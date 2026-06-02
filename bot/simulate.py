@@ -10,18 +10,29 @@ from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from threading import Thread
 
-try:
-    import websockets
-    HAS_WS = True
-except ImportError:
-    HAS_WS = False
-
 state = {
     'total': 0, 'profitable': 0, 'pnl': 0.0,
-    'lat': 45.0, 'start': datetime.now(timezone.utc)
+    'lat': 45.0, 'start': datetime.now(timezone.utc),
+    'last_trade': None,
 }
-clients = set()
 TRIANGLES = ['BTC->ETH->USDT', 'ETH->SOL->USDT', 'BTC->SOL->USDT']
+
+
+def build_data():
+    elapsed = (datetime.now(timezone.utc) - state['start']).total_seconds()
+    hit = (state['profitable'] / state['total'] * 100) if state['total'] else 0
+    return json.dumps({
+        'total':      state['total'],
+        'profitable': state['profitable'],
+        'pnl':        round(state['pnl'], 4),
+        'hit_rate':   round(hit, 4),
+        'lat_cur':    round(state['lat'], 1),
+        'lat_avg':    55.0,
+        'lat_min':    28.0,
+        'lat_max':    92.0,
+        'elapsed_s':  elapsed,
+        'last_trade': state['last_trade'],
+    }).encode()
 
 
 def serve_http():
@@ -29,23 +40,18 @@ def serve_http():
     os.chdir(base)
     class H(SimpleHTTPRequestHandler):
         def log_message(self, *a): pass
+        def do_GET(self):
+            if self.path == '/data':
+                data = build_data()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(data)
+            else:
+                super().do_GET()
     HTTPServer(('0.0.0.0', 8080), H).serve_forever()
 
-
-async def ws_handler(websocket):
-    clients.add(websocket)
-    try:
-        await websocket.wait_closed()
-    finally:
-        clients.discard(websocket)
-
-
-async def broadcast(msg):
-    for c in list(clients):
-        try:
-            await c.send(msg)
-        except Exception:
-            clients.discard(c)
 
 
 async def trading_loop():
@@ -72,23 +78,8 @@ async def trading_loop():
                 'profit':   profit,
                 'pct':      pct,
             }
+            state['last_trade'] = new_trade
             print(f"[{ts}] +${profit:.4f} | {new_trade['triangle']} | PnL: ${state['pnl']:.4f}")
-
-        elapsed = (datetime.now(timezone.utc) - state['start']).total_seconds()
-        hit     = (state['profitable'] / state['total'] * 100) if state['total'] else 0
-        msg = json.dumps({
-            'total':      state['total'],
-            'profitable': state['profitable'],
-            'pnl':        round(state['pnl'], 4),
-            'hit_rate':   round(hit, 4),
-            'lat_cur':    round(state['lat'], 1),
-            'lat_avg':    55.0,
-            'lat_min':    28.0,
-            'lat_max':    92.0,
-            'elapsed_s':  elapsed,
-            'new_trade':  new_trade,
-        })
-        await broadcast(msg)
 
         if state['total'] % 30 == 0:
             print(f"ciclos:{state['total']} | opps:{state['profitable']} | pnl:${state['pnl']:.4f}")
@@ -99,13 +90,7 @@ async def trading_loop():
 async def main():
     Thread(target=serve_http, daemon=True).start()
     print("Servidor HTTP iniciado na porta 8080")
-
-    if HAS_WS:
-        srv = await websockets.serve(ws_handler, '0.0.0.0', 8765)
-        print("WebSocket iniciado na porta 8765")
-        await asyncio.gather(trading_loop(), srv.serve_forever())
-    else:
-        await trading_loop()
+    await trading_loop()
 
 
 if __name__ == '__main__':
