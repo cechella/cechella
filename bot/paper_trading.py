@@ -37,7 +37,7 @@ def fetch_tickers() -> dict:
 
 async def main():
     detector = OpportunityDetector()
-    stats = {'total': 0, 'profitable': 0, 'simulated_pnl': 0.0}
+    stats = {'total': 0, 'profitable': 0, 'simulated_pnl': 0.0, 'latencies': []}
 
     print("=== PAPER TRADING INICIADO ===")
     print(f"Capital por ciclo: ${CAPITAL_PER_CYCLE}")
@@ -48,7 +48,13 @@ async def main():
     try:
         while True:
             try:
+                t_start = datetime.now(timezone.utc)
                 tickers = fetch_tickers()
+                t_fetch = (datetime.now(timezone.utc) - t_start).total_seconds() * 1000
+
+                stats['latencies'].append(t_fetch)
+                avg_lat = sum(stats['latencies']) / len(stats['latencies'])
+
                 for triangle in TRIANGLES:
                     opp = detector.check(tickers, triangle)
                     stats['total'] += 1
@@ -59,12 +65,23 @@ async def main():
                         ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
                         print(
                             f"[{ts}] OPORTUNIDADE DETECTADA"
-                            f"\n  Triangulo: {triangle[0]} -> {triangle[1]} -> {triangle[2]}"
-                            f"\n  Lucro liq: +{opp['net_profit_pct']:.4f}%"
-                            f"\n  Lucro $:   +${profit:.4f}"
-                            f"\n  PnL total: +${stats['simulated_pnl']:.4f}"
+                            f"\n  Triangulo:      {triangle[0]} -> {triangle[1]} -> {triangle[2]}"
+                            f"\n  Lucro liquido:  +{opp['net_profit_pct']:.4f}%"
+                            f"\n  Lucro $:        +${profit:.4f}"
+                            f"\n  PnL acumulado:  +${stats['simulated_pnl']:.4f}"
+                            f"\n  Latencia atual: {t_fetch:.0f}ms"
+                            f"\n  Latencia media: {avg_lat:.0f}ms"
                             f"\n"
                         )
+
+                # Status a cada 30 ciclos
+                if stats['total'] % 30 == 0:
+                    ts = datetime.now(timezone.utc).strftime('%H:%M:%S')
+                    print(f"[{ts}] STATUS | Ciclos: {stats['total']} | "
+                          f"Oportunidades: {stats['profitable']} | "
+                          f"PnL: +${stats['simulated_pnl']:.4f} | "
+                          f"Latencia media: {avg_lat:.0f}ms")
+
                 await asyncio.sleep(1)
             except Exception as e:
                 print(f"Erro: {e}")
@@ -72,11 +89,27 @@ async def main():
 
     except KeyboardInterrupt:
         hit_rate = (stats['profitable'] / stats['total'] * 100) if stats['total'] else 0
-        print(f"\n=== RESUMO ===")
+        avg_lat = sum(stats['latencies']) / len(stats['latencies']) if stats['latencies'] else 0
+        min_lat = min(stats['latencies']) if stats['latencies'] else 0
+        max_lat = max(stats['latencies']) if stats['latencies'] else 0
+
+        print(f"\n========== RESUMO FINAL ==========")
         print(f"Ciclos analisados:     {stats['total']}")
         print(f"Oportunidades reais:   {stats['profitable']}")
-        print(f"Taxa de acerto:        {hit_rate:.4f}%")
+        print(f"Taxa de oportunidade:  {hit_rate:.4f}%")
         print(f"PnL simulado total:    ${stats['simulated_pnl']:.4f}")
+        print(f"")
+        print(f"--- LATENCIA DA SUA CONEXAO ---")
+        print(f"Media:  {avg_lat:.0f}ms")
+        print(f"Minima: {min_lat:.0f}ms")
+        print(f"Maxima: {max_lat:.0f}ms")
+        print(f"")
+        if avg_lat < 100:
+            print(f"Avaliacao: EXCELENTE — sua conexao e rapida o suficiente")
+        elif avg_lat < 300:
+            print(f"Avaliacao: BOM — funcional mas VPS Tokyo melhoraria resultados")
+        else:
+            print(f"Avaliacao: LENTO — VPS Tokyo necessario para ser competitivo")
 
 
 if __name__ == '__main__':
