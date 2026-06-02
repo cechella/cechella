@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  bot:
+    build: ../bot
+    container_name: cechella_bot
+    restart: always
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+
+  api:
+    build: ../api
+    container_name: cechella_api
+    restart: always
+    ports:
+      - '8000:8000'
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: cechella_db
+    restart: always
+    environment:
+      POSTGRES_DB: cechella
+      POSTGRES_USER: cechella
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: cechella_redis
+    restart: always
+
+  nginx:
+    image: nginx:alpine
+    container_name: cechella_nginx
+    restart: always
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+
+volumes:
+  pgdata:
