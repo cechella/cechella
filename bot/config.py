@@ -11,7 +11,6 @@ CAPITAL_PER_CYCLE = 1000   # USDT por ciclo
 DAILY_STOP_LOSS   = 30     # Para o bot se perder $30 no dia
 
 TRIANGLES = [
-    ('BTC/USDT', 'ETH/BTC',  'ETH/USDT'),
-    ('BTC/USDT', 'BNB/BTC',  'BNB/USDT'),
-    ('ETH/USDT', 'SOL/ETH',  'SOL/USDT'),
+    ('BTC/USDT', 'ETH/BTC', 'ETH/USDT'),
+    ('ETH/USDT', 'SOL/ETH', 'SOL/USDT'),
 ]

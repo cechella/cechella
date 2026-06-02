@@ -24,6 +24,7 @@ SSL_CTX.check_hostname = False
 SSL_CTX.verify_mode = ssl.CERT_NONE
 
 SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'BNBUSDT', 'SOLUSDT', 'ETHBTC', 'BNBBTC', 'SOLETH']
+SYMBOLS_OKX = ['BTC-USDT', 'ETH-USDT', 'SOL-USDT', 'ETH-BTC', 'SOL-ETH']
 
 state = {
     'total': 0,
@@ -38,19 +39,23 @@ connected_clients = set()
 
 
 def fetch_tickers() -> dict:
-    url = 'https://api.binance.com/api/v3/ticker/bookTicker'
-    with urllib.request.urlopen(url, context=SSL_CTX, timeout=5) as r:
-        data = json.loads(r.read())
+    url = 'https://www.okx.com/api/v5/market/tickers?instType=SPOT'
+    req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    with urllib.request.urlopen(req, context=SSL_CTX, timeout=5) as r:
+        data = json.loads(r.read())['data']
     sym_map = {
-        'BTCUSDT': 'BTC/USDT', 'ETHUSDT': 'ETH/USDT', 'BNBUSDT': 'BNB/USDT',
-        'SOLUSDT': 'SOL/USDT', 'ETHBTC':  'ETH/BTC',  'BNBBTC':  'BNB/BTC',
-        'SOLETH':  'SOL/ETH',
+        'BTC-USDT': 'BTC/USDT', 'ETH-USDT': 'ETH/USDT',
+        'SOL-USDT': 'SOL/USDT', 'ETH-BTC':  'ETH/BTC',
+        'SOL-ETH':  'SOL/ETH',
     }
     result = {}
     for t in data:
-        pair = sym_map.get(t['symbol'])
+        pair = sym_map.get(t['instId'])
         if pair:
-            result[pair] = {'bid': float(t['bidPrice']), 'ask': float(t['askPrice'])}
+            result[pair] = {
+                'bid': float(t['bidPx']) if t['bidPx'] else 0,
+                'ask': float(t['askPx']) if t['askPx'] else 0,
+            }
     return result
 
 
