@@ -296,32 +296,30 @@
 
   drawChart()
 
-  // --- WebSocket ---
-  let ws, reconnectTimer
+  // --- HTTP Polling (compativel com Replit) ---
   const trades = []
+  let lastTradeTime = null
 
-  function connect() {
-    const wsHost = location.hostname === 'localhost' ? 'localhost:8765' : location.hostname.replace('8080', '8765').replace('-8080-', '-8765-')
-    ws = new WebSocket(`wss://${wsHost}`)
-
-    ws.onopen = () => {
+  async function poll() {
+    try {
+      const r = await fetch('/data')
+      const d = await r.json()
       document.getElementById('live-badge').innerHTML = '<span class="dot"></span> LIVE'
       document.getElementById('conn-status').textContent = 'Conectado ao bot'
-      clearTimeout(reconnectTimer)
-    }
-
-    ws.onmessage = (e) => {
-      const d = JSON.parse(e.data)
-      updateUI(d)
-    }
-
-    ws.onclose = () => {
+      if (d.last_trade && d.last_trade.time !== lastTradeTime) {
+        lastTradeTime = d.last_trade.time
+        trades.unshift(d.last_trade)
+        if (trades.length > 100) trades.pop()
+        renderTrades()
+        updateUI({...d, new_trade: d.last_trade})
+      } else {
+        updateUI(d)
+      }
+    } catch(e) {
       document.getElementById('live-badge').innerHTML = '<span class="dot" style="background:#f87171;animation:none"></span> DESCONECTADO'
-      document.getElementById('conn-status').textContent = 'Reconectando em 3s...'
-      reconnectTimer = setTimeout(connect, 3000)
+      document.getElementById('conn-status').textContent = 'Reconectando...'
     }
-
-    ws.onerror = () => ws.close()
+    setTimeout(poll, 1500)
   }
 
   function updateUI(d) {
@@ -402,7 +400,7 @@
     `).join('')
   }
 
-  connect()
+  poll()
 </script>
 </body>
 </html>
