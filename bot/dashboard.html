@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cechella — Paper Trading Live</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a0f;
+      color: #e2e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 28px;
+    }
+
+    header h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px; }
+    header p  { color: #64748b; font-size: 0.85rem; margin-top: 2px; }
+
+    .live-badge {
+      display: flex; align-items: center; gap: 8px;
+      background: #0f2a1a; border: 1px solid #166534;
+      padding: 6px 14px; border-radius: 999px;
+      font-size: 0.8rem; font-weight: 600; color: #4ade80;
+    }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #4ade80; animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px; }
+
+    @media (max-width: 900px) {
+      .grid-3 { grid-template-columns: 1fr; }
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: #111118;
+      border: 1px solid #1e1e2e;
+      border-radius: 16px;
+      padding: 20px 24px;
+    }
+
+    .card-label { color: #64748b; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.8px; }
+    .card-value { font-size: 2rem; font-weight: 700; margin-top: 6px; }
+    .card-sub   { font-size: 0.82rem; color: #64748b; margin-top: 6px; }
+
+    .green  { color: #4ade80; }
+    .yellow { color: #facc15; }
+    .red    { color: #f87171; }
+    .blue   { color: #60a5fa; }
+
+    /* PnL Chart */
+    #chart-wrap { position: relative; height: 200px; }
+    #pnl-chart  { width: 100%; height: 100%; }
+
+    /* Latency bar */
+    .lat-bar-wrap { margin-top: 12px; }
+    .lat-bar-bg   { background: #1e1e2e; border-radius: 4px; height: 8px; overflow: hidden; }
+    .lat-bar-fill {
+      height: 100%; border-radius: 4px;
+      background: linear-gradient(90deg, #4ade80, #facc15);
+      transition: width 0.5s ease;
+    }
+    .lat-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: #64748b; margin-top: 4px; }
+
+    /* Trades feed */
+    #trades-list { max-height: 340px; overflow-y: auto; }
+    #trades-list::-webkit-scrollbar { width: 4px; }
+    #trades-list::-webkit-scrollbar-thumb { background: #1e1e2e; border-radius: 4px; }
+
+    .trade-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 10px 0; border-bottom: 1px solid #1e1e2e;
+      animation: fadeIn 0.4s ease;
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; } }
+
+    .trade-row:last-child { border-bottom: none; }
+    .trade-triangle { font-family: monospace; font-size: 0.82rem; color: #cbd5e1; }
+    .trade-time     { font-size: 0.72rem; color: #475569; margin-top: 2px; }
+    .trade-profit   { font-weight: 700; font-size: 0.92rem; }
+
+    /* Stats row */
+    .stat-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #1e1e2e; font-size: 0.88rem; }
+    .stat-row:last-child { border-bottom: none; }
+    .stat-key { color: #64748b; }
+
+    /* Connection status */
+    #conn-status { font-size: 0.78rem; color: #64748b; margin-top: 4px; }
+
+    .empty-state { color: #334155; text-align: center; padding: 40px 0; font-size: 0.88rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Cechella</h1>
+    <p>Paper Trading Monitor • Binance</p>
+  </div>
+  <div>
+    <div class="live-badge" id="live-badge">
+      <span class="dot"></span> CONECTANDO...
+    </div>
+    <div id="conn-status">Aguardando bot...</div>
+  </div>
+</header>
+
+<!-- Row 1: KPIs -->
+<div class="grid-3">
+  <div class="card">
+    <div class="card-label">PnL Simulado</div>
+    <div class="card-value green" id="pnl">$0.0000</div>
+    <div class="card-sub" id="pnl-sub">0 oportunidades capturadas</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Latencia Media</div>
+    <div class="card-value yellow" id="lat-avg">---</div>
+    <div class="card-sub" id="lat-eval">Aguardando dados...</div>
+  </div>
+  <div class="card">
+    <div class="card-label">Ciclos Analisados</div>
+    <div class="card-value blue" id="cycles">0</div>
+    <div class="card-sub" id="hit-rate">Taxa de oportunidade: 0.0000%</div>
+  </div>
+</div>
+
+<!-- Row 2: Chart + Latency -->
+<div class="grid-2">
+  <div class="card">
+    <div class="card-label" style="margin-bottom:12px">Evolucao do PnL</div>
+    <div id="chart-wrap">
+      <canvas id="pnl-chart"></canvas>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-label" style="margin-bottom:16px">Latencia da Conexao</div>
+    <div class="stat-row">
+      <span class="stat-key">Atual</span>
+      <span id="lat-cur" class="yellow">---</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-key">Media</span>
+      <span id="lat-avg2" class="yellow">---</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-key">Minima</span>
+      <span id="lat-min" class="green">---</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-key">Maxima</span>
+      <span id="lat-max" class="red">---</span>
+    </div>
+    <div class="lat-bar-wrap" style="margin-top:16px">
+      <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#64748b;margin-bottom:6px">
+        <span>0ms</span><span>Local</span><span>VPS Tokyo</span><span>500ms</span>
+      </div>
+      <div class="lat-bar-bg">
+        <div class="lat-bar-fill" id="lat-bar" style="width:0%"></div>
+      </div>
+      <div class="lat-labels">
+        <span class="green">Excelente &lt;100ms</span>
+        <span class="yellow">Bom &lt;300ms</span>
+        <span class="red">Lento &gt;300ms</span>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding:10px 14px;background:#0f172a;border-radius:8px;font-size:0.82rem" id="lat-rec">
+      Rodando primeiros ciclos...
+    </div>
+  </div>
+</div>
+
+<!-- Row 3: Trades + Stats -->
+<div class="grid-2">
+  <div class="card">
+    <div class="card-label" style="margin-bottom:12px">Oportunidades Detectadas</div>
+    <div id="trades-list">
+      <div class="empty-state">Aguardando oportunidades...</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-label" style="margin-bottom:12px">Estatisticas</div>
+    <div class="stat-row">
+      <span class="stat-key">Capital por ciclo</span>
+      <span id="s-capital">$1,000</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-key">Spread minimo</span>
+      <span id="s-spread">0.15%</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-key">Oportunidades hoje</span>
+      <span id="s-opps" class="green">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-key">Ciclos totais</span>
+      <span id="s-cycles">0</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-key">Taxa de acerto</span>
+      <span id="s-rate">0.0000%</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-key">PnL acumulado</span>
+      <span id="s-pnl" class="green">$0.0000</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-key">Projecao 30 dias</span>
+      <span id="s-proj" class="yellow">---</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // --- Chart setup ---
+  const canvas = document.getElementById('pnl-chart')
+  const ctx = canvas.getContext('2d')
+  const pnlHistory = [0]
+  const timeLabels = ['0s']
+
+  function resizeCanvas() {
+    canvas.width  = canvas.offsetWidth
+    canvas.height = canvas.offsetHeight
+  }
+  resizeCanvas()
+  window.addEventListener('resize', () => { resizeCanvas(); drawChart() })
+
+  function drawChart() {
+    const W = canvas.width, H = canvas.height
+    ctx.clearRect(0, 0, W, H)
+
+    if (pnlHistory.length < 2) {
+      ctx.fillStyle = '#334155'
+      ctx.font = '13px system-ui'
+      ctx.textAlign = 'center'
+      ctx.fillText('Aguardando dados...', W/2, H/2)
+      return
+    }
+
+    const maxVal = Math.max(...pnlHistory, 0.001)
+    const minVal = Math.min(...pnlHistory, 0)
+    const range  = maxVal - minVal || 1
+
+    // Grid lines
+    ctx.strokeStyle = '#1e1e2e'
+    ctx.lineWidth = 1
+    for (let i = 0; i <= 4; i++) {
+      const y = H - (i / 4) * H * 0.85 - H * 0.05
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
+    }
+
+    // Gradient fill
+    const grad = ctx.createLinearGradient(0, 0, 0, H)
+    grad.addColorStop(0, 'rgba(74,222,128,0.3)')
+    grad.addColorStop(1, 'rgba(74,222,128,0)')
+
+    ctx.beginPath()
+    pnlHistory.forEach((v, i) => {
+      const x = (i / (pnlHistory.length - 1)) * W
+      const y = H - ((v - minVal) / range) * H * 0.85 - H * 0.05
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+    })
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath()
+    ctx.fillStyle = grad; ctx.fill()
+
+    // Line
+    ctx.beginPath()
+    pnlHistory.forEach((v, i) => {
+      const x = (i / (pnlHistory.length - 1)) * W
+      const y = H - ((v - minVal) / range) * H * 0.85 - H * 0.05
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+    })
+    ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2; ctx.stroke()
+
+    // Current value label
+    const lastY = H - ((pnlHistory.at(-1) - minVal) / range) * H * 0.85 - H * 0.05
+    ctx.fillStyle = '#4ade80'; ctx.font = 'bold 12px monospace'
+    ctx.textAlign = 'right'
+    ctx.fillText(`$${pnlHistory.at(-1).toFixed(4)}`, W - 8, lastY - 6)
+  }
+
+  drawChart()
+
+  // --- WebSocket ---
+  let ws, reconnectTimer
+  const trades = []
+
+  function connect() {
+    ws = new WebSocket('ws://localhost:8765')
+
+    ws.onopen = () => {
+      document.getElementById('live-badge').innerHTML = '<span class="dot"></span> LIVE'
+      document.getElementById('conn-status').textContent = 'Conectado ao bot'
+      clearTimeout(reconnectTimer)
+    }
+
+    ws.onmessage = (e) => {
+      const d = JSON.parse(e.data)
+      updateUI(d)
+    }
+
+    ws.onclose = () => {
+      document.getElementById('live-badge').innerHTML = '<span class="dot" style="background:#f87171;animation:none"></span> DESCONECTADO'
+      document.getElementById('conn-status').textContent = 'Reconectando em 3s...'
+      reconnectTimer = setTimeout(connect, 3000)
+    }
+
+    ws.onerror = () => ws.close()
+  }
+
+  function updateUI(d) {
+    // KPIs
+    document.getElementById('pnl').textContent      = `$${d.pnl.toFixed(4)}`
+    document.getElementById('pnl-sub').textContent  = `${d.profitable} oportunidades capturadas`
+    document.getElementById('lat-avg').textContent  = `${d.lat_avg.toFixed(0)}ms`
+    document.getElementById('cycles').textContent   = d.total
+    document.getElementById('hit-rate').textContent = `Taxa de oportunidade: ${d.hit_rate.toFixed(4)}%`
+
+    // Latency card
+    document.getElementById('lat-cur').textContent  = `${d.lat_cur.toFixed(0)}ms`
+    document.getElementById('lat-avg2').textContent = `${d.lat_avg.toFixed(0)}ms`
+    document.getElementById('lat-min').textContent  = `${d.lat_min.toFixed(0)}ms`
+    document.getElementById('lat-max').textContent  = `${d.lat_max.toFixed(0)}ms`
+
+    const barPct = Math.min((d.lat_avg / 500) * 100, 100)
+    document.getElementById('lat-bar').style.width = barPct + '%'
+
+    let rec, recColor
+    if (d.lat_avg < 100) {
+      rec = '✅ EXCELENTE — conexao rapida, pode fazer live trading direto'
+      recColor = '#4ade80'
+    } else if (d.lat_avg < 300) {
+      rec = '⚡ BOM — funcional, VPS Tokyo melhoraria +30% dos resultados'
+      recColor = '#facc15'
+    } else {
+      rec = '⚠️ LENTO — VPS Tokyo necessario para ser competitivo'
+      recColor = '#f87171'
+    }
+    const recEl = document.getElementById('lat-rec')
+    recEl.textContent = rec
+    recEl.style.color = recColor
+
+    // Stats
+    document.getElementById('s-opps').textContent   = d.profitable
+    document.getElementById('s-cycles').textContent = d.total
+    document.getElementById('s-rate').textContent   = `${d.hit_rate.toFixed(4)}%`
+    document.getElementById('s-pnl').textContent    = `$${d.pnl.toFixed(4)}`
+    document.getElementById('lat-avg').textContent  = `${d.lat_avg.toFixed(0)}ms`
+
+    // Projecao 30 dias
+    if (d.elapsed_s > 10 && d.pnl > 0) {
+      const perDay = (d.pnl / d.elapsed_s) * 86400
+      document.getElementById('s-proj').textContent = `+$${(perDay * 30).toFixed(2)}/mes`
+    }
+
+    // Chart
+    pnlHistory.push(d.pnl)
+    if (pnlHistory.length > 120) pnlHistory.shift()
+    drawChart()
+
+    // Trades feed
+    if (d.new_trade) {
+      trades.unshift(d.new_trade)
+      if (trades.length > 100) trades.pop()
+      renderTrades()
+    }
+  }
+
+  function renderTrades() {
+    const el = document.getElementById('trades-list')
+    if (trades.length === 0) {
+      el.innerHTML = '<div class="empty-state">Aguardando oportunidades...</div>'
+      return
+    }
+    el.innerHTML = trades.map(t => `
+      <div class="trade-row">
+        <div>
+          <div class="trade-triangle">${t.triangle}</div>
+          <div class="trade-time">${t.time}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="trade-profit green">+$${t.profit.toFixed(4)}</div>
+          <div class="trade-time">+${t.pct.toFixed(4)}%</div>
+        </div>
+      </div>
+    `).join('')
+  }
+
+  connect()
+</script>
+</body>
+</html>
