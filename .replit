@@ -1,0 +1,7 @@
+run = "cd bot && pip install ccxt websockets python-dotenv -q && python paper_trading.py"
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "cd bot && python paper_trading.py"]

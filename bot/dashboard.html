@@ -301,7 +301,8 @@
   const trades = []
 
   function connect() {
-    ws = new WebSocket('ws://localhost:8765')
+    const wsHost = location.hostname === 'localhost' ? 'localhost:8765' : location.hostname.replace('8080', '8765').replace('-8080-', '-8765-')
+    ws = new WebSocket(`wss://${wsHost}`)
 
     ws.onopen = () => {
       document.getElementById('live-badge').innerHTML = '<span class="dot"></span> LIVE'
