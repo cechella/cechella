@@ -5,3 +5,7 @@ channel = "stable-24_05"
 
 [deployment]
 run = ["sh", "-c", "cd bot && python paper_trading.py"]
+
+[[ports]]
+localPort = 8081
+externalPort = 80
