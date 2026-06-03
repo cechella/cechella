@@ -142,8 +142,43 @@ BASE_PRICES = {
 sim_prices = {k: v for k, v in BASE_PRICES.items()}
 
 def fetch_simulated() -> dict:
-    for pair in sim_prices:
-        sim_prices[pair] *= math.exp(random.gauss(0, 0.00008))
+    """
+    Precos cointegrados: BTC/ETH/BNB/SOL movem juntos (mercado real).
+    Pares cruzados derivados dos precos base + ruido minimo.
+    Taxa de oportunidade real: ~0.1% dos ciclos.
+    """
+    # Movimento de mercado compartilhado (crypto correlacionado)
+    market = math.exp(random.gauss(0, 0.0004))
+    noise  = 0.00015  # ruido individual minimo
+
+    sim_prices['BTC/USDT'] *= market * math.exp(random.gauss(0, noise))
+    sim_prices['ETH/USDT'] *= market * math.exp(random.gauss(0, noise))
+    sim_prices['BNB/USDT'] *= market * math.exp(random.gauss(0, noise))
+    sim_prices['SOL/USDT'] *= market * math.exp(random.gauss(0, noise))
+    sim_prices['XRP/USDT'] *= market * math.exp(random.gauss(0, noise))
+    sim_prices['ADA/USDT'] *= market * math.exp(random.gauss(0, noise))
+    sim_prices['LINK/USDT']*= market * math.exp(random.gauss(0, noise))
+
+    # Pares cruzados derivados dos precos USDT (cointegrados)
+    btc = sim_prices['BTC/USDT']
+    eth = sim_prices['ETH/USDT']
+    bnb = sim_prices['BNB/USDT']
+    sol = sim_prices['SOL/USDT']
+    xrp = sim_prices['XRP/USDT']
+    ada = sim_prices['ADA/USDT']
+    lnk = sim_prices['LINK/USDT']
+
+    sim_prices['ETH/BTC']  = (eth/btc) * math.exp(random.gauss(0, noise))
+    sim_prices['BNB/BTC']  = (bnb/btc) * math.exp(random.gauss(0, noise))
+    sim_prices['SOL/BTC']  = (sol/btc) * math.exp(random.gauss(0, noise))
+    sim_prices['XRP/BTC']  = (xrp/btc) * math.exp(random.gauss(0, noise))
+    sim_prices['ADA/BTC']  = (ada/btc) * math.exp(random.gauss(0, noise))
+    sim_prices['LINK/BTC'] = (lnk/btc) * math.exp(random.gauss(0, noise))
+    sim_prices['BNB/ETH']  = (bnb/eth) * math.exp(random.gauss(0, noise))
+    sim_prices['SOL/ETH']  = (sol/eth) * math.exp(random.gauss(0, noise))
+    sim_prices['XRP/ETH']  = (xrp/eth) * math.exp(random.gauss(0, noise))
+    sim_prices['LINK/ETH'] = (lnk/eth) * math.exp(random.gauss(0, noise))
+
     return {p: {'bid': v*(1-SPREAD), 'ask': v*(1+SPREAD)} for p, v in sim_prices.items()}
 
 
