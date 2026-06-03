@@ -249,7 +249,7 @@ def serve_http():
                 self.wfile.write(data)
             else:
                 super().do_GET()
-    HTTPServer(('0.0.0.0', 8080), H).serve_forever()
+    HTTPServer(('0.0.0.0', 8081), H).serve_forever()
 
 
 # ----------------------------------------------------------------
@@ -318,7 +318,7 @@ async def trading_loop():
 
 async def main():
     Thread(target=serve_http, daemon=True).start()
-    print("Servidor HTTP na porta 8080")
+    print("Servidor HTTP na porta 8081")
     await trading_loop()
 
 
