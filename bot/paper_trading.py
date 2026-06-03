@@ -1,8 +1,6 @@
 """
-Paper trading com precos REAIS via CoinGecko (gratuito, sem bloqueio no Replit).
-Tenta Binance primeiro (API key). Se bloqueado, usa CoinGecko.
-Nunca executa ordens reais — apenas detecta oportunidades e registra.
-Dashboard: porta 8080 /dashboard.html
+Paper trading com precos REAIS via CoinGecko + sinais RAFI Forex.
+Dashboard unificado: arbitragem triangular + sinais RAFI para Forex.
 """
 import asyncio
 import ssl
@@ -15,6 +13,14 @@ import random
 from datetime import datetime, timezone
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from threading import Thread
+
+# Modulo RAFI (carrega se yfinance disponivel)
+try:
+    import yfinance as yf
+    import numpy as np
+    RAFI_ENABLED = True
+except ImportError:
+    RAFI_ENABLED = False
 
 # --- Configuracao ---
 MIN_PROFIT_PCT = 0.15   # % minimo apos taxas
@@ -254,6 +260,173 @@ def check_triangle(tickers: dict, triangle: tuple):
 
 
 # ----------------------------------------------------------------
+# Modulo RAFI — sinais Forex (EUR/USD, GBP/USD, XAU/USD, USD/JPY)
+# ----------------------------------------------------------------
+FOREX_PAIRS = {
+    'EUR/USD': 'EURUSD=X',
+    'GBP/USD': 'GBPUSD=X',
+    'XAU/USD': 'GC=F',
+    'USD/JPY': 'USDJPY=X',
+}
+
+rafi_state = {
+    'signals': [],
+    'last_update': None,
+    'error': None,
+}
+
+def calc_rafi(closes, highs, lows, opens, period=8):
+    """
+    Aproximacao do indicador RAFI:
+    - Mede a forca do rompimento em relacao ao range medio (ATR proxy)
+    - > +2.5 com rompimento de resistencia = sinal de COMPRA (verde)
+    - > +2.5 com rompimento de suporte    = sinal de VENDA (vermelho)
+    - Anterior > +2.5 e atual cai abaixo  = EXAUSTAO (amarelo)
+    """
+    if len(closes) < period + 2:
+        return None, 'neutro'
+
+    # ATR proxy: media dos ranges dos ultimos N candles
+    ranges = [highs[i] - lows[i] for i in range(len(closes))]
+    avg_range = sum(ranges[-period:]) / period
+    if avg_range == 0:
+        return None, 'neutro'
+
+    # Movimento do candle atual
+    body = closes[-1] - opens[-1]
+
+    # RAFI = corpo do candle normalizado pelo range medio
+    rafi_val = (body / avg_range) * 1.8
+
+    # Resistencia = maximo dos ultimos N candles (excluindo atual)
+    resistance = max(highs[-period-1:-1])
+    support    = min(lows[-period-1:-1])
+
+    # Cor do candle
+    prev_rafi = (closes[-2] - opens[-2]) / avg_range * 1.8
+    if abs(rafi_val) > 2.5:
+        if closes[-1] > resistance:
+            cor = 'verde'    # compra
+        elif closes[-1] < support:
+            cor = 'vermelho' # venda
+        else:
+            cor = 'neutro'
+    elif abs(prev_rafi) > 2.5 and abs(rafi_val) < 1.0:
+        cor = 'amarelo'  # exaustao
+    else:
+        cor = 'neutro'
+
+    return round(rafi_val, 2), cor
+
+
+def calc_bollinger(closes, period=8, std_mult=2.0):
+    if len(closes) < period:
+        return None, None, None
+    window = closes[-period:]
+    mean = sum(window) / period
+    variance = sum((x - mean) ** 2 for x in window) / period
+    std = math.sqrt(variance)
+    return mean - std_mult * std, mean, mean + std_mult * std
+
+
+def fetch_rafi_signals():
+    if not RAFI_ENABLED:
+        return []
+
+    signals = []
+    for name, ticker in FOREX_PAIRS.items():
+        try:
+            df = yf.download(ticker, period='5d', interval='1h',
+                             progress=False, auto_adjust=True)
+            if df is None or len(df) < 15:
+                continue
+
+            closes = df['Close'].tolist()
+            highs  = df['High'].tolist()
+            lows   = df['Low'].tolist()
+            opens  = df['Open'].tolist()
+
+            rafi_val, cor = calc_rafi(closes, highs, lows, opens)
+            bb_low, bb_mid, bb_high = calc_bollinger(closes)
+
+            # Verificacao multi-timeframe (15min via proxy: agrupamento)
+            # Simplificado: verifica 3 candles consecutivos com mesma direcao
+            trend_candles = closes[-4:]
+            if len(trend_candles) >= 3:
+                if all(trend_candles[i] < trend_candles[i+1] for i in range(len(trend_candles)-1)):
+                    trend = 'alta'
+                elif all(trend_candles[i] > trend_candles[i+1] for i in range(len(trend_candles)-1)):
+                    trend = 'baixa'
+                else:
+                    trend = 'lateral'
+            else:
+                trend = 'indefinido'
+
+            # Bollinger abrindo? (banda superior subindo e inferior caindo)
+            bb_open = False
+            if len(closes) >= 16:
+                _, _, bb_high_prev = calc_bollinger(closes[:-1])
+                bb_low_prev, _, _  = calc_bollinger(closes[:-1])
+                if bb_high and bb_high_prev:
+                    bb_open = (bb_high > bb_high_prev) and (bb_low < bb_low_prev)
+
+            # Forca combinada
+            forca = ''
+            if cor == 'verde' and trend == 'alta' and bb_open:
+                forca = 'FORTE'
+            elif cor == 'verde' and trend == 'alta':
+                forca = 'moderado'
+            elif cor == 'vermelho' and trend == 'baixa' and bb_open:
+                forca = 'FORTE'
+            elif cor == 'vermelho' and trend == 'baixa':
+                forca = 'moderado'
+            elif cor == 'amarelo':
+                forca = 'exaustao'
+            else:
+                forca = 'aguardar'
+
+            preco_atual = round(float(closes[-1]), 5)
+
+            signals.append({
+                'par':      name,
+                'preco':    preco_atual,
+                'rafi':     rafi_val,
+                'cor':      cor,
+                'trend':    trend,
+                'bb_open':  bb_open,
+                'forca':    forca,
+                'hora':     datetime.now(timezone.utc).strftime('%H:%M'),
+            })
+        except Exception as e:
+            signals.append({
+                'par':   name,
+                'preco': 0,
+                'rafi':  None,
+                'cor':   'erro',
+                'trend': 'erro',
+                'bb_open': False,
+                'forca': str(e)[:40],
+                'hora':  datetime.now(timezone.utc).strftime('%H:%M'),
+            })
+
+    return signals
+
+
+def rafi_loop():
+    """Atualiza sinais RAFI a cada 5 minutos (respeita rate limit yfinance)."""
+    import time
+    while True:
+        try:
+            sigs = fetch_rafi_signals()
+            rafi_state['signals']     = sigs
+            rafi_state['last_update'] = datetime.now(timezone.utc).strftime('%H:%M:%S')
+            rafi_state['error']       = None
+        except Exception as e:
+            rafi_state['error'] = str(e)
+        time.sleep(300)  # 5 minutos
+
+
+# ----------------------------------------------------------------
 # HTTP server com endpoint /data
 # ----------------------------------------------------------------
 def build_data() -> bytes:
@@ -283,6 +456,18 @@ def serve_http():
         def do_GET(self):
             if self.path == '/data':
                 data = build_data()
+                self.send_response(200)
+                self.send_header('Content-Type', 'application/json')
+                self.send_header('Access-Control-Allow-Origin', '*')
+                self.end_headers()
+                self.wfile.write(data)
+            elif self.path == '/rafi':
+                data = json.dumps({
+                    'signals':     rafi_state['signals'],
+                    'last_update': rafi_state['last_update'],
+                    'enabled':     RAFI_ENABLED,
+                    'error':       rafi_state['error'],
+                }).encode()
                 self.send_response(200)
                 self.send_header('Content-Type', 'application/json')
                 self.send_header('Access-Control-Allow-Origin', '*')
@@ -364,6 +549,11 @@ async def trading_loop():
 
 async def main():
     Thread(target=serve_http, daemon=True).start()
+    if RAFI_ENABLED:
+        Thread(target=rafi_loop, daemon=True).start()
+        print("Modulo RAFI ativo — sinais Forex a cada 5min")
+    else:
+        print("Modulo RAFI inativo — instale: pip install yfinance numpy pandas")
     port = int(os.getenv('PORT', 8081))
     print(f"Servidor HTTP na porta {port}")
     await trading_loop()

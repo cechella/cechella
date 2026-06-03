@@ -3,107 +3,150 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Cechella — Paper Trading Live</title>
+  <title>Cechella — Painel Unificado</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
     body {
-      background: #0a0a0f;
+      background: #07070f;
       color: #e2e8f0;
       font-family: 'Segoe UI', system-ui, sans-serif;
       min-height: 100vh;
-      padding: 24px;
+      padding: 20px;
     }
 
+    /* HEADER */
     header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 28px;
-    }
-
-    header h1 { font-size: 1.6rem; font-weight: 700; letter-spacing: -0.5px; }
-    header p  { color: #64748b; font-size: 0.85rem; margin-top: 2px; }
-
-    .live-badge {
-      display: flex; align-items: center; gap: 8px;
-      background: #0f2a1a; border: 1px solid #166534;
-      padding: 6px 14px; border-radius: 999px;
-      font-size: 0.8rem; font-weight: 600; color: #4ade80;
-    }
-    .dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: #4ade80; animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50%       { opacity: 0.3; }
-    }
-
-    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 16px; }
-    .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-bottom: 16px; }
-
-    @media (max-width: 900px) {
-      .grid-3 { grid-template-columns: 1fr; }
-      .grid-2 { grid-template-columns: 1fr; }
-    }
-
-    .card {
-      background: #111118;
-      border: 1px solid #1e1e2e;
-      border-radius: 16px;
-      padding: 20px 24px;
-    }
-
-    .card-label { color: #64748b; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.8px; }
-    .card-value { font-size: 2rem; font-weight: 700; margin-top: 6px; }
-    .card-sub   { font-size: 0.82rem; color: #64748b; margin-top: 6px; }
-
-    .green  { color: #4ade80; }
-    .yellow { color: #facc15; }
-    .red    { color: #f87171; }
-    .blue   { color: #60a5fa; }
-
-    /* PnL Chart */
-    #chart-wrap { position: relative; height: 200px; }
-    #pnl-chart  { width: 100%; height: 100%; }
-
-    /* Latency bar */
-    .lat-bar-wrap { margin-top: 12px; }
-    .lat-bar-bg   { background: #1e1e2e; border-radius: 4px; height: 8px; overflow: hidden; }
-    .lat-bar-fill {
-      height: 100%; border-radius: 4px;
-      background: linear-gradient(90deg, #4ade80, #facc15);
-      transition: width 0.5s ease;
-    }
-    .lat-labels { display: flex; justify-content: space-between; font-size: 0.72rem; color: #64748b; margin-top: 4px; }
-
-    /* Trades feed */
-    #trades-list { max-height: 340px; overflow-y: auto; }
-    #trades-list::-webkit-scrollbar { width: 4px; }
-    #trades-list::-webkit-scrollbar-thumb { background: #1e1e2e; border-radius: 4px; }
-
-    .trade-row {
       display: flex; align-items: center; justify-content: space-between;
-      padding: 10px 0; border-bottom: 1px solid #1e1e2e;
-      animation: fadeIn 0.4s ease;
+      margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
     }
-    @keyframes fadeIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; } }
+    header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.5px; }
+    header p  { color: #475569; font-size: 0.82rem; margin-top: 2px; }
+    .badges { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    .badge {
+      display: flex; align-items: center; gap: 7px;
+      padding: 5px 13px; border-radius: 999px;
+      font-size: 0.78rem; font-weight: 600;
+    }
+    .badge-green  { background:#0f2a1a; border:1px solid #166534; color:#4ade80; }
+    .badge-blue   { background:#0c1a2e; border:1px solid #1e40af; color:#60a5fa; }
+    .badge-gray   { background:#111118; border:1px solid #334155; color:#94a3b8; }
+    .dot { width:7px; height:7px; border-radius:50%; animation: pulse 1.5s infinite; }
+    .dot-green { background:#4ade80; }
+    .dot-blue  { background:#60a5fa; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
 
-    .trade-row:last-child { border-bottom: none; }
-    .trade-triangle { font-family: monospace; font-size: 0.82rem; color: #cbd5e1; }
-    .trade-time     { font-size: 0.72rem; color: #475569; margin-top: 2px; }
-    .trade-profit   { font-weight: 700; font-size: 0.92rem; }
+    /* TABS */
+    .tabs {
+      display: flex; gap: 4px; margin-bottom: 20px;
+      background: #111118; border: 1px solid #1e1e2e;
+      border-radius: 12px; padding: 4px; width: fit-content;
+    }
+    .tab {
+      padding: 8px 20px; border-radius: 9px; font-size: 0.85rem;
+      font-weight: 600; cursor: pointer; border: none;
+      transition: all 0.2s; color: #64748b; background: transparent;
+    }
+    .tab.active { background: #1e1e3e; color: #e2e8f0; }
 
-    /* Stats row */
-    .stat-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #1e1e2e; font-size: 0.88rem; }
-    .stat-row:last-child { border-bottom: none; }
-    .stat-key { color: #64748b; }
+    /* GRIDS */
+    .grid-3 { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 14px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2,1fr); gap: 14px; margin-bottom: 14px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 14px; }
+    @media(max-width:900px) {
+      .grid-3,.grid-2,.grid-4 { grid-template-columns:1fr; }
+    }
 
-    /* Connection status */
-    #conn-status { font-size: 0.78rem; color: #64748b; margin-top: 4px; }
+    /* CARDS */
+    .card {
+      background: #111118; border: 1px solid #1e1e2e;
+      border-radius: 14px; padding: 18px 22px;
+    }
+    .card-label { color:#64748b; font-size:.75rem; text-transform:uppercase; letter-spacing:.8px; }
+    .card-value { font-size:1.8rem; font-weight:700; margin-top:5px; }
+    .card-sub   { font-size:.8rem; color:#64748b; margin-top:5px; }
 
-    .empty-state { color: #334155; text-align: center; padding: 40px 0; font-size: 0.88rem; }
+    .green  { color:#4ade80; }
+    .yellow { color:#facc15; }
+    .red    { color:#f87171; }
+    .blue   { color:#60a5fa; }
+    .purple { color:#a78bfa; }
+    .gray   { color:#64748b; }
+
+    /* SECTION TITLES */
+    .section-title {
+      font-size: .7rem; text-transform: uppercase; letter-spacing: 1px;
+      color: #475569; margin-bottom: 10px; display: flex;
+      align-items: center; gap: 8px;
+    }
+    .section-title::after {
+      content: ''; flex: 1; height: 1px; background: #1e1e2e;
+    }
+
+    /* CHART */
+    #chart-wrap { position:relative; height:180px; }
+    #pnl-chart  { width:100%; height:100%; }
+
+    /* STAT ROW */
+    .stat-row {
+      display:flex; justify-content:space-between; padding:7px 0;
+      border-bottom:1px solid #1e1e2e; font-size:.85rem;
+    }
+    .stat-row:last-child { border-bottom:none; }
+    .stat-key { color:#64748b; }
+
+    /* TRADES */
+    .feed { max-height:320px; overflow-y:auto; }
+    .feed::-webkit-scrollbar { width:3px; }
+    .feed::-webkit-scrollbar-thumb { background:#1e1e2e; border-radius:3px; }
+    .feed-row {
+      display:flex; align-items:center; justify-content:space-between;
+      padding:9px 0; border-bottom:1px solid #1e1e2e;
+      animation: fadeIn .4s ease;
+    }
+    .feed-row:last-child { border-bottom:none; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(-5px)} to{opacity:1} }
+    .feed-label { font-family:monospace; font-size:.8rem; color:#cbd5e1; }
+    .feed-time  { font-size:.7rem; color:#475569; margin-top:2px; }
+    .feed-val   { font-weight:700; font-size:.9rem; text-align:right; }
+
+    /* RAFI SIGNAL CARD */
+    .rafi-card {
+      background: #111118; border: 1px solid #1e1e2e;
+      border-radius: 12px; padding: 14px 16px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .rafi-header {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .rafi-par    { font-weight: 700; font-size: .95rem; }
+    .rafi-preco  { font-size: .8rem; color: #94a3b8; font-family: monospace; }
+    .rafi-bar    {
+      height: 6px; border-radius: 3px; background: #1e1e2e; overflow: hidden;
+    }
+    .rafi-fill   { height: 100%; border-radius: 3px; transition: width .4s; }
+    .rafi-meta   {
+      display: flex; justify-content: space-between; font-size: .75rem;
+    }
+
+    .pill {
+      display: inline-block; padding: 2px 10px; border-radius: 999px;
+      font-size: .72rem; font-weight: 700;
+    }
+    .pill-verde    { background:#0f2a1a; color:#4ade80; border:1px solid #166534; }
+    .pill-vermelho { background:#2a0f0f; color:#f87171; border:1px solid #7f1d1d; }
+    .pill-amarelo  { background:#2a250f; color:#facc15; border:1px solid #713f12; }
+    .pill-neutro   { background:#111827; color:#64748b; border:1px solid #1e2836; }
+    .pill-forte    { background:#1e1e3e; color:#a78bfa; border:1px solid #4c1d95; }
+
+    /* LAT BAR */
+    .lat-bar-bg   { background:#1e1e2e; border-radius:4px; height:7px; overflow:hidden; margin-top:10px; }
+    .lat-bar-fill { height:100%; border-radius:4px; background:linear-gradient(90deg,#4ade80,#facc15); transition:width .5s; }
+
+    .empty-state { color:#334155; text-align:center; padding:32px 0; font-size:.85rem; }
+
+    /* PANEL visibility */
+    .panel { display: none; }
+    .panel.active { display: block; }
   </style>
 </head>
 <body>
@@ -111,261 +154,301 @@
 <header>
   <div>
     <h1>Cechella</h1>
-    <p>Paper Trading Monitor • Binance</p>
+    <p>Painel Unificado — Arbitragem Cripto + RAFI Forex</p>
   </div>
-  <div>
-    <div class="live-badge" id="live-badge">
-      <span class="dot"></span> CONECTANDO...
+  <div class="badges">
+    <div class="badge badge-green" id="badge-arb">
+      <span class="dot dot-green"></span> CRIPTO
     </div>
-    <div id="conn-status">Aguardando bot...</div>
+    <div class="badge badge-blue" id="badge-rafi">
+      <span class="dot dot-blue"></span> FOREX RAFI
+    </div>
+    <div class="badge badge-gray" id="badge-time">--:--</div>
   </div>
 </header>
 
-<!-- Row 1: KPIs -->
-<div class="grid-3">
-  <div class="card">
-    <div class="card-label">PnL Simulado</div>
-    <div class="card-value green" id="pnl">$0.0000</div>
-    <div class="card-sub" id="pnl-sub">0 oportunidades capturadas</div>
-  </div>
-  <div class="card">
-    <div class="card-label">Latencia Media</div>
-    <div class="card-value yellow" id="lat-avg">---</div>
-    <div class="card-sub" id="lat-eval">Aguardando dados...</div>
-  </div>
-  <div class="card">
-    <div class="card-label">Ciclos Analisados</div>
-    <div class="card-value blue" id="cycles">0</div>
-    <div class="card-sub" id="hit-rate">Taxa de oportunidade: 0.0000%</div>
-  </div>
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" onclick="showTab('arb')">Arbitragem Cripto</button>
+  <button class="tab"        onclick="showTab('rafi')">RAFI Forex</button>
+  <button class="tab"        onclick="showTab('all')">Visao Geral</button>
 </div>
 
-<!-- Row 2: Chart + Latency -->
-<div class="grid-2">
-  <div class="card">
-    <div class="card-label" style="margin-bottom:12px">Evolucao do PnL</div>
-    <div id="chart-wrap">
-      <canvas id="pnl-chart"></canvas>
-    </div>
-  </div>
-  <div class="card">
-    <div class="card-label" style="margin-bottom:16px">Latencia da Conexao</div>
-    <div class="stat-row">
-      <span class="stat-key">Atual</span>
-      <span id="lat-cur" class="yellow">---</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-key">Media</span>
-      <span id="lat-avg2" class="yellow">---</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-key">Minima</span>
-      <span id="lat-min" class="green">---</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-key">Maxima</span>
-      <span id="lat-max" class="red">---</span>
-    </div>
-    <div class="lat-bar-wrap" style="margin-top:16px">
-      <div style="display:flex;justify-content:space-between;font-size:0.72rem;color:#64748b;margin-bottom:6px">
-        <span>0ms</span><span>Local</span><span>VPS Tokyo</span><span>500ms</span>
-      </div>
-      <div class="lat-bar-bg">
-        <div class="lat-bar-fill" id="lat-bar" style="width:0%"></div>
-      </div>
-      <div class="lat-labels">
-        <span class="green">Excelente &lt;100ms</span>
-        <span class="yellow">Bom &lt;300ms</span>
-        <span class="red">Lento &gt;300ms</span>
-      </div>
-    </div>
-    <div style="margin-top:16px;padding:10px 14px;background:#0f172a;border-radius:8px;font-size:0.82rem" id="lat-rec">
-      Rodando primeiros ciclos...
-    </div>
-  </div>
-</div>
+<!-- ============================== PANEL: ARBITRAGEM ============================== -->
+<div id="panel-arb" class="panel active">
 
-<!-- Row 3: Trades + Stats -->
-<div class="grid-2">
+  <div class="section-title">Arbitragem Triangular — Binance</div>
+
+  <div class="grid-3">
+    <div class="card">
+      <div class="card-label">PnL Simulado</div>
+      <div class="card-value green" id="pnl">$0.0000</div>
+      <div class="card-sub" id="pnl-sub">0 oportunidades</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Latencia Media</div>
+      <div class="card-value yellow" id="lat-avg">---</div>
+      <div class="card-sub" id="lat-src">Aguardando...</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Ciclos Analisados</div>
+      <div class="card-value blue" id="cycles">0</div>
+      <div class="card-sub" id="hit-rate">Taxa: 0.0000%</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-label" style="margin-bottom:12px">Evolucao do PnL</div>
+      <div id="chart-wrap"><canvas id="pnl-chart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-label" style="margin-bottom:14px">Estatisticas</div>
+      <div class="stat-row"><span class="stat-key">Capital por ciclo</span><span>$1,000</span></div>
+      <div class="stat-row"><span class="stat-key">Spread minimo</span><span>0.15%</span></div>
+      <div class="stat-row"><span class="stat-key">Oportunidades</span><span id="s-opps" class="green">0</span></div>
+      <div class="stat-row"><span class="stat-key">Ciclos totais</span><span id="s-cycles">0</span></div>
+      <div class="stat-row"><span class="stat-key">Taxa de acerto</span><span id="s-rate">0.0000%</span></div>
+      <div class="stat-row"><span class="stat-key">PnL acumulado</span><span id="s-pnl" class="green">$0.0000</span></div>
+      <div class="stat-row"><span class="stat-key">Projecao 30 dias</span><span id="s-proj" class="yellow">---</span></div>
+      <div class="lat-bar-bg"><div class="lat-bar-fill" id="lat-bar" style="width:0%"></div></div>
+      <div style="display:flex;justify-content:space-between;font-size:.7rem;color:#475569;margin-top:4px">
+        <span class="green">Excelente</span><span class="yellow">Bom</span><span class="red">Lento</span>
+      </div>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-label" style="margin-bottom:12px">Oportunidades Detectadas</div>
-    <div id="trades-list">
-      <div class="empty-state">Aguardando oportunidades...</div>
+    <div class="feed" id="arb-feed">
+      <div class="empty-state">Aguardando oportunidades de arbitragem...</div>
     </div>
   </div>
-  <div class="card">
-    <div class="card-label" style="margin-bottom:12px">Estatisticas</div>
-    <div class="stat-row">
-      <span class="stat-key">Capital por ciclo</span>
-      <span id="s-capital">$1,000</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-key">Spread minimo</span>
-      <span id="s-spread">0.15%</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-key">Oportunidades hoje</span>
-      <span id="s-opps" class="green">0</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-key">Ciclos totais</span>
-      <span id="s-cycles">0</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-key">Taxa de acerto</span>
-      <span id="s-rate">0.0000%</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-key">PnL acumulado</span>
-      <span id="s-pnl" class="green">$0.0000</span>
-    </div>
-    <div class="stat-row">
-      <span class="stat-key">Projecao 30 dias</span>
-      <span id="s-proj" class="yellow">---</span>
+
+</div>
+
+<!-- ============================== PANEL: RAFI ============================== -->
+<div id="panel-rafi" class="panel">
+
+  <div class="section-title">Sinais RAFI — Forex (Raphael Figueredo)</div>
+
+  <!-- Legenda -->
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap">
+    <span class="pill pill-verde">Verde = COMPRA</span>
+    <span class="pill pill-vermelho">Vermelho = VENDA</span>
+    <span class="pill pill-amarelo">Amarelo = Exaustao</span>
+    <span class="pill pill-neutro">Neutro = Aguardar</span>
+    <span class="pill pill-forte">FORTE = Bollinger abrindo</span>
+  </div>
+
+  <!-- Regras RAFI -->
+  <div class="card" style="margin-bottom:14px;background:#0c1020;border-color:#1e2a3e">
+    <div style="font-size:.78rem;color:#64748b;line-height:1.7">
+      <b style="color:#a78bfa">Regras RAFI (Modulo 1 e 2):</b>
+      RAFI &gt; +2.5 rompendo resistencia = Candle VERDE (compra) &nbsp;|&nbsp;
+      RAFI &gt; +2.5 rompendo suporte = Candle VERMELHO (venda) &nbsp;|&nbsp;
+      Candle AMARELO = exaustao do movimento anterior &nbsp;|&nbsp;
+      <b>Sempre opere a favor da tendencia!</b>
+      Bollinger Bands (8 per, 2 DP) abertas = timing ideal de entrada.
+      Nunca compre com RAFI vermelho.
     </div>
   </div>
+
+  <div class="grid-4" id="rafi-grid">
+    <div class="empty-state" style="grid-column:1/-1">Carregando sinais RAFI... (atualiza a cada 5 minutos)</div>
+  </div>
+
+  <!-- Multi-timeframe -->
+  <div class="card" style="margin-top:4px">
+    <div class="card-label" style="margin-bottom:12px">Alinhamento Multi-Timeframe</div>
+    <div style="font-size:.82rem;color:#64748b;margin-bottom:12px">
+      Sinal VALIDO = H1 + H4 + D1 na mesma direcao com RAFI &gt; +2.5
+    </div>
+    <div id="mtf-table">
+      <div class="empty-state">Aguardando dados...</div>
+    </div>
+  </div>
+
+  <div style="margin-top:14px;font-size:.75rem;color:#334155">
+    Ultima atualizacao: <span id="rafi-update">---</span> &nbsp;|&nbsp;
+    Dados via Yahoo Finance (gratuito) &nbsp;|&nbsp;
+    Para o RAFI original instale o arquivo .ex5 no MT5
+  </div>
+</div>
+
+<!-- ============================== PANEL: VISAO GERAL ============================== -->
+<div id="panel-all" class="panel">
+
+  <div class="section-title">Resumo Geral — Ecossistema Cechella</div>
+
+  <div class="grid-4">
+    <div class="card">
+      <div class="card-label">PnL Cripto</div>
+      <div class="card-value green" id="all-pnl">$0.00</div>
+      <div class="card-sub">Arbitragem triangular</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Sinais Forex Hoje</div>
+      <div class="card-value blue" id="all-rafi-count">0</div>
+      <div class="card-sub">Setups RAFI ativos</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Melhor Sinal</div>
+      <div class="card-value purple" id="all-best">---</div>
+      <div class="card-sub" id="all-best-sub">RAFI Forex</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Alertas</div>
+      <div class="card-value yellow" id="all-alerts">0</div>
+      <div class="card-sub">Setups FORTE ativos</div>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <!-- Mini cripto -->
+    <div class="card">
+      <div class="card-label" style="margin-bottom:12px">Arbitragem Cripto — Resumo</div>
+      <div class="stat-row"><span class="stat-key">Status</span><span id="all-arb-status" class="green">Monitorando</span></div>
+      <div class="stat-row"><span class="stat-key">Ciclos</span><span id="all-cycles">0</span></div>
+      <div class="stat-row"><span class="stat-key">Oportunidades</span><span id="all-opps" class="green">0</span></div>
+      <div class="stat-row"><span class="stat-key">PnL</span><span id="all-pnl2" class="green">$0.00</span></div>
+      <div class="stat-row"><span class="stat-key">Fonte</span><span id="all-src" class="yellow">---</span></div>
+    </div>
+    <!-- Mini rafi -->
+    <div class="card">
+      <div class="card-label" style="margin-bottom:12px">RAFI Forex — Sinais Ativos</div>
+      <div id="all-rafi-mini">
+        <div class="empty-state">Sem sinais ativos</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plano de capital -->
+  <div class="card" style="background:#0c1020;border-color:#1e2a3e">
+    <div class="card-label" style="margin-bottom:14px">Plano de Capital — Ecossistema</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;text-align:center">
+      <div>
+        <div style="font-size:.75rem;color:#64748b;margin-bottom:6px">ARBITRAGEM CRIPTO</div>
+        <div style="font-size:1.2rem;font-weight:700;color:#4ade80">$500</div>
+        <div style="font-size:.75rem;color:#64748b;margin-top:4px">Meta: 1-3%/mes</div>
+        <div style="font-size:.75rem;color:#4ade80;margin-top:2px">= $5-$15/mes</div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center;color:#334155;font-size:1.4rem">+</div>
+      <div>
+        <div style="font-size:.75rem;color:#64748b;margin-bottom:6px">DAY TRADE FOREX (XM)</div>
+        <div style="font-size:1.2rem;font-weight:700;color:#60a5fa">$20</div>
+        <div style="font-size:.75rem;color:#64748b;margin-top:4px">Lote: 0.01 | Risco: 2%</div>
+        <div style="font-size:.75rem;color:#60a5fa;margin-top:2px">Meta: $0.80/dia</div>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding:10px;background:#111118;border-radius:8px;font-size:.8rem;color:#64748b;text-align:center">
+      Regra: operar RAFI so quando H1 + tendencia alinhados. Stop obrigatorio. Max 2% risco/trade.
+    </div>
+  </div>
+
 </div>
 
 <script>
-  // --- Chart setup ---
-  const canvas = document.getElementById('pnl-chart')
-  const ctx = canvas.getContext('2d')
-  const pnlHistory = [0]
-  const timeLabels = ['0s']
+// ===================== TABS =====================
+function showTab(name) {
+  ['arb','rafi','all'].forEach(t => {
+    document.getElementById('panel-'+t).classList.remove('active')
+    document.querySelectorAll('.tab')[['arb','rafi','all'].indexOf(t)].classList.remove('active')
+  })
+  document.getElementById('panel-'+name).classList.add('active')
+  document.querySelectorAll('.tab')[['arb','rafi','all'].indexOf(name)].classList.add('active')
+}
 
-  function resizeCanvas() {
-    canvas.width  = canvas.offsetWidth
-    canvas.height = canvas.offsetHeight
+// ===================== CLOCK =====================
+function updateClock() {
+  const now = new Date()
+  document.getElementById('badge-time').textContent =
+    now.toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit',second:'2-digit'})
+}
+setInterval(updateClock, 1000)
+updateClock()
+
+// ===================== CHART =====================
+const canvas = document.getElementById('pnl-chart')
+const ctx = canvas.getContext('2d')
+const pnlHistory = [0]
+
+function resizeCanvas() { canvas.width = canvas.offsetWidth; canvas.height = canvas.offsetHeight }
+resizeCanvas()
+window.addEventListener('resize', () => { resizeCanvas(); drawChart() })
+
+function drawChart() {
+  const W = canvas.width, H = canvas.height
+  ctx.clearRect(0,0,W,H)
+  if (pnlHistory.length < 2) {
+    ctx.fillStyle='#334155'; ctx.font='12px system-ui'; ctx.textAlign='center'
+    ctx.fillText('Aguardando dados...', W/2, H/2); return
   }
-  resizeCanvas()
-  window.addEventListener('resize', () => { resizeCanvas(); drawChart() })
-
-  function drawChart() {
-    const W = canvas.width, H = canvas.height
-    ctx.clearRect(0, 0, W, H)
-
-    if (pnlHistory.length < 2) {
-      ctx.fillStyle = '#334155'
-      ctx.font = '13px system-ui'
-      ctx.textAlign = 'center'
-      ctx.fillText('Aguardando dados...', W/2, H/2)
-      return
-    }
-
-    const maxVal = Math.max(...pnlHistory, 0.001)
-    const minVal = Math.min(...pnlHistory, 0)
-    const range  = maxVal - minVal || 1
-
-    // Grid lines
-    ctx.strokeStyle = '#1e1e2e'
-    ctx.lineWidth = 1
-    for (let i = 0; i <= 4; i++) {
-      const y = H - (i / 4) * H * 0.85 - H * 0.05
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
-    }
-
-    // Gradient fill
-    const grad = ctx.createLinearGradient(0, 0, 0, H)
-    grad.addColorStop(0, 'rgba(74,222,128,0.3)')
-    grad.addColorStop(1, 'rgba(74,222,128,0)')
-
-    ctx.beginPath()
-    pnlHistory.forEach((v, i) => {
-      const x = (i / (pnlHistory.length - 1)) * W
-      const y = H - ((v - minVal) / range) * H * 0.85 - H * 0.05
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-    })
-    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath()
-    ctx.fillStyle = grad; ctx.fill()
-
-    // Line
-    ctx.beginPath()
-    pnlHistory.forEach((v, i) => {
-      const x = (i / (pnlHistory.length - 1)) * W
-      const y = H - ((v - minVal) / range) * H * 0.85 - H * 0.05
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
-    })
-    ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2; ctx.stroke()
-
-    // Current value label
-    const lastY = H - ((pnlHistory.at(-1) - minVal) / range) * H * 0.85 - H * 0.05
-    ctx.fillStyle = '#4ade80'; ctx.font = 'bold 12px monospace'
-    ctx.textAlign = 'right'
-    ctx.fillText(`$${pnlHistory.at(-1).toFixed(4)}`, W - 8, lastY - 6)
+  const maxVal = Math.max(...pnlHistory, 0.001)
+  const minVal = Math.min(...pnlHistory, 0)
+  const range  = maxVal - minVal || 1
+  ctx.strokeStyle='#1e1e2e'; ctx.lineWidth=1
+  for (let i=0;i<=4;i++) {
+    const y = H - (i/4)*H*.85 - H*.05
+    ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke()
   }
+  const grad = ctx.createLinearGradient(0,0,0,H)
+  grad.addColorStop(0,'rgba(74,222,128,0.25)'); grad.addColorStop(1,'rgba(74,222,128,0)')
+  ctx.beginPath()
+  pnlHistory.forEach((v,i)=>{
+    const x=(i/(pnlHistory.length-1))*W
+    const y=H-((v-minVal)/range)*H*.85-H*.05
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)
+  })
+  ctx.lineTo(W,H); ctx.lineTo(0,H); ctx.closePath()
+  ctx.fillStyle=grad; ctx.fill()
+  ctx.beginPath()
+  pnlHistory.forEach((v,i)=>{
+    const x=(i/(pnlHistory.length-1))*W
+    const y=H-((v-minVal)/range)*H*.85-H*.05
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y)
+  })
+  ctx.strokeStyle='#4ade80'; ctx.lineWidth=2; ctx.stroke()
+  const lastY=H-((pnlHistory.at(-1)-minVal)/range)*H*.85-H*.05
+  ctx.fillStyle='#4ade80'; ctx.font='bold 11px monospace'; ctx.textAlign='right'
+  ctx.fillText(`$${pnlHistory.at(-1).toFixed(4)}`, W-6, lastY-5)
+}
+drawChart()
 
-  drawChart()
+// ===================== ARB POLLING =====================
+const arbTrades = []
+let lastTradeTime = null
 
-  // --- HTTP Polling (compativel com Replit) ---
-  const trades = []
-  let lastTradeTime = null
+async function pollArb() {
+  try {
+    const r = await fetch('/data')
+    const d = await r.json()
+    document.getElementById('badge-arb').innerHTML = '<span class="dot dot-green"></span> CRIPTO LIVE'
 
-  async function poll() {
-    try {
-      const r = await fetch('/data')
-      const d = await r.json()
-      document.getElementById('live-badge').innerHTML = '<span class="dot"></span> LIVE'
-      document.getElementById('conn-status').textContent = 'Conectado ao bot'
-      if (d.last_trade && d.last_trade.time !== lastTradeTime) {
-        lastTradeTime = d.last_trade.time
-        trades.unshift(d.last_trade)
-        if (trades.length > 100) trades.pop()
-        renderTrades()
-        updateUI({...d, new_trade: d.last_trade})
-      } else {
-        updateUI(d)
-      }
-    } catch(e) {
-      document.getElementById('live-badge').innerHTML = '<span class="dot" style="background:#f87171;animation:none"></span> DESCONECTADO'
-      document.getElementById('conn-status').textContent = 'Reconectando...'
-    }
-    setTimeout(poll, 1500)
-  }
-
-  function updateUI(d) {
     // KPIs
-    document.getElementById('pnl').textContent      = `$${d.pnl.toFixed(4)}`
-    document.getElementById('pnl-sub').textContent  = `${d.profitable} oportunidades capturadas`
-    document.getElementById('lat-avg').textContent  = `${d.lat_avg.toFixed(0)}ms`
-    document.getElementById('cycles').textContent   = d.total
-    document.getElementById('hit-rate').textContent = `Taxa de oportunidade: ${d.hit_rate.toFixed(4)}%`
+    document.getElementById('pnl').textContent     = `$${d.pnl.toFixed(4)}`
+    document.getElementById('pnl-sub').textContent = `${d.profitable} oportunidades`
+    document.getElementById('lat-avg').textContent = `${d.lat_avg.toFixed(0)}ms`
+    document.getElementById('lat-src').textContent = d.source || '---'
+    document.getElementById('cycles').textContent  = d.total
+    document.getElementById('hit-rate').textContent= `Taxa: ${d.hit_rate.toFixed(4)}%`
+    document.getElementById('s-opps').textContent  = d.profitable
+    document.getElementById('s-cycles').textContent= d.total
+    document.getElementById('s-rate').textContent  = `${d.hit_rate.toFixed(4)}%`
+    document.getElementById('s-pnl').textContent   = `$${d.pnl.toFixed(4)}`
+    document.getElementById('lat-bar').style.width = Math.min((d.lat_avg/500)*100,100)+'%'
 
-    // Latency card
-    document.getElementById('lat-cur').textContent  = `${d.lat_cur.toFixed(0)}ms`
-    document.getElementById('lat-avg2').textContent = `${d.lat_avg.toFixed(0)}ms`
-    document.getElementById('lat-min').textContent  = `${d.lat_min.toFixed(0)}ms`
-    document.getElementById('lat-max').textContent  = `${d.lat_max.toFixed(0)}ms`
-
-    const barPct = Math.min((d.lat_avg / 500) * 100, 100)
-    document.getElementById('lat-bar').style.width = barPct + '%'
-
-    let rec, recColor
-    if (d.lat_avg < 100) {
-      rec = '✅ EXCELENTE — conexao rapida, pode fazer live trading direto'
-      recColor = '#4ade80'
-    } else if (d.lat_avg < 300) {
-      rec = '⚡ BOM — funcional, VPS Tokyo melhoraria +30% dos resultados'
-      recColor = '#facc15'
-    } else {
-      rec = '⚠️ LENTO — VPS Tokyo necessario para ser competitivo'
-      recColor = '#f87171'
-    }
-    const recEl = document.getElementById('lat-rec')
-    recEl.textContent = rec
-    recEl.style.color = recColor
-
-    // Stats
-    document.getElementById('s-opps').textContent   = d.profitable
-    document.getElementById('s-cycles').textContent = d.total
-    document.getElementById('s-rate').textContent   = `${d.hit_rate.toFixed(4)}%`
-    document.getElementById('s-pnl').textContent    = `$${d.pnl.toFixed(4)}`
-    document.getElementById('lat-avg').textContent  = `${d.lat_avg.toFixed(0)}ms`
-
-    // Projecao 30 dias
     if (d.elapsed_s > 10 && d.pnl > 0) {
-      const perDay = (d.pnl / d.elapsed_s) * 86400
-      document.getElementById('s-proj').textContent = `+$${(perDay * 30).toFixed(2)}/mes`
+      const proj = (d.pnl / d.elapsed_s) * 86400 * 30
+      document.getElementById('s-proj').textContent = `+$${proj.toFixed(2)}/mes`
     }
+
+    // Visao Geral
+    document.getElementById('all-pnl').textContent  = `$${d.pnl.toFixed(2)}`
+    document.getElementById('all-pnl2').textContent = `$${d.pnl.toFixed(2)}`
+    document.getElementById('all-cycles').textContent= d.total
+    document.getElementById('all-opps').textContent = d.profitable
+    document.getElementById('all-src').textContent  = d.source || '---'
 
     // Chart
     pnlHistory.push(d.pnl)
@@ -373,34 +456,164 @@
     drawChart()
 
     // Trades feed
-    if (d.new_trade) {
-      trades.unshift(d.new_trade)
-      if (trades.length > 100) trades.pop()
-      renderTrades()
+    if (d.last_trade && d.last_trade.time !== lastTradeTime) {
+      lastTradeTime = d.last_trade.time
+      arbTrades.unshift(d.last_trade)
+      if (arbTrades.length > 60) arbTrades.pop()
+      renderArbFeed()
     }
+  } catch(e) {
+    document.getElementById('badge-arb').innerHTML =
+      '<span class="dot" style="background:#f87171;animation:none"></span> CRIPTO OFF'
   }
+  setTimeout(pollArb, 1500)
+}
 
-  function renderTrades() {
-    const el = document.getElementById('trades-list')
-    if (trades.length === 0) {
-      el.innerHTML = '<div class="empty-state">Aguardando oportunidades...</div>'
+function renderArbFeed() {
+  const el = document.getElementById('arb-feed')
+  if (!arbTrades.length) {
+    el.innerHTML = '<div class="empty-state">Aguardando oportunidades de arbitragem...</div>'
+    return
+  }
+  el.innerHTML = arbTrades.map(t => `
+    <div class="feed-row">
+      <div>
+        <div class="feed-label">${t.triangle}</div>
+        <div class="feed-time">${t.time}</div>
+      </div>
+      <div>
+        <div class="feed-val green">+$${t.profit.toFixed(4)}</div>
+        <div class="feed-time green">+${t.pct.toFixed(4)}%</div>
+      </div>
+    </div>`).join('')
+}
+
+// ===================== RAFI POLLING =====================
+async function pollRafi() {
+  try {
+    const r = await fetch('/rafi')
+    const d = await r.json()
+
+    if (!d.enabled) {
+      document.getElementById('rafi-grid').innerHTML =
+        '<div class="empty-state" style="grid-column:1/-1">Modulo RAFI nao instalado no servidor.<br>Execute: pip install yfinance numpy pandas</div>'
+      setTimeout(pollRafi, 30000)
       return
     }
-    el.innerHTML = trades.map(t => `
-      <div class="trade-row">
-        <div>
-          <div class="trade-triangle">${t.triangle}</div>
-          <div class="trade-time">${t.time}</div>
+
+    document.getElementById('badge-rafi').innerHTML = '<span class="dot dot-blue"></span> FOREX LIVE'
+    if (d.last_update) document.getElementById('rafi-update').textContent = d.last_update
+
+    const signals = d.signals || []
+    renderRafiGrid(signals)
+    renderMtfTable(signals)
+    updateRafiSummary(signals)
+  } catch(e) {
+    document.getElementById('badge-rafi').innerHTML =
+      '<span class="dot" style="background:#64748b;animation:none"></span> FOREX OFF'
+  }
+  setTimeout(pollRafi, 30000) // atualiza a cada 30s (dados mudam a cada 5min)
+}
+
+function corClass(cor) {
+  const map = { verde:'green', vermelho:'red', amarelo:'yellow', neutro:'gray', erro:'red' }
+  return map[cor] || 'gray'
+}
+function pillClass(cor) {
+  const map = { verde:'pill-verde', vermelho:'pill-vermelho', amarelo:'pill-amarelo',
+                neutro:'pill-neutro', erro:'pill-neutro' }
+  return map[cor] || 'pill-neutro'
+}
+function sinalTexto(cor) {
+  const map = { verde:'COMPRA', vermelho:'VENDA', amarelo:'EXAUSTAO', neutro:'AGUARDAR', erro:'ERRO' }
+  return map[cor] || 'AGUARDAR'
+}
+function trendIcon(t) {
+  return t === 'alta' ? '↑' : t === 'baixa' ? '↓' : '→'
+}
+
+function renderRafiGrid(signals) {
+  if (!signals.length) {
+    document.getElementById('rafi-grid').innerHTML =
+      '<div class="empty-state" style="grid-column:1/-1">Carregando dados de mercado...</div>'
+    return
+  }
+  document.getElementById('rafi-grid').innerHTML = signals.map(s => {
+    const rafiPct = s.rafi ? Math.min(Math.abs(s.rafi) / 5 * 100, 100) : 0
+    const barColor = s.cor === 'verde' ? '#4ade80' : s.cor === 'vermelho' ? '#f87171' :
+                     s.cor === 'amarelo' ? '#facc15' : '#334155'
+    const forcaPill = s.forca === 'FORTE' ?
+      '<span class="pill pill-forte">FORTE</span>' : ''
+    return `
+      <div class="rafi-card">
+        <div class="rafi-header">
+          <span class="rafi-par ${corClass(s.cor)}">${s.par}</span>
+          <span class="pill ${pillClass(s.cor)}">${sinalTexto(s.cor)}</span>
         </div>
-        <div style="text-align:right">
-          <div class="trade-profit green">+$${t.profit.toFixed(4)}</div>
-          <div class="trade-time">+${t.pct.toFixed(4)}%</div>
+        <div class="rafi-preco">${s.preco > 100 ? s.preco.toFixed(2) : s.preco.toFixed(5)}</div>
+        <div class="rafi-bar">
+          <div class="rafi-fill" style="width:${rafiPct}%;background:${barColor}"></div>
         </div>
-      </div>
-    `).join('')
+        <div class="rafi-meta">
+          <span class="gray">RAFI: <span class="${corClass(s.cor)}">${s.rafi !== null ? s.rafi : '--'}</span></span>
+          <span class="gray">Trend: <span class="${corClass(s.cor)}">${trendIcon(s.trend)} ${s.trend}</span></span>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          ${forcaPill}
+          ${s.bb_open ? '<span class="pill pill-forte">BB Abrindo</span>' : ''}
+          <span style="font-size:.7rem;color:#475569">${s.hora} UTC</span>
+        </div>
+      </div>`
+  }).join('')
+}
+
+function renderMtfTable(signals) {
+  if (!signals.length) return
+  const rows = signals.map(s => `
+    <div class="stat-row">
+      <span class="stat-key">${s.par}</span>
+      <span class="${corClass(s.cor)}">${trendIcon(s.trend)} ${s.trend}</span>
+      <span class="pill ${pillClass(s.cor)}" style="font-size:.7rem">${sinalTexto(s.cor)}</span>
+      <span class="${s.forca === 'FORTE' ? 'purple' : 'gray'}">${s.forca}</span>
+    </div>`).join('')
+  document.getElementById('mtf-table').innerHTML = rows
+}
+
+function updateRafiSummary(signals) {
+  const ativos = signals.filter(s => s.cor !== 'neutro' && s.cor !== 'erro')
+  const fortes = signals.filter(s => s.forca === 'FORTE')
+  const melhor = fortes[0] || ativos[0]
+
+  document.getElementById('all-rafi-count').textContent = ativos.length
+  document.getElementById('all-alerts').textContent     = fortes.length
+  if (melhor) {
+    document.getElementById('all-best').textContent     = melhor.par
+    document.getElementById('all-best-sub').textContent = `${sinalTexto(melhor.cor)} | ${melhor.forca}`
+    document.getElementById('all-best').className       = corClass(melhor.cor)
   }
 
-  poll()
+  // Mini lista na visao geral
+  const mini = document.getElementById('all-rafi-mini')
+  if (!ativos.length) {
+    mini.innerHTML = '<div class="empty-state">Sem sinais ativos</div>'
+    return
+  }
+  mini.innerHTML = ativos.map(s => `
+    <div class="feed-row">
+      <div>
+        <div class="feed-label ${corClass(s.cor)}">${s.par}</div>
+        <div class="feed-time">${s.preco > 100 ? s.preco.toFixed(2) : s.preco.toFixed(5)}</div>
+      </div>
+      <div>
+        <div class="feed-val ${corClass(s.cor)}">${sinalTexto(s.cor)}</div>
+        <div class="feed-time">${s.forca === 'FORTE' ? '⚡ FORTE' : s.forca}</div>
+      </div>
+    </div>`).join('')
+}
+
+// ===================== INIT =====================
+pollArb()
+pollRafi()
 </script>
 </body>
 </html>
