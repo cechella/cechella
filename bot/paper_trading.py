@@ -288,7 +288,8 @@ def serve_http():
                 self.end_headers()
             else:
                 super().do_GET()
-    HTTPServer(('0.0.0.0', 8081), H).serve_forever()
+    port = int(os.getenv('PORT', 8081))
+    HTTPServer(('0.0.0.0', port), H).serve_forever()
 
 
 # ----------------------------------------------------------------
@@ -357,7 +358,8 @@ async def trading_loop():
 
 async def main():
     Thread(target=serve_http, daemon=True).start()
-    print("Servidor HTTP na porta 8081")
+    port = int(os.getenv('PORT', 8081))
+    print(f"Servidor HTTP na porta {port}")
     await trading_loop()
 
 
