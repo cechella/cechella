@@ -247,6 +247,10 @@ def serve_http():
                 self.send_header('Access-Control-Allow-Origin', '*')
                 self.end_headers()
                 self.wfile.write(data)
+            elif self.path == '/':
+                self.send_response(302)
+                self.send_header('Location', '/dashboard.html')
+                self.end_headers()
             else:
                 super().do_GET()
     HTTPServer(('0.0.0.0', 8081), H).serve_forever()
