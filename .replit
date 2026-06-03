@@ -1,7 +1,7 @@
-run = "cd bot && python simulate.py"
+run = "cd bot && python paper_trading.py"
 
 [nix]
 channel = "stable-24_05"
 
 [deployment]
-run = ["sh", "-c", "cd bot && python simulate.py"]
+run = ["sh", "-c", "cd bot && python paper_trading.py"]
