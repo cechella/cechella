@@ -143,7 +143,7 @@ sim_prices = {k: v for k, v in BASE_PRICES.items()}
 
 def fetch_simulated() -> dict:
     for pair in sim_prices:
-        sim_prices[pair] *= math.exp(random.gauss(0, 0.0003))
+        sim_prices[pair] *= math.exp(random.gauss(0, 0.002))
     return {p: {'bid': v*(1-SPREAD), 'ask': v*(1+SPREAD)} for p, v in sim_prices.items()}
 
 
