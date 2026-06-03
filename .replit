@@ -1,10 +1,10 @@
-run = "cd bot && python paper_trading.py"
+run = "cd bot && python310 paper_trading.py"
 
 [nix]
 channel = "stable-24_05"
 
 [deployment]
-run = ["sh", "-c", "cd bot && python paper_trading.py"]
+run = ["sh", "-c", "cd bot && python310 paper_trading.py"]
 
 [[ports]]
 localPort = 8081
