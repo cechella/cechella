@@ -185,34 +185,40 @@ def fetch_simulated() -> dict:
 # ----------------------------------------------------------------
 # Seletor de fonte com cache de modo
 # ----------------------------------------------------------------
-_fail_counts = {'binance': 0, 'coingecko': 0}
+_fail_counts = {'binance': 0}
+_last_coingecko_fetch = 0
+_last_coingecko_tickers = {}
 
 def get_tickers():
-    global _source_mode
+    global _source_mode, _last_coingecko_fetch, _last_coingecko_tickers
+    import time
 
     # Tenta Binance
-    if _source_mode in (None, 'binance') and _fail_counts['binance'] < 3:
+    if _fail_counts['binance'] < 3:
         try:
             t = fetch_binance()
             _source_mode = 'binance'
             _fail_counts['binance'] = 0
-            return t, 'BINANCE LIVE 🟢'
+            return t, 'BINANCE LIVE'
         except Exception:
             _fail_counts['binance'] += 1
 
-    # Tenta CoinGecko
-    if _source_mode in (None, 'binance', 'coingecko') and _fail_counts['coingecko'] < 5:
+    # CoinGecko: busca a cada 10 segundos para respeitar rate limit
+    now = time.time()
+    if now - _last_coingecko_fetch >= 10:
         try:
-            t = fetch_coingecko()
+            _last_coingecko_tickers = fetch_coingecko()
+            _last_coingecko_fetch = now
             _source_mode = 'coingecko'
-            _fail_counts['coingecko'] = 0
-            return t, 'COINGECKO LIVE 🟡'
         except Exception:
-            _fail_counts['coingecko'] += 1
+            pass
+
+    if _last_coingecko_tickers:
+        return _last_coingecko_tickers, 'COINGECKO LIVE'
 
     # Fallback simulacao
     _source_mode = 'sim'
-    return fetch_simulated(), 'SIMULACAO 🔴'
+    return fetch_simulated(), 'SIMULACAO'
 
 
 # ----------------------------------------------------------------
