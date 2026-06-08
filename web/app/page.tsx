@@ -24,22 +24,28 @@ export default function LandingPage() {
     e.preventDefault()
     setLoading(true)
     setError('')
-    const supabase = createClient()
-    const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
-    if (authError) {
-      setError('E-mail ou senha incorretos.')
+    try {
+      const supabase = createClient()
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
+      if (authError) {
+        setError('E-mail ou senha incorretos: ' + authError.message)
+        setLoading(false)
+        return
+      }
+      const { data: profile, error: profileError } = await supabase.from('profiles').select('role').eq('id', data.user.id).single()
+      if (profileError) console.error('Profile error:', profileError)
+      const role = profile?.role || 'patient'
+      const redirectMap: Record<string, string> = {
+        patient: '/patient/dashboard',
+        doctor: '/medical/dashboard',
+        sales: '/sales/dashboard',
+        admin: '/admin/dashboard',
+      }
+      router.push(redirectMap[role] || '/patient/dashboard')
+    } catch (err) {
+      setError('Erro de conexão. Verifique sua internet.')
       setLoading(false)
-      return
     }
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single()
-    const role = profile?.role || 'patient'
-    const redirectMap: Record<string, string> = {
-      patient: '/patient/dashboard',
-      doctor: '/medical/dashboard',
-      sales: '/sales/dashboard',
-      admin: '/admin/dashboard',
-    }
-    router.push(redirectMap[role] || '/patient/dashboard')
   }
 
   return (
