@@ -8,3 +8,5 @@ node_modules/
 next-env.d.ts
 web/node_modules/
 hormone-ecosystem.tar.gz
+web/.env.local
+web/.env*.local
