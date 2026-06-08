@@ -1,24 +1,35 @@
 {
-  "name": "cechella-web",
-  "version": "0.1.0",
+  "name": "hormone-ecosystem",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "lint": "next lint"
   },
   "dependencies": {
     "next": "14.2.0",
     "react": "^18",
     "react-dom": "^18",
-    "lightweight-charts": "^4.1.0"
+    "lucide-react": "^0.363.0",
+    "@radix-ui/react-dialog": "^1.0.5",
+    "@radix-ui/react-dropdown-menu": "^2.0.6",
+    "@radix-ui/react-progress": "^1.0.3",
+    "@radix-ui/react-tabs": "^1.0.4",
+    "recharts": "^2.12.2",
+    "clsx": "^2.1.0",
+    "tailwind-merge": "^2.2.2"
   },
   "devDependencies": {
     "@types/node": "^20",
     "@types/react": "^18",
+    "@types/react-dom": "^18",
     "typescript": "^5",
     "tailwindcss": "^3.4.0",
     "autoprefixer": "^10",
-    "postcss": "^8"
+    "postcss": "^8",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.0"
   }
 }
