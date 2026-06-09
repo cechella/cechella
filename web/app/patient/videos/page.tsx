@@ -13,6 +13,7 @@ interface Video {
   description: string | null
   category: string
   duration_seconds: number | null
+  thumbnail_path: string | null
   is_published: boolean
 }
 
@@ -115,15 +116,23 @@ export default function VideosPage() {
                           onClick={() => setSelectedVideo(v)}
                           className="group text-left bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden hover:border-[#7B3FE4]/50 transition-all"
                         >
-                          <div className="relative h-32 flex items-center justify-center" style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}>
-                            <span className="text-4xl font-bold text-white/30">{v.title[0]}</span>
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
+                          <div className="relative h-32 flex items-center justify-center overflow-hidden" style={!v.thumbnail_path ? { background: `linear-gradient(135deg, ${from}, ${to})` } : {}}>
+                            {v.thumbnail_path ? (
+                              <img
+                                src={`/api/video/thumbnail?key=${encodeURIComponent(v.thumbnail_path)}`}
+                                alt={v.title}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-4xl font-bold text-white/30">{v.title[0]}</span>
+                            )}
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
                               <div className="w-10 h-10 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
                                 <Play className="w-4 h-4 text-white" fill="white" />
                               </div>
                             </div>
                             {v.duration_seconds && (
-                              <span className="absolute bottom-2 right-2 text-xs text-white bg-black/50 px-1.5 py-0.5 rounded">
+                              <span className="absolute bottom-2 right-2 text-xs text-white bg-black/60 px-1.5 py-0.5 rounded">
                                 {formatDuration(v.duration_seconds)}
                               </span>
                             )}

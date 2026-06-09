@@ -24,18 +24,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const { videoId, fileName, contentType } = await request.json()
+  const { videoId, fileName, contentType, type } = await request.json()
   if (!videoId || !fileName) {
     return NextResponse.json({ error: 'videoId and fileName required' }, { status: 400 })
   }
 
   const ext = fileName.split('.').pop()
-  const key = `hls/${videoId}/master.${ext}`
+  const key = type === 'thumbnail'
+    ? `thumbnails/${videoId}/thumb.${ext}`
+    : `hls/${videoId}/master.${ext}`
 
   const command = new PutObjectCommand({
     Bucket: R2_BUCKET,
     Key: key,
-    ContentType: contentType ?? 'video/mp4',
+    ContentType: contentType ?? (type === 'thumbnail' ? 'image/jpeg' : 'video/mp4'),
   })
 
   const uploadUrl = await getSignedUrl(r2, command, { expiresIn: 3600 })

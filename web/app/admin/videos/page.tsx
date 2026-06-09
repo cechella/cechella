@@ -16,6 +16,7 @@ interface Video {
   category: string
   duration_seconds: number | null
   hls_path: string | null
+  thumbnail_path: string | null
   is_published: boolean
   created_at: string
 }
@@ -44,6 +45,8 @@ export default function AdminVideosPage() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const thumbInputRef = useRef<HTMLInputElement>(null)
+  const [thumbPreview, setThumbPreview] = useState<string | null>(null)
 
   const [form, setForm] = useState({
     title: '',
@@ -100,45 +103,48 @@ export default function AdminVideosPage() {
         throw new Error(insertError?.message ?? 'Failed to create video record')
       }
 
-      // Upload file directly to R2 via presigned URL
+      // Upload video file to R2
       if (file) {
         const urlRes = await fetch('/api/video/upload-url', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            videoId: newVideo.id,
-            fileName: file.name,
-            contentType: file.type || 'video/mp4',
-          }),
+          body: JSON.stringify({ videoId: newVideo.id, fileName: file.name, contentType: file.type || 'video/mp4' }),
         })
-
         if (!urlRes.ok) {
           await supabase.from('videos').delete().eq('id', newVideo.id)
           throw new Error('Falha ao obter URL de upload')
         }
-
         const { uploadUrl, key } = await urlRes.json()
-
-        const uploadRes = await fetch(uploadUrl, {
-          method: 'PUT',
-          body: file,
-          headers: { 'Content-Type': file.type || 'video/mp4' },
-        })
-
+        const uploadRes = await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type || 'video/mp4' } })
         if (!uploadRes.ok) {
           await supabase.from('videos').delete().eq('id', newVideo.id)
-          throw new Error('Falha no upload para o storage')
+          throw new Error('Falha no upload do vídeo')
         }
+        await supabase.from('videos').update({ hls_path: key }).eq('id', newVideo.id)
+      }
 
-        await supabase
-          .from('videos')
-          .update({ hls_path: key })
-          .eq('id', newVideo.id)
+      // Upload thumbnail to R2
+      const thumbFile = thumbInputRef.current?.files?.[0]
+      if (thumbFile) {
+        const thumbRes = await fetch('/api/video/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoId: newVideo.id, fileName: thumbFile.name, contentType: thumbFile.type || 'image/jpeg', type: 'thumbnail' }),
+        })
+        if (thumbRes.ok) {
+          const { uploadUrl: thumbUrl, key: thumbKey } = await thumbRes.json()
+          const tr = await fetch(thumbUrl, { method: 'PUT', body: thumbFile, headers: { 'Content-Type': thumbFile.type || 'image/jpeg' } })
+          if (tr.ok) {
+            await supabase.from('videos').update({ thumbnail_path: thumbKey }).eq('id', newVideo.id)
+          }
+        }
       }
 
       setUploadSuccess(true)
       setForm({ title: '', description: '', category: CATEGORIES[0], duration_seconds: '' })
       if (fileInputRef.current) fileInputRef.current.value = ''
+      if (thumbInputRef.current) thumbInputRef.current.value = ''
+      setThumbPreview(null)
       await loadVideos()
 
       setTimeout(() => {
@@ -282,6 +288,42 @@ export default function AdminVideosPage() {
                         placeholder="Ex: 1200"
                         min={0}
                         className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm placeholder-[#52525B] focus:outline-none focus:border-[#7B3FE4] transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Thumbnail upload */}
+                  <div>
+                    <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Capa do Vídeo (opcional)</label>
+                    <div
+                      className="border border-dashed border-[#2A2A2E] rounded-xl overflow-hidden cursor-pointer hover:border-[#7B3FE4]/50 transition-colors"
+                      onClick={() => thumbInputRef.current?.click()}
+                    >
+                      {thumbPreview ? (
+                        <div className="relative h-32">
+                          <img src={thumbPreview} alt="Capa" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                            <p className="text-white text-xs">Trocar imagem</p>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="p-4 text-center">
+                          <div className="w-8 h-8 rounded-lg bg-[#7B3FE4]/10 flex items-center justify-center mx-auto mb-2">
+                            <Upload className="w-4 h-4 text-[#7B3FE4]" />
+                          </div>
+                          <p className="text-xs text-[#71717A]">Clique para selecionar a capa</p>
+                          <p className="text-[10px] text-[#52525B] mt-1">JPG, PNG, WEBP — recomendado 16:9</p>
+                        </div>
+                      )}
+                      <input
+                        ref={thumbInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0]
+                          if (f) setThumbPreview(URL.createObjectURL(f))
+                        }}
                       />
                     </div>
                   </div>
