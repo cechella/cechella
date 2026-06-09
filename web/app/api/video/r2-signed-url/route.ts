@@ -43,8 +43,15 @@ export async function GET(request: NextRequest) {
     if (!video.is_published) return NextResponse.json({ error: 'Video not available' }, { status: 403 })
     if (!video.hls_path) return NextResponse.json({ error: 'No video file' }, { status: 404 })
 
+    if (!process.env.R2_ACCOUNT_ID || !process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY) {
+      return NextResponse.json({ error: 'R2 not configured' }, { status: 500 })
+    }
+
     const command = new GetObjectCommand({ Bucket: R2_BUCKET, Key: video.hls_path })
-    const signedUrl = await getSignedUrl(r2, command, { expiresIn: 7200 })
+    const signedUrl = await Promise.race([
+      getSignedUrl(r2, command, { expiresIn: 7200 }),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('R2 timeout')), 8000)),
+    ])
 
     const ext = video.hls_path.split('.').pop()?.toLowerCase() ?? ''
     const isHls = ext === 'm3u8'
