@@ -63,7 +63,9 @@ export function SecureVideoPlayer({ videoId, title, userEmail, onClose }: Secure
         const video = videoRef.current
         if (!video) return
 
-        if (Hls.isSupported()) {
+        const isHls = signedUrl.includes('.m3u8') || signedUrl.includes('/hls/')
+
+        if (isHls && Hls.isSupported()) {
           const hls = new Hls({
             enableWorker: true,
             lowLatencyMode: false,
@@ -86,14 +88,24 @@ export function SecureVideoPlayer({ videoId, title, userEmail, onClose }: Secure
               setIsLoading(false)
             }
           })
-        } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+        } else if (isHls && video.canPlayType('application/vnd.apple.mpegurl')) {
           // Safari native HLS
           video.src = signedUrl
           video.addEventListener('loadedmetadata', () => {
             if (!cancelled) setIsLoading(false)
           })
         } else {
-          throw new Error('HLS not supported on this browser')
+          // Direct MP4 / non-HLS
+          video.src = signedUrl
+          video.addEventListener('loadedmetadata', () => {
+            if (!cancelled) setIsLoading(false)
+          }, { once: true })
+          video.addEventListener('error', () => {
+            if (!cancelled) {
+              setError('Erro ao carregar o vídeo. Tente novamente.')
+              setIsLoading(false)
+            }
+          }, { once: true })
         }
       } catch (err) {
         if (!cancelled) {
