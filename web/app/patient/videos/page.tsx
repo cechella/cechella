@@ -121,7 +121,7 @@ export default function VideosPage() {
                               <img
                                 src={`/api/video/thumbnail?key=${encodeURIComponent(v.thumbnail_path)}`}
                                 alt={v.title}
-                                className="w-full h-full object-cover"
+                                className="w-full h-full object-contain bg-black"
                               />
                             ) : (
                               <span className="text-4xl font-bold text-white/30">{v.title[0]}</span>
