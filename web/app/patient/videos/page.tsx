@@ -93,7 +93,7 @@ export default function VideosPage() {
             </div>
           </div>
 
-          <div className="px-8 space-y-8 pb-8">
+          <div className="px-8 space-y-10 pb-10">
             {loading ? (
               <div className="flex items-center justify-center py-20">
                 <div className="w-8 h-8 border-2 border-[#7B3FE4] border-t-transparent rounded-full animate-spin" />
@@ -106,40 +106,63 @@ export default function VideosPage() {
             ) : (
               Object.entries(byCategory).map(([category, vids]) => (
                 <section key={category}>
-                  <h3 className="font-semibold text-white mb-4">{category}</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  <h3 className="font-semibold text-white mb-4 text-base">{category}</h3>
+
+                  {/* Dynamic grid: portrait cards when thumbnail, landscape when gradient */}
+                  <div className="grid gap-4"
+                    style={{
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
+                    }}
+                  >
                     {vids.map((v, i) => {
                       const [from, to] = GRADIENTS[i % GRADIENTS.length]
+                      const hasThumb = !!v.thumbnail_path
+
                       return (
                         <button
                           key={v.id}
                           onClick={() => setSelectedVideo(v)}
-                          className="group text-left bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden hover:border-[#7B3FE4]/50 transition-all"
+                          className="group text-left bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden hover:border-[#7B3FE4]/50 hover:scale-[1.02] transition-all duration-200 shadow-lg hover:shadow-[#7B3FE4]/10"
                         >
-                          <div className="relative h-32 flex items-center justify-center overflow-hidden" style={!v.thumbnail_path ? { background: `linear-gradient(135deg, ${from}, ${to})` } : {}}>
-                            {v.thumbnail_path ? (
+                          {/* Thumbnail — aspect ratio adapts: 9:16 if portrait photo, 16:9 if gradient */}
+                          <div
+                            className="relative w-full overflow-hidden"
+                            style={{ aspectRatio: hasThumb ? '9/16' : '16/9' }}
+                          >
+                            {hasThumb ? (
                               <img
-                                src={`/api/video/thumbnail?key=${encodeURIComponent(v.thumbnail_path)}`}
+                                src={`/api/video/thumbnail?key=${encodeURIComponent(v.thumbnail_path!)}`}
                                 alt={v.title}
-                                className="w-full h-full object-contain bg-black"
+                                className="w-full h-full object-cover"
                               />
                             ) : (
-                              <span className="text-4xl font-bold text-white/30">{v.title[0]}</span>
+                              <div
+                                className="w-full h-full flex items-center justify-center"
+                                style={{ background: `linear-gradient(135deg, ${from}, ${to})` }}
+                              >
+                                <span className="text-5xl font-bold text-white/30">{v.title[0]}</span>
+                              </div>
                             )}
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-all flex items-center justify-center">
-                              <div className="w-10 h-10 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center">
-                                <Play className="w-4 h-4 text-white" fill="white" />
+
+                            {/* Hover overlay with play button */}
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all duration-200 flex items-center justify-center">
+                              <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all duration-200 flex items-center justify-center">
+                                <Play className="w-5 h-5 text-white ml-0.5" fill="white" />
                               </div>
                             </div>
+
+                            {/* Duration badge */}
                             {v.duration_seconds && (
-                              <span className="absolute bottom-2 right-2 text-xs text-white bg-black/60 px-1.5 py-0.5 rounded">
+                              <span className="absolute bottom-2 right-2 text-xs text-white bg-black/70 backdrop-blur-sm px-1.5 py-0.5 rounded-md font-mono">
                                 {formatDuration(v.duration_seconds)}
                               </span>
                             )}
                           </div>
+
+                          {/* Info */}
                           <div className="p-3">
-                            <p className="text-xs text-[#7B3FE4] font-medium mb-1">{v.category.toUpperCase()}</p>
-                            <p className="text-sm font-medium text-white line-clamp-2">{v.title}</p>
+                            <p className="text-[10px] text-[#7B3FE4] font-semibold mb-1 tracking-wider uppercase">{v.category}</p>
+                            <p className="text-sm font-medium text-white line-clamp-2 leading-snug">{v.title}</p>
                           </div>
                         </button>
                       )
