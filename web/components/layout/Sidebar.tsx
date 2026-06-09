@@ -8,13 +8,11 @@ import {
   LayoutDashboard,
   Play,
   BookOpen,
-  Calendar,
   FileText,
   GraduationCap,
   Library,
   Users,
   Award,
-  TrendingUp,
   BarChart3,
   Kanban,
   Trophy,
@@ -23,7 +21,7 @@ import {
   ChevronRight,
   Dumbbell,
   MessageSquare,
-  Shield,
+  FlaskConical,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -36,9 +34,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Rea
   patient: [
     { label: 'Dashboard', href: '/patient/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
     { label: 'Vídeos', href: '/patient/videos', icon: <Play className="w-5 h-5" /> },
-    { label: 'Conteúdo', href: '/patient/content', icon: <BookOpen className="w-5 h-5" /> },
-    { label: 'Casos Clínicos', href: '/patient/cases', icon: <FileText className="w-5 h-5" /> },
-    { label: 'Agendamento', href: '/patient/schedule', icon: <Calendar className="w-5 h-5" /> },
+    { label: 'Evidência Científica', href: '/patient/evidencia', icon: <FlaskConical className="w-5 h-5" /> },
   ],
   medical: [
     { label: 'Dashboard', href: '/medical/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
