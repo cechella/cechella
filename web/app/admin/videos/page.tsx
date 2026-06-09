@@ -100,24 +100,35 @@ export default function AdminVideosPage() {
         throw new Error(insertError?.message ?? 'Failed to create video record')
       }
 
-      // Upload file via server-side proxy to R2
+      // Upload file directly to R2 via presigned URL
       if (file) {
-        const fd = new FormData()
-        fd.append('file', file)
-        fd.append('videoId', newVideo.id)
-
-        const uploadRes = await fetch('/api/video/upload-url', {
+        const urlRes = await fetch('/api/video/upload-url', {
           method: 'POST',
-          body: fd,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            videoId: newVideo.id,
+            fileName: file.name,
+            contentType: file.type || 'video/mp4',
+          }),
+        })
+
+        if (!urlRes.ok) {
+          await supabase.from('videos').delete().eq('id', newVideo.id)
+          throw new Error('Falha ao obter URL de upload')
+        }
+
+        const { uploadUrl, key } = await urlRes.json()
+
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type || 'video/mp4' },
         })
 
         if (!uploadRes.ok) {
           await supabase.from('videos').delete().eq('id', newVideo.id)
-          const err = await uploadRes.json().catch(() => ({}))
-          throw new Error(err.error ?? 'Falha no upload')
+          throw new Error('Falha no upload para o storage')
         }
-
-        const { key } = await uploadRes.json()
 
         await supabase
           .from('videos')

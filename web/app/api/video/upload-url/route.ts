@@ -2,9 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { PutObjectCommand } from '@aws-sdk/client-s3'
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 import { r2, R2_BUCKET } from '@/lib/r2'
-
-export const maxDuration = 60
 
 export async function POST(request: NextRequest) {
   const cookieStore = await cookies()
@@ -25,24 +24,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const formData = await request.formData()
-  const file = formData.get('file') as File | null
-  const videoId = formData.get('videoId') as string | null
-
-  if (!file || !videoId) {
-    return NextResponse.json({ error: 'file and videoId required' }, { status: 400 })
+  const { videoId, fileName, contentType } = await request.json()
+  if (!videoId || !fileName) {
+    return NextResponse.json({ error: 'videoId and fileName required' }, { status: 400 })
   }
 
-  const ext = file.name.split('.').pop()
+  const ext = fileName.split('.').pop()
   const key = `hls/${videoId}/master.${ext}`
-  const buffer = Buffer.from(await file.arrayBuffer())
 
-  await r2.send(new PutObjectCommand({
+  const command = new PutObjectCommand({
     Bucket: R2_BUCKET,
     Key: key,
-    Body: buffer,
-    ContentType: file.type || 'video/mp4',
-  }))
+    ContentType: contentType ?? 'video/mp4',
+  })
 
-  return NextResponse.json({ key })
+  const uploadUrl = await getSignedUrl(r2, command, { expiresIn: 3600 })
+
+  return NextResponse.json({ uploadUrl, key })
 }
