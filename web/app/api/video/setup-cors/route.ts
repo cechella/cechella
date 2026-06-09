@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { PutBucketCorsCommand } from '@aws-sdk/client-s3'
 import { r2, R2_BUCKET } from '@/lib/r2'
