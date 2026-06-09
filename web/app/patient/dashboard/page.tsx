@@ -1,310 +1,289 @@
+'use client'
+
+import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
-import { StatsCard } from '@/components/ui/StatsCard'
-import { VideoCard } from '@/components/ui/VideoCard'
-import { createClient } from '@/lib/supabase/server'
+import { SecureVideoPlayer } from '@/components/ui/SecureVideoPlayer'
 import {
-  Play, Calendar, BookOpen, Video, Heart, ChevronRight,
-  Clock, Zap, Star
+  Play, ChevronRight, Star, Shield, Users, Award,
+  Calendar, CheckCircle, ArrowRight, Zap, Clock
 } from 'lucide-react'
+import { createBrowserClient } from '@supabase/ssr'
 
-const CATEGORY_GRADIENTS: Record<string, { from: string; to: string }> = {
-  'Implantes Hormonais': { from: '#7B3FE4', to: '#9558EE' },
-  'Menopausa': { from: '#EC4899', to: '#7B3FE4' },
-  'Andropausa': { from: '#3B82F6', to: '#06B6D4' },
-  'Performance': { from: '#F59E0B', to: '#EF4444' },
-  'Libido': { from: '#EC4899', to: '#7B3FE4' },
-  'Saúde Feminina': { from: '#10B981', to: '#3B82F6' },
-  'Saúde Masculina': { from: '#06B6D4', to: '#3B82F6' },
-  'TRH': { from: '#06B6D4', to: '#7B3FE4' },
-  'Cortisol': { from: '#F97316', to: '#EF4444' },
-  'Tireóide': { from: '#8B5CF6', to: '#3B82F6' },
+interface Video {
+  id: string
+  title: string
+  category: string
+  duration_seconds: number | null
+  thumbnail_path: string | null
+  is_published: boolean
 }
 
-function getGradient(category: string) {
-  return CATEGORY_GRADIENTS[category] ?? { from: '#7B3FE4', to: '#3B82F6' }
+function formatDuration(s: number | null) {
+  if (!s) return ''
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return `${m}:${sec.toString().padStart(2, '0')}`
 }
 
-function formatDuration(seconds: number | null): string {
-  if (!seconds) return ''
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${m}:${s.toString().padStart(2, '0')}`
-}
+const BENEFITS = [
+  { icon: '⚡', title: 'Energia de volta', desc: 'Recupere sua disposição e vitalidade em semanas' },
+  { icon: '😴', title: 'Sono reparador', desc: 'Durma profundamente e acorde renovada' },
+  { icon: '🔥', title: 'Libido restaurada', desc: 'Reconecte-se com seu corpo e prazer' },
+  { icon: '💪', title: 'Força e músculo', desc: 'Mantenha massa muscular e reduza gordura' },
+  { icon: '🧠', title: 'Foco e memória', desc: 'Clareza mental e concentração no dia a dia' },
+  { icon: '❤️', title: 'Humor estável', desc: 'Adeus ansiedade, irritabilidade e tristeza' },
+]
 
-function formatAppointmentDate(dateStr: string) {
-  const d = new Date(dateStr + 'T00:00:00')
-  return {
-    day: d.getDate().toString(),
-    month: d.toLocaleString('pt-BR', { month: 'short' }).toUpperCase().replace('.', ''),
-  }
-}
+const SOCIAL_PROOF = [
+  { value: '2.847', label: 'Pacientes transformados' },
+  { value: '98%', label: 'Satisfação comprovada' },
+  { value: '6 meses', label: 'de proteção por implante' },
+  { value: '15 anos', label: 'de experiência clínica' },
+]
 
-export default async function PatientDashboard() {
-  const supabase = await createClient()
+export default function PatientDashboard() {
+  const [videos, setVideos] = useState<Video[]>([])
+  const [selectedVideo, setSelectedVideo] = useState<Video | null>(null)
+  const [userEmail, setUserEmail] = useState('')
+  const [userName, setUserName] = useState('')
 
-  // Get current user
-  const { data: { user } } = await supabase.auth.getUser()
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
-  // Fetch profile for display name
-  const { data: profile } = user
-    ? await supabase.from('profiles').select('name, role').eq('id', user.id).single()
-    : { data: null }
-
-  const displayName = profile?.name ?? user?.user_metadata?.name ?? user?.email?.split('@')[0] ?? 'Paciente'
-
-  // Fetch next appointment
-  const { data: appointments } = user
-    ? await supabase
-        .from('appointments')
-        .select('*')
-        .eq('patient_id', user.id)
-        .eq('status', 'scheduled')
-        .gte('appointment_date', new Date().toISOString().split('T')[0])
-        .order('appointment_date', { ascending: true })
-        .order('appointment_time', { ascending: true })
-        .limit(5)
-    : { data: [] }
-
-  const nextAppointment = appointments?.[0] ?? null
-
-  // Fetch watch history with video info
-  const { data: watchHistory } = user
-    ? await supabase
-        .from('watch_history')
-        .select('*, videos(id, title, category, duration_seconds)')
-        .eq('patient_id', user.id)
-        .order('last_watched_at', { ascending: false })
-        .limit(6)
-    : { data: [] }
-
-  const continueWatching = (watchHistory ?? [])
-    .filter((wh: any) => wh.videos && !wh.completed)
-    .map((wh: any) => {
-      const grad = getGradient(wh.videos.category)
-      return {
-        id: wh.videos.id,
-        title: wh.videos.title,
-        duration: formatDuration(wh.videos.duration_seconds),
-        category: wh.videos.category,
-        gradientFrom: grad.from,
-        gradientTo: grad.to,
-        progress: wh.videos.duration_seconds
-          ? Math.round((wh.progress_seconds / wh.videos.duration_seconds) * 100)
-          : 0,
+  useEffect(() => {
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user?.email) {
+        setUserEmail(user.email)
+        const name = user.user_metadata?.name || user.email.split('@')[0]
+        setUserName(name.charAt(0).toUpperCase() + name.slice(1))
       }
-    })
-
-  // Fetch patient journey
-  const { data: journey } = user
-    ? await supabase
-        .from('patient_journey')
-        .select('*')
-        .eq('patient_id', user.id)
-        .order('step_number', { ascending: true })
-    : { data: [] }
-
-  const journeySteps = journey ?? []
-  const completedSteps = journeySteps.filter((s: any) => s.completed).length
-  const totalSteps = journeySteps.length || 6
-  const journeyPct = totalSteps > 0 ? Math.round((completedSteps / totalSteps) * 100) : 0
-
-  // Fetch recommended videos
-  const { data: recommendedVideos } = await supabase
-    .from('videos')
-    .select('id, title, category, duration_seconds')
-    .eq('is_published', true)
-    .order('created_at', { ascending: false })
-    .limit(6)
-
-  const recommended = (recommendedVideos ?? []).map((v: any) => {
-    const grad = getGradient(v.category)
-    return {
-      id: v.id,
-      title: v.title,
-      duration: formatDuration(v.duration_seconds),
-      category: v.category,
-      gradientFrom: grad.from,
-      gradientTo: grad.to,
+      const { data } = await supabase
+        .from('videos')
+        .select('id, title, category, duration_seconds, thumbnail_path, is_published')
+        .eq('is_published', true)
+        .order('created_at', { ascending: false })
+        .limit(6)
+      setVideos(data ?? [])
     }
-  })
-
-  // Stats
-  const watchedCount = (watchHistory ?? []).filter((wh: any) => wh.completed).length
-  const appointmentsCount = (appointments ?? []).length
-
-  // Days until next appointment
-  let daysUntilNext: string | null = null
-  if (nextAppointment) {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const apptDate = new Date(nextAppointment.appointment_date + 'T00:00:00')
-    const diff = Math.ceil((apptDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    daysUntilNext = diff === 0 ? 'hoje' : diff === 1 ? 'amanhã' : `${diff} dias`
-  }
-
-  const apptDateDisplay = nextAppointment
-    ? formatAppointmentDate(nextAppointment.appointment_date)
-    : null
+    load()
+  }, []) // eslint-disable-line
 
   return (
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
       <Sidebar role="patient" />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar
-          user={{ name: displayName, role: 'patient' }}
-          title="Dashboard"
-        />
-        <main className="flex-1 overflow-y-auto px-6 py-6">
-          {/* Welcome */}
-          <div className="mb-8">
-            <div className="relative bg-[#111113] border border-[#1C1C1E] rounded-3xl p-6 overflow-hidden">
-              <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiM3QjNGRTQiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PHBhdGggZD0iTTM2IDM0djZoNnYtNmgtNnptMCAwdjZoNnYtNmgtNnoiLz48L2c+PC9nPjwvc3ZnPg==')] opacity-50" />
-              <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-[#7B3FE4]/10 blur-[60px]" />
-              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                  <p className="text-[#A1A1AA] text-sm mb-1">Bem-vindo(a) de volta,</p>
-                  <h2 className="text-2xl font-bold text-white mb-1">{displayName} 👋</h2>
-                  {daysUntilNext ? (
-                    <p className="text-sm text-[#71717A]">
-                      Sua próxima consulta é{' '}
-                      <span className="text-[#9558EE] font-medium">
-                        {daysUntilNext === 'hoje' || daysUntilNext === 'amanhã' ? daysUntilNext : `em ${daysUntilNext}`}
-                      </span>
-                    </p>
-                  ) : (
-                    <p className="text-sm text-[#71717A]">Nenhuma consulta agendada</p>
-                  )}
-                </div>
+        <TopBar user={{ name: userName || 'Paciente', role: 'patient' }} title="Início" />
 
-                {/* Journey progress */}
-                <div className="bg-[#18181A] rounded-2xl p-4 min-w-[240px]">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold text-[#A1A1AA] uppercase tracking-wider">Sua Jornada Hormonal</p>
-                    <span className="text-xs font-bold text-[#7B3FE4]">{journeyPct}%</span>
+        <main className="flex-1 overflow-y-auto pb-20 md:pb-0">
+
+          {/* HERO */}
+          <div className="relative px-6 pt-6">
+            <div className="relative rounded-3xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #1a0533 0%, #0d1a3a 50%, #0A0A0B 100%)' }}>
+              <div className="absolute top-0 left-1/4 w-96 h-96 rounded-full bg-[#7B3FE4]/20 blur-[100px] pointer-events-none" />
+              <div className="absolute bottom-0 right-1/4 w-64 h-64 rounded-full bg-[#3B82F6]/15 blur-[80px] pointer-events-none" />
+              <div className="relative z-10 px-8 py-10 md:py-12">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-8">
+                  <div className="max-w-xl">
+                    <div className="inline-flex items-center gap-2 bg-[#7B3FE4]/20 border border-[#7B3FE4]/30 rounded-full px-4 py-1.5 mb-4">
+                      <span className="w-2 h-2 rounded-full bg-[#7B3FE4] animate-pulse" />
+                      <span className="text-xs font-semibold text-[#9558EE] tracking-wide uppercase">Bem-vindo(a) à sua transformação</span>
+                    </div>
+                    <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-3">
+                      Recupere sua energia,<br />
+                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7B3FE4] to-[#3B82F6]">libido e qualidade de vida</span>
+                    </h1>
+                    <p className="text-[#A1A1AA] text-base mb-6 leading-relaxed">
+                      O implante hormonal é a solução definitiva para quem quer resultados reais e duradouros. Veja os depoimentos, tire suas dúvidas e dê o primeiro passo.
+                    </p>
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <a href="/patient/agendamento" className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#7B3FE4] to-[#6325C8] hover:from-[#6325C8] hover:to-[#5020A0] text-white font-bold px-6 py-3.5 rounded-2xl transition-all duration-200 shadow-lg shadow-[#7B3FE4]/30 hover:scale-[1.02]">
+                        <Zap className="w-5 h-5" />
+                        QUERO MEU IMPLANTE
+                        <ArrowRight className="w-4 h-4" />
+                      </a>
+                      <a href="/patient/videos" className="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium px-6 py-3.5 rounded-2xl transition-all duration-200">
+                        <Play className="w-4 h-4" />
+                        Ver depoimentos
+                      </a>
+                    </div>
                   </div>
-                  <div className="h-2 bg-[#1C1C1E] rounded-full overflow-hidden mb-2">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-[#7B3FE4] to-[#3B82F6] transition-all duration-700"
-                      style={{ width: `${journeyPct}%` }}
-                    />
+                  <div className="grid grid-cols-2 gap-3 min-w-[280px]">
+                    {SOCIAL_PROOF.map((item, i) => (
+                      <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center backdrop-blur-sm">
+                        <p className="text-2xl font-bold text-white mb-0.5">{item.value}</p>
+                        <p className="text-[10px] text-[#71717A] leading-tight">{item.label}</p>
+                      </div>
+                    ))}
                   </div>
-                  <p className="text-xs text-[#71717A]">{completedSteps} de {totalSteps} etapas concluídas</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <StatsCard title="Vídeos Assistidos" value={String(watchedCount || 0)} icon={<Video className="w-5 h-5" />} trend={{ value: 0, label: 'concluídos' }} />
-            <StatsCard title="Em Andamento" value={String(continueWatching.length)} icon={<Play className="w-5 h-5" />} />
-            <StatsCard title="Jornada" value={`${journeyPct}%`} icon={<Heart className="w-5 h-5" />} trend={{ value: completedSteps, label: 'etapas' }} />
-            <StatsCard title="Consultas" value={String(appointmentsCount)} icon={<Calendar className="w-5 h-5" />} subtitle={daysUntilNext ? `próxima ${daysUntilNext}` : 'nenhuma agendada'} />
-          </div>
+          <div className="px-6 space-y-8 py-8">
 
-          {/* Continue Watching */}
-          {continueWatching.length > 0 && (
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-white flex items-center gap-2">
-                  <Play className="w-4 h-4 text-[#7B3FE4]" />
-                  Continuar Assistindo
-                </h3>
-                <a href="/patient/videos" className="text-xs text-[#7B3FE4] hover:text-[#9558EE] flex items-center gap-1 transition-colors">
-                  Ver tudo <ChevronRight className="w-3 h-3" />
-                </a>
+            {/* DEPOIMENTOS */}
+            {videos.length > 0 && (
+              <section>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h2 className="font-bold text-white text-lg flex items-center gap-2">
+                      <Star className="w-5 h-5 text-amber-400" fill="currentColor" />
+                      Depoimentos Reais
+                    </h2>
+                    <p className="text-xs text-[#71717A] mt-0.5">Pacientes que já transformaram suas vidas</p>
+                  </div>
+                  <a href="/patient/videos" className="text-xs text-[#7B3FE4] hover:text-[#9558EE] flex items-center gap-1 transition-colors">
+                    Ver todos <ChevronRight className="w-3 h-3" />
+                  </a>
+                </div>
+                <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
+                  {videos.map((v) => (
+                    <button key={v.id} onClick={() => setSelectedVideo(v)} className="group text-left bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden hover:border-[#7B3FE4]/50 hover:scale-[1.02] transition-all duration-200">
+                      <div className="relative w-full overflow-hidden" style={{ aspectRatio: v.thumbnail_path ? '9/16' : '16/9' }}>
+                        {v.thumbnail_path ? (
+                          <img src={`/api/video/thumbnail?key=${encodeURIComponent(v.thumbnail_path)}`} alt={v.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full bg-gradient-to-br from-[#7B3FE4] to-[#3B82F6] flex items-center justify-center">
+                            <span className="text-4xl font-bold text-white/30">{v.title[0]}</span>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center">
+                          <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm opacity-0 group-hover:opacity-100 scale-75 group-hover:scale-100 transition-all flex items-center justify-center">
+                            <Play className="w-5 h-5 text-white ml-0.5" fill="white" />
+                          </div>
+                        </div>
+                        {v.duration_seconds && (
+                          <span className="absolute bottom-2 right-2 text-xs text-white bg-black/70 px-1.5 py-0.5 rounded-md font-mono">{formatDuration(v.duration_seconds)}</span>
+                        )}
+                      </div>
+                      <div className="p-3">
+                        <p className="text-xs text-[#7B3FE4] font-semibold mb-1 uppercase tracking-wider">{v.category}</p>
+                        <p className="text-sm font-medium text-white line-clamp-2 leading-snug">{v.title}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* BENEFICIOS */}
+            <section>
+              <div className="mb-4">
+                <h2 className="font-bold text-white text-lg flex items-center gap-2">
+                  <CheckCircle className="w-5 h-5 text-green-400" />
+                  O que você vai sentir
+                </h2>
+                <p className="text-xs text-[#71717A] mt-0.5">Resultados comprovados por milhares de pacientes</p>
               </div>
-              <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-                {continueWatching.map((v) => (
-                  <VideoCard key={v.id} {...v} />
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {BENEFITS.map((b, i) => (
+                  <div key={i} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4 hover:border-[#7B3FE4]/30 transition-colors">
+                    <span className="text-2xl mb-2 block">{b.icon}</span>
+                    <p className="text-sm font-semibold text-white mb-1">{b.title}</p>
+                    <p className="text-xs text-[#71717A] leading-relaxed">{b.desc}</p>
+                  </div>
                 ))}
               </div>
-            </div>
-          )}
+            </section>
 
-          {/* Next appointment + Quick access */}
-          <div className="grid md:grid-cols-3 gap-4 mb-8">
-            {/* Next appointment */}
-            <div className="md:col-span-2 bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Calendar className="w-4 h-4 text-[#7B3FE4]" />
-                <h3 className="font-semibold text-white text-sm">Próxima Consulta</h3>
+            {/* CTA PRINCIPAL */}
+            <section>
+              <div className="relative rounded-3xl overflow-hidden" style={{ background: 'linear-gradient(135deg, #7B3FE4 0%, #3B82F6 100%)' }}>
+                <div className="relative z-10 px-8 py-8 flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Shield className="w-5 h-5 text-white/80" />
+                      <span className="text-white/80 text-sm font-medium">Procedimento 100% seguro e minimamente invasivo</span>
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-1">Pronto para se transformar?</h3>
+                    <p className="text-white/70 text-sm">Agende sua consulta hoje e comece sua jornada hormonal.</p>
+                    <div className="flex items-center gap-4 mt-3">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 text-white/60" />
+                        <span className="text-white/60 text-xs">Consulta em até 48h</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <Users className="w-4 h-4 text-white/60" />
+                        <span className="text-white/60 text-xs">+2.847 pacientes atendidos</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-center gap-3 flex-shrink-0">
+                    <div className="text-center mb-1">
+                      <p className="text-white/60 text-xs mb-0.5">Investimento único</p>
+                      <p className="text-3xl font-black text-white">R$ 5.000</p>
+                      <p className="text-white/60 text-xs">válido por 6 meses</p>
+                    </div>
+                    <a href="/patient/agendamento" className="inline-flex items-center gap-2 bg-white text-[#7B3FE4] font-bold px-8 py-3.5 rounded-2xl hover:bg-white/90 transition-all duration-200 shadow-xl hover:scale-[1.02] whitespace-nowrap">
+                      <Calendar className="w-5 h-5" />
+                      AGENDAR AGORA
+                    </a>
+                    <div className="flex items-center gap-1">
+                      {[...Array(5)].map((_, i) => (
+                        <Star key={i} className="w-3.5 h-3.5 text-amber-300" fill="currentColor" />
+                      ))}
+                      <span className="text-white/60 text-xs ml-1">4.9/5 — 847 avaliações</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              {nextAppointment && apptDateDisplay ? (
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#7B3FE4]/20 to-[#3B82F6]/20 border border-[#7B3FE4]/20 flex flex-col items-center justify-center flex-shrink-0">
-                    <span className="text-lg font-bold text-white">{apptDateDisplay.day}</span>
-                    <span className="text-[10px] text-[#7B3FE4] font-medium">{apptDateDisplay.month}</span>
+            </section>
+
+            {/* CREDIBILIDADE */}
+            <section>
+              <div className="grid md:grid-cols-3 gap-4">
+                <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5 flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-[#7B3FE4]/10 flex items-center justify-center flex-shrink-0">
+                    <Award className="w-5 h-5 text-[#7B3FE4]" />
                   </div>
                   <div>
-                    <p className="font-semibold text-white">{nextAppointment.specialty ?? 'Consulta'}</p>
-                    <p className="text-sm text-[#71717A]">{nextAppointment.doctor_name}</p>
-                    <p className="text-xs text-[#52525B] mt-1 flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {nextAppointment.appointment_time?.slice(0, 5)} • {nextAppointment.type === 'telemedicina' ? 'Telemedicina' : 'Presencial'}
-                    </p>
-                  </div>
-                  <div className="ml-auto">
-                    <a
-                      href="/patient/schedule"
-                      className="bg-[#7B3FE4]/10 border border-[#7B3FE4]/20 text-[#7B3FE4] text-xs font-medium px-3 py-2 rounded-xl hover:bg-[#7B3FE4]/20 transition-colors"
-                    >
-                      Ver detalhes
-                    </a>
+                    <p className="font-semibold text-white text-sm mb-1">Médico Especialista</p>
+                    <p className="text-xs text-[#71717A] leading-relaxed">Formado e certificado em terapia hormonal com implantes. Membro da SBEM.</p>
                   </div>
                 </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <Calendar className="w-8 h-8 text-[#3A3A3E] mb-2" />
-                  <p className="text-sm text-[#71717A]">Nenhuma consulta agendada</p>
-                  <a href="/patient/schedule" className="mt-2 text-xs text-[#7B3FE4] hover:underline">Agendar agora</a>
+                <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5 flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                    <Shield className="w-5 h-5 text-green-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white text-sm mb-1">Aprovado pela ANVISA</p>
+                    <p className="text-xs text-[#71717A] leading-relaxed">Implantes certificados, procedimento regulamentado e seguro para aplicação.</p>
+                  </div>
                 </div>
-              )}
-            </div>
+                <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5 flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                    <Users className="w-5 h-5 text-amber-400" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white text-sm mb-1">Comunidade Ativa</p>
+                    <p className="text-xs text-[#71717A] leading-relaxed">Mais de 2.800 pacientes tratados com acompanhamento completo pós-implante.</p>
+                  </div>
+                </div>
+              </div>
+            </section>
 
-            {/* CTA */}
-            <div className="bg-gradient-to-br from-[#7B3FE4] to-[#3B82F6] rounded-2xl p-5 flex flex-col justify-between">
-              <div>
-                <Zap className="w-6 h-6 text-white/80 mb-2" />
-                <h3 className="font-bold text-white mb-1">Agendar Consulta</h3>
-                <p className="text-xs text-white/70">Fale com um especialista em hormônios</p>
-              </div>
-              <a
-                href="/patient/schedule"
-                className="mt-4 bg-white/10 hover:bg-white/20 border border-white/20 text-white text-sm font-semibold py-2 px-4 rounded-xl transition-all flex items-center gap-2"
-              >
-                Agendar agora <ChevronRight className="w-4 h-4" />
-              </a>
-            </div>
-          </div>
-
-          {/* Recommended */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-white flex items-center gap-2">
-                <Star className="w-4 h-4 text-amber-400" />
-                Recomendado para você
-              </h3>
-              <a href="/patient/videos" className="text-xs text-[#7B3FE4] hover:text-[#9558EE] flex items-center gap-1 transition-colors">
-                Ver tudo <ChevronRight className="w-3 h-3" />
-              </a>
-            </div>
-            {recommended.length > 0 ? (
-              <div className="flex gap-4 overflow-x-auto no-scrollbar pb-2">
-                {recommended.map((v) => (
-                  <VideoCard key={v.id} {...v} />
-                ))}
-              </div>
-            ) : (
-              <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-8 text-center">
-                <Play className="w-8 h-8 text-[#3A3A3E] mx-auto mb-2" />
-                <p className="text-sm text-[#71717A]">Nenhum vídeo disponível no momento</p>
-              </div>
-            )}
           </div>
         </main>
       </div>
+
+      {/* Fixed CTA — mobile only */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden">
+        <div className="bg-[#0A0A0B]/95 backdrop-blur-md border-t border-[#1C1C1E] px-4 py-3">
+          <a href="/patient/agendamento" className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-[#7B3FE4] to-[#6325C8] text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-[#7B3FE4]/30">
+            <Zap className="w-5 h-5" />
+            QUERO MEU IMPLANTE — R$5.000
+          </a>
+        </div>
+      </div>
+
+      {selectedVideo && (
+        <SecureVideoPlayer videoId={selectedVideo.id} title={selectedVideo.title} userEmail={userEmail} onClose={() => setSelectedVideo(null)} />
+      )}
     </div>
   )
 }
