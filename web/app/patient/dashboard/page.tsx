@@ -100,7 +100,7 @@ export default function PatientDashboard() {
                       O implante hormonal é a solução definitiva para quem quer resultados reais e duradouros. Veja os depoimentos, tire suas dúvidas e dê o primeiro passo.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-3">
-                      <a href="/patient/agendamento" className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#7B3FE4] to-[#6325C8] hover:from-[#6325C8] hover:to-[#5020A0] text-white font-bold px-6 py-3.5 rounded-2xl transition-all duration-200 shadow-lg shadow-[#7B3FE4]/30 hover:scale-[1.02]">
+                      <a href="https://wa.me/5547999050888?text=Olá%2C%20tenho%20interesse%20no%20implante%20hormonal%21%20Podem%20me%20ajudar%3F" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#7B3FE4] to-[#6325C8] hover:from-[#6325C8] hover:to-[#5020A0] text-white font-bold px-6 py-3.5 rounded-2xl transition-all duration-200 shadow-lg shadow-[#7B3FE4]/30 hover:scale-[1.02]">
                         <Zap className="w-5 h-5" />
                         QUERO MEU IMPLANTE
                         <ArrowRight className="w-4 h-4" />
@@ -215,11 +215,11 @@ export default function PatientDashboard() {
                   </div>
                   <div className="flex flex-col items-center gap-3 flex-shrink-0">
                     <div className="text-center mb-1">
-                      <p className="text-white/60 text-xs mb-0.5">Investimento único</p>
-                      <p className="text-3xl font-black text-white">R$ 5.000</p>
-                      <p className="text-white/60 text-xs">válido por 6 meses</p>
+                      
+                      
+                      
                     </div>
-                    <a href="/patient/agendamento" className="inline-flex items-center gap-2 bg-white text-[#7B3FE4] font-bold px-8 py-3.5 rounded-2xl hover:bg-white/90 transition-all duration-200 shadow-xl hover:scale-[1.02] whitespace-nowrap">
+                    <a href="https://wa.me/5547999050888?text=Olá%2C%20tenho%20interesse%20no%20implante%20hormonal%21%20Podem%20me%20ajudar%3F" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-white text-[#7B3FE4] font-bold px-8 py-3.5 rounded-2xl hover:bg-white/90 transition-all duration-200 shadow-xl hover:scale-[1.02] whitespace-nowrap">
                       <Calendar className="w-5 h-5" />
                       AGENDAR AGORA
                     </a>
@@ -274,9 +274,9 @@ export default function PatientDashboard() {
       {/* Fixed CTA — mobile only */}
       <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden">
         <div className="bg-[#0A0A0B]/95 backdrop-blur-md border-t border-[#1C1C1E] px-4 py-3">
-          <a href="/patient/agendamento" className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-[#7B3FE4] to-[#6325C8] text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-[#7B3FE4]/30">
+          <a href="https://wa.me/5547999050888?text=Olá%2C%20tenho%20interesse%20no%20implante%20hormonal%21%20Podem%20me%20ajudar%3F" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-[#7B3FE4] to-[#6325C8] text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-[#7B3FE4]/30">
             <Zap className="w-5 h-5" />
-            QUERO MEU IMPLANTE — R$5.000
+            QUERO MEU IMPLANTE
           </a>
         </div>
       </div>
