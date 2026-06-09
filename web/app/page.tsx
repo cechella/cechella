@@ -41,7 +41,7 @@ export default function LandingPage() {
         sales: '/sales/dashboard',
         admin: '/admin/dashboard',
       }
-      router.push(redirectMap[role] || '/patient/dashboard')
+      window.location.href = redirectMap[role] || '/patient/dashboard'
     } catch (err) {
       setError('Erro de conexão. Verifique sua internet.')
       setLoading(false)
