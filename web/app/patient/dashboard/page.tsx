@@ -35,18 +35,38 @@ const BENEFITS = [
   { icon: '❤️', title: 'Humor estável', desc: 'Adeus ansiedade, irritabilidade e tristeza' },
 ]
 
-const SOCIAL_PROOF = [
-  { value: '2.847', label: 'Pacientes transformados' },
-  { value: '98%', label: 'Satisfação comprovada' },
-  { value: '6 meses', label: 'de proteção por implante' },
-  { value: '15 anos', label: 'de experiência clínica' },
-]
+interface PatientSettings {
+  hero_title: string
+  hero_subtitle: string
+  stat_patients: string
+  stat_satisfaction: string
+  stat_duration: string
+  stat_years: string
+  whatsapp_number: string
+  whatsapp_message: string
+  cta_primary_label: string
+  cta_secondary_label: string
+}
+
+const DEFAULT_SETTINGS: PatientSettings = {
+  hero_title: 'Recupere sua energia, libido e qualidade de vida',
+  hero_subtitle: 'Milhares de mulheres já transformaram sua saúde hormonal com implantes bioidênticos. Descubra como.',
+  stat_patients: '2.847',
+  stat_satisfaction: '98%',
+  stat_duration: '6 meses',
+  stat_years: '15 anos',
+  whatsapp_number: '5547988507977',
+  whatsapp_message: 'Olá! Tenho interesse no implante hormonal. Pode me ajudar?',
+  cta_primary_label: 'QUERO MEU IMPLANTE',
+  cta_secondary_label: 'Ver depoimentos',
+}
 
 export default function PatientDashboard() {
   const [videos, setVideos] = useState<Video[]>([])
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null)
   const [userEmail, setUserEmail] = useState('')
   const [userName, setUserName] = useState('')
+  const [cfg, setCfg] = useState<PatientSettings>(DEFAULT_SETTINGS)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -61,13 +81,17 @@ export default function PatientDashboard() {
         const name = user.user_metadata?.name || user.email.split('@')[0]
         setUserName(name.charAt(0).toUpperCase() + name.slice(1))
       }
-      const { data } = await supabase
-        .from('videos')
-        .select('id, title, category, duration_seconds, thumbnail_path, is_published')
-        .eq('is_published', true)
-        .order('created_at', { ascending: false })
-        .limit(6)
-      setVideos(data ?? [])
+      const [{ data: videosData }, { data: settingsData }] = await Promise.all([
+        supabase
+          .from('videos')
+          .select('id, title, category, duration_seconds, thumbnail_path, is_published')
+          .eq('is_published', true)
+          .order('created_at', { ascending: false })
+          .limit(6),
+        supabase.from('patient_settings').select('*').limit(1).maybeSingle(),
+      ])
+      setVideos(videosData ?? [])
+      if (settingsData) setCfg(settingsData)
     }
     load()
   }, []) // eslint-disable-line
@@ -93,26 +117,30 @@ export default function PatientDashboard() {
                       <span className="text-xs font-semibold text-[#9558EE] tracking-wide uppercase">Bem-vindo(a) à sua transformação</span>
                     </div>
                     <h1 className="text-3xl md:text-4xl font-bold text-white leading-tight mb-3">
-                      Recupere sua energia,<br />
-                      <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7B3FE4] to-[#3B82F6]">libido e qualidade de vida</span>
+                      {cfg.hero_title}
                     </h1>
                     <p className="text-[#A1A1AA] text-base mb-6 leading-relaxed">
-                      O implante hormonal é a solução definitiva para quem quer resultados reais e duradouros. Veja os depoimentos, tire suas dúvidas e dê o primeiro passo.
+                      {cfg.hero_subtitle}
                     </p>
                     <div className="flex flex-col sm:flex-row gap-3">
-                      <a href="https://wa.me/5547988507977?text=Olá%2C%20tenho%20interesse%20no%20implante%20hormonal%21%20Podem%20me%20ajudar%3F" target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#7B3FE4] to-[#6325C8] hover:from-[#6325C8] hover:to-[#5020A0] text-white font-bold px-6 py-3.5 rounded-2xl transition-all duration-200 shadow-lg shadow-[#7B3FE4]/30 hover:scale-[1.02]">
+                      <a href={`https://wa.me/${cfg.whatsapp_number}?text=${encodeURIComponent(cfg.whatsapp_message)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 bg-gradient-to-r from-[#7B3FE4] to-[#6325C8] hover:from-[#6325C8] hover:to-[#5020A0] text-white font-bold px-6 py-3.5 rounded-2xl transition-all duration-200 shadow-lg shadow-[#7B3FE4]/30 hover:scale-[1.02]">
                         <Zap className="w-5 h-5" />
-                        QUERO MEU IMPLANTE
+                        {cfg.cta_primary_label}
                         <ArrowRight className="w-4 h-4" />
                       </a>
                       <a href="/patient/videos" className="inline-flex items-center justify-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium px-6 py-3.5 rounded-2xl transition-all duration-200">
                         <Play className="w-4 h-4" />
-                        Ver depoimentos
+                        {cfg.cta_secondary_label}
                       </a>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 min-w-[280px]">
-                    {SOCIAL_PROOF.map((item, i) => (
+                    {[
+                      { value: cfg.stat_patients, label: 'Pacientes transformados' },
+                      { value: cfg.stat_satisfaction, label: 'Satisfação comprovada' },
+                      { value: cfg.stat_duration, label: 'de proteção por implante' },
+                      { value: cfg.stat_years, label: 'de experiência clínica' },
+                    ].map((item, i) => (
                       <div key={i} className="bg-white/5 border border-white/10 rounded-2xl p-4 text-center backdrop-blur-sm">
                         <p className="text-2xl font-bold text-white mb-0.5">{item.value}</p>
                         <p className="text-[10px] text-[#71717A] leading-tight">{item.label}</p>
@@ -219,7 +247,7 @@ export default function PatientDashboard() {
                       
                       
                     </div>
-                    <a href="https://wa.me/5547988507977?text=Olá%2C%20tenho%20interesse%20no%20implante%20hormonal%21%20Podem%20me%20ajudar%3F" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-white text-[#7B3FE4] font-bold px-8 py-3.5 rounded-2xl hover:bg-white/90 transition-all duration-200 shadow-xl hover:scale-[1.02] whitespace-nowrap">
+                    <a href={`https://wa.me/${cfg.whatsapp_number}?text=${encodeURIComponent(cfg.whatsapp_message)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 bg-white text-[#7B3FE4] font-bold px-8 py-3.5 rounded-2xl hover:bg-white/90 transition-all duration-200 shadow-xl hover:scale-[1.02] whitespace-nowrap">
                       <Calendar className="w-5 h-5" />
                       AGENDAR AGORA
                     </a>
@@ -274,9 +302,9 @@ export default function PatientDashboard() {
       {/* Fixed CTA — mobile only */}
       <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden">
         <div className="bg-[#0A0A0B]/95 backdrop-blur-md border-t border-[#1C1C1E] px-4 py-3">
-          <a href="https://wa.me/5547988507977?text=Olá%2C%20tenho%20interesse%20no%20implante%20hormonal%21%20Podem%20me%20ajudar%3F" target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-[#7B3FE4] to-[#6325C8] text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-[#7B3FE4]/30">
+          <a href={`https://wa.me/${cfg.whatsapp_number}?text=${encodeURIComponent(cfg.whatsapp_message)}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-[#7B3FE4] to-[#6325C8] text-white font-bold py-3.5 rounded-2xl shadow-lg shadow-[#7B3FE4]/30">
             <Zap className="w-5 h-5" />
-            QUERO MEU IMPLANTE
+            {cfg.cta_primary_label}
           </a>
         </div>
       </div>

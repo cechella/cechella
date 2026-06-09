@@ -5,7 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import {
   Upload, Play, Eye, EyeOff, Trash2, Plus, X,
-  CheckCircle, Clock, AlertCircle, Film
+  CheckCircle, Clock, AlertCircle, Film, Star
 } from 'lucide-react'
 import { createBrowserClient } from '@supabase/ssr'
 
@@ -18,6 +18,7 @@ interface Video {
   hls_path: string | null
   thumbnail_path: string | null
   is_published: boolean
+  is_featured: boolean
   created_at: string
 }
 
@@ -165,6 +166,21 @@ export default function AdminVideosPage() {
       .eq('id', video.id)
     setVideos((prev) =>
       prev.map((v) => v.id === video.id ? { ...v, is_published: !v.is_published } : v)
+    )
+  }
+
+  async function toggleFeatured(video: Video) {
+    const newFeatured = !video.is_featured
+    // Only one video can be featured at a time
+    if (newFeatured) {
+      await supabase.from('videos').update({ is_featured: false }).neq('id', video.id)
+    }
+    await supabase.from('videos').update({ is_featured: newFeatured }).eq('id', video.id)
+    setVideos((prev) =>
+      prev.map((v) => v.id === video.id
+        ? { ...v, is_featured: newFeatured }
+        : newFeatured ? { ...v, is_featured: false } : v
+      )
     )
   }
 
@@ -427,6 +443,7 @@ export default function AdminVideosPage() {
                       <th className="text-left text-xs font-semibold text-[#71717A] px-5 py-3 uppercase tracking-wide">Categoria</th>
                       <th className="text-left text-xs font-semibold text-[#71717A] px-5 py-3 uppercase tracking-wide">Duração</th>
                       <th className="text-left text-xs font-semibold text-[#71717A] px-5 py-3 uppercase tracking-wide">Status</th>
+                      <th className="text-left text-xs font-semibold text-[#71717A] px-5 py-3 uppercase tracking-wide">Destaque</th>
                       <th className="text-left text-xs font-semibold text-[#71717A] px-5 py-3 uppercase tracking-wide">Criado em</th>
                       <th className="text-left text-xs font-semibold text-[#71717A] px-5 py-3 uppercase tracking-wide">Ações</th>
                     </tr>
@@ -470,6 +487,20 @@ export default function AdminVideosPage() {
                               Rascunho
                             </span>
                           )}
+                        </td>
+                        <td className="px-5 py-4">
+                          <button
+                            onClick={() => toggleFeatured(video)}
+                            title={video.is_featured ? 'Remover destaque' : 'Marcar como destaque (banner hero)'}
+                            className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                              video.is_featured
+                                ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                                : 'bg-[#18181A] border-[#1C1C1E] text-[#52525B] hover:text-amber-400 hover:border-amber-500/30'
+                            }`}
+                          >
+                            <Star className={`w-3 h-3 ${video.is_featured ? 'fill-amber-400' : ''}`} />
+                            {video.is_featured ? 'Destaque' : 'Destacar'}
+                          </button>
                         </td>
                         <td className="px-5 py-4">
                           <span className="text-sm text-[#71717A]">{formatDate(video.created_at)}</span>

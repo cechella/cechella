@@ -51,9 +51,9 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Rea
   ],
   admin: [
     { label: 'Dashboard', href: '/admin/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { label: 'Usuários', href: '/admin/users', icon: <Users className="w-5 h-5" /> },
-    { label: 'Conteúdo', href: '/admin/content', icon: <BookOpen className="w-5 h-5" /> },
     { label: 'Vídeos', href: '/admin/videos', icon: <Play className="w-5 h-5" /> },
+    { label: 'Usuários', href: '/admin/users', icon: <Users className="w-5 h-5" /> },
+    { label: 'Área do Paciente', href: '/admin/patient-settings', icon: <Settings className="w-5 h-5" /> },
     { label: 'Analytics', href: '/admin/analytics', icon: <BarChart3 className="w-5 h-5" /> },
   ],
 }
