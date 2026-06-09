@@ -51,7 +51,7 @@ export function SecureVideoPlayer({ videoId, title, userEmail, onClose }: Secure
         setIsLoading(true)
         setError(null)
 
-        const res = await fetch(`/api/video/signed-url?videoId=${videoId}`)
+        const res = await fetch(`/api/video/r2-signed-url?videoId=${videoId}`)
         if (!res.ok) {
           const data = await res.json()
           throw new Error(data.error || 'Failed to load video')

@@ -100,25 +100,39 @@ export default function AdminVideosPage() {
         throw new Error(insertError?.message ?? 'Failed to create video record')
       }
 
-      // Upload file if provided
+      // Upload file via R2 presigned URL
       if (file) {
-        const ext = file.name.split('.').pop()
-        const storagePath = `hls/${newVideo.id}/master.${ext}`
+        const urlRes = await fetch('/api/video/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            videoId: newVideo.id,
+            fileName: file.name,
+            contentType: file.type || 'video/mp4',
+          }),
+        })
 
-        const { error: uploadError } = await supabase.storage
-          .from('videos')
-          .upload(storagePath, file, { upsert: true })
-
-        if (uploadError) {
-          // Cleanup the DB record
+        if (!urlRes.ok) {
           await supabase.from('videos').delete().eq('id', newVideo.id)
-          throw new Error(uploadError.message)
+          throw new Error('Falha ao obter URL de upload')
         }
 
-        // Update record with storage path
+        const { uploadUrl, key } = await urlRes.json()
+
+        const uploadRes = await fetch(uploadUrl, {
+          method: 'PUT',
+          body: file,
+          headers: { 'Content-Type': file.type || 'video/mp4' },
+        })
+
+        if (!uploadRes.ok) {
+          await supabase.from('videos').delete().eq('id', newVideo.id)
+          throw new Error('Falha no upload para o storage')
+        }
+
         await supabase
           .from('videos')
-          .update({ hls_path: storagePath })
+          .update({ hls_path: key })
           .eq('id', newVideo.id)
       }
 
