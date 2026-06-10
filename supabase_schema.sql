@@ -44,3 +44,29 @@ CREATE POLICY "Admin can view all profiles" ON profiles
 
 -- Seed: create admin user (run after creating user via dashboard)
 -- UPDATE profiles SET role = 'admin' WHERE email = 'vcechella@gmail.com';
+
+-- ============================================
+-- LEADS — captura de prospects via landing page
+-- ============================================
+CREATE TABLE IF NOT EXISTS leads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT UNIQUE NOT NULL,
+  nome TEXT NOT NULL,
+  telefone TEXT,
+  origem TEXT DEFAULT 'landing_page',
+  user_id UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE leads ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Admin vê todos os leads" ON leads
+  FOR ALL USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+  );
+
+CREATE POLICY "Sales vê leads" ON leads
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'sales'))
+  );

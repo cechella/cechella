@@ -130,6 +130,20 @@ export function Sidebar({ role = 'patient' }: SidebarProps) {
         })}
       </nav>
 
+      {/* CTA Implante — só para pacientes */}
+      {role === 'patient' && !collapsed && (
+        <div className="px-3 pb-2">
+          <a
+            href="https://wa.me/5547988507977?text=Ol%C3%A1%21+Quero+saber+mais+sobre+o+implante+hormonal."
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-2 w-full bg-gradient-to-r from-[#7B3FE4] to-[#9558EE] text-white text-xs font-bold py-3 rounded-xl hover:opacity-90 transition-opacity shadow-[0_0_20px_rgba(123,63,228,0.3)]"
+          >
+            ⚡ QUERO MEU IMPLANTE
+          </a>
+        </div>
+      )}
+
       {/* Bottom */}
       <div className="border-t border-[#1C1C1E] p-2">
         <Link
