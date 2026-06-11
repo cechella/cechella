@@ -87,7 +87,7 @@ export async function POST(req: NextRequest) {
         const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
           type: 'magiclink',
           email: emailLower,
-          options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://cechella.vercel.app'}/patient/dashboard` },
+          options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://cechella.vercel.app'}/auth/callback?next=/patient/dashboard` },
         })
         if (linkData?.properties?.action_link) {
           await sendWelcomeEmail(nome, emailLower, linkData.properties.action_link)
@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
     const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
       type: 'magiclink',
       email: emailLower,
-      options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://cechella.vercel.app'}/patient/dashboard` },
+      options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://cechella.vercel.app'}/auth/callback?next=/patient/dashboard` },
     })
 
     if (linkData?.properties?.action_link) {
