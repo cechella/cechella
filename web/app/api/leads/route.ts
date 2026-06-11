@@ -12,7 +12,7 @@ function generatePassword(length = 10) {
   return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
 }
 
-async function sendWelcomeEmail(nome: string, email: string, magicLink: string) {
+async function sendWelcomeEmail(nome: string, email: string, senha: string, loginUrl: string) {
   const resendKey = process.env.RESEND_API_KEY
   if (!resendKey) return
 
@@ -35,17 +35,33 @@ async function sendWelcomeEmail(nome: string, email: string, magicLink: string) 
 
           <h2 style="color: #fff; font-size: 20px;">Olá, ${nome}! 🎉</h2>
           <p style="color: #A1A1AA; font-size: 16px; line-height: 1.6;">
-            Sua conta foi criada com sucesso! Clique no botão abaixo para acessar a plataforma exclusiva de implantes hormonais.
+            Sua conta foi criada com sucesso! Abaixo estão suas credenciais de acesso à plataforma exclusiva de implantes hormonais.
+          </p>
+
+          <div style="background: #111113; border: 1px solid #1C1C1E; border-radius: 12px; padding: 24px; margin: 24px 0;">
+            <p style="color: #71717A; font-size: 13px; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.1em;">Suas credenciais de acesso</p>
+            <div style="margin-bottom: 12px;">
+              <span style="color: #71717A; font-size: 13px;">E-mail:</span>
+              <p style="color: #fff; font-size: 16px; font-weight: bold; margin: 4px 0 0 0;">${email}</p>
+            </div>
+            <div>
+              <span style="color: #71717A; font-size: 13px;">Senha:</span>
+              <p style="color: #7B3FE4; font-size: 20px; font-weight: bold; letter-spacing: 0.15em; margin: 4px 0 0 0; font-family: monospace;">${senha}</p>
+            </div>
+          </div>
+
+          <p style="color: #A1A1AA; font-size: 14px; line-height: 1.6;">
+            Guarde esta senha em local seguro. Você pode alterá-la depois de fazer o primeiro acesso.
           </p>
 
           <div style="text-align: center; margin: 32px 0;">
-            <a href="${magicLink}" style="background: linear-gradient(135deg, #7B3FE4, #3B82F6); color: #fff; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block;">
+            <a href="${loginUrl}" style="background: linear-gradient(135deg, #7B3FE4, #3B82F6); color: #fff; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block;">
               ⚡ Acessar minha plataforma
             </a>
           </div>
 
-          <p style="color: #71717A; font-size: 14px; text-align: center;">
-            Este link expira em 24 horas. Se não solicitou este acesso, ignore este email.
+          <p style="color: #71717A; font-size: 13px; text-align: center;">
+            Se não solicitou este acesso, ignore este email.
           </p>
 
           <hr style="border: none; border-top: 1px solid #1C1C1E; margin: 32px 0;">
@@ -77,21 +93,17 @@ export async function POST(req: NextRequest) {
       user_metadata: { full_name: nome, phone: telefone },
     })
 
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://cechella.vercel.app'
+    const loginUrl = `${siteUrl}/login`
+
     if (authError) {
       if (authError.message.includes('already been registered') || authError.status === 422) {
         await supabaseAdmin.from('leads').upsert(
           { email: emailLower, nome, telefone, origem: 'landing_page', updated_at: new Date().toISOString() },
           { onConflict: 'email' }
         )
-        // Gerar novo magic link para usuário existente
-        const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
-          type: 'magiclink',
-          email: emailLower,
-          options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://cechella.vercel.app'}/auth/callback?next=/patient/dashboard` },
-        })
-        if (linkData?.properties?.action_link) {
-          await sendWelcomeEmail(nome, emailLower, linkData.properties.action_link)
-        }
+        // Usuário já existe — envia email informando para usar a senha cadastrada
+        await sendWelcomeEmail(nome, emailLower, '(use sua senha cadastrada)', loginUrl)
         return NextResponse.json({ success: true, existing: true })
       }
       throw authError
@@ -112,16 +124,7 @@ export async function POST(req: NextRequest) {
       { onConflict: 'email' }
     )
 
-    // Gerar magic link e enviar via Resend
-    const { data: linkData } = await supabaseAdmin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: emailLower,
-      options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'https://cechella.vercel.app'}/auth/callback?next=/patient/dashboard` },
-    })
-
-    if (linkData?.properties?.action_link) {
-      await sendWelcomeEmail(nome, emailLower, linkData.properties.action_link)
-    }
+    await sendWelcomeEmail(nome, emailLower, senha, loginUrl)
 
     return NextResponse.json({ success: true })
   } catch (err: any) {
