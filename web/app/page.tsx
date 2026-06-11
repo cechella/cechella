@@ -310,14 +310,21 @@ function LeadForm() {
           <CheckCircle className="w-8 h-8 text-green-400" />
         </div>
         <h3 className="text-2xl font-bold text-white mb-2">Acesso enviado! 🎉</h3>
-        <p className="text-[#A1A1AA] mb-6">Verifique seu e-mail — enviamos seu login e senha para acessar a plataforma.</p>
+        <p className="text-[#A1A1AA] mb-2">Enviamos seu <strong className="text-white">login e senha</strong> para o seu e-mail.</p>
+        <p className="text-sm text-[#71717A] mb-6">Não encontrou? Verifique a caixa de <strong className="text-[#9D6FF0]">Spam / Promoções</strong>.</p>
         <a
-          href="/patient/dashboard"
+          href="https://mail.google.com"
+          target="_blank"
+          rel="noopener noreferrer"
           className="inline-flex items-center gap-2 bg-gradient-to-r from-[#7B3FE4] to-[#9558EE] text-white font-bold px-8 py-3 rounded-xl hover:opacity-90 transition-opacity"
         >
-          Acessar agora
+          📧 Abrir meu e-mail
           <ArrowRight className="w-4 h-4" />
         </a>
+        <p className="mt-4 text-xs text-[#52525B]">
+          Já tem login e senha?{' '}
+          <a href="/login" className="text-[#7B3FE4] hover:underline">Entrar na plataforma</a>
+        </p>
       </div>
     )
   }

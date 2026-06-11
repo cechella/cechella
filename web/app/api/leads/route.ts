@@ -102,8 +102,14 @@ export async function POST(req: NextRequest) {
           { email: emailLower, nome, telefone, origem: 'landing_page', updated_at: new Date().toISOString() },
           { onConflict: 'email' }
         )
-        // Usuário já existe — envia email informando para usar a senha cadastrada
-        await sendWelcomeEmail(nome, emailLower, '(use sua senha cadastrada)', loginUrl)
+        // Usuário já existe — gera nova senha e envia por email
+        const novaSenha = generatePassword()
+        const { data: existingUser } = await supabaseAdmin.auth.admin.listUsers()
+        const user = existingUser?.users?.find(u => u.email === emailLower)
+        if (user) {
+          await supabaseAdmin.auth.admin.updateUserById(user.id, { password: novaSenha })
+        }
+        await sendWelcomeEmail(nome, emailLower, novaSenha, loginUrl)
         return NextResponse.json({ success: true, existing: true })
       }
       throw authError
