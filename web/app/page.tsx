@@ -9,7 +9,7 @@ const DEPOIMENTOS = [
     nome: 'Adriana Lima Cechella',
     categoria: 'IMPLANTES HORMONAIS',
     duracao: '1:15',
-    thumbnail: '/thumbnails/depoimento1.jpg',
+    thumbnail: '/api/video/thumbnails%2FFb1be62b9-0ffe-4079-b41b-d47c6c391a6b%2Fthumb.jpg',
     destaque: '"Recuperei minha energia em 3 semanas"',
   },
   {
