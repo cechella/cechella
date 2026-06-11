@@ -6,31 +6,31 @@ import Link from 'next/link'
 
 const DEPOIMENTOS = [
   {
-    nome: 'Adriana Lima Cechella',
+    nome: 'Adriana Mendes',
     categoria: 'IMPLANTES HORMONAIS',
     duracao: '1:15',
-    thumbnail: '/api/video/thumbnails%2FFb1be62b9-0ffe-4079-b41b-d47c6c391a6b%2Fthumb.jpg',
+    thumbnail: 'https://pub-7091151189544b0980e12e81533a5213.r2.dev/thumbnails/528f0138-6230-40fc-b797-442c62cfa6fd/thumb.jpg',
     destaque: '"Recuperei minha energia em 3 semanas"',
   },
   {
     nome: 'Márcia Oliveira',
     categoria: 'IMPLANTES HORMONAIS',
     duracao: '1:42',
-    thumbnail: '/thumbnails/depoimento2.jpg',
+    thumbnail: 'https://pub-7091151189544b0980e12e81533a5213.r2.dev/thumbnails/84aff29f-4049-483c-8c60-4728bb9ba328/thumb.jpg',
     destaque: '"Minha libido voltou completamente"',
   },
   {
     nome: 'Fernanda Costa',
     categoria: 'IMPLANTES HORMONAIS',
     duracao: '0:58',
-    thumbnail: '/thumbnails/depoimento3.jpg',
+    thumbnail: 'https://pub-7091151189544b0980e12e81533a5213.r2.dev/thumbnails/b1be62b9-0ffe-4079-b41b-d47c6c391a6b/thumb.jpg',
     destaque: '"Meu sono melhorou de imediato"',
   },
   {
     nome: 'Patricia Mendes',
     categoria: 'IMPLANTES HORMONAIS',
     duracao: '2:10',
-    thumbnail: '/thumbnails/depoimento4.jpg',
+    thumbnail: 'https://pub-7091151189544b0980e12e81533a5213.r2.dev/thumbnails/528f0138-6230-40fc-b797-442c62cfa6fd/thumb.jpg',
     destaque: '"Perdi 8kg sem dieta restritiva"',
   },
 ]
