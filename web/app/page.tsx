@@ -93,51 +93,43 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      {/* HERO */}
+      {/* HERO + FORMULÁRIO */}
       <section className="relative pt-28 pb-20 px-4 overflow-hidden">
         <div className="absolute inset-0 pointer-events-none">
           <div className="absolute top-0 left-1/4 w-[700px] h-[700px] rounded-full bg-[#7B3FE4]/12 blur-[140px]" />
           <div className="absolute bottom-0 right-0 w-[500px] h-[500px] rounded-full bg-[#3B82F6]/8 blur-[120px]" />
         </div>
-        <div className="relative max-w-5xl mx-auto text-center">
-          <div className="inline-flex items-center gap-2 bg-[#7B3FE4]/10 border border-[#7B3FE4]/30 rounded-full px-4 py-1.5 text-sm text-[#9D6FF0] mb-8">
-            <Instagram className="w-3.5 h-3.5" />
-            <span>Bem-vinda à sua transformação</span>
-          </div>
-          <h1 className="text-5xl md:text-7xl font-bold leading-[1.08] mb-6 tracking-tight">
-            Recupere sua{' '}
-            <span className="bg-gradient-to-r from-[#7B3FE4] to-[#9558EE] bg-clip-text text-transparent">energia,</span>
-            <br />libido e qualidade
-            <br />de vida
-          </h1>
-          <p className="text-xl text-[#A1A1AA] max-w-2xl mx-auto mb-10 leading-relaxed">
-            Milhares de mulheres já transformaram sua saúde hormonal com implantes bioidenticos.
-            Descubra como em menos de 30 minutos.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
-            <button
-              onClick={scrollToForm}
-              className="group flex items-center gap-2 bg-gradient-to-r from-[#7B3FE4] to-[#9558EE] text-white font-bold px-8 py-4 rounded-2xl text-lg hover:opacity-90 transition-all shadow-[0_0_40px_rgba(123,63,228,0.4)] hover:shadow-[0_0_60px_rgba(123,63,228,0.6)]"
-            >
-              <span>⚡ QUERO MEU IMPLANTE</span>
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </button>
-            <a
-              href="#depoimentos"
-              className="flex items-center gap-2 text-[#A1A1AA] hover:text-white transition-colors text-lg font-medium"
-            >
-              <Play className="w-5 h-5" />
-              Ver depoimentos reais
-            </a>
-          </div>
-          {/* Números */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
-            {NUMEROS.map(n => (
-              <div key={n.label} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4 text-center">
-                <p className="text-2xl font-bold text-white">{n.valor}</p>
-                <p className="text-xs text-[#71717A] mt-1">{n.label}</p>
+        <div className="relative max-w-6xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            {/* Texto lado esquerdo */}
+            <div>
+              <div className="inline-flex items-center gap-2 bg-[#7B3FE4]/10 border border-[#7B3FE4]/30 rounded-full px-4 py-1.5 text-sm text-[#9D6FF0] mb-8">
+                <Instagram className="w-3.5 h-3.5" />
+                <span>Bem-vinda à sua transformação</span>
               </div>
-            ))}
+              <h1 className="text-4xl md:text-6xl font-bold leading-[1.08] mb-6 tracking-tight">
+                Recupere sua{' '}
+                <span className="bg-gradient-to-r from-[#7B3FE4] to-[#9558EE] bg-clip-text text-transparent">energia,</span>
+                <br />libido e qualidade
+                <br />de vida
+              </h1>
+              <p className="text-lg text-[#A1A1AA] mb-8 leading-relaxed">
+                Milhares de mulheres já transformaram sua saúde hormonal com implantes bioidenticos.
+                Descubra como em menos de 30 minutos.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {NUMEROS.map(n => (
+                  <div key={n.label} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4 text-center">
+                    <p className="text-2xl font-bold text-white">{n.valor}</p>
+                    <p className="text-xs text-[#71717A] mt-1">{n.label}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Formulário lado direito */}
+            <div ref={formRef} id="cadastro">
+              <LeadForm />
+            </div>
           </div>
         </div>
       </section>
@@ -218,20 +210,6 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-        </div>
-      </section>
-
-      {/* FORMULÁRIO DE CAPTURA */}
-      <section ref={formRef} id="cadastro" className="py-20 px-4 bg-[#0D0D0F]">
-        <div className="max-w-lg mx-auto">
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 bg-[#7B3FE4]/10 border border-[#7B3FE4]/30 rounded-full px-4 py-1.5 text-sm text-[#9D6FF0] mb-6">
-              <span>🔒 Acesso gratuito e seguro</span>
-            </div>
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Comece sua transformação</h2>
-            <p className="text-[#71717A]">Preencha e receba acesso imediato à plataforma com conteúdos exclusivos</p>
-          </div>
-          <LeadForm />
         </div>
       </section>
 
@@ -376,7 +354,7 @@ function LeadForm() {
           {loading ? (
             <><span className="animate-spin">⚡</span> Criando seu acesso...</>
           ) : (
-            <>⚡ QUERO MEU IMPLANTE GRÁTIS <ArrowRight className="w-5 h-5" /></>
+            <>⚡ ACESSAR A PLATAFORMA GRÁTIS <ArrowRight className="w-5 h-5" /></>
           )}
         </button>
         <p className="text-center text-xs text-[#52525B]">
