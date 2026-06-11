@@ -23,7 +23,7 @@ async function sendWelcomeEmail(nome: string, email: string, senha: string, logi
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: { email: 'MS_hormoneeco@trial-3z0vklo1e7vl7qrx.mlsender.net', name: 'Hormone Ecosystem' },
+      from: { email: 'noreply@hormoneecosystem.com', name: 'Hormone Ecosystem' },
       to: [{ email, name: nome }],
       subject: '⚡ Seu acesso à plataforma Hormone Ecosystem está pronto!',
       html: `
