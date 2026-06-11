@@ -13,18 +13,18 @@ function generatePassword(length = 10) {
 }
 
 async function sendWelcomeEmail(nome: string, email: string, senha: string, loginUrl: string) {
-  const resendKey = process.env.RESEND_API_KEY
-  if (!resendKey) return
+  const mailerKey = process.env.MAILERSEND_API_KEY
+  if (!mailerKey) return
 
-  await fetch('https://api.resend.com/emails', {
+  await fetch('https://api.mailersend.com/v1/email', {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${resendKey}`,
+      'Authorization': `Bearer ${mailerKey}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'Hormone Ecosystem <onboarding@resend.dev>',
-      to: email,
+      from: { email: 'MS_hormoneeco@trial-3z0vklo1e7vl7qrx.mlsender.net', name: 'Hormone Ecosystem' },
+      to: [{ email, name: nome }],
       subject: '⚡ Seu acesso à plataforma Hormone Ecosystem está pronto!',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0A0A0B; color: #fff; padding: 40px; border-radius: 16px;">
