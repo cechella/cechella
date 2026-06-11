@@ -42,11 +42,15 @@ async function sendWelcomeEmail(nome: string, email: string, senha: string, logi
             <p style="color: #71717A; font-size: 13px; margin: 0 0 16px 0; text-transform: uppercase; letter-spacing: 0.1em;">Suas credenciais de acesso</p>
             <div style="margin-bottom: 12px;">
               <span style="color: #71717A; font-size: 13px;">E-mail:</span>
-              <p style="color: #fff; font-size: 16px; font-weight: bold; margin: 4px 0 0 0;">${email}</p>
+              <div style="margin-top: 6px; background: #1C1C1E; border: 1px solid #2C2C2E; border-radius: 8px; padding: 10px 14px; cursor: text;">
+                <span style="color: #fff; font-size: 15px; font-weight: bold; user-select: all; -webkit-user-select: all;">${email}</span>
+              </div>
             </div>
             <div>
-              <span style="color: #71717A; font-size: 13px;">Senha:</span>
-              <p style="color: #7B3FE4; font-size: 20px; font-weight: bold; letter-spacing: 0.15em; margin: 4px 0 0 0; font-family: monospace;">${senha}</p>
+              <span style="color: #71717A; font-size: 13px;">Senha: <span style="color: #52525B;">(clique para selecionar e copie com Ctrl+C)</span></span>
+              <div style="margin-top: 6px; background: #1C1C1E; border: 1px solid #7B3FE4; border-radius: 8px; padding: 10px 14px; cursor: text;">
+                <span style="color: #A78BFA; font-size: 20px; font-weight: bold; letter-spacing: 0.2em; font-family: monospace; user-select: all; -webkit-user-select: all;">${senha}</span>
+              </div>
             </div>
           </div>
 
