@@ -197,42 +197,71 @@ export default function LandingPage() {
             ))}
           </div>
 
-          {/* 2 depoimentos estilo WhatsApp */}
+          {/* 2 depoimentos estilo WhatsApp Business real */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
             {DEPOIMENTOS_TEXTO.map(d => (
-              <div key={d.nome} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden">
-                {/* Header WhatsApp */}
-                <div className="bg-[#1a1a1c] px-4 py-3 flex items-center gap-3 border-b border-[#1C1C1E]">
-                  <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#7B3FE4]/40">
-                    <img src={d.foto} alt={d.nome} className="w-full h-full object-cover object-top" />
+              <div key={d.nome} className="rounded-2xl overflow-hidden shadow-2xl" style={{fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif'}}>
+                {/* Header — igual WhatsApp Business */}
+                <div className="flex items-center gap-3 px-3 py-2" style={{background: '#1f2c34'}}>
+                  <div className="text-white/70 text-lg">‹</div>
+                  <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 bg-[#6b7c85] flex items-center justify-center">
+                    <span className="text-white text-sm font-bold">VC</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{d.nome}</p>
-                    <p className="text-xs text-[#25D366]">● online</p>
+                    <p className="text-white text-sm font-semibold leading-tight">Dr. Vinícius Cechella</p>
+                    <p className="text-[#8696a0] text-[11px]">Suporte Dr. Vinícius Cechella</p>
                   </div>
-                  <MessageCircle className="w-5 h-5 text-[#25D366]" />
+                  <div className="flex gap-4 text-[#aebac1]">
+                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor"><path d="M15.9 14.3H15l-.3-.3c1-1.1 1.6-2.7 1.6-4.3C16.3 5.9 13.4 3 9.8 3S3.3 5.9 3.3 9.7s2.9 6.7 6.5 6.7c1.6 0 3-.6 4.1-1.6l.3.3v.8l5.1 5.1 1.5-1.5-5-5.2zm-6.1 0C7.2 14.3 4.8 11.9 4.8 9s2.4-5.3 5.3-5.3S15.4 6.1 15.4 9s-2.7 5.3-5.6 5.3z"/></svg>
+                    <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor"><path d="M12 7a2 2 0 1 0-.001-4.001A2 2 0 0 0 12 7zm0 2a2 2 0 1 0-.001 3.999A2 2 0 0 0 12 9zm0 6a2 2 0 1 0-.001 3.999A2 2 0 0 0 12 15z"/></svg>
+                  </div>
                 </div>
-                {/* Corpo da conversa */}
-                <div className="p-4 bg-[#0D0D0F]">
-                  <div className="flex justify-end mb-2">
-                    <div className="bg-[#1C3A2A] rounded-2xl rounded-tr-sm px-4 py-3 max-w-[85%]">
-                      <p className="text-sm text-white leading-relaxed">{d.mensagem}</p>
+
+                {/* Corpo da conversa com wallpaper */}
+                <div className="relative p-3 pb-2" style={{
+                  background: '#0b141a',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23182229' fill-opacity='0.8'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+                }}>
+                  {/* Data */}
+                  <div className="flex justify-center mb-3">
+                    <span className="text-[#8696a0] text-[11px] bg-[#182229] px-3 py-1 rounded-full">hoje</span>
+                  </div>
+
+                  {/* Mensagem recebida — da paciente (esquerda) */}
+                  <div className="flex items-end gap-2 mb-2">
+                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0">
+                      <img src={d.foto} alt={d.nome} className="w-full h-full object-cover object-top" />
+                    </div>
+                    <div className="max-w-[82%] rounded-lg rounded-bl-sm px-3 py-2" style={{background: '#202c33'}}>
+                      <p className="text-[#25d366] text-xs font-semibold mb-0.5">{d.nome}</p>
+                      <p className="text-[#e9edef] text-[13px] leading-relaxed">{d.mensagem}</p>
+                      <div className="flex justify-end mt-1">
+                        <span className="text-[#8696a0] text-[10px]">{d.horario}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Resposta do Dr. — enviada (direita) */}
+                  <div className="flex justify-end mb-1">
+                    <div className="max-w-[75%] rounded-lg rounded-br-sm px-3 py-2" style={{background: '#005c4b'}}>
+                      <p className="text-[#e9edef] text-[13px] leading-relaxed">Que notícia incrível! 🙏 Fico muito feliz com seu resultado. Obrigada por confiar no nosso trabalho!</p>
                       <div className="flex items-center justify-end gap-1 mt-1">
-                        <span className="text-[10px] text-white/40">{d.horario}</span>
-                        <svg className="w-4 h-4" viewBox="0 0 16 11" fill="none">
-                          <path d="M11 1L5 8.5L1 5" stroke="#53BDEB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                          <path d="M15 1L9 8.5L7 6.5" stroke="#53BDEB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        <span className="text-[#8696a0] text-[10px]">{d.horario}</span>
+                        <svg className="w-4 h-3" viewBox="0 0 16 11" fill="none">
+                          <path d="M11 1L5 8.5L1 5" stroke="#53bdeb" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M15 1L9 8.5L7 6.5" stroke="#53bdeb" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                         </svg>
                       </div>
                     </div>
                   </div>
                 </div>
+
                 {/* Footer com avaliação */}
-                <div className="px-4 py-3 bg-[#111113] border-t border-[#1C1C1E] flex items-center justify-between">
+                <div className="px-4 py-2.5 flex items-center justify-between" style={{background: '#1f2c34'}}>
                   <div className="flex gap-0.5">
-                    {[...Array(d.avaliacao)].map((_, i) => <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />)}
+                    {[...Array(d.avaliacao)].map((_, i) => <Star key={i} className="w-3.5 h-3.5 fill-yellow-400 text-yellow-400" />)}
                   </div>
-                  <span className="text-xs text-[#71717A]">{d.cidade}</span>
+                  <span className="text-[#8696a0] text-xs">{d.cidade}</span>
                 </div>
               </div>
             ))}
