@@ -204,8 +204,8 @@ export default function LandingPage() {
                 {/* Header — igual WhatsApp Business */}
                 <div className="flex items-center gap-3 px-3 py-2" style={{background: '#1f2c34'}}>
                   <div className="text-white/70 text-lg">‹</div>
-                  <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 bg-[#6b7c85]">
-                    <img src="/depoimentos/dr-vinicius.jpg" alt="Dr. Vinícius Cechella" className="w-full h-full object-cover" style={{objectPosition: '50% 15%'}} />
+                  <div className="w-11 h-11 rounded-full overflow-hidden flex-shrink-0 bg-[#6b7c85]">
+                    <img src="/depoimentos/dr-vinicius.jpg" alt="Dr. Vinícius Cechella" className="w-full h-full object-cover" style={{objectPosition: '50% 10%'}} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">
@@ -236,8 +236,8 @@ export default function LandingPage() {
 
                   {/* Mensagem recebida — da paciente (esquerda) */}
                   <div className="flex items-end gap-2 mb-2">
-                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0">
-                      <img src={d.foto} alt={d.nome} className="w-full h-full object-cover object-top" />
+                    <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 flex-shrink-0">
+                      <img src={d.foto} alt={d.nome} className="w-full h-full object-cover" style={{objectPosition: '50% 5%'}} />
                     </div>
                     <div className="max-w-[82%] rounded-lg rounded-bl-sm px-3 py-2" style={{background: '#202c33'}}>
                       <p className="text-[#25d366] text-xs font-semibold mb-0.5">{d.nome}</p>
