@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { ChevronRight, Play, Star, Shield, Award, Users, ArrowRight, CheckCircle, Instagram, MessageCircle, Phone, Lock } from 'lucide-react'
 import Link from 'next/link'
 
-const DEPOIMENTOS = [
+const DEPOIMENTOS_VIDEO = [
   {
     nome: 'Adriana Mendes',
     categoria: 'IMPLANTES HORMONAIS',
@@ -19,19 +19,24 @@ const DEPOIMENTOS = [
     thumbnail: '/depoimentos/marcia-oliveira.jpg',
     destaque: '"Minha libido voltou completamente"',
   },
+]
+
+const DEPOIMENTOS_TEXTO = [
   {
     nome: 'Fernanda Costa',
-    categoria: 'IMPLANTES HORMONAIS',
-    duracao: '0:58',
-    thumbnail: '/depoimentos/fernanda-costa.jpg',
-    destaque: '"Meu sono melhorou de imediato"',
+    cidade: 'Curitiba, PR',
+    foto: '/depoimentos/fernanda-costa.jpg',
+    horario: '14:32',
+    mensagem: 'Acordava cansada, dormia cansada. Depois do implante com o Dr. Vinícius Cechella, na primeira semana já senti diferença no sono. Na segunda semana, a energia no trabalho voltou. Hoje durmo profundamente e acordo com vontade de conquistar o dia. Mudou minha vida! 🙏',
+    avaliacao: 5,
   },
   {
     nome: 'Patricia Mendes',
-    categoria: 'IMPLANTES HORMONAIS',
-    duracao: '2:10',
-    thumbnail: '/depoimentos/patricia-mendes.jpg',
-    destaque: '"Perdi 8kg sem dieta restritiva"',
+    cidade: 'Porto Alegre, RS',
+    foto: '/depoimentos/patricia-mendes.jpg',
+    horario: '09:17',
+    mensagem: 'Tentei de tudo para perder peso. Nada funcionava. Com o implante do Dr. Vinícius Cechella, em 3 meses perdi 8 quilos sem dieta restritiva. O metabolismo voltou a funcionar. Hoje com 58 anos uso calça que não usava com 48. Não é milagre — é ciência hormonal! ✨',
+    avaliacao: 5,
   },
 ]
 
@@ -163,15 +168,16 @@ export default function LandingPage() {
             <h2 className="text-3xl md:text-4xl font-bold mb-4">Depoimentos Reais</h2>
             <p className="text-[#71717A] text-lg">Pacientes que já transformaram suas vidas</p>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
-            {DEPOIMENTOS.map(d => (
+
+          {/* 2 vídeos */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            {DEPOIMENTOS_VIDEO.map(d => (
               <div key={d.nome} className="group">
                 <div className="relative aspect-[9/16] bg-[#1C1C1E] rounded-2xl overflow-hidden mb-3">
                   {d.thumbnail && (
                     <img src={d.thumbnail} alt={d.nome} className="absolute inset-0 w-full h-full object-cover" />
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
-                  {/* Cadeado — vídeo exclusivo */}
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="flex flex-col items-center gap-2">
                       <div className="w-14 h-14 rounded-full bg-black/50 backdrop-blur border border-white/20 flex items-center justify-center">
@@ -190,6 +196,48 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
+
+          {/* 2 depoimentos estilo WhatsApp */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
+            {DEPOIMENTOS_TEXTO.map(d => (
+              <div key={d.nome} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden">
+                {/* Header WhatsApp */}
+                <div className="bg-[#1a1a1c] px-4 py-3 flex items-center gap-3 border-b border-[#1C1C1E]">
+                  <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 border-2 border-[#7B3FE4]/40">
+                    <img src={d.foto} alt={d.nome} className="w-full h-full object-cover object-top" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{d.nome}</p>
+                    <p className="text-xs text-[#25D366]">● online</p>
+                  </div>
+                  <MessageCircle className="w-5 h-5 text-[#25D366]" />
+                </div>
+                {/* Corpo da conversa */}
+                <div className="p-4 bg-[#0D0D0F]">
+                  <div className="flex justify-end mb-2">
+                    <div className="bg-[#1C3A2A] rounded-2xl rounded-tr-sm px-4 py-3 max-w-[85%]">
+                      <p className="text-sm text-white leading-relaxed">{d.mensagem}</p>
+                      <div className="flex items-center justify-end gap-1 mt-1">
+                        <span className="text-[10px] text-white/40">{d.horario}</span>
+                        <svg className="w-4 h-4" viewBox="0 0 16 11" fill="none">
+                          <path d="M11 1L5 8.5L1 5" stroke="#53BDEB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          <path d="M15 1L9 8.5L7 6.5" stroke="#53BDEB" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {/* Footer com avaliação */}
+                <div className="px-4 py-3 bg-[#111113] border-t border-[#1C1C1E] flex items-center justify-between">
+                  <div className="flex gap-0.5">
+                    {[...Array(d.avaliacao)].map((_, i) => <Star key={i} className="w-4 h-4 fill-yellow-400 text-yellow-400" />)}
+                  </div>
+                  <span className="text-xs text-[#71717A]">{d.cidade}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
           <div className="text-center">
             <button onClick={scrollToForm} className="inline-flex items-center gap-2 bg-gradient-to-r from-[#7B3FE4] to-[#9558EE] text-white font-bold px-8 py-4 rounded-2xl hover:opacity-90 transition-opacity shadow-[0_0_40px_rgba(123,63,228,0.3)]">
               ⚡ QUERO MEU IMPLANTE
