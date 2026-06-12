@@ -205,10 +205,18 @@ export default function LandingPage() {
                 <div className="flex items-center gap-3 px-3 py-2" style={{background: '#1f2c34'}}>
                   <div className="text-white/70 text-lg">‹</div>
                   <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 bg-[#6b7c85] flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">VC</span>
+                    <img src="/depoimentos/dr-vinicius.jpg" alt="Dr. Vinícius Cechella" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display='none' }} />
+                    <span className="text-white text-sm font-bold absolute">VC</span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-white text-sm font-semibold leading-tight">Dr. Vinícius Cechella</p>
+                    <div className="flex items-center gap-1">
+                      <p className="text-white text-sm font-semibold leading-tight">Dr. Vinícius Cechella</p>
+                      {/* Selo verificado WhatsApp Business */}
+                      <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0" fill="none">
+                        <circle cx="12" cy="12" r="12" fill="#25D366"/>
+                        <path d="M6.5 12.5L10 16L17.5 8.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
                     <p className="text-[#8696a0] text-[11px]">Suporte Dr. Vinícius Cechella</p>
                   </div>
                   <div className="flex gap-4 text-[#aebac1]">
