@@ -204,8 +204,8 @@ export default function LandingPage() {
                 {/* Header — igual WhatsApp Business */}
                 <div className="flex items-center gap-3 px-3 py-2" style={{background: '#1f2c34'}}>
                   <div className="text-white/70 text-lg">‹</div>
-                  <div className="w-14 h-14 rounded-full overflow-hidden flex-shrink-0 bg-[#6b7c85]">
-                    <img src="/depoimentos/dr-vinicius.jpg" alt="Dr. Vinícius Cechella" className="w-full h-full object-cover" style={{objectPosition: '50% 0%'}} />
+                  <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 bg-[#6b7c85]">
+                    <img src="/depoimentos/dr-vinicius.jpg" alt="Dr. Vinícius Cechella" className="w-full h-full object-cover" style={{objectPosition: '50% 25%'}} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1">
