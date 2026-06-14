@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
       user_metadata: { full_name: nome, phone: telefone },
     })
 
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://cechella.vercel.app'
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://hormoneecosystem.com'
     const loginUrl = `${siteUrl}/login`
 
     if (authError) {
