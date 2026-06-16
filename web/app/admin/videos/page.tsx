@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import {
@@ -47,6 +48,7 @@ export default function AdminVideosPage() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const thumbInputRef = useRef<HTMLInputElement>(null)
   const [thumbPreview, setThumbPreview] = useState<string | null>(null)
@@ -577,25 +579,20 @@ export default function AdminVideosPage() {
                             </button>
                             <div className="relative">
                               <button
-                                onClick={() => setOpenMenuId(openMenuId === video.id ? null : video.id)}
+                                onClick={(e) => {
+                                  if (openMenuId === video.id) {
+                                    setOpenMenuId(null)
+                                    setMenuPos(null)
+                                  } else {
+                                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                                    setMenuPos({ top: rect.bottom + window.scrollY + 4, right: window.innerWidth - rect.right })
+                                    setOpenMenuId(video.id)
+                                  }
+                                }}
                                 className="w-8 h-8 rounded-lg bg-[#18181A] border border-[#1C1C1E] flex items-center justify-center text-[#71717A] hover:text-white hover:border-[#27272A] transition-all"
                               >
                                 <MoreVertical className="w-3.5 h-3.5" />
                               </button>
-                              {openMenuId === video.id && (
-                                <div className="absolute right-0 bottom-full mb-1 z-50 bg-[#18181A] border border-[#1C1C1E] rounded-xl shadow-xl w-44 py-1">
-                                  <button onClick={() => { toggleFeatured(video); setOpenMenuId(null) }} className="w-full text-left px-4 py-2 text-sm text-[#A1A1AA] hover:text-white hover:bg-[#1C1C1E] flex items-center gap-2">
-                                    <Star className="w-3.5 h-3.5" /> {video.is_featured ? 'Remover destaque' : 'Destacar'}
-                                  </button>
-                                  <button onClick={() => { startEdit(video) }} className="w-full text-left px-4 py-2 text-sm text-[#A1A1AA] hover:text-white hover:bg-[#1C1C1E] flex items-center gap-2">
-                                    <Pencil className="w-3.5 h-3.5" /> Editar detalhes
-                                  </button>
-                                  <div className="border-t border-[#1C1C1E] my-1" />
-                                  <button onClick={() => { deleteVideo(video); setOpenMenuId(null) }} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2">
-                                    <Trash2 className="w-3.5 h-3.5" /> Excluir
-                                  </button>
-                                </div>
-                              )}
                             </div>
                           </div>
                         </td>
@@ -672,6 +669,35 @@ export default function AdminVideosPage() {
         </div>
       </div>
     )}
+
+      {/* Dropdown portal for 3-dot menu */}
+      {openMenuId && menuPos && typeof document !== 'undefined' && createPortal(
+        <>
+          <div className="fixed inset-0 z-[99]" onClick={() => { setOpenMenuId(null); setMenuPos(null) }} />
+          <div
+            className="fixed z-[100] bg-[#18181A] border border-[#1C1C1E] rounded-xl shadow-xl w-44 py-1"
+            style={{ top: menuPos.top, right: menuPos.right }}
+          >
+            {(() => {
+              const video = videos.find(v => v.id === openMenuId)
+              if (!video) return null
+              return <>
+                <button onClick={() => { toggleFeatured(video); setOpenMenuId(null); setMenuPos(null) }} className="w-full text-left px-4 py-2 text-sm text-[#A1A1AA] hover:text-white hover:bg-[#1C1C1E] flex items-center gap-2">
+                  <Star className="w-3.5 h-3.5" /> {video.is_featured ? 'Remover destaque' : 'Destacar'}
+                </button>
+                <button onClick={() => { startEdit(video); setOpenMenuId(null); setMenuPos(null) }} className="w-full text-left px-4 py-2 text-sm text-[#A1A1AA] hover:text-white hover:bg-[#1C1C1E] flex items-center gap-2">
+                  <Pencil className="w-3.5 h-3.5" /> Editar detalhes
+                </button>
+                <div className="border-t border-[#1C1C1E] my-1" />
+                <button onClick={() => { deleteVideo(video); setOpenMenuId(null); setMenuPos(null) }} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2">
+                  <Trash2 className="w-3.5 h-3.5" /> Excluir
+                </button>
+              </>
+            })()}
+          </div>
+        </>,
+        document.body
+      )}
     </div>
   )
 }
