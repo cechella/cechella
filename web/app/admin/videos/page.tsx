@@ -489,8 +489,8 @@ export default function AdminVideosPage() {
                 <p className="text-xs text-[#52525B]">Adicione o primeiro vídeo para começar</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
+              <div className="overflow-x-auto overflow-y-visible">
+                <table className="w-full" style={{ borderCollapse: 'separate' }}>
                   <thead>
                     <tr className="border-b border-[#1C1C1E]">
                       <th className="text-left text-xs font-semibold text-[#71717A] px-5 py-3 uppercase tracking-wide">Título</th>
@@ -583,7 +583,7 @@ export default function AdminVideosPage() {
                                 <MoreVertical className="w-3.5 h-3.5" />
                               </button>
                               {openMenuId === video.id && (
-                                <div className="absolute right-0 top-9 z-50 bg-[#18181A] border border-[#1C1C1E] rounded-xl shadow-xl w-44 py-1">
+                                <div className="absolute right-0 bottom-full mb-1 z-50 bg-[#18181A] border border-[#1C1C1E] rounded-xl shadow-xl w-44 py-1">
                                   <button onClick={() => { toggleFeatured(video); setOpenMenuId(null) }} className="w-full text-left px-4 py-2 text-sm text-[#A1A1AA] hover:text-white hover:bg-[#1C1C1E] flex items-center gap-2">
                                     <Star className="w-3.5 h-3.5" /> {video.is_featured ? 'Remover destaque' : 'Destacar'}
                                   </button>
