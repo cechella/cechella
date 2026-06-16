@@ -86,6 +86,7 @@ export default function PatientDashboard() {
           .from('videos')
           .select('id, title, category, duration_seconds, thumbnail_path, is_published')
           .eq('is_published', true)
+          .order('is_featured', { ascending: false })
           .order('created_at', { ascending: false })
           .limit(6),
         supabase.from('patient_settings').select('*').limit(1).maybeSingle(),
