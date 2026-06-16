@@ -155,24 +155,28 @@ export default function PatientDashboard() {
           <div className="px-6 space-y-8 py-8">
 
             {/* DEPOIMENTOS */}
-            {videos.length > 0 && (
-              <section>
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="font-bold text-white text-lg flex items-center gap-2">
-                      <Star className="w-5 h-5 text-amber-400" fill="currentColor" />
-                      Depoimentos Reais
-                    </h2>
-                    <p className="text-xs text-[#71717A] mt-0.5">Pacientes que já transformaram suas vidas</p>
-                  </div>
+            <section>
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="font-bold text-white text-lg flex items-center gap-2">
+                    <Star className="w-5 h-5 text-amber-400" fill="currentColor" />
+                    Depoimentos Reais
+                  </h2>
+                  <p className="text-xs text-[#71717A] mt-0.5">Pacientes que já transformaram suas vidas</p>
+                </div>
+                {videos.length > 0 && (
                   <a href="/patient/videos" className="text-xs text-[#7B3FE4] hover:text-[#9558EE] flex items-center gap-1 transition-colors">
                     Ver todos <ChevronRight className="w-3 h-3" />
                   </a>
-                </div>
-                <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))' }}>
-                  {videos.map((v) => (
+                )}
+              </div>
+
+              {/* Vídeos */}
+              {videos.length > 0 && (
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  {videos.slice(0, 2).map((v) => (
                     <button key={v.id} onClick={() => setSelectedVideo(v)} className="group text-left bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden hover:border-[#7B3FE4]/50 hover:scale-[1.02] transition-all duration-200">
-                      <div className="relative w-full overflow-hidden" style={{ aspectRatio: v.thumbnail_path ? '9/16' : '16/9' }}>
+                      <div className="relative w-full overflow-hidden" style={{ aspectRatio: '9/16' }}>
                         {v.thumbnail_path ? (
                           <img src={`/api/video/thumbnail?key=${encodeURIComponent(v.thumbnail_path)}`} alt={v.title} className="w-full h-full object-cover" />
                         ) : (
@@ -188,16 +192,82 @@ export default function PatientDashboard() {
                         {v.duration_seconds && (
                           <span className="absolute bottom-2 right-2 text-xs text-white bg-black/70 px-1.5 py-0.5 rounded-md font-mono">{formatDuration(v.duration_seconds)}</span>
                         )}
-                      </div>
-                      <div className="p-3">
-                        <p className="text-xs text-[#7B3FE4] font-semibold mb-1 uppercase tracking-wider">{v.category}</p>
-                        <p className="text-sm font-medium text-white line-clamp-2 leading-snug">{v.title}</p>
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 pt-8">
+                          <p className="text-[10px] text-[#7B3FE4] font-semibold uppercase tracking-wider">{v.category}</p>
+                          <p className="text-sm font-semibold text-white line-clamp-1">{v.title}</p>
+                        </div>
                       </div>
                     </button>
                   ))}
                 </div>
-              </section>
-            )}
+              )}
+
+              {/* Cards WhatsApp */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  {
+                    nome: 'Fernanda Costa', cidade: 'Curitiba, PR', horario: '14:32',
+                    foto: '/depoimentos/fernanda-costa.jpg',
+                    mensagem: 'Acordava cansada, dormia cansada. Depois do implante com o Dr. Vinícius Cechella, na primeira semana já senti diferença no sono. Na segunda semana, a energia no trabalho voltou. Hoje durmo profundamente e acordo com vontade de conquistar o dia. Mudou minha vida! 🙏',
+                  },
+                  {
+                    nome: 'Patricia Mendes', cidade: 'Porto Alegre, RS', horario: '09:17',
+                    foto: '/depoimentos/patricia-mendes.jpg',
+                    mensagem: 'Tentei de tudo para perder peso. Nada funcionava. Com o implante do Dr. Vinícius Cechella, em 3 meses perdi 8 quilos sem dieta restritiva. O metabolismo voltou a funcionar. Hoje com 58 anos uso calça que não usava com 48. Não é milagre — é ciência hormonal! ✨',
+                  },
+                ].map((d) => (
+                  <div key={d.nome} className="rounded-2xl overflow-hidden border border-[#1C1C1E]" style={{ background: '#0d1418' }}>
+                    {/* Header WhatsApp */}
+                    <div className="flex items-center gap-3 px-4 py-3" style={{ background: '#1f2c34' }}>
+                      <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-[#6b7c85]">
+                        <img src="/depoimentos/dr-vinicius.jpg" alt="Dr. Vinícius Cechella" className="w-full h-full object-cover object-top" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1">
+                          <p className="text-white text-sm font-semibold leading-tight">Dr. Vinícius Cechella</p>
+                          <svg viewBox="0 0 24 24" className="w-4 h-4 flex-shrink-0" fill="none">
+                            <circle cx="12" cy="12" r="12" fill="#25D366"/>
+                            <path d="M6.5 12.5L10 16L17.5 8.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                          </svg>
+                        </div>
+                        <p className="text-[#8696a0] text-[11px]">Suporte Dr. Vinícius Cechella</p>
+                      </div>
+                    </div>
+                    {/* Chat */}
+                    <div className="px-3 py-4 space-y-2" style={{ background: '#0b141a' }}>
+                      <div className="flex items-start gap-2">
+                        <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0">
+                          <img src={d.foto} alt={d.nome} className="w-full h-full object-cover object-top" />
+                        </div>
+                        <div className="max-w-[85%] rounded-lg rounded-tl-none px-3 py-2" style={{ background: '#1f2c34' }}>
+                          <p className="text-[#25D366] text-xs font-semibold mb-1">{d.nome}</p>
+                          <p className="text-[#e9edef] text-xs leading-relaxed">{d.mensagem}</p>
+                          <p className="text-[#8696a0] text-[10px] text-right mt-1">{d.horario}</p>
+                        </div>
+                      </div>
+                      <div className="flex justify-end">
+                        <div className="max-w-[85%] rounded-lg rounded-tr-none px-3 py-2" style={{ background: '#005c4b' }}>
+                          <p className="text-[#e9edef] text-xs leading-relaxed">Que notícia incrível! 🎉 Fico muito feliz com seu resultado. Obrigada por confiar no nosso trabalho!</p>
+                          <div className="flex items-center justify-end gap-1 mt-1">
+                            <p className="text-[#8696a0] text-[10px]">{d.horario}</p>
+                            <svg viewBox="0 0 16 11" className="w-4 h-3" fill="#53bdeb"><path d="M11.071.653a.45.45 0 0 0-.624 0l-4.668 4.62-1.901-1.9a.45.45 0 0 0-.624.648l2.218 2.2a.45.45 0 0 0 .624 0l4.975-4.92a.45.45 0 0 0 0-.648zm2.314 0a.45.45 0 0 0-.624 0L7.793 5.273l-.31-.308a.45.45 0 0 0-.624.648l.618.613a.45.45 0 0 0 .624 0l5.284-5.225a.45.45 0 0 0 0-.648z"/></svg>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Estrelas */}
+                      <div className="flex items-center justify-between pt-1 px-1">
+                        <div className="flex gap-0.5">
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} className="w-3.5 h-3.5 text-amber-400" fill="currentColor" />
+                          ))}
+                        </div>
+                        <span className="text-[#8696a0] text-[10px]">{d.cidade}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
 
             {/* BENEFICIOS */}
             <section>
