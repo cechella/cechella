@@ -5,7 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import {
   Upload, Play, Eye, EyeOff, Trash2, Plus, X,
-  CheckCircle, Clock, AlertCircle, Film, Star
+  CheckCircle, Clock, AlertCircle, Film, Star, Pencil, MoreVertical
 } from 'lucide-react'
 import { createBrowserClient } from '@supabase/ssr'
 
@@ -42,9 +42,11 @@ export default function AdminVideosPage() {
   const [videos, setVideos] = useState<Video[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
+  const [editingVideo, setEditingVideo] = useState<Video | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState(false)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const thumbInputRef = useRef<HTMLInputElement>(null)
   const [thumbPreview, setThumbPreview] = useState<string | null>(null)
@@ -182,6 +184,58 @@ export default function AdminVideosPage() {
         : newFeatured ? { ...v, is_featured: false } : v
       )
     )
+  }
+
+  function startEdit(video: Video) {
+    setEditingVideo(video)
+    setForm({
+      title: video.title,
+      description: video.description ?? '',
+      category: video.category,
+      duration_seconds: video.duration_seconds?.toString() ?? '',
+    })
+    setThumbPreview(null)
+    setUploadError(null)
+    setUploadSuccess(false)
+    setOpenMenuId(null)
+  }
+
+  async function handleEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingVideo) return
+    setUploadError(null)
+    setUploading(true)
+
+    try {
+      await supabase.from('videos').update({
+        title: form.title.trim(),
+        description: form.description.trim() || null,
+        category: form.category,
+        duration_seconds: form.duration_seconds ? parseInt(form.duration_seconds) : null,
+      }).eq('id', editingVideo.id)
+
+      const thumbFile = thumbInputRef.current?.files?.[0]
+      if (thumbFile) {
+        const thumbRes = await fetch('/api/video/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoId: editingVideo.id, fileName: thumbFile.name, contentType: thumbFile.type || 'image/jpeg', type: 'thumbnail' }),
+        })
+        if (thumbRes.ok) {
+          const { uploadUrl: thumbUrl, key: thumbKey } = await thumbRes.json()
+          const tr = await fetch(thumbUrl, { method: 'PUT', body: thumbFile, headers: { 'Content-Type': thumbFile.type || 'image/jpeg' } })
+          if (tr.ok) await supabase.from('videos').update({ thumbnail_path: thumbKey }).eq('id', editingVideo.id)
+        }
+      }
+
+      setUploadSuccess(true)
+      await loadVideos()
+      setTimeout(() => { setEditingVideo(null); setUploadSuccess(false) }, 1200)
+    } catch {
+      setUploadError('Erro ao salvar alterações')
+    } finally {
+      setUploading(false)
+    }
   }
 
   async function deleteVideo(video: Video) {
@@ -506,7 +560,14 @@ export default function AdminVideosPage() {
                           <span className="text-sm text-[#71717A]">{formatDate(video.created_at)}</span>
                         </td>
                         <td className="px-5 py-4">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 relative">
+                            <button
+                              onClick={() => startEdit(video)}
+                              title="Editar"
+                              className="w-8 h-8 rounded-lg bg-[#18181A] border border-[#1C1C1E] flex items-center justify-center text-[#71717A] hover:text-[#7B3FE4] hover:border-[#7B3FE4]/30 transition-all"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
                             <button
                               onClick={() => togglePublished(video)}
                               title={video.is_published ? 'Despublicar' : 'Publicar'}
@@ -514,13 +575,28 @@ export default function AdminVideosPage() {
                             >
                               {video.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                             </button>
-                            <button
-                              onClick={() => deleteVideo(video)}
-                              title="Excluir"
-                              className="w-8 h-8 rounded-lg bg-[#18181A] border border-[#1C1C1E] flex items-center justify-center text-[#71717A] hover:text-red-400 hover:border-red-500/30 transition-all"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
+                            <div className="relative">
+                              <button
+                                onClick={() => setOpenMenuId(openMenuId === video.id ? null : video.id)}
+                                className="w-8 h-8 rounded-lg bg-[#18181A] border border-[#1C1C1E] flex items-center justify-center text-[#71717A] hover:text-white hover:border-[#27272A] transition-all"
+                              >
+                                <MoreVertical className="w-3.5 h-3.5" />
+                              </button>
+                              {openMenuId === video.id && (
+                                <div className="absolute right-0 top-9 z-50 bg-[#18181A] border border-[#1C1C1E] rounded-xl shadow-xl w-44 py-1">
+                                  <button onClick={() => { toggleFeatured(video); setOpenMenuId(null) }} className="w-full text-left px-4 py-2 text-sm text-[#A1A1AA] hover:text-white hover:bg-[#1C1C1E] flex items-center gap-2">
+                                    <Star className="w-3.5 h-3.5" /> {video.is_featured ? 'Remover destaque' : 'Destacar'}
+                                  </button>
+                                  <button onClick={() => { startEdit(video) }} className="w-full text-left px-4 py-2 text-sm text-[#A1A1AA] hover:text-white hover:bg-[#1C1C1E] flex items-center gap-2">
+                                    <Pencil className="w-3.5 h-3.5" /> Editar detalhes
+                                  </button>
+                                  <div className="border-t border-[#1C1C1E] my-1" />
+                                  <button onClick={() => { deleteVideo(video); setOpenMenuId(null) }} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2">
+                                    <Trash2 className="w-3.5 h-3.5" /> Excluir
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>
@@ -533,6 +609,69 @@ export default function AdminVideosPage() {
 
         </main>
       </div>
+
+      {/* Edit Modal */}
+    {editingVideo && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-6 w-full max-w-lg mx-4">
+          <div className="flex items-center justify-between mb-5">
+            <h3 className="font-semibold text-white">Editar Vídeo</h3>
+            <button onClick={() => setEditingVideo(null)} className="text-[#71717A] hover:text-white transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <form onSubmit={handleEdit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Título *</label>
+              <input type="text" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+                className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm placeholder-[#52525B] focus:outline-none focus:border-[#7B3FE4] transition-colors" required />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Descrição</label>
+              <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                rows={3} className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm placeholder-[#52525B] focus:outline-none focus:border-[#7B3FE4] transition-colors resize-none" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Categoria</label>
+                <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                  className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#7B3FE4] transition-colors">
+                  {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Duração (segundos)</label>
+                <input type="number" value={form.duration_seconds} onChange={(e) => setForm((f) => ({ ...f, duration_seconds: e.target.value }))}
+                  min={0} className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#7B3FE4] transition-colors" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Trocar Thumbnail (opcional)</label>
+              <div className="border border-dashed border-[#2A2A2E] rounded-xl overflow-hidden cursor-pointer hover:border-[#7B3FE4]/50 transition-colors" onClick={() => thumbInputRef.current?.click()}>
+                {thumbPreview ? (
+                  <div className="relative h-32"><img src={thumbPreview} alt="Capa" className="w-full h-full object-cover" /></div>
+                ) : (
+                  <div className="p-4 text-center">
+                    <Upload className="w-4 h-4 text-[#7B3FE4] mx-auto mb-1" />
+                    <p className="text-xs text-[#71717A]">Clique para trocar a thumbnail</p>
+                  </div>
+                )}
+                <input ref={thumbInputRef} type="file" accept="image/*" className="hidden"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) setThumbPreview(URL.createObjectURL(f)) }} />
+              </div>
+            </div>
+            {uploadError && <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">{uploadError}</p>}
+            {uploadSuccess && <p className="text-green-400 text-xs bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5">Salvo com sucesso!</p>}
+            <div className="flex gap-3 pt-1">
+              <button type="button" onClick={() => setEditingVideo(null)} className="flex-1 bg-[#18181A] border border-[#1C1C1E] text-[#A1A1AA] text-sm font-medium py-2.5 rounded-xl hover:border-[#27272A] transition-colors">Cancelar</button>
+              <button type="submit" disabled={uploading} className="flex-1 bg-[#7B3FE4] hover:bg-[#6325C8] disabled:opacity-60 text-white text-sm font-medium py-2.5 rounded-xl flex items-center justify-center gap-2 transition-colors">
+                {uploading ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Salvando...</> : 'Salvar alterações'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
     </div>
   )
 }
