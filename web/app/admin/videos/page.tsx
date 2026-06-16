@@ -51,7 +51,9 @@ export default function AdminVideosPage() {
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const thumbInputRef = useRef<HTMLInputElement>(null)
+  const editVideoInputRef = useRef<HTMLInputElement>(null)
   const [thumbPreview, setThumbPreview] = useState<string | null>(null)
+  const [editVideoName, setEditVideoName] = useState<string | null>(null)
 
   const [form, setForm] = useState({
     title: '',
@@ -197,9 +199,11 @@ export default function AdminVideosPage() {
       duration_seconds: video.duration_seconds?.toString() ?? '',
     })
     setThumbPreview(null)
+    setEditVideoName(null)
     setUploadError(null)
     setUploadSuccess(false)
     setOpenMenuId(null)
+    if (editVideoInputRef.current) editVideoInputRef.current.value = ''
   }
 
   async function handleEdit(e: React.FormEvent) {
@@ -227,6 +231,20 @@ export default function AdminVideosPage() {
           const { uploadUrl: thumbUrl, key: thumbKey } = await thumbRes.json()
           const tr = await fetch(thumbUrl, { method: 'PUT', body: thumbFile, headers: { 'Content-Type': thumbFile.type || 'image/jpeg' } })
           if (tr.ok) await supabase.from('videos').update({ thumbnail_path: thumbKey }).eq('id', editingVideo.id)
+        }
+      }
+
+      const newVideoFile = editVideoInputRef.current?.files?.[0]
+      if (newVideoFile) {
+        const urlRes = await fetch('/api/video/upload-url', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ videoId: editingVideo.id, fileName: newVideoFile.name, contentType: newVideoFile.type || 'video/mp4' }),
+        })
+        if (urlRes.ok) {
+          const { uploadUrl, key } = await urlRes.json()
+          const vr = await fetch(uploadUrl, { method: 'PUT', body: newVideoFile, headers: { 'Content-Type': newVideoFile.type || 'video/mp4' } })
+          if (vr.ok) await supabase.from('videos').update({ hls_path: key }).eq('id', editingVideo.id)
         }
       }
 
@@ -655,6 +673,35 @@ export default function AdminVideosPage() {
                 )}
                 <input ref={thumbInputRef} type="file" accept="image/*" className="hidden"
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) setThumbPreview(URL.createObjectURL(f)) }} />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Substituir Vídeo (opcional)</label>
+              <div
+                className="border border-dashed border-[#2A2A2E] rounded-xl cursor-pointer hover:border-[#7B3FE4]/50 transition-colors"
+                onClick={() => editVideoInputRef.current?.click()}
+              >
+                {editVideoName ? (
+                  <div className="px-4 py-3 flex items-center gap-2">
+                    <Film className="w-4 h-4 text-[#7B3FE4] shrink-0" />
+                    <span className="text-xs text-white truncate">{editVideoName}</span>
+                  </div>
+                ) : (
+                  <div className="p-4 text-center">
+                    <Upload className="w-4 h-4 text-[#7B3FE4] mx-auto mb-1" />
+                    <p className="text-xs text-[#71717A]">Clique para substituir o arquivo de vídeo</p>
+                  </div>
+                )}
+                <input
+                  ref={editVideoInputRef}
+                  type="file"
+                  accept="video/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0]
+                    if (f) setEditVideoName(f.name)
+                  }}
+                />
               </div>
             </div>
             {uploadError && <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">{uploadError}</p>}
