@@ -173,7 +173,7 @@ export default function PatientDashboard() {
 
               {/* Vídeos */}
               {videos.length > 0 && (
-                <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="grid grid-cols-2 gap-4 mb-6" style={{ maxWidth: '600px' }}>
                   {videos.slice(0, 2).map((v) => (
                     <button key={v.id} onClick={() => setSelectedVideo(v)} className="group text-left bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden hover:border-[#7B3FE4]/50 hover:scale-[1.02] transition-all duration-200">
                       <div className="relative w-full overflow-hidden" style={{ aspectRatio: '9/16' }}>
