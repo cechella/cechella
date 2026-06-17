@@ -17,6 +17,9 @@ export const metadata: Metadata = {
     description: 'O maior ecossistema digital de implantes hormonais do Brasil',
     type: 'website',
   },
+  other: {
+    'facebook-domain-verification': '3h09pulh4me0v2vhar4enkboy0azle',
+  },
 }
 
 export default function RootLayout({
