@@ -169,7 +169,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"phone\": \"{{ $json.telefone }}\",\n  \"message\": {{ JSON.stringify($json.resposta) }}\n}",
+        "jsonBody": "={\n  \"phone\": \"{{ $('Extrair Mensagem').item.json.telefone }}\",\n  \"message\": {{ JSON.stringify($json.resposta) }}\n}",
         "options": {}
       },
       "id": "enviar-whatsapp",
