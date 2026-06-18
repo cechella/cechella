@@ -5,7 +5,8 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "whatsapp-webhook",
-        "responseMode": "responseNode",
+        "responseMode": "immediately",
+        "responseCode": 200,
         "options": {}
       },
       "id": "webhook-trigger",
@@ -13,18 +14,6 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [240, 300]
-    },
-    {
-      "parameters": {
-        "respondWith": "text",
-        "responseBody": "OK",
-        "options": {}
-      },
-      "id": "respond-webhook",
-      "name": "Responder Webhook",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1,
-      "position": [460, 160]
     },
     {
       "parameters": {
@@ -37,8 +26,8 @@
           "conditions": [
             {
               "id": "check-message-type",
-              "leftValue": "={{ $json.body.event }}",
-              "rightValue": "messages.upsert",
+              "leftValue": "={{ $json.body.type }}",
+              "rightValue": "ReceivedCallback",
               "operator": {
                 "type": "string",
                 "operation": "equals"
@@ -57,7 +46,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.item.json.body;\nconst data = body.data;\n\nif (!data) return [];\n\nconst key = data.key || {};\nconst from = (key.remoteJid || '').replace('@s.whatsapp.net', '').replace('@g.us', '');\nconst fromMe = key.fromMe || false;\nconst messageText = data.message?.conversation || \n                    data.message?.extendedTextMessage?.text || \n                    data.message?.imageMessage?.caption || '';\n\nif (fromMe || !from || !messageText) return [];\n\nreturn [{\n  json: {\n    phone: from,\n    message: messageText,\n    messageType: 'text',\n    timestamp: new Date().toISOString()\n  }\n}];"
+        "jsCode": "const body = $input.item.json.body;\n\nif (!body) return [];\n\nconst fromMe = body.fromMe || false;\nconst from = body.phone || '';\nconst messageText = body.text?.message || '';\n\nif (fromMe || !from || !messageText) return [];\n\nreturn [{\n  json: {\n    telefone: from,\n    message: messageText,\n    messageType: 'text',\n    instanceName: 'hormone-clinica'\n  }\n}];"
       },
       "id": "extract-message",
       "name": "Extrair Mensagem",
@@ -74,7 +63,7 @@
           "parameters": [
             {
               "name": "telefone",
-              "value": "=eq.{{ $json.phone }}"
+              "value": "=eq.{{ $json.telefone }}"
             },
             {
               "name": "select",
@@ -105,7 +94,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const leads = $input.item.json;\nconst phone = $('Extrair Mensagem').item.json.phone;\nconst message = $('Extrair Mensagem').item.json.message;\n\nlet lead = Array.isArray(leads) ? leads[0] : null;\nlet isNew = false;\n\nif (!lead) {\n  isNew = true;\n  lead = {\n    telefone: phone,\n    etapa: 1,\n    temperatura: 'morno',\n    historico: [],\n    dor_principal: null,\n    nome: null,\n    contexto: null\n  };\n}\n\nconst historico = lead.historico || [];\nhistorico.push({ role: 'user', content: message, ts: new Date().toISOString() });\n\nreturn [{\n  json: {\n    ...lead,\n    phone,\n    message,\n    isNew,\n    historico\n  }\n}];"
+        "jsCode": "const leads = $input.item.json;\nconst telefone = $('Extrair Mensagem').item.json.telefone;\nconst message = $('Extrair Mensagem').item.json.message;\n\nlet lead = Array.isArray(leads) ? leads[0] : null;\nlet isNew = false;\n\nif (!lead) {\n  isNew = true;\n  lead = {\n    telefone: telefone,\n    etapa: 1,\n    temperatura: 'morno',\n    historico: [],\n    dor_principal: null,\n    nome: null,\n    contexto: null\n  };\n}\n\nconst historico = lead.historico || [];\nhistorico.push({ role: 'user', content: message, ts: new Date().toISOString() });\n\nreturn [{\n  json: {\n    ...lead,\n    telefone,\n    message,\n    isNew,\n    historico\n  }\n}];"
       },
       "id": "processar-lead",
       "name": "Processar Lead",
@@ -168,14 +157,10 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "=http://evolution:8080/message/sendText/hormone-clinica",
+        "url": "https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "apikey",
-              "value": "hormone2026"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
@@ -184,7 +169,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"number\": \"{{ $json.phone }}\",\n  \"text\": {{ JSON.stringify($json.resposta) }}\n}",
+        "jsonBody": "={\n  \"phone\": \"{{ $json.telefone }}\",\n  \"message\": {{ JSON.stringify($json.resposta) }}\n}",
         "options": {}
       },
       "id": "enviar-whatsapp",
@@ -196,7 +181,7 @@
     {
       "parameters": {
         "method": "={{ $('Processar Lead').item.json.isNew ? 'POST' : 'PATCH' }}",
-        "url": "={{ $('Processar Lead').item.json.isNew ? $env.SUPABASE_URL + '/rest/v1/leads' : $env.SUPABASE_URL + '/rest/v1/leads?telefone=eq.' + $json.phone }}",
+        "url": "={{ $('Processar Lead').item.json.isNew ? $env.SUPABASE_URL + '/rest/v1/leads' : $env.SUPABASE_URL + '/rest/v1/leads?telefone=eq.' + $json.telefone }}",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
@@ -220,7 +205,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={\n  \"telefone\": \"{{ $json.phone }}\",\n  \"nome\": {{ JSON.stringify($json.nome) }},\n  \"etapa\": {{ $json.proxima_etapa }},\n  \"dor_principal\": {{ JSON.stringify($json.dor_principal) }},\n  \"historico\": {{ JSON.stringify($json.historico) }},\n  \"updated_at\": \"{{ new Date().toISOString() }}\"\n}",
+        "jsonBody": "={\n  \"telefone\": \"{{ $json.telefone }}\",\n  \"nome\": {{ JSON.stringify($json.nome) }},\n  \"etapa\": {{ $json.proxima_etapa }},\n  \"dor_principal\": {{ JSON.stringify($json.dor_principal) }},\n  \"historico\": {{ JSON.stringify($json.historico) }},\n  \"updated_at\": \"{{ new Date().toISOString() }}\"\n}",
         "options": {}
       },
       "id": "salvar-supabase",
@@ -234,11 +219,6 @@
     "Webhook Evolution API": {
       "main": [
         [
-          {
-            "node": "Responder Webhook",
-            "type": "main",
-            "index": 0
-          },
           {
             "node": "Filtrar Mensagens",
             "type": "main",
