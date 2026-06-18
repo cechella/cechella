@@ -16,7 +16,8 @@ interface LeadAgente {
   id: string
   telefone: string
   nome: string | null
-  etapa: number
+  etapa: string | null
+  etapa_agente: number | null
   temperatura: string
   dor_principal: string | null
   historico: MsgHistorico[]
@@ -84,7 +85,7 @@ export default function AgenteAdminPage() {
   const fetchLeads = useCallback(async () => {
     const { data } = await supabase
       .from('leads')
-      .select('id, telefone, nome, etapa, temperatura, dor_principal, historico, updated_at')
+      .select('id, telefone, nome, etapa, etapa_agente, temperatura, dor_principal, historico, updated_at')
       .not('historico', 'eq', '[]')
       .not('historico', 'is', null)
       .order('updated_at', { ascending: false })
@@ -106,7 +107,7 @@ export default function AgenteAdminPage() {
     return () => clearInterval(interval)
   }, [fetchLeads])
 
-  const etapaAtual = selected?.etapa || 1
+  const etapaAtual = selected?.etapa_agente || 1
   const historico = selected?.historico || []
 
   return (
@@ -143,7 +144,7 @@ export default function AgenteAdminPage() {
                 </div>
               ) : (
                 leads.map(lead => {
-                  const etapa = lead.etapa || 1
+                  const etapa = lead.etapa_agente || 1
                   const nome = lead.nome || lead.telefone
                   const isActive = selected?.id === lead.id
                   const lastMsg = lead.historico?.[lead.historico.length - 1]
