@@ -29,6 +29,17 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: string |
   }
 }
 
+let supabaseClient: ReturnType<typeof createBrowserClient> | null = null
+function getSupabase() {
+  if (!supabaseClient) {
+    supabaseClient = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+  }
+  return supabaseClient
+}
+
 interface MsgHistorico {
   role: 'user' | 'assistant'
   content: string
@@ -102,12 +113,8 @@ export default function AgenteAdminPage() {
   const selectedRef = useRef<LeadAgente | null>(null)
   selectedRef.current = selected
 
-  const supabase = useRef(createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )).current
-
   const fetchLeads = useCallback(async () => {
+    const supabase = getSupabase()
     const { data } = await supabase
       .from('leads')
       .select('id, telefone, nome, etapa, etapa_agente, temperatura, dor_principal, historico, updated_at')
@@ -124,7 +131,7 @@ export default function AgenteAdminPage() {
       setLastUpdate(new Date())
     }
     setLoading(false)
-  }, [supabase])
+  }, [])
 
   useEffect(() => {
     fetchLeads()
