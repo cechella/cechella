@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { createBrowserClient } from '@supabase/ssr'
@@ -76,11 +76,13 @@ export default function AgenteAdminPage() {
   const [selected, setSelected] = useState<LeadAgente | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date())
+  const selectedRef = useRef<LeadAgente | null>(null)
+  selectedRef.current = selected
 
-  const supabase = createBrowserClient(
+  const supabase = useRef(createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  )).current
 
   const fetchLeads = useCallback(async () => {
     const { data } = await supabase
@@ -92,14 +94,14 @@ export default function AgenteAdminPage() {
 
     if (data) {
       setLeads(data as LeadAgente[])
-      if (selected) {
-        const updated = (data as LeadAgente[]).find(l => l.id === selected.id)
+      if (selectedRef.current) {
+        const updated = (data as LeadAgente[]).find(l => l.id === selectedRef.current!.id)
         if (updated) setSelected(updated)
       }
       setLastUpdate(new Date())
     }
     setLoading(false)
-  }, [supabase, selected])
+  }, [supabase])
 
   useEffect(() => {
     fetchLeads()
