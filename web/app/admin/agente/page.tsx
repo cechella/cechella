@@ -1,10 +1,33 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, Component, ReactNode } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { createBrowserClient } from '@supabase/ssr'
 import { RefreshCw, Bot, User, MessageSquare } from 'lucide-react'
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { error: null }
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error: error.message }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex h-screen items-center justify-center bg-[#0A0A0B] p-8">
+          <div className="text-center max-w-lg">
+            <p className="text-red-400 text-sm font-mono mb-2">Erro capturado:</p>
+            <p className="text-white text-xs font-mono bg-[#1C1C1E] p-4 rounded-lg">{this.state.error}</p>
+          </div>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 interface MsgHistorico {
   role: 'user' | 'assistant'
@@ -113,6 +136,7 @@ export default function AgenteAdminPage() {
   const historico = selected?.historico || []
 
   return (
+    <ErrorBoundary>
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
       <Sidebar role="admin" />
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -306,5 +330,6 @@ export default function AgenteAdminPage() {
         </div>
       </div>
     </div>
+    </ErrorBoundary>
   )
 }
