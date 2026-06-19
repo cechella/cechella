@@ -19,7 +19,7 @@ import Link from 'next/link'
 // ─── Types ───────────────────────────────────────────────
 type Lead = {
   id: string
-  nome: string
+  nome: string | null
   email: string
   telefone?: string
   etapa?: string
@@ -127,16 +127,25 @@ function timeAgo(date: string) {
   return `${Math.floor(h / 24)}d`
 }
 
+// ─── Supabase singleton ───────────────────────────────────
+let supabaseClient: ReturnType<typeof createBrowserClient> | null = null
+function getSupabase() {
+  if (!supabaseClient) {
+    supabaseClient = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+  }
+  return supabaseClient
+}
+
 // ─── Component ───────────────────────────────────────────
 export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState(new Date())
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = getSupabase()
 
   async function load() {
     try {
@@ -604,10 +613,10 @@ export default function AdminDashboard() {
                   {(stats?.recentLeads ?? []).map((lead, i) => (
                     <div key={i} className="flex items-center gap-3 py-2.5 border-b border-[#1C1C1E]/50 last:border-0 hover:bg-[#18181A] rounded-xl px-2 transition-colors">
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#7B3FE4]/20 to-[#3B82F6]/20 flex items-center justify-center text-xs font-bold text-[#7B3FE4] flex-shrink-0">
-                        {lead.nome.charAt(0).toUpperCase()}
+                        {(lead.nome || '?').charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate">{lead.nome}</p>
+                        <p className="text-sm font-medium text-white truncate">{lead.nome || '—'}</p>
                         <p className="text-xs text-[#52525B] truncate">{lead.email}</p>
                       </div>
                       {lead.etapa && (
