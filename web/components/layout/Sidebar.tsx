@@ -24,6 +24,7 @@ import {
   FlaskConical,
   Network,
   Bot,
+  Share2,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -58,6 +59,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Rea
     { label: 'Usuários', href: '/admin/users', icon: <Users className="w-5 h-5" /> },
     { label: 'Área do Paciente', href: '/admin/patient-settings', icon: <Settings className="w-5 h-5" /> },
     { label: 'Agente IA', href: '/admin/agente', icon: <Bot className="w-5 h-5" /> },
+    { label: 'Referidos IA', href: '/admin/referidos', icon: <Share2 className="w-5 h-5" /> },
     { label: 'Analytics', href: '/admin/analytics', icon: <BarChart3 className="w-5 h-5" /> },
     { label: 'Rede', href: '/admin/rede', icon: <Network className="w-5 h-5" /> },
   ],
