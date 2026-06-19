@@ -147,7 +147,8 @@ export default function AgenteAdminPage() {
                   const etapa = lead.etapa_agente || 1
                   const nome = lead.nome || lead.telefone
                   const isActive = selected?.id === lead.id
-                  const lastMsg = lead.historico?.[lead.historico.length - 1]
+                  const historicoValido = Array.isArray(lead.historico) ? lead.historico.filter(m => m && m.content) : []
+                  const lastMsg = historicoValido[historicoValido.length - 1]
 
                   return (
                     <button
@@ -259,7 +260,7 @@ export default function AgenteAdminPage() {
                     <p className="text-sm">Sem mensagens</p>
                   </div>
                 ) : (
-                  historico.map((msg, i) => {
+                  historico.filter(msg => msg && msg.role && msg.content).map((msg, i) => {
                     const isUser = msg.role === 'user'
                     return (
                       <div key={i} className={`flex gap-3 ${isUser ? 'justify-end' : 'justify-start'}`}>
@@ -274,7 +275,7 @@ export default function AgenteAdminPage() {
                               ? 'bg-green-900/40 text-green-100 border border-green-800/50 rounded-br-sm'
                               : 'bg-[#1C1C1E] text-[#E4E4E7] border border-[#2a2a2a] rounded-bl-sm'
                           }`}>
-                            {msg.content}
+                            {String(msg.content || '')}
                           </div>
                           {msg.ts && (
                             <span className="text-[10px] text-[#444] mt-1 px-1">{formatTime(msg.ts)}</span>
