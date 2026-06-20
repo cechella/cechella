@@ -24,6 +24,7 @@ type Lead = {
   telefone?: string
   etapa?: string
   temperatura?: string
+  origem?: string
   created_at: string
   ultimo_contato?: string
 }
@@ -66,6 +67,14 @@ type AgentStats = {
   tempoMedioResposta: number
 }
 
+type OrigemStat = {
+  origem: string
+  label: string
+  total: number
+  cor: string
+  emoji: string
+}
+
 type Stats = {
   totalLeads: number
   leadsHoje: number
@@ -79,6 +88,7 @@ type Stats = {
   recentLeads: Lead[]
   alertas: { tipo: string; msg: string; href: string }[]
   agente: AgentStats
+  origens: OrigemStat[]
 }
 
 // ─── Constants ───────────────────────────────────────────
@@ -150,7 +160,7 @@ export default function AdminDashboard() {
   async function load() {
     try {
       const [leadsRes, referidosRes, convsRes, msgsRes] = await Promise.all([
-        supabase.from('leads').select('id,nome,email,telefone,etapa,temperatura,created_at,ultimo_contato').order('created_at', { ascending: false }),
+        supabase.from('leads').select('id,nome,email,telefone,etapa,temperatura,origem,created_at,ultimo_contato').order('created_at', { ascending: false }),
         supabase.from('referidos').select('id,nome,status,nivel,created_at').order('created_at', { ascending: false }),
         supabase.from('whatsapp_conversations').select('id,nome,etapa,status,referidos_coletados,iniciado_em,atualizado_em').order('atualizado_em', { ascending: false }),
         supabase.from('whatsapp_messages').select('id,conversation_id,direcao,enviado_em').order('enviado_em', { ascending: false }).limit(500),
@@ -185,6 +195,20 @@ export default function AdminDashboard() {
         const total = leads.filter(l => new Date(l.created_at).toDateString() === d.toDateString()).length
         leadsPorDia.push({ dia: label, total })
       }
+
+      // ── Origens ──
+      const origensDef = [
+        { origem: 'instagram', label: 'Instagram / ManyChat', cor: '#E1306C', emoji: '📸' },
+        { origem: 'referido',  label: 'Referidos (Ana IA)',   cor: '#7B3FE4', emoji: '🔗' },
+        { origem: 'site',      label: 'Site / Formulário',    cor: '#3B82F6', emoji: '🌐' },
+        { origem: 'google',    label: 'Google Ads',           cor: '#F59E0B', emoji: '🔍' },
+        { origem: 'whatsapp',  label: 'WhatsApp Direto',      cor: '#25D366', emoji: '💬' },
+        { origem: 'manual',    label: 'Cadastro Manual',      cor: '#71717A', emoji: '✏️' },
+      ]
+      const origens: OrigemStat[] = origensDef.map(o => ({
+        ...o,
+        total: leads.filter(l => (l.origem || 'manual') === o.origem).length,
+      })).filter(o => o.total > 0).sort((a, b) => b.total - a.total)
 
       // ── Alertas ──
       const alertas: { tipo: string; msg: string; href: string }[] = []
@@ -265,7 +289,7 @@ export default function AdminDashboard() {
         totalLeads: leads.length, leadsHoje, ganhos, perdidos,
         referidosTotais: referidos.length, referidosValidados,
         etapaCount, temperaturaCounts, leadsPorDia,
-        recentLeads: leads.slice(0, 6), alertas,
+        recentLeads: leads.slice(0, 6), alertas, origens,
         agente: {
           conversasAtivas, conversasHoje,
           mensagensHoje: msgsHoje.length,
@@ -595,6 +619,59 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          {/* ── Origens dos Leads ── */}
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-semibold text-white flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-[#7B3FE4]" /> Origem dos Leads
+              </h3>
+              <span className="text-xs text-[#52525B]">{stats?.totalLeads ?? 0} leads no total</span>
+            </div>
+            {loading ? (
+              <div className="h-20 flex items-center justify-center text-[#52525B]">Carregando…</div>
+            ) : !stats?.origens?.length ? (
+              <p className="text-sm text-[#52525B] text-center py-6">Nenhum lead com origem registrada ainda</p>
+            ) : (
+              <div className="space-y-3">
+                {stats.origens.map((o, i) => {
+                  const pct = Math.round((o.total / Math.max(stats.totalLeads, 1)) * 100)
+                  return (
+                    <div key={i} className="flex items-center gap-3">
+                      <span className="text-base w-6 flex-shrink-0">{o.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-medium text-[#A1A1AA] truncate">{o.label}</span>
+                          <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                            <span className="text-xs font-bold text-white">{o.total}</span>
+                            <span className="text-[10px] text-[#52525B] w-8 text-right">{pct}%</span>
+                          </div>
+                        </div>
+                        <div className="h-2 bg-[#1C1C1E] rounded-full overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{ width: `${pct}%`, background: o.cor }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+                <div className="pt-3 border-t border-[#1C1C1E] grid grid-cols-3 gap-2 mt-2">
+                  {[
+                    { label: 'Orgânicos', value: stats.origens.filter(o => ['instagram','site','whatsapp'].includes(o.origem)).reduce((a,b) => a+b.total, 0), cor: '#22C55E' },
+                    { label: 'Referidos', value: stats.origens.find(o => o.origem === 'referido')?.total ?? 0, cor: '#7B3FE4' },
+                    { label: 'Pagos', value: stats.origens.find(o => o.origem === 'google')?.total ?? 0, cor: '#F59E0B' },
+                  ].map((g, i) => (
+                    <div key={i} className="bg-[#0A0A0B] rounded-xl p-3 text-center">
+                      <p className="text-lg font-bold" style={{ color: g.cor }}>{g.value}</p>
+                      <p className="text-[10px] text-[#52525B] mt-0.5">{g.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* ── Leads Recentes + Rede ── */}
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5">
@@ -623,6 +700,11 @@ export default function AdminDashboard() {
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
                           style={{ background: etapaColors[lead.etapa] + '20', color: etapaColors[lead.etapa] }}>
                           {etapaLabels[lead.etapa]}
+                        </span>
+                      )}
+                      {lead.origem && lead.origem !== 'manual' && (
+                        <span className="text-[10px] flex-shrink-0 px-1.5 py-0.5 rounded-full bg-[#1C1C1E] text-[#71717A]">
+                          {lead.origem === 'instagram' ? '📸' : lead.origem === 'referido' ? '🔗' : lead.origem === 'google' ? '🔍' : lead.origem === 'site' ? '🌐' : '💬'}
                         </span>
                       )}
                       {lead.temperatura && (
