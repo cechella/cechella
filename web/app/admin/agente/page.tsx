@@ -123,9 +123,17 @@ export default function AgenteAdminPage() {
       .order('updated_at', { ascending: false })
 
     if (data) {
-      setLeads(data as LeadAgente[])
+      // Deduplica por telefone mantendo o mais recente
+      const vistos = new Map<string, LeadAgente>()
+      for (const lead of data as LeadAgente[]) {
+        if (!vistos.has(lead.telefone) || lead.updated_at > vistos.get(lead.telefone)!.updated_at) {
+          vistos.set(lead.telefone, lead)
+        }
+      }
+      const unicos = Array.from(vistos.values()).sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+      setLeads(unicos)
       if (selectedRef.current) {
-        const updated = (data as LeadAgente[]).find(l => l.id === selectedRef.current!.id)
+        const updated = unicos.find(l => l.id === selectedRef.current!.id)
         if (updated) setSelected(updated)
       }
       setLastUpdate(new Date())
