@@ -86,7 +86,7 @@ export default function ResultadosPage() {
     const [funilRes, etapa7AllRes, referidosRes, quentesRes] = await Promise.all([
       supabase.from('leads').select('etapa_agente').not('etapa_agente', 'is', null),
       supabase.from('leads').select('updated_at').eq('etapa_agente', 7),
-      supabase.from('referidos').select('indicado_por_telefone'),
+      supabase.from('contatos_referidos').select('indicado_por_telefone'),
       supabase
         .from('leads')
         .select('id, nome, telefone, etapa_agente, updated_at')

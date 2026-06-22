@@ -68,7 +68,7 @@ export default function ReferidosPage() {
   const carregar = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase
-      .from('referidos')
+      .from('contatos_referidos')
       .select('*')
       .order('prioridade', { ascending: true })
       .order('created_at', { ascending: false })
@@ -80,7 +80,7 @@ export default function ReferidosPage() {
 
   const atualizarStatus = async (id: string, status: StatusReferido) => {
     setAtualizando(id)
-    await supabase.from('referidos').update({ status }).eq('id', id)
+    await supabase.from('contatos_referidos').update({ status }).eq('id', id)
     setReferidos(prev => prev.map(r => r.id === id ? { ...r, status } : r))
     setAtualizando(null)
   }
@@ -109,7 +109,7 @@ export default function ReferidosPage() {
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
       <Sidebar role="admin" />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar title="Referidos Qualificados — Ana IA" />
+        <TopBar title="Contatos Referidos — Ana IA" />
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
 
           {/* Métricas */}
