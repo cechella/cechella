@@ -25,6 +25,7 @@ import {
   Network,
   Bot,
   Share2,
+  TrendingUp,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -62,6 +63,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Rea
     { label: 'Referidos IA', href: '/admin/referidos', icon: <Share2 className="w-5 h-5" /> },
     { label: 'Analytics', href: '/admin/analytics', icon: <BarChart3 className="w-5 h-5" /> },
     { label: 'Rede', href: '/admin/rede', icon: <Network className="w-5 h-5" /> },
+    { label: 'Resultados', href: '/admin/resultados', icon: <TrendingUp className="w-5 h-5" /> },
   ],
 }
 
