@@ -85,7 +85,7 @@ export default function ReferidosPage() {
     setAtualizando(null)
   }
 
-  const indicadores = [...new Set(referidos.map(r => r.indicado_por_nome).filter(Boolean))] as string[]
+  const indicadores = Array.from(new Set<string>(referidos.map(r => r.indicado_por_nome).filter((x): x is string => Boolean(x))))
 
   const filtrados = referidos.filter(r => {
     const matchSearch =

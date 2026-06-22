@@ -117,7 +117,7 @@ export default function ResultadosPage() {
 
     if (referidosRes.data) {
       const rows = referidosRes.data as { indicado_por_telefone: string | null }[]
-      const distintos = new Set(rows.map(r => r.indicado_por_telefone).filter(Boolean))
+      const distintos = new Set<string>(rows.map(r => r.indicado_por_telefone).filter((x): x is string => Boolean(x)))
       setReferidos({ total: rows.length, leadsComReferidos: distintos.size })
     }
 
