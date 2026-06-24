@@ -1,5 +1,11 @@
 {
   "name": "Hormone Agent — Dr. Vinícius 7 Passos",
+  "_fixes": [
+    "FIX 1 — Filtrar Mensagens: adicionada condição fromMe is false para bloquear mensagens da Ana (outgoing) de re-triggar o workflow",
+    "FIX 2 — Processar Resposta: parseInt() em etapa_agente evita bug de concatenação string '1'+1='11' que causava Math.min(8,'11',8)=8",
+    "FIX 3 — Processar Resposta: removido push duplicado da mensagem do usuário (Processar Lead já adiciona; pushando 2x confundia o Claude)",
+    "FIX 4 — Code in JavaScript: PATCH por id=eq.{leadId} em vez de telefone=eq.{telefone} que falhava silenciosamente (0 rows afetadas)"
+  ],
   "nodes": [
     {
       "parameters": {
@@ -32,27 +38,39 @@
                 "type": "string",
                 "operation": "equals"
               }
+            },
+            {
+              "id": "check-from-me",
+              "leftValue": "={{ $json.body.fromMe }}",
+              "operator": {
+                "type": "boolean",
+                "operation": "false"
+              }
             }
           ],
           "combinator": "and"
         },
-        "options": {}
+        "options": {
+          "convertTypes": false
+        }
       },
       "id": "filter-messages",
       "name": "Filtrar Mensagens",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [460, 300]
+      "position": [460, 300],
+      "_note": "FIX 1: 2 condições — type=ReceivedCallback E fromMe is false. Sem converter tipos. Bloqueia mensagens da Ana (fromMe:true) de triggar o workflow."
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.item.json.body;\n\nif (!body) return [];\n\nconst fromMe = body.fromMe || false;\nconst from = body.phone || '';\nconst messageText = body.text?.message || '';\n\nif (fromMe || !from || !messageText) return [];\n\nreturn [{\n  json: {\n    telefone: from,\n    message: messageText,\n    messageType: 'text',\n    instanceName: 'hormone-clinica'\n  }\n}];"
+        "jsCode": "const body = $input.item.json.body;\n\nif (!body) return [];\n\nconst from = body.phone || '';\nconst messageText = body.text?.message || '';\n\nif (!from || !messageText) return [];\n\nreturn [{\n  json: {\n    telefone: from,\n    message: messageText,\n    messageType: 'text',\n    instanceName: 'hormone-clinica'\n  }\n}];"
       },
       "id": "extract-message",
       "name": "Extrair Mensagem",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300]
+      "position": [680, 300],
+      "_note": "fromMe já filtrado em Filtrar Mensagens — não precisa checar aqui novamente"
     },
     {
       "parameters": {
@@ -94,7 +112,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const leads = $input.item.json;\nconst telefone = $('Extrair Mensagem').item.json.telefone;\nconst message = $('Extrair Mensagem').item.json.message;\n\nlet lead = Array.isArray(leads) ? leads[0] : null;\nlet isNew = false;\n\nif (!lead) {\n  isNew = true;\n  lead = {\n    telefone: telefone,\n    etapa: 1,\n    temperatura: 'morno',\n    historico: [],\n    dor_principal: null,\n    nome: null,\n    contexto: null\n  };\n}\n\nconst historico = lead.historico || [];\nhistorico.push({ role: 'user', content: message, ts: new Date().toISOString() });\n\nreturn [{\n  json: {\n    ...lead,\n    telefone,\n    message,\n    isNew,\n    historico\n  }\n}];"
+        "jsCode": "const leads = $input.item.json;\nconst telefone = $('Extrair Mensagem').item.json.telefone;\nconst message = $('Extrair Mensagem').item.json.message;\n\nlet lead = Array.isArray(leads) ? leads[0] : null;\nlet isNew = false;\n\nif (!lead) {\n  isNew = true;\n  lead = {\n    telefone: telefone,\n    etapa_agente: 1,\n    temperatura: 'morno',\n    historico: [],\n    dor_principal: null,\n    nome: null\n  };\n}\n\nconst historico = lead.historico || [];\n// Adiciona mensagem do usuário UMA VEZ aqui — Processar Resposta NÃO deve adicionar novamente\nhistorico.push({ role: 'user', content: message, ts: new Date().toISOString() });\n\nreturn [{\n  json: {\n    ...lead,\n    telefone,\n    message,\n    isNew,\n    historico\n  }\n}];"
       },
       "id": "processar-lead",
       "name": "Processar Lead",
@@ -104,7 +122,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const lead = $input.item.json;\nconst etapa = lead.etapa || 1;\nconst nome = lead.nome || 'você';\nconst dor = lead.dor_principal || 'desequilíbrio hormonal';\nconst contexto = lead.contexto || '';\nconst historico = lead.historico || [];\n\nconst scriptEtapas = {\n  1: `Você está na ETAPA 1 — APRESENTAÇÃO.\nSe apresente como Dr. Vinícius, consultor do Hormone Ecosystem.\nIdentifique a dor principal do lead.\nPergunte o que trouxe ele a buscar informações sobre reposição hormonal.\nListe sintomas: ondas de calor, dificuldade para dormir, mudanças de humor, cansaço, queda na libido, dificuldade de concentração.\nRegistre a dor_principal na resposta JSON.`,\n\n  2: `Você está na ETAPA 2 — CONEXÃO.\nCrie rapport usando o contexto do lead: ${contexto}.\nConecte o hobby/profissão do lead com benefícios do implante.\nMostre empatia genuína. Diga que os sintomas não são 'coisa da idade'.\nPergunte mais sobre o dia a dia do lead.`,\n\n  3: `Você está na ETAPA 3 — D.I. (COMBINADO).\nFaça o combinado: peça permissão para apresentar o produto.\nDiga: 'Se gostar, você me dá um SIM. Se não gostar, tudo bem.'\nPergunte se toma decisões de saúde sozinho ou precisa alinhar com alguém.\nPergunte se tem viagem marcada nos próximos dias.\nSe tiver viagem: aplique a vacina ('o procedimento dura 20 minutos, pode viajar no mesmo dia').`,\n\n  4: `Você está na ETAPA 4 — SPEECH.\nApresente o implante conectado à dor: ${dor}.\nExplique que é um cilindro do tamanho de um grão de arroz inserido sob a pele.\nLibera hormônios de forma contínua e natural por 6 meses.\nResultados: ondas de calor somem em 2-4 semanas, sono profundo, energia, humor estável, libido restaurada, clareza mental.\nPergunte: 'O que mais te chamou atenção?'`,\n\n  5: `Você está na ETAPA 5 — FECHAMENTO.\nRelembre o combinado.\nUse o que o lead disse que mais gostou.\nInforme o investimento: R$ 5.000 (R$ 833/mês por 6 meses).\nOfereca duas formas: cartão de crédito parcelado ou Pix à vista.\nPergunte qual funciona melhor.\nApós confirmação de pagamento, envie o link e diga que a equipe vai agendar o procedimento.`,\n\n  6: `Você está na ETAPA 6 — REFERIDOS.\nPeça 20 contatos de mulheres que podem se beneficiar.\nInstrua o lead a abrir os Contatos no celular e enviar nome + número.\nApós receber os contatos, peça que o lead mande uma mensagem para cada uma dizendo que Dr. Vinícius vai entrar em contato.\nSe o lead NÃO fechou: peça apenas 4 referidos.`,\n\n  7: `Você está na ETAPA 7 — VALIDAÇÃO.\n24-48h após o lead enviar os contatos.\nPergunte se algum contato respondeu dizendo que NÃO quer receber mensagem.\nRemova os que não querem.\nPergunte contexto de cada referido (profissão, hobby, momento de vida).\nEnvie resumo: quantos responderam, quantos pendentes, quantos removidos.`\n};\n\nconst sistemaPrompt = `Você é Dr. Vinícius Cechella, médico e consultor do Hormone Ecosystem.\nVocê está conduzindo um funil de vendas pelo WhatsApp para o implante hormonal (R$ 5.000, dura 6 meses, procedimento de 20 minutos).\n\nRegras:\n- Seja caloroso, empático e profissional\n- Use o nome do lead quando souber\n- Não revele que é um agente de IA\n- Mensagens curtas e naturais como WhatsApp real\n- Não use markdown, não use asteriscos\n- Emojis moderados como numa conversa real\n- Sempre avance para a próxima etapa quando o objetivo da etapa atual for atingido\n- Retorne SEMPRE um JSON válido com: { \"resposta\": \"texto da mensagem\", \"proxima_etapa\": número, \"dor_principal\": \"string ou null\", \"nome_lead\": \"string ou null\" }\n\nContexto do lead:\n- Nome: ${nome}\n- Etapa atual: ${etapa}\n- Dor principal: ${dor}\n- Contexto: ${contexto}\n\nInstrução da etapa atual:\n${scriptEtapas[etapa] || scriptEtapas[1]}`;\n\nconst mensagens = historico.slice(-10).map(h => ({\n  role: h.role,\n  content: h.content\n}));\n\nreturn [{\n  json: {\n    ...lead,\n    sistemaPrompt,\n    mensagens\n  }\n}];"
+        "jsCode": "const lead = $input.item.json;\nconst etapa = parseInt(lead.etapa_agente) || 1;\nconst nome = lead.nome || 'você';\nconst dor = lead.dor_principal || 'desequilíbrio hormonal';\nconst historico = lead.historico || [];\n\nconst scriptEtapas = {\n  1: `Você está na ETAPA 1 — APRESENTAÇÃO.\\nSe apresente como Dr. Vinícius, consultor do Hormone Ecosystem.\\nIdentifique a dor principal do lead.\\nPergunte o que trouxe ele a buscar informações sobre reposição hormonal.\\nListe sintomas: ondas de calor, dificuldade para dormir, mudanças de humor, cansaço, queda na libido, dificuldade de concentração.\\nRegistre a dor_principal e nome_lead na resposta JSON.`,\n\n  2: `Você está na ETAPA 2 — CONEXÃO.\\nCrie rapport com o lead: ${nome}.\\nConecte o hobby/profissão do lead com benefícios do implante.\\nMostre empatia genuína. Diga que os sintomas não são 'coisa da idade'.\\nPergunte mais sobre o dia a dia do lead.`,\n\n  3: `Você está na ETAPA 3 — D.I. (COMBINADO).\\nFaça o combinado: peça permissão para apresentar o produto.\\nDiga: 'Se gostar, você me dá um SIM. Se não gostar, tudo bem.'\\nPergunte se toma decisões de saúde sozinho ou precisa alinhar com alguém.\\nPergunte se tem viagem marcada nos próximos dias.\\nSe tiver viagem: aplique a vacina ('o procedimento dura 20 minutos, pode viajar no mesmo dia').`,\n\n  4: `Você está na ETAPA 4 — SPEECH.\\nApresente o implante conectado à dor: ${dor}.\\nExplique que é um cilindro do tamanho de um grão de arroz inserido sob a pele.\\nLibera hormônios de forma contínua e natural por 6 meses.\\nResultados: ondas de calor somem em 2-4 semanas, sono profundo, energia, humor estável, libido restaurada, clareza mental.\\nPergunte: 'O que mais te chamou atenção?'`,\n\n  5: `Você está na ETAPA 5 — FECHAMENTO.\\nRelembre o combinado.\\nUse o que o lead disse que mais gostou.\\nInforme o investimento: R$ 5.000 (R$ 833/mês por 6 meses).\\nOferece duas formas: cartão de crédito parcelado ou Pix à vista.\\nPergunte qual funciona melhor.\\nApós confirmação de pagamento, envie o link e diga que a equipe vai agendar o procedimento.`,\n\n  6: `Você está na ETAPA 6 — AGUARDANDO PAGAMENTO.\\nConfirme que o link de pagamento foi enviado.\\nAguarde confirmação do pagamento.\\nSe o lead não pagou em 30 minutos, reforce gentilmente.`,\n\n  7: `Você está na ETAPA 7 — REFERIDOS.\\nPeça 20 contatos de mulheres que podem se beneficiar.\\nInstrua o lead a abrir os Contatos no celular e enviar nome + número.\\nApós receber os contatos, peça que o lead mande uma mensagem para cada uma dizendo que Dr. Vinícius vai entrar em contato.\\nSe o lead NÃO fechou: peça apenas 4 referidos.`,\n\n  8: `Você está na ETAPA 8 — VALIDAÇÃO.\\n24-48h após o lead enviar os contatos.\\nPergunte se algum contato respondeu dizendo que NÃO quer receber mensagem.\\nRemova os que não querem.\\nPergunte contexto de cada referido (profissão, hobby, momento de vida).\\nEnvie resumo: quantos responderam, quantos pendentes, quantos removidos.`\n};\n\nconst sistemaPrompt = `Você é Ana, assistente do Dr. Vinícius Cechella, médico e consultor do Hormone Ecosystem.\\nVocê está conduzindo um funil de vendas pelo WhatsApp para o implante hormonal (R$ 5.000, dura 6 meses, procedimento de 20 minutos).\\n\\nETAPA ATUAL: ${etapa}\\n\\nRegras:\\n- Seja calorosa, empática e profissional\\n- Use o nome do lead quando souber\\n- Não revele que é um agente de IA\\n- Mensagens curtas e naturais como WhatsApp real\\n- Não use markdown, não use asteriscos\\n- Emojis moderados como numa conversa real\\n- Avance para a próxima etapa SOMENTE quando o objetivo da etapa atual for completamente atingido\\n- Retorne SEMPRE um JSON válido com: { \"resposta\": \"texto da mensagem\", \"proxima_etapa\": número, \"dor_principal\": \"string ou null\", \"nome_lead\": \"string ou null\" }\\n\\nContexto do lead:\\n- Nome: ${nome}\\n- Etapa atual: ${etapa}\\n- Dor principal: ${dor}\\n\\nInstrução da etapa atual:\\n${scriptEtapas[etapa] || scriptEtapas[1]}`;\n\nconst mensagens = historico.slice(-10).map(h => ({\n  role: h.role,\n  content: h.content\n}));\n\nreturn [{\n  json: {\n    ...lead,\n    sistemaPrompt,\n    mensagens\n  }\n}];"
       },
       "id": "montar-prompt",
       "name": "Montar Prompt",
@@ -146,7 +164,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const claudeResponse = $input.item.json;\nconst lead = $('Montar Prompt').item.json;\n\nlet resposta = '';\nlet proximaEtapa = lead.etapa;\nlet dorPrincipal = lead.dor_principal;\nlet nomeLead = lead.nome;\n\ntry {\n  const content = claudeResponse.content?.[0]?.text || '';\n  const parsed = JSON.parse(content);\n  resposta = parsed.resposta || content;\n  proximaEtapa = parsed.proxima_etapa || lead.etapa;\n  if (parsed.dor_principal) dorPrincipal = parsed.dor_principal;\n  if (parsed.nome_lead) nomeLead = parsed.nome_lead;\n} catch (e) {\n  resposta = claudeResponse.content?.[0]?.text || 'Desculpe, tive um problema. Pode repetir?';\n}\n\nconst historico = lead.historico || [];\nhistorico.push({ role: 'assistant', content: resposta, ts: new Date().toISOString() });\n\nreturn [{\n  json: {\n    ...lead,\n    resposta,\n    proxima_etapa: proximaEtapa,\n    dor_principal: dorPrincipal,\n    nome: nomeLead,\n    historico\n  }\n}];"
+        "jsCode": "// FIX 2: parseInt em etapa_agente evita bug '1'+1='11' → Math.min(8,'11',8)=8\n// FIX 3: NÃO adicionar mensagem do usuário aqui — Processar Lead já fez isso\nconst claudeResponse = $input.item.json;\nconst lead = $('Montar Prompt').item.json;\n\nlet resposta = '';\nlet proximaEtapa = parseInt(lead.etapa_agente) || 1;\nlet dorPrincipal = lead.dor_principal;\nlet nomeLead = lead.nome;\n\ntry {\n  let content = claudeResponse.content?.[0]?.text || '';\n  content = content.replace(/```json\\n?/g, '').replace(/```\\n?/g, '').trim();\n  const jsonMatch = content.match(/\\{[\\s\\S]*\\}/);\n  if (!jsonMatch) throw new Error('No JSON found');\n  const parsed = JSON.parse(jsonMatch[0]);\n  resposta = parsed.resposta || content;\n  resposta = resposta.replace(/\\n/g, ' ').replace(/\\r/g, '').trim();\n  const etapaAtual = parseInt(lead.etapa_agente) || 1;\n  const etapaSugerida = parseInt(parsed.proxima_etapa) || etapaAtual;\n  // Cap: avança no máximo 1 etapa por vez, nunca passa de 8\n  proximaEtapa = Math.min(Math.max(etapaSugerida, etapaAtual), etapaAtual + 1, 8);\n  if (parsed.dor_principal) dorPrincipal = parsed.dor_principal;\n  if (parsed.nome_lead) nomeLead = parsed.nome_lead;\n} catch (e) {\n  const etapaAtual = parseInt(lead.etapa_agente) || 1;\n  proximaEtapa = etapaAtual;\n  let raw = claudeResponse.content?.[0]?.text || 'Desculpe, tive um problema. Pode repetir?';\n  resposta = raw.replace(/\\s*\\{[\\s\\S]*\\}\\s*$/i, '').replace(/\\n/g, ' ').replace(/\\r/g, '').trim();\n  if (!resposta) resposta = 'Desculpe, tive um problema. Pode repetir?';\n}\n\nconst historico = lead.historico || [];\n// Adiciona SOMENTE a resposta do assistente — usuário já foi adicionado em Processar Lead\nhistorico.push({ role: 'assistant', content: resposta, ts: new Date().toISOString() });\n\nreturn [{ json: { ...lead, resposta, proximaEtapa, dorPrincipal, nomeLead, historico } }];"
       },
       "id": "processar-resposta",
       "name": "Processar Resposta",
@@ -180,39 +198,14 @@
     },
     {
       "parameters": {
-        "method": "={{ $('Processar Lead').item.json.isNew ? 'POST' : 'PATCH' }}",
-        "url": "={{ $('Processar Lead').item.json.isNew ? $env.SUPABASE_URL + '/rest/v1/leads' : $env.SUPABASE_URL + '/rest/v1/leads?telefone=eq.' + $json.telefone }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "apikey",
-              "value": "={{ $env.SUPABASE_KEY }}"
-            },
-            {
-              "name": "Authorization",
-              "value": "Bearer {{ $env.SUPABASE_KEY }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            },
-            {
-              "name": "Prefer",
-              "value": "return=minimal"
-            }
-          ]
-        },
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"telefone\": \"{{ $json.telefone }}\",\n  \"nome\": {{ JSON.stringify($json.nome) }},\n  \"etapa\": {{ $json.proxima_etapa }},\n  \"dor_principal\": {{ JSON.stringify($json.dor_principal) }},\n  \"historico\": {{ JSON.stringify($json.historico) }},\n  \"updated_at\": \"{{ new Date().toISOString() }}\"\n}",
-        "options": {}
+        "jsCode": "// FIX 4: PATCH por id=eq.{leadId} em vez de telefone=eq.{telefone}\n// O telefone no Supabase pode ter formato diferente do recebido pelo webhook\n// causando 0 rows afetadas silenciosamente\nconst SUPABASE_URL = 'https://rmsblsoqqhtantyomhsh.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtc2Jsc29xcWh0YW50eW9taHNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4OTI5MDgsImV4cCI6MjA5NjQ2ODkwOH0.PAje_eA_dYrwM_5f-4n9MMDY-GGtC0ZzEdRn7W3gg30';\n\nconst data = $input.item.json;\nconst telefone = $('Extrair Mensagem').item.json.telefone;\nconst leadId = data.id;\n\nconst body = {\n  telefone: telefone,\n  nome: data.nomeLead || data.nome || null,\n  etapa_agente: data.proximaEtapa || data.proxima_etapa || 1,\n  dor_principal: data.dorPrincipal || data.dor_principal || null,\n  historico: data.historico || [],\n  temperatura: data.temperatura || 'morno',\n  origem_agente: 'whatsapp'\n};\n\ntry {\n  if (data.isNew) {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `${SUPABASE_URL}/rest/v1/leads`,\n      headers: {\n        'Content-Type': 'application/json',\n        'apikey': SUPABASE_KEY,\n        'Authorization': 'Bearer ' + SUPABASE_KEY,\n        'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify(body),\n    });\n  } else {\n    // PATCH por ID — garante que a linha certa é atualizada\n    await this.helpers.httpRequest({\n      method: 'PATCH',\n      url: `${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}`,\n      headers: {\n        'Content-Type': 'application/json',\n        'apikey': SUPABASE_KEY,\n        'Authorization': 'Bearer ' + SUPABASE_KEY,\n        'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify(body),\n    });\n  }\n} catch(e) {\n  console.error('Erro ao salvar lead:', e.message);\n}\n\nreturn [{ json: { ...data, saved: true } }];"
       },
-      "id": "salvar-supabase",
-      "name": "Salvar Supabase",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [2220, 300]
+      "id": "code-in-javascript",
+      "name": "Code in JavaScript",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2220, 300],
+      "_note": "FIX 4: substitui o nó HTTP 'Salvar Supabase' que fazia PATCH por telefone (falhava silenciosamente). Agora usa PATCH por id=eq.{leadId}."
     }
   ],
   "connections": {
@@ -308,7 +301,7 @@
       "main": [
         [
           {
-            "node": "Salvar Supabase",
+            "node": "Code in JavaScript",
             "type": "main",
             "index": 0
           }
