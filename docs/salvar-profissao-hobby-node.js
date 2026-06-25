@@ -7,74 +7,56 @@
 const SUPABASE_URL = 'https://rmsblsoqqhtantyomhsh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtc2Jsc29xcWh0YW50eW9taHNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4OTI5MDgsImV4cCI6MjA5NjQ2ODkwOH0.PAje_eA_dYrwM_5f-4n9MMDY-GGtC0ZzEdRn7W3gg30';
 
-const extrairMsg = $('Extrair Mensagem').item.json;
-const telefone = extrairMsg.telefone || '';
-const mensagem = extrairMsg.mensagem || '';
+const mensagem = $('Extrair Mensagem').item.json.message || '';
+const telefone = $('Extrair Mensagem').item.json.telefone || '';
 
-// Só processa se a mensagem tem dados de profissão/hobby
-if (!mensagem.includes('Profissão:') && !mensagem.includes('Hobby:') && !mensagem.includes('Profissao:')) {
+if (!mensagem.includes('Profiss') && !mensagem.includes('Hobby')) {
   return [{ json: { salvos: 0, status: 'nenhum_dado' } }];
 }
 
-// Divide a mensagem em blocos por referido (separados por linha em branco ou numeração)
-// Formato esperado:
-// 1. Nome: Maria Silva
-//    Profissão: Enfermeira
-//    Hobby: Yoga
-//
-// 2. Nome: Ana Paula
-//    Profissão: Professora
-//    Hobby: Caminhada
-
-const blocos = mensagem.split(/\n\s*\n|\n(?=\d+[\.\)])/);
+const blocos = mensagem.split(/\n\s*\n/);
 const atualizacoes = [];
 
 for (const bloco of blocos) {
-  const nomeMatch = bloco.match(/Nome[:\s]+(.+)/i);
-  const profissaoMatch = bloco.match(/Profiss[aã]o[:\s]+(.+)/i);
-  const hobbyMatch = bloco.match(/Hobby[:\s]+(.+)/i);
+  const linhas = bloco.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  let nome = null, profissao = null, hobby = null;
 
-  if (!nomeMatch && !profissaoMatch && !hobbyMatch) continue;
+  for (const linha of linhas) {
+    // Usa includes em vez de ^ para ignorar "1. " no início
+    if (/Nome\s*:/i.test(linha)) {
+      nome = linha.replace(/.*Nome\s*:\s*/i, '').trim();
+    } else if (/Profiss[aã]o\s*:/i.test(linha)) {
+      profissao = linha.replace(/.*Profiss[aã]o\s*:\s*/i, '').trim();
+    } else if (/Hobby\s*:/i.test(linha)) {
+      hobby = linha.replace(/.*Hobby\s*:\s*/i, '').trim();
+    }
+  }
 
-  const nome = nomeMatch?.[1]?.trim();
-  const profissao = profissaoMatch?.[1]?.trim() || null;
-  const hobby = hobbyMatch?.[1]?.trim() || null;
-
-  if (!nome || (!profissao && !hobby)) continue;
-
-  atualizacoes.push({ nome, profissao, hobby });
+  if (nome && (profissao || hobby)) {
+    atualizacoes.push({ nome, profissao, hobby });
+  }
 }
 
 if (atualizacoes.length === 0) {
   return [{ json: { salvos: 0, status: 'nenhum_dado_parseado' } }];
 }
 
-// Busca os contatos_referidos indicados por este telefone
 const referidos = await this.helpers.httpRequest({
   method: 'GET',
   url: `${SUPABASE_URL}/rest/v1/contatos_referidos?indicado_por_telefone=eq.${telefone}&select=id,nome`,
-  headers: {
-    'apikey': SUPABASE_KEY,
-    'Authorization': 'Bearer ' + SUPABASE_KEY,
-  },
+  headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
 });
 
 let salvos = 0;
 
 for (const upd of atualizacoes) {
-  // Encontra o referido pelo nome (busca parcial case-insensitive)
-  const referido = referidos.find(r =>
-    r.nome && upd.nome &&
-    r.nome.toLowerCase().includes(upd.nome.toLowerCase().split(' ')[0])
-  );
-
+  const primeiraPalavra = upd.nome.toLowerCase().split(' ')[0];
+  const referido = referidos.find(r => r.nome && r.nome.toLowerCase().includes(primeiraPalavra));
   if (!referido) continue;
 
   const patch = {};
   if (upd.profissao) patch.profissao = upd.profissao;
   if (upd.hobby) patch.hobby = upd.hobby;
-
-  if (Object.keys(patch).length === 0) continue;
 
   try {
     await this.helpers.httpRequest({
@@ -92,4 +74,4 @@ for (const upd of atualizacoes) {
   } catch(e) {}
 }
 
-return [{ json: { salvos, total_blocos: atualizacoes.length, status: 'ok', telefone } }];
+return [{ json: { salvos, total_parseados: atualizacoes.length, status: 'ok', telefone } }];
