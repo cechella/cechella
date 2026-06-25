@@ -122,7 +122,8 @@ if (Array.isArray(checkResp) && checkResp.length > 0) {
       }
     });
   } catch(errSupabase) {
-    return [{ json: { pagamento_gerado: false, erro: 'falhou_supabase', detalhe: String(errSupabase) } }];
+    // Erro não crítico — continua e envia PIX mesmo assim
+    console.error('Supabase pagamentos 403 (não crítico):', String(errSupabase));
   }
 
   // Mensagem 1: confirmação de novo PIX
