@@ -1,98 +1,114 @@
-// ═══════════════════════════════════════════════════════════════
-// NÓ: Parsear Referidos — Parser puro JS, sem API externa
-// Extrai contatos em QUALQUER formato enviado pelo lead
-// ═══════════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://rmsblsoqqhtantyomhsh.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtc2Jsc29xcWh0YW50eW9taHNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4OTI5MDgsImV4cCI6MjA5NjQ2ODkwOH0.PAje_eA_dYrwM_5f-4n9MMDY-GGtC0ZzEdRn7W3gg30';
+const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text';
+const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS';
 
-const lead = $input.item.json;
-const indicado_por_telefone = lead.telefone || '';
-const indicado_por_nome = lead.nome || '';
+const extrairMsg = $('Extrair Mensagem').item.json;
+const telefone = extrairMsg.telefone || '';
 
-// Pega o historico — pode vir como array ou string JSON
-let historico = lead.historico || [];
-if (typeof historico === 'string') {
-  try { historico = JSON.parse(historico); } catch(e) { historico = []; }
+const webhookRaw = $('Webhook Evolution API').item.json;
+const bodyRaw = webhookRaw?.body || {};
+
+const vcardContacts = Array.isArray(bodyRaw.contactArray) && bodyRaw.contactArray.length > 0
+  ? bodyRaw.contactArray
+  : (bodyRaw.contact ? [bodyRaw.contact] : []);
+
+// Se não tem contatos vcard reais, ignora — não parsear texto como contato
+if (vcardContacts.length === 0) {
+  return [{ json: { salvos: 0, status: 'nenhum_vcard', telefone } }];
 }
 
-// Pega TODAS as mensagens do usuário
-const mensagensUsuario = historico
-  .filter(m => m && m.role === 'user' && m.content && m.content.length > 2)
-  .map(m => m.content);
-
-if (mensagensUsuario.length === 0) {
-  return [{ json: { referidos: [], total: 0, indicado_por_nome, indicado_por_telefone } }];
-}
-
-// Junta tudo em um bloco de texto para processar
-const textoCompleto = mensagensUsuario.join('\n');
-
-// Extrai todas as linhas com potencial de ser um contato
-const linhas = textoCompleto
-  .split('\n')
-  .map(l => l.replace(/^\d+[\.\)\-\s]+/, '').trim()) // remove "1. " "2) " etc
-  .filter(l => l.length >= 4);
+let indicado_por_nome = '';
+let totalAtual = 0;
+try {
+  const r = await this.helpers.httpRequest({
+    method: 'GET',
+    url: `${SUPABASE_URL}/rest/v1/leads?telefone=eq.${telefone}&select=nome,total_referidos`,
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+  });
+  const lead = Array.isArray(r) ? r[0] : r;
+  indicado_por_nome = lead?.nome || '';
+  totalAtual = lead?.total_referidos || 0;
+} catch(e) {}
 
 const referidos = [];
-const nomesVistos = new Set();
 
-for (const linha of linhas) {
-
-  // Ignora linhas que são claramente conversas (frases longas com verbo)
-  if (linha.length > 120) continue;
-  if (/\b(eu|meu|minha|você|pode|quero|tenho|está|vou|obrigad|sim|não|oi|olá|tudo|certo|ok|claro)\b/i.test(linha) && linha.length > 40) continue;
-
-  // Extrai telefone se houver
-  const telMatch = linha.match(/(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)?\d{4,5}[\s\-]?\d{4}/);
-  let telefone = null;
-  if (telMatch) {
-    const digitos = telMatch[0].replace(/\D/g, '');
-    if (digitos.length >= 10 && digitos.length <= 13) {
-      telefone = digitos;
-    }
-  }
-
-  // Remove o telefone da linha para extrair nome/profissao/hobby
-  const semTelefone = linha.replace(/(?:\+?55\s?)?(?:\(?\d{2}\)?\s?)?\d{4,5}[\s\-]?\d{4}/, '').trim();
-
-  // Divide por separadores comuns
-  const partes = semTelefone
-    .split(/\s*[\-–,;:\/|]\s*/)
-    .map(p => p.trim())
-    .filter(p => p.length >= 2);
-
-  if (partes.length === 0) continue;
-
-  const nome = partes[0];
-
-  // Nome precisa ter pelo menos 2 palavras OU ser claramente um nome
-  const palavrasNome = nome.split(' ').filter(p => p.length > 1);
-  if (palavrasNome.length < 2 && !telefone) continue;
-  if (nome.length < 3) continue;
-
-  // Evita duplicatas
-  const nomeKey = nome.toLowerCase().replace(/\s+/g, '');
-  if (nomesVistos.has(nomeKey)) continue;
-  nomesVistos.add(nomeKey);
-
-  const profissao = partes[1] || null;
-  const hobby = partes[2] || null;
-
+for (const c of vcardContacts) {
+  const nome = c.displayName || null;
+  const fone = c.phones?.[0] ? String(c.phones[0]).replace(/\D/g, '') : null;
+  if (!nome && !fone) continue;
   referidos.push({
-    indicado_por_telefone,
+    indicado_por_telefone: telefone,
     indicado_por_nome,
-    nome,
-    telefone,
-    profissao,
-    hobby,
-    prioridade: (profissao || hobby) ? 1 : 2,
+    nome: nome || fone,
+    telefone: fone,
+    profissao: null,
+    hobby: null,
+    prioridade: 2,
     status: 'aguardando',
   });
 }
 
-return [{
-  json: {
-    referidos,
-    total: referidos.length,
-    indicado_por_nome,
-    indicado_por_telefone,
-  }
-}];
+if (referidos.length === 0) {
+  return [{ json: { salvos: 0, status: 'nenhum_referido', telefone } }];
+}
+
+await this.helpers.httpRequest({
+  method: 'POST',
+  url: `${SUPABASE_URL}/rest/v1/contatos_referidos`,
+  headers: {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_KEY,
+    'Prefer': 'return=minimal',
+  },
+  body: JSON.stringify(referidos),
+});
+
+const novoTotal = totalAtual + referidos.length;
+
+try {
+  await this.helpers.httpRequest({
+    method: 'PATCH',
+    url: `${SUPABASE_URL}/rest/v1/leads?telefone=eq.${telefone}`,
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SUPABASE_KEY,
+      'Authorization': 'Bearer ' + SUPABASE_KEY,
+      'Prefer': 'return=minimal',
+    },
+    body: JSON.stringify({ total_referidos: novoTotal }),
+  });
+} catch(e) {}
+
+if (novoTotal >= 20) {
+  try {
+    await this.helpers.httpRequest({
+      method: 'PATCH',
+      url: `${SUPABASE_URL}/rest/v1/leads?telefone=eq.${telefone}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify({ etapa_agente: 8 }),
+    });
+  } catch(e) {}
+
+  const mensagemEtapa8 = `Maravilhoso! 🎉 Você é incrível!\nO sistema confirmou que recebi ${novoTotal} contatos seus. ✅\nAgora me ajuda com uma coisa rápida — alguma das mulheres que você indicou já te respondeu dizendo que não quer receber contato? 😊\nSe sim, me fala o nome que eu já retiro da lista.\nSe todas toparam, me fala 'todas ok' e a gente segue!`;
+
+  try {
+    await this.helpers.httpRequest({
+      method: 'POST',
+      url: ZAPI_URL,
+      headers: {
+        'Content-Type': 'application/json',
+        'Client-Token': ZAPI_TOKEN,
+      },
+      body: JSON.stringify({ phone: telefone, message: mensagemEtapa8 }),
+    });
+  } catch(e) {}
+}
+
+return [{ json: { salvos: referidos.length, total_acumulado: novoTotal, status: 'ok', telefone } }];
