@@ -6,235 +6,463 @@
 <title>Hormone Ecosystem — Painel Admin</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f0f0f; color: #e0e0e0; display: flex; height: 100vh; overflow: hidden; }
 
-  header {
+  /* ── LEFT NAV ── */
+  .nav {
+    width: 56px;
+    min-width: 56px;
+    background: #111;
+    border-right: 1px solid #1e1e1e;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px 0;
+    gap: 4px;
+    z-index: 100;
+  }
+  .nav-logo {
+    width: 32px;
+    height: 32px;
+    background: #22c55e;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 800;
+    color: #000;
+    margin-bottom: 16px;
+  }
+  .nav-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: #555;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .nav-btn:hover { background: #1e1e1e; color: #aaa; }
+  .nav-btn.active { background: #14532d; color: #22c55e; }
+  .nav-btn svg { width: 18px; height: 18px; }
+  .nav-tooltip {
+    position: absolute;
+    left: 52px;
+    background: #1e1e1e;
+    color: #e0e0e0;
+    font-size: 11px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    border: 1px solid #2a2a2a;
+    z-index: 999;
+  }
+  .nav-btn:hover .nav-tooltip { opacity: 1; }
+
+  /* ── PANELS ── */
+  .panel { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+  .panel.visible { display: flex; }
+
+  /* ── SHARED HEADER ── */
+  .panel-header {
     background: #1a1a1a;
     border-bottom: 1px solid #2a2a2a;
-    padding: 16px 24px;
+    padding: 14px 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-shrink: 0;
   }
-  header h1 { font-size: 18px; font-weight: 600; color: #fff; }
-  header h1 span { color: #22c55e; }
+  .panel-header h1 { font-size: 16px; font-weight: 600; color: #fff; }
+  .panel-header h1 span { color: #22c55e; }
   .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #22c55e; display: inline-block; margin-right: 6px; animation: pulse 2s infinite; }
   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
   .live-badge { font-size: 12px; color: #22c55e; display: flex; align-items: center; }
 
-  .layout { display: flex; height: calc(100vh - 57px); }
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
 
-  /* SIDEBAR — lista de leads */
-  .sidebar {
-    width: 320px;
-    min-width: 320px;
-    border-right: 1px solid #2a2a2a;
-    overflow-y: auto;
+  /* ══════════════════════════════════════
+     PAINEL 1: DASHBOARD
+  ══════════════════════════════════════ */
+  .dash-body { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 20px; }
+
+  .stats-bar { display: flex; gap: 12px; flex-wrap: wrap; }
+  .stat-card {
+    flex: 1;
+    min-width: 140px;
     background: #141414;
+    border: 1px solid #1e1e1e;
+    border-radius: 10px;
+    padding: 16px;
+  }
+  .stat-card .label { font-size: 11px; color: #555; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+  .stat-card .value { font-size: 28px; font-weight: 700; color: #fff; line-height: 1; }
+  .stat-card .sub { font-size: 11px; color: #444; margin-top: 4px; }
+  .stat-card.green .value { color: #22c55e; }
+  .stat-card.yellow .value { color: #fbbf24; }
+  .stat-card.blue .value { color: #60a5fa; }
+  .stat-card.red .value { color: #f87171; }
+
+  .dash-row { display: flex; gap: 16px; }
+  .dash-col { flex: 1; background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; padding: 16px; }
+  .dash-col h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #555; margin-bottom: 14px; }
+
+  .funnel-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .funnel-label { font-size: 12px; color: #888; width: 110px; flex-shrink: 0; }
+  .funnel-bar-wrap { flex: 1; background: #1e1e1e; border-radius: 4px; height: 22px; overflow: hidden; position: relative; }
+  .funnel-bar { height: 100%; background: #22c55e22; border-radius: 4px; display: flex; align-items: center; padding-left: 8px; transition: width 0.5s; position: relative; }
+  .funnel-bar.top { background: #22c55e44; }
+  .funnel-count { font-size: 12px; font-weight: 600; color: #22c55e; position: absolute; left: 8px; }
+  .funnel-pct { font-size: 11px; color: #444; width: 44px; text-align: right; flex-shrink: 0; }
+
+  .stuck-list { display: flex; flex-direction: column; gap: 6px; }
+  .stuck-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px;
+    background: #1a0f0f; border: 1px solid #2a1515; border-radius: 8px; font-size: 13px;
+  }
+  .stuck-dot { width: 8px; height: 8px; background: #ef4444; border-radius: 50%; flex-shrink: 0; }
+  .stuck-name { color: #fff; font-weight: 500; flex: 1; }
+  .stuck-etapa { color: #666; font-size: 11px; }
+  .stuck-time { color: #ef4444; font-size: 11px; }
+
+  .ana-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .ana-stat { background: #111; border: 1px solid #1e1e1e; border-radius: 8px; padding: 12px; text-align: center; }
+  .ana-stat .val { font-size: 22px; font-weight: 700; color: #22c55e; }
+  .ana-stat .lbl { font-size: 10px; color: #555; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  /* ══════════════════════════════════════
+     PAINEL 2: CRM
+  ══════════════════════════════════════ */
+  .crm-layout { display: flex; flex: 1; overflow: hidden; }
+
+  .sidebar {
+    width: 300px; min-width: 300px;
+    border-right: 1px solid #2a2a2a;
+    overflow-y: auto; background: #141414;
+    display: flex; flex-direction: column;
   }
   .sidebar-header {
-    padding: 12px 16px;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #666;
+    padding: 10px 14px; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 1px; color: #666;
     border-bottom: 1px solid #2a2a2a;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-shrink: 0;
   }
   .lead-count { background: #22c55e22; color: #22c55e; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
 
   .lead-item {
-    padding: 14px 16px;
-    border-bottom: 1px solid #1e1e1e;
-    cursor: pointer;
-    transition: background 0.15s;
+    padding: 12px 14px; border-bottom: 1px solid #1e1e1e;
+    cursor: pointer; transition: background 0.15s; position: relative;
   }
   .lead-item:hover { background: #1e1e1e; }
   .lead-item.active { background: #1e2d1e; border-left: 3px solid #22c55e; }
+  .lead-name { font-size: 14px; font-weight: 500; color: #fff; margin-bottom: 3px; }
+  .lead-phone { font-size: 12px; color: #666; margin-bottom: 6px; }
+  .lead-last-msg { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; }
 
-  .lead-name { font-size: 14px; font-weight: 500; color: #fff; margin-bottom: 4px; }
-  .lead-phone { font-size: 12px; color: #666; margin-bottom: 8px; }
-  .lead-last-msg { font-size: 12px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 8px; }
-
-  /* Progress bar 7 etapas */
   .etapa-bar { display: flex; gap: 3px; }
-  .etapa-dot {
-    flex: 1;
-    height: 4px;
-    border-radius: 2px;
-    background: #2a2a2a;
-    transition: background 0.3s;
-  }
+  .etapa-dot { flex: 1; height: 4px; border-radius: 2px; background: #2a2a2a; transition: background 0.3s; }
   .etapa-dot.done { background: #22c55e; }
   .etapa-dot.active { background: #86efac; }
+  .etapa-label { font-size: 11px; color: #22c55e; margin-top: 4px; font-weight: 500; }
 
-  .etapa-label {
-    font-size: 11px;
-    color: #22c55e;
-    margin-top: 4px;
-    font-weight: 500;
-  }
   .temp-badge {
-    display: inline-block;
-    padding: 1px 6px;
-    border-radius: 8px;
-    font-size: 10px;
-    font-weight: 600;
-    margin-left: 6px;
+    display: inline-block; padding: 1px 6px; border-radius: 8px;
+    font-size: 10px; font-weight: 600; margin-left: 6px;
   }
   .temp-quente { background: #ef444422; color: #f87171; }
   .temp-morno  { background: #f59e0b22; color: #fbbf24; }
   .temp-frio   { background: #3b82f622; color: #60a5fa; }
 
   .lead-time { font-size: 10px; color: #444; margin-top: 4px; }
-
-  /* MAIN — chat */
-  .main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
+  .stuck-badge-crm {
+    position: absolute; top: 10px; right: 10px;
+    width: 8px; height: 8px; background: #ef4444; border-radius: 50%;
   }
 
-  .chat-header {
-    padding: 16px 24px;
-    border-bottom: 1px solid #2a2a2a;
-    background: #141414;
-  }
+  .crm-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+  .chat-header { padding: 14px 20px; border-bottom: 1px solid #2a2a2a; background: #141414; flex-shrink: 0; }
   .chat-header-name { font-size: 16px; font-weight: 600; color: #fff; }
   .chat-header-sub { font-size: 13px; color: #666; margin-top: 2px; }
 
-  /* Etapas timeline no topo */
   .etapas-timeline {
-    display: flex;
-    padding: 16px 24px;
-    gap: 0;
-    border-bottom: 1px solid #1e1e1e;
-    background: #111;
-    overflow-x: auto;
+    display: flex; padding: 14px 20px;
+    border-bottom: 1px solid #1e1e1e; background: #111;
+    overflow-x: auto; flex-shrink: 0;
   }
-  .etapa-step {
-    display: flex;
-    align-items: center;
-    flex: 1;
-    min-width: 100px;
-  }
-  .etapa-step:last-child .etapa-line { display: none; }
+  .etapa-step-wrapper { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 70px; }
+  .etapa-step-inner { display: flex; align-items: center; width: 100%; }
   .etapa-circle {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: #2a2a2a;
-    border: 2px solid #333;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 700;
-    color: #555;
-    flex-shrink: 0;
-    transition: all 0.3s;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: #2a2a2a; border: 2px solid #333;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: #555;
+    flex-shrink: 0; transition: all 0.3s;
   }
   .etapa-circle.done { background: #166534; border-color: #22c55e; color: #22c55e; }
   .etapa-circle.active { background: #14532d; border-color: #86efac; color: #fff; box-shadow: 0 0 8px #22c55e44; }
-  .etapa-line { flex: 1; height: 2px; background: #2a2a2a; margin: 0 4px; }
+  .etapa-line { flex: 1; height: 2px; background: #2a2a2a; margin: 0 3px; }
   .etapa-line.done { background: #22c55e; }
-  .etapa-info { position: absolute; margin-top: 36px; font-size: 9px; color: #555; white-space: nowrap; }
-  .etapa-step-wrapper { display: flex; flex-direction: column; align-items: center; flex: 1; min-width: 80px; }
-  .etapa-step-label { font-size: 9px; color: #555; margin-top: 4px; text-align: center; max-width: 70px; line-height: 1.2; }
+  .etapa-step-label { font-size: 9px; color: #555; margin-top: 3px; text-align: center; max-width: 60px; line-height: 1.2; }
   .etapa-step-label.active { color: #86efac; }
   .etapa-step-label.done { color: #4ade80; }
 
-  /* Chat messages */
-  .chat-messages {
-    flex: 1;
-    overflow-y: auto;
-    padding: 20px 24px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  .chat-tabs { display: flex; border-bottom: 1px solid #1e1e1e; background: #141414; flex-shrink: 0; }
+  .chat-tab {
+    padding: 10px 20px; font-size: 13px; color: #555;
+    cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s;
   }
+  .chat-tab:hover { color: #aaa; }
+  .chat-tab.active { color: #22c55e; border-bottom-color: #22c55e; }
 
+  .tab-panel { display: none; flex: 1; overflow: hidden; }
+  .tab-panel.visible { display: flex; flex-direction: column; }
+
+  .chat-messages {
+    flex: 1; overflow-y: auto; padding: 18px 20px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
   .msg { display: flex; gap: 10px; max-width: 75%; }
   .msg.user { align-self: flex-end; flex-direction: row-reverse; }
   .msg.assistant { align-self: flex-start; }
-
-  .msg-bubble {
-    padding: 10px 14px;
-    border-radius: 12px;
-    font-size: 14px;
-    line-height: 1.5;
-  }
+  .msg-bubble { padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.5; }
   .msg.user .msg-bubble { background: #166534; color: #fff; border-bottom-right-radius: 4px; }
   .msg.assistant .msg-bubble { background: #1e1e1e; color: #e0e0e0; border-bottom-left-radius: 4px; border: 1px solid #2a2a2a; }
-
   .msg-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 12px;
-    font-weight: 600;
-    flex-shrink: 0;
-    margin-top: 2px;
+    width: 26px; height: 26px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; flex-shrink: 0; margin-top: 2px;
   }
   .msg.user .msg-avatar { background: #166534; color: #fff; }
   .msg.assistant .msg-avatar { background: #1e3a5f; color: #60a5fa; }
-
-  .msg-time { font-size: 10px; color: #444; margin-top: 4px; text-align: right; }
+  .msg-time { font-size: 10px; color: #444; margin-top: 3px; text-align: right; }
   .msg.assistant .msg-time { text-align: left; }
 
-  /* Empty state */
+  .ref-panel { flex: 1; overflow-y: auto; padding: 16px 20px; }
+  .ref-table { width: 100%; border-collapse: collapse; }
+  .ref-table th {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: #555; padding: 6px 10px; text-align: left;
+    border-bottom: 1px solid #1e1e1e;
+  }
+  .ref-table td { padding: 10px; border-bottom: 1px solid #1a1a1a; font-size: 13px; }
+  .ref-table tr:hover td { background: #141414; }
+  .score-circles { display: flex; gap: 2px; }
+  .score-circle { font-size: 12px; line-height: 1; }
+  .score-circle.filled { color: #22c55e; }
+  .score-circle.empty { color: #333; }
+  .ref-status {
+    display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 600;
+  }
+  .ref-status.aguardando { background: #fbbf2422; color: #fbbf24; }
+  .ref-status.contatado  { background: #60a5fa22; color: #60a5fa; }
+  .ref-status.interessado { background: #f9731622; color: #fb923c; }
+  .ref-status.vendido    { background: #22c55e22; color: #22c55e; }
+  .acionar-btn {
+    background: #1e2d1e; border: 1px solid #22c55e33; color: #22c55e;
+    padding: 3px 10px; border-radius: 6px; font-size: 11px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .acionar-btn:hover { background: #14532d; }
+
   .empty-state {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: #333;
-    gap: 12px;
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: #333; gap: 12px;
   }
   .empty-state svg { width: 48px; height: 48px; }
   .empty-state p { font-size: 14px; }
-
-  /* Loading */
   .loading { text-align: center; padding: 40px; color: #444; font-size: 14px; }
+  .no-leads { padding: 24px 14px; color: #444; font-size: 13px; text-align: center; }
 
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #333; border-radius: 2px; }
+  /* ══════════════════════════════════════
+     PAINEL 3: REDE
+  ══════════════════════════════════════ */
+  .rede-body { flex: 1; overflow-y: auto; padding: 20px; }
+  .rede-stats { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; }
+  .rede-stat { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; padding: 14px 20px; }
+  .rede-stat .val { font-size: 24px; font-weight: 700; color: #22c55e; }
+  .rede-stat .lbl { font-size: 11px; color: #555; margin-top: 2px; }
 
-  .no-leads { padding: 24px 16px; color: #444; font-size: 13px; text-align: center; }
+  .tree { display: flex; flex-direction: column; gap: 12px; }
+  .tree-lead { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; padding: 14px 16px; }
+  .tree-lead-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+  .tree-lead-icon {
+    width: 32px; height: 32px; background: #14532d; border: 1px solid #22c55e44;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; color: #22c55e; flex-shrink: 0;
+  }
+  .tree-lead-name { font-size: 14px; font-weight: 600; color: #fff; }
+  .tree-lead-meta { font-size: 11px; color: #555; }
+  .tree-refs {
+    padding-left: 20px; border-left: 2px solid #1e1e1e;
+    margin-left: 16px; display: flex; flex-direction: column; gap: 6px;
+  }
+  .tree-ref {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px; background: #111; border: 1px solid #1a1a1a; border-radius: 8px;
+    position: relative;
+  }
+  .tree-ref::before {
+    content: ''; position: absolute; left: -20px; top: 50%;
+    width: 20px; height: 1px; background: #1e1e1e;
+  }
+  .tree-ref-icon {
+    width: 26px; height: 26px; background: #1e1e1e; border: 1px solid #2a2a2a;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 600; color: #aaa; flex-shrink: 0;
+  }
+  .tree-ref-name { font-size: 13px; color: #ccc; flex: 1; }
+  .tree-ref-prof { font-size: 11px; color: #555; }
+  .tree-ref-score { display: flex; gap: 2px; }
+  .tree-ref-score .sc { font-size: 11px; }
+  .tree-ref-score .sc.on { color: #22c55e; }
+  .tree-ref-score .sc.off { color: #333; }
+  .no-refs { font-size: 12px; color: #333; padding: 6px 0; font-style: italic; }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>Hormone Ecosystem <span>— Admin</span></h1>
-  <div class="live-badge"><span class="status-dot"></span> Tempo real</div>
-</header>
+<!-- LEFT NAV -->
+<div class="nav">
+  <div class="nav-logo">H</div>
 
-<div class="layout">
-  <div class="sidebar">
-    <div class="sidebar-header">
-      Leads ativos
-      <span class="lead-count" id="lead-count">0</span>
-    </div>
-    <div id="leads-list"><div class="loading">Carregando...</div></div>
+  <div class="nav-btn active" id="nav-dashboard" onclick="showPanel('dashboard')">
+    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+      <rect x="3" y="3" width="7" height="7" rx="1.5"/>
+      <rect x="14" y="3" width="7" height="7" rx="1.5"/>
+      <rect x="3" y="14" width="7" height="7" rx="1.5"/>
+      <rect x="14" y="14" width="7" height="7" rx="1.5"/>
+    </svg>
+    <span class="nav-tooltip">Dashboard</span>
   </div>
 
-  <div class="main" id="main-panel">
-    <div class="empty-state">
-      <svg fill="none" stroke="#333" stroke-width="1.5" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/>
-      </svg>
-      <p>Selecione um lead para ver o chat</p>
+  <div class="nav-btn" id="nav-crm" onclick="showPanel('crm')">
+    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/>
+    </svg>
+    <span class="nav-tooltip">CRM</span>
+  </div>
+
+  <div class="nav-btn" id="nav-rede" onclick="showPanel('rede')">
+    <svg fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+      <circle cx="12" cy="5" r="2"/>
+      <circle cx="5" cy="19" r="2"/>
+      <circle cx="19" cy="19" r="2"/>
+      <line x1="12" y1="7" x2="12" y2="12" stroke-linecap="round"/>
+      <line x1="12" y1="12" x2="6" y2="17.5" stroke-linecap="round"/>
+      <line x1="12" y1="12" x2="18" y2="17.5" stroke-linecap="round"/>
+    </svg>
+    <span class="nav-tooltip">Rede</span>
+  </div>
+</div>
+
+<!-- ══════════ PAINEL 1: DASHBOARD ══════════ -->
+<div class="panel visible" id="panel-dashboard">
+  <div class="panel-header">
+    <h1>Hormone Ecosystem <span>— Dashboard</span></h1>
+    <div class="live-badge"><span class="status-dot"></span> Atualiza em <span id="dash-countdown">30</span>s</div>
+  </div>
+  <div class="dash-body">
+    <div class="stats-bar">
+      <div class="stat-card green">
+        <div class="label">Leads Ativos</div>
+        <div class="value" id="stat-total">—</div>
+        <div class="sub">total no CRM</div>
+      </div>
+      <div class="stat-card yellow">
+        <div class="label">Etapa 6+</div>
+        <div class="value" id="stat-etapa6">—</div>
+        <div class="sub">referidos ou mais</div>
+      </div>
+      <div class="stat-card blue">
+        <div class="label">Referidos Salvos</div>
+        <div class="value" id="stat-refs">—</div>
+        <div class="sub">total contatos_referidos</div>
+      </div>
+      <div class="stat-card green">
+        <div class="label">Vendas Fechadas</div>
+        <div class="value" id="stat-vendas">—</div>
+        <div class="sub">etapa 7+</div>
+      </div>
+      <div class="stat-card red">
+        <div class="label">Taxa de Conversão</div>
+        <div class="value" id="stat-conv">—</div>
+        <div class="sub">etapa 7 / total</div>
+      </div>
     </div>
+
+    <div class="dash-row">
+      <div class="dash-col" style="flex:1.4">
+        <h3>Funil de Etapas</h3>
+        <div id="dash-funnel"><div class="loading" style="padding:20px;font-size:12px">Carregando...</div></div>
+      </div>
+      <div class="dash-col" style="flex:1">
+        <h3>Leads Travadas 24h+</h3>
+        <div id="dash-stuck"><div class="loading" style="padding:20px;font-size:12px">Carregando...</div></div>
+      </div>
+    </div>
+
+    <div class="dash-col">
+      <h3>Performance da Ana</h3>
+      <div class="ana-grid">
+        <div class="ana-stat"><div class="val" id="ana-msgs">—</div><div class="lbl">Msgs Enviadas Hoje</div></div>
+        <div class="ana-stat"><div class="val" id="ana-avg-etapa">—</div><div class="lbl">Etapa Média Atingida</div></div>
+        <div class="ana-stat"><div class="val" id="ana-conv">—%</div><div class="lbl">Taxa Conversão do Mês</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAINEL 2: CRM ══════════ -->
+<div class="panel" id="panel-crm">
+  <div class="panel-header">
+    <h1>Hormone Ecosystem <span>— CRM</span></h1>
+    <div class="live-badge"><span class="status-dot"></span> Tempo real</div>
+  </div>
+  <div class="crm-layout">
+    <div class="sidebar">
+      <div class="sidebar-header">
+        Leads ativos
+        <span class="lead-count" id="lead-count">0</span>
+      </div>
+      <div id="leads-list"><div class="loading">Carregando...</div></div>
+    </div>
+
+    <div class="crm-main" id="crm-main-panel">
+      <div class="empty-state">
+        <svg fill="none" stroke="#333" stroke-width="1.5" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.625 12a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H8.25m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0H12m4.125 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm0 0h-.375M21 12c0 4.556-4.03 8.25-9 8.25a9.764 9.764 0 01-2.555-.337A5.972 5.972 0 015.41 20.97a5.969 5.969 0 01-.474-.065 4.48 4.48 0 00.978-2.025c.09-.457-.133-.901-.467-1.226C3.93 16.178 3 14.189 3 12c0-4.556 4.03-8.25 9-8.25s9 3.694 9 8.25z"/>
+        </svg>
+        <p>Selecione um lead para ver o chat</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════ PAINEL 3: REDE ══════════ -->
+<div class="panel" id="panel-rede">
+  <div class="panel-header">
+    <h1>Hormone Ecosystem <span>— Rede de Referidos</span></h1>
+    <div class="live-badge"><span class="status-dot"></span> Tempo real</div>
+  </div>
+  <div class="rede-body">
+    <div class="rede-stats">
+      <div class="rede-stat"><div class="val" id="rede-total">—</div><div class="lbl">Total na Rede</div></div>
+      <div class="rede-stat"><div class="val" id="rede-gen2">—</div><div class="lbl">Geração 2 (referidos)</div></div>
+      <div class="rede-stat"><div class="val" id="rede-leads-with-refs">—</div><div class="lbl">Leads com Referidos</div></div>
+    </div>
+    <div class="tree" id="rede-tree"><div class="loading">Carregando rede...</div></div>
   </div>
 </div>
 
@@ -251,31 +479,21 @@ const ETAPAS = [
   { n: 6, label: 'Referidos' },
   { n: 7, label: 'Validação' },
 ];
-
 const ETAPA_NAMES = {
-  1: 'ETAPA 1: Apresentação',
-  2: 'ETAPA 2: Conexão',
-  3: 'ETAPA 3: D.I. — Combinado',
-  4: 'ETAPA 4: Speech do Produto',
-  5: 'ETAPA 5: Fechamento',
-  6: 'ETAPA 6: Referidos',
-  7: 'ETAPA 7: Validação',
+  1: 'ETAPA 1: Apresentação', 2: 'ETAPA 2: Conexão',
+  3: 'ETAPA 3: D.I. — Combinado', 4: 'ETAPA 4: Speech do Produto',
+  5: 'ETAPA 5: Fechamento', 6: 'ETAPA 6: Referidos', 7: 'ETAPA 7: Validação',
 };
 
 let selectedLead = null;
 let allLeads = [];
+let allReferidos = [];
+let activeCrmTab = 'chat';
+let currentPanel = 'dashboard';
+let dashCountdown = 30;
+let dashTimer = null;
 
-async function fetchLeads() {
-  const res = await fetch(`${SUPABASE_URL}/rest/v1/leads?select=*&order=updated_at.desc`, {
-    headers: {
-      'apikey': SUPABASE_KEY,
-      'Authorization': `Bearer ${SUPABASE_KEY}`,
-    }
-  });
-  if (!res.ok) return [];
-  return res.json();
-}
-
+// ── Utils ──
 function timeAgo(ts) {
   if (!ts) return '';
   const diff = (Date.now() - new Date(ts)) / 1000;
@@ -285,12 +503,177 @@ function timeAgo(ts) {
   return new Date(ts).toLocaleDateString('pt-BR');
 }
 
+function hoursAgo(ts) {
+  if (!ts) return 999;
+  return (Date.now() - new Date(ts)) / 3600000;
+}
+
+function isStuck(lead) {
+  return hoursAgo(lead.updated_at) >= 24;
+}
+
 function getLastMsg(historico) {
   if (!historico || !historico.length) return 'Sem mensagens';
   const last = historico[historico.length - 1];
-  return last.content?.substring(0, 60) + (last.content?.length > 60 ? '...' : '');
+  return (last.content || '').substring(0, 55) + ((last.content||'').length > 55 ? '...' : '');
 }
 
+// ── Score ──
+function calcScore(ref) {
+  const prof = (ref.profissao || '').toLowerCase();
+  let rendaScore = 1;
+  if (['médico','medico','advogado','empresário','empresario','dentista','engenheiro'].some(p => prof.includes(p))) rendaScore = 5;
+  else if (['enfermeira','fisio','psicóloga','psicologa','nutricionista'].some(p => prof.includes(p))) rendaScore = 3;
+  else if (['professor','comerciante','secretária','secretaria'].some(p => prof.includes(p))) rendaScore = 2;
+
+  const hasProfissao = !!(ref.profissao && ref.profissao.trim());
+  const hasHobby = !!(ref.hobby && ref.hobby.trim());
+  let dadosScore = 0;
+  if (hasProfissao && hasHobby) dadosScore = 3;
+  else if (hasProfissao || hasHobby) dadosScore = 1;
+
+  return Math.min(rendaScore + dadosScore, 8);
+}
+
+function scoreCircles(score) {
+  const filled = Math.round((score / 8) * 5);
+  let html = '<div class="score-circles">';
+  for (let i = 0; i < 5; i++) {
+    html += `<span class="score-circle ${i < filled ? 'filled' : 'empty'}">${i < filled ? '●' : '○'}</span>`;
+  }
+  return html + '</div>';
+}
+
+// ── Fetch ──
+async function fetchLeads() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/leads?select=*&order=updated_at.desc`, {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+async function fetchReferidos() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/contatos_referidos?select=*`, {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+// ── Navigation ──
+function showPanel(name) {
+  currentPanel = name;
+  ['dashboard','crm','rede'].forEach(p => {
+    document.getElementById('panel-' + p).classList.toggle('visible', p === name);
+    document.getElementById('nav-' + p).classList.toggle('active', p === name);
+  });
+  if (name === 'rede') renderRede();
+  if (name === 'dashboard') renderDashboard();
+}
+
+// ══════════════════════════════════════
+//  DASHBOARD
+// ══════════════════════════════════════
+function renderDashboard() {
+  const leads = allLeads;
+  const refs = allReferidos;
+
+  const total = leads.length;
+  const etapa6plus = leads.filter(l => (l.etapa||1) >= 6).length;
+  const vendas = leads.filter(l => (l.etapa||1) >= 7).length;
+  const conv = total ? ((vendas / total) * 100).toFixed(1) : '0.0';
+
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-etapa6').textContent = etapa6plus;
+  document.getElementById('stat-refs').textContent = refs.length;
+  document.getElementById('stat-vendas').textContent = vendas;
+  document.getElementById('stat-conv').textContent = conv + '%';
+
+  // Funnel
+  const counts = [0,0,0,0,0,0,0];
+  leads.forEach(l => {
+    const e = Math.min(Math.max(l.etapa||1, 1), 7);
+    counts[e-1]++;
+  });
+  const maxCount = Math.max(...counts, 1);
+  const funnelHtml = ETAPAS.map((e, i) => {
+    const cnt = counts[i];
+    const pct = total ? ((cnt / total) * 100).toFixed(0) : 0;
+    const barW = ((cnt / maxCount) * 100).toFixed(1);
+    return `
+      <div class="funnel-row">
+        <div class="funnel-label">E${e.n} ${e.label}</div>
+        <div class="funnel-bar-wrap">
+          <div class="funnel-bar ${i===0?'top':''}" style="width:${barW}%">
+            <span class="funnel-count">${cnt}</span>
+          </div>
+        </div>
+        <div class="funnel-pct">${pct}%</div>
+      </div>
+    `;
+  }).join('');
+  document.getElementById('dash-funnel').innerHTML = funnelHtml || '<div style="color:#444;font-size:13px;padding:10px">Sem dados</div>';
+
+  // Stuck
+  const stuck = leads.filter(isStuck);
+  if (stuck.length === 0) {
+    document.getElementById('dash-stuck').innerHTML = '<div style="color:#444;font-size:13px;padding:10px 0">Nenhuma lead travada ✓</div>';
+  } else {
+    document.getElementById('dash-stuck').innerHTML = `<div class="stuck-list">${
+      stuck.slice(0,10).map(l => {
+        const hrs = Math.floor(hoursAgo(l.updated_at));
+        return `
+          <div class="stuck-item">
+            <div class="stuck-dot"></div>
+            <div class="stuck-name">${l.nome || l.telefone || 'Desconhecido'}</div>
+            <div class="stuck-etapa">E${l.etapa||1}</div>
+            <div class="stuck-time">${hrs}h sem update</div>
+          </div>
+        `;
+      }).join('')
+    }</div>`;
+  }
+
+  // Ana Performance
+  const today = new Date().toDateString();
+  let msgsToday = 0;
+  leads.forEach(l => {
+    (l.historico || []).forEach(m => {
+      if (m.role === 'assistant' && m.ts && new Date(m.ts).toDateString() === today) msgsToday++;
+    });
+  });
+
+  const avgEtapa = total ? (leads.reduce((s, l) => s + (l.etapa||1), 0) / total).toFixed(1) : '—';
+
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const leadsThisMonth = leads.filter(l => l.created_at && new Date(l.created_at) >= startOfMonth);
+  const vendasThisMonth = leadsThisMonth.filter(l => (l.etapa||1) >= 7).length;
+  const convMonth = leadsThisMonth.length ? ((vendasThisMonth / leadsThisMonth.length)*100).toFixed(1) : '0.0';
+
+  document.getElementById('ana-msgs').textContent = msgsToday;
+  document.getElementById('ana-avg-etapa').textContent = avgEtapa;
+  document.getElementById('ana-conv').textContent = convMonth + '%';
+}
+
+function startDashCountdown() {
+  if (dashTimer) clearInterval(dashTimer);
+  dashCountdown = 30;
+  dashTimer = setInterval(() => {
+    dashCountdown--;
+    const el = document.getElementById('dash-countdown');
+    if (el) el.textContent = dashCountdown;
+    if (dashCountdown <= 0) {
+      dashCountdown = 30;
+      if (currentPanel === 'dashboard') renderDashboard();
+    }
+  }, 1000);
+}
+
+// ══════════════════════════════════════
+//  CRM
+// ══════════════════════════════════════
 function renderLeadsList(leads) {
   const container = document.getElementById('leads-list');
   document.getElementById('lead-count').textContent = leads.length;
@@ -306,6 +689,7 @@ function renderLeadsList(leads) {
     const temp = lead.temperatura || 'morno';
     const historico = lead.historico || [];
     const active = selectedLead && selectedLead.id === lead.id;
+    const stuck = isStuck(lead);
 
     const dots = ETAPAS.map((e, i) => {
       let cls = '';
@@ -316,6 +700,7 @@ function renderLeadsList(leads) {
 
     return `
       <div class="lead-item ${active ? 'active' : ''}" onclick="selectLead('${lead.id}')">
+        ${stuck ? '<div class="stuck-badge-crm" title="Sem update há 24h+"></div>' : ''}
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div class="lead-name">${nome}<span class="temp-badge temp-${temp}">${temp}</span></div>
         </div>
@@ -337,15 +722,12 @@ function renderChat(lead) {
   const historico = lead.historico || [];
 
   const timeline = ETAPAS.map((e, i) => {
-    let circleClass = '';
-    let labelClass = '';
-    let lineClass = '';
+    let circleClass = '', labelClass = '', lineClass = '';
     if (i + 1 < etapa) { circleClass = 'done'; labelClass = 'done'; lineClass = 'done'; }
     else if (i + 1 === etapa) { circleClass = 'active'; labelClass = 'active'; }
-
     return `
       <div class="etapa-step-wrapper">
-        <div style="display:flex;align-items:center;width:100%">
+        <div class="etapa-step-inner">
           <div class="etapa-circle ${circleClass}">${e.n}</div>
           ${i < 6 ? `<div class="etapa-line ${lineClass}"></div>` : ''}
         </div>
@@ -356,9 +738,7 @@ function renderChat(lead) {
 
   const messages = historico.map(msg => {
     const isUser = msg.role === 'user';
-    const avatar = isUser
-      ? nome.charAt(0).toUpperCase()
-      : 'Dr';
+    const avatar = isUser ? nome.charAt(0).toUpperCase() : 'Dr';
     const time = msg.ts ? new Date(msg.ts).toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'}) : '';
     return `
       <div class="msg ${isUser ? 'user' : 'assistant'}">
@@ -373,14 +753,53 @@ function renderChat(lead) {
 
   const dor = lead.dor_principal ? `· Dor: ${lead.dor_principal}` : '';
 
-  document.getElementById('main-panel').innerHTML = `
+  const leadRefs = allReferidos
+    .filter(r => r.lead_id === lead.id)
+    .map(r => ({ ...r, _score: calcScore(r) }))
+    .sort((a, b) => b._score - a._score);
+
+  const refsTable = leadRefs.length === 0
+    ? '<div style="color:#444;font-size:13px;padding:20px 0">Nenhum referido cadastrado para esta lead.</div>'
+    : `<table class="ref-table">
+        <thead>
+          <tr>
+            <th>Nome</th><th>Profissão</th><th>Hobby</th><th>Score</th><th>Status</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${leadRefs.map(r => {
+            const status = (r.status || 'aguardando').toLowerCase();
+            return `
+              <tr>
+                <td style="color:#fff;font-weight:500">${r.nome || '—'}</td>
+                <td>${r.profissao || '—'}</td>
+                <td>${r.hobby || '—'}</td>
+                <td>${scoreCircles(r._score)}</td>
+                <td><span class="ref-status ${status}">${status}</span></td>
+                <td><button class="acionar-btn" onclick="acionarAna('${(r.nome||'').replace(/'/g,"\\'")}','${lead.id}')">⚡ Acionar Ana</button></td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>`;
+
+  document.getElementById('crm-main-panel').innerHTML = `
     <div class="chat-header">
       <div class="chat-header-name">${nome}</div>
       <div class="chat-header-sub">${lead.telefone || ''} ${dor}</div>
     </div>
     <div class="etapas-timeline">${timeline}</div>
-    <div class="chat-messages" id="chat-scroll">
-      ${messages.length ? messages : '<div style="color:#444;text-align:center;margin-top:40px;font-size:14px">Sem mensagens ainda</div>'}
+    <div class="chat-tabs">
+      <div class="chat-tab ${activeCrmTab==='chat'?'active':''}" onclick="switchTab('chat')">Chat</div>
+      <div class="chat-tab ${activeCrmTab==='referidos'?'active':''}" onclick="switchTab('referidos')">Referidos${leadRefs.length ? ` (${leadRefs.length})` : ''}</div>
+    </div>
+    <div class="tab-panel ${activeCrmTab==='chat'?'visible':''}" id="tab-chat">
+      <div class="chat-messages" id="chat-scroll">
+        ${messages.length ? messages : '<div style="color:#444;text-align:center;margin-top:40px;font-size:14px">Sem mensagens ainda</div>'}
+      </div>
+    </div>
+    <div class="tab-panel ${activeCrmTab==='referidos'?'visible':''}" id="tab-referidos">
+      <div class="ref-panel">${refsTable}</div>
     </div>
   `;
 
@@ -388,34 +807,121 @@ function renderChat(lead) {
   if (scroll) scroll.scrollTop = scroll.scrollHeight;
 }
 
+function switchTab(tab) {
+  activeCrmTab = tab;
+  if (selectedLead) renderChat(selectedLead);
+}
+
+function acionarAna(nome, leadId) {
+  alert(`⚡ Acionando Ana para entrar em contato com "${nome}"\n\nFuncionalidade de acionamento manual em desenvolvimento.`);
+}
+
 function selectLead(id) {
   selectedLead = allLeads.find(l => l.id === id);
+  activeCrmTab = 'chat';
   if (selectedLead) renderChat(selectedLead);
   renderLeadsList(allLeads);
 }
 
+// ══════════════════════════════════════
+//  REDE
+// ══════════════════════════════════════
+function renderRede() {
+  const leads = allLeads;
+  const refs = allReferidos;
+
+  const gen2 = refs.length;
+  const leadsWithRefs = new Set(refs.map(r => r.lead_id)).size;
+  const totalNetwork = leads.length + gen2;
+
+  document.getElementById('rede-total').textContent = totalNetwork;
+  document.getElementById('rede-gen2').textContent = gen2;
+  document.getElementById('rede-leads-with-refs').textContent = leadsWithRefs;
+
+  const refsByLead = {};
+  refs.forEach(r => {
+    if (!refsByLead[r.lead_id]) refsByLead[r.lead_id] = [];
+    refsByLead[r.lead_id].push(r);
+  });
+
+  const sorted = [...leads].sort((a, b) => {
+    const aR = (refsByLead[a.id] || []).length;
+    const bR = (refsByLead[b.id] || []).length;
+    return bR - aR;
+  });
+
+  const treeHtml = sorted.map(lead => {
+    const nome = lead.nome || lead.telefone || 'Desconhecido';
+    const leadRefs = (refsByLead[lead.id] || [])
+      .map(r => ({ ...r, _score: calcScore(r) }))
+      .sort((a, b) => b._score - a._score);
+
+    const refsHtml = leadRefs.length === 0
+      ? '<div class="no-refs">Sem referidos</div>'
+      : leadRefs.map(r => {
+          const filled = Math.round((r._score / 8) * 5);
+          const scoreHtml = Array.from({length:5}, (_,i) =>
+            `<span class="sc ${i < filled ? 'on' : 'off'}">${i < filled ? '●' : '○'}</span>`
+          ).join('');
+          return `
+            <div class="tree-ref">
+              <div class="tree-ref-icon">${(r.nome||'?').charAt(0).toUpperCase()}</div>
+              <div style="flex:1">
+                <div class="tree-ref-name">${r.nome || '—'}</div>
+                <div class="tree-ref-prof">${r.profissao || 'Profissão não informada'}</div>
+              </div>
+              <div class="tree-ref-score">${scoreHtml}</div>
+            </div>
+          `;
+        }).join('');
+
+    return `
+      <div class="tree-lead">
+        <div class="tree-lead-header">
+          <div class="tree-lead-icon">${nome.charAt(0).toUpperCase()}</div>
+          <div>
+            <div class="tree-lead-name">${nome}</div>
+            <div class="tree-lead-meta">Etapa ${lead.etapa||1} · ${leadRefs.length} referido${leadRefs.length !== 1 ? 's' : ''}</div>
+          </div>
+        </div>
+        <div class="tree-refs">${refsHtml}</div>
+      </div>
+    `;
+  }).join('');
+
+  document.getElementById('rede-tree').innerHTML = treeHtml || '<div class="loading">Nenhum dado disponível.</div>';
+}
+
+// ══════════════════════════════════════
+//  REFRESH LOOP
+// ══════════════════════════════════════
 async function refresh() {
   try {
-    const leads = await fetchLeads();
+    const [leads, refs] = await Promise.all([fetchLeads(), fetchReferidos()]);
     allLeads = leads;
+    allReferidos = refs;
+
     renderLeadsList(leads);
 
     if (selectedLead) {
       const updated = leads.find(l => l.id === selectedLead.id);
       if (updated) {
-        const oldEtapa = selectedLead.etapa;
         selectedLead = updated;
         renderChat(updated);
         renderLeadsList(leads);
       }
     }
+
+    if (currentPanel === 'dashboard') renderDashboard();
+    if (currentPanel === 'rede') renderRede();
   } catch(e) {
-    console.error('Erro ao buscar leads:', e);
+    console.error('Erro ao buscar dados:', e);
   }
 }
 
 refresh();
 setInterval(refresh, 5000);
+startDashCountdown();
 </script>
 </body>
 </html>
