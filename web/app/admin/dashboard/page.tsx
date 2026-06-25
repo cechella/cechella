@@ -20,39 +20,28 @@ import Link from 'next/link'
 type Lead = {
   id: string
   nome: string | null
-  email: string
   telefone?: string
-  etapa?: string
+  etapa_agente?: number
   temperatura?: string
-  origem?: string
-  created_at: string
-  ultimo_contato?: string
+  historico?: Array<{role: string; content: string; ts?: string}>
+  total_referidos?: number
+  updated_at: string
+  dor_principal?: string
 }
 
 type Referido = {
   id: string
   nome: string
+  telefone?: string
+  profissao?: string | null
+  hobby?: string | null
   status: string
-  nivel?: number
+  indicado_por_telefone?: string
+  indicado_por_nome?: string
   created_at: string
 }
 
-type Conversation = {
-  id: string
-  nome?: string
-  etapa: string
-  status: string
-  referidos_coletados: number
-  iniciado_em: string
-  atualizado_em: string
-}
-
-type Message = {
-  id: string
-  conversation_id: string
-  direcao: 'entrada' | 'saida'
-  enviado_em: string
-}
+type ReferidoComScore = Referido & { score: number }
 
 type AgentStats = {
   conversasAtivas: number
@@ -63,7 +52,6 @@ type AgentStats = {
   referidosColetadosAgente: number
   etapaDistribuicao: { etapa: string; total: number }[]
   mensagensPorHora: { hora: string; enviadas: number; recebidas: number }[]
-  conversasRecentes: Conversation[]
   tempoMedioResposta: number
 }
 
@@ -82,39 +70,35 @@ type Stats = {
   perdidos: number
   referidosTotais: number
   referidosValidados: number
-  etapaCount: Record<string, number>
+  etapaCount: Record<number, number>
   temperaturaCounts: { quente: number; morno: number; frio: number }
   leadsPorDia: { dia: string; total: number }[]
   recentLeads: Lead[]
   alertas: { tipo: string; msg: string; href: string }[]
   agente: AgentStats
   origens: OrigemStat[]
+  referidosComScore: ReferidoComScore[]
+  topReferidos: ReferidoComScore[]
 }
 
 // ─── Constants ───────────────────────────────────────────
-const etapaLabels: Record<string, string> = {
-  instagram: 'Instagram', site: 'Site', whatsapp: 'WhatsApp',
-  apresentacao: 'Apresentação', conexao: 'Conexão', di: 'D.I.',
-  speech: 'Speech', fechamento: 'Fechamento', referidos: 'Referidos',
-  validacao: 'Validação', ganho: 'Ganho', perdido: 'Perdido',
-  inicio: 'Início',
+const etapaAgentLabels: Record<number, string> = {
+  1: 'Apresentação', 2: 'Conexão', 3: 'D.I.', 4: 'Speech',
+  5: 'Fechamento', 6: 'Pag. Pendente', 7: 'Referidos', 8: 'Validação'
 }
 
-const etapaOrder = ['instagram','site','whatsapp','apresentacao','conexao','di','speech','fechamento','referidos','validacao','ganho','perdido']
-
-const etapaColors: Record<string, string> = {
-  instagram: '#E1306C', site: '#7B3FE4', whatsapp: '#25D366',
-  apresentacao: '#3B82F6', conexao: '#06B6D4', di: '#8B5CF6',
-  speech: '#F59E0B', fechamento: '#EF4444', referidos: '#10B981',
-  validacao: '#F97316', ganho: '#22C55E', perdido: '#71717A', inicio: '#52525B',
+const etapaAgentColors: Record<number, string> = {
+  1: '#3B82F6', 2: '#06B6D4', 3: '#8B5CF6', 4: '#F59E0B',
+  5: '#EF4444', 6: '#F97316', 7: '#10B981', 8: '#22C55E'
 }
 
 const tempColors = { quente: '#EF4444', morno: '#F59E0B', frio: '#3B82F6' }
 
-const statusAgente: Record<string, { label: string; color: string }> = {
-  ativo: { label: 'Ativo', color: '#22C55E' },
-  pausado: { label: 'Pausado', color: '#F59E0B' },
-  encerrado: { label: 'Encerrado', color: '#71717A' },
+const statusReferidoColors: Record<string, string> = {
+  aguardando: '#F59E0B',
+  contatado: '#3B82F6',
+  interessado: '#F97316',
+  vendido: '#22C55E',
 }
 
 function kpi(n: number) {
@@ -135,6 +119,24 @@ function timeAgo(date: string) {
   const h = Math.floor(m / 60)
   if (h < 24) return `${h}h`
   return `${Math.floor(h / 24)}d`
+}
+
+// ─── Scoring ─────────────────────────────────────────────
+function calcScore(profissao: string | null | undefined, hobby: string | null | undefined): number {
+  const prof = (profissao || '').toLowerCase()
+  let renda = 1
+  if (/médic|medic|dentist|advogad|empresár|empresar|jogador|diretor|engenheiro|arquitet|farmacêut/.test(prof)) renda = 5
+  else if (/enfermeir|fisio|psicólog|psicolog|nutricionist|veterinár/.test(prof)) renda = 3
+  else if (/professor|comerciant|secretár|recepcion|vendedor|técnic|tecnic|cabelerei/.test(prof)) renda = 2
+  let dados = 0
+  if (profissao && hobby) dados = 3
+  else if (profissao || hobby) dados = 1
+  return renda + dados
+}
+
+function scoreCircles(score: number): string {
+  const filled = Math.round((score / 8) * 5)
+  return '●'.repeat(filled) + '○'.repeat(5 - filled)
 }
 
 // ─── Supabase singleton ───────────────────────────────────
@@ -159,28 +161,33 @@ export default function AdminDashboard() {
 
   async function load() {
     try {
-      const [leadsRes, referidosRes, convsRes, msgsRes] = await Promise.all([
-        supabase.from('leads').select('id,nome,email,telefone,etapa,temperatura,origem,created_at,ultimo_contato').order('created_at', { ascending: false }),
-        supabase.from('referidos').select('id,nome,status,nivel,created_at').order('created_at', { ascending: false }),
-        supabase.from('whatsapp_conversations').select('id,nome,etapa,status,referidos_coletados,iniciado_em,atualizado_em').order('atualizado_em', { ascending: false }),
-        supabase.from('whatsapp_messages').select('id,conversation_id,direcao,enviado_em').order('enviado_em', { ascending: false }).limit(500),
+      const [leadsRes, referidosRes] = await Promise.all([
+        supabase.from('leads').select('id,nome,telefone,etapa_agente,temperatura,historico,total_referidos,updated_at,dor_principal').order('updated_at', { ascending: false }),
+        supabase.from('contatos_referidos').select('id,nome,telefone,profissao,hobby,status,indicado_por_telefone,indicado_por_nome,created_at').order('created_at', { ascending: false }),
       ])
 
       const leads: Lead[] = leadsRes.data ?? []
       const referidos: Referido[] = referidosRes.data ?? []
-      const convs: Conversation[] = convsRes.data ?? []
-      const msgs: Message[] = msgsRes.data ?? []
+
+      // ── Flatten historico messages ──
+      const allMessages: Array<{role: string; content: string; ts: string; leadId: string}> = []
+      leads.forEach(lead => {
+        (lead.historico || []).forEach((msg: any) => {
+          if (msg.ts) allMessages.push({ ...msg, leadId: lead.id })
+        })
+      })
 
       // ── Leads stats ──
       const hoje = new Date().toDateString()
-      const leadsHoje = leads.filter(l => new Date(l.created_at).toDateString() === hoje).length
-      const ganhos = leads.filter(l => l.etapa === 'ganho').length
-      const perdidos = leads.filter(l => l.etapa === 'perdido').length
-      const referidosValidados = referidos.filter(r => r.status === 'validado').length
+      const leadsHoje = leads.filter(l => new Date(l.updated_at).toDateString() === hoje).length
+      const ganhos = leads.filter(l => (l.etapa_agente ?? 0) >= 7).length
+      const perdidos = 0
+      const referidosValidados = referidos.filter(r => r.status === 'vendido').length
 
-      const etapaCount: Record<string, number> = {}
-      etapaOrder.forEach(e => { etapaCount[e] = 0 })
-      leads.forEach(l => { if (l.etapa) etapaCount[l.etapa] = (etapaCount[l.etapa] ?? 0) + 1 })
+      const etapaCount: Record<number, number> = {}
+      leads.forEach(l => {
+        if (l.etapa_agente) etapaCount[l.etapa_agente] = (etapaCount[l.etapa_agente] ?? 0) + 1
+      })
 
       const temperaturaCounts = {
         quente: leads.filter(l => l.temperatura === 'quente').length,
@@ -192,7 +199,7 @@ export default function AdminDashboard() {
       for (let i = 6; i >= 0; i--) {
         const d = new Date(); d.setDate(d.getDate() - i)
         const label = d.toLocaleDateString('pt-BR', { weekday: 'short' })
-        const total = leads.filter(l => new Date(l.created_at).toDateString() === d.toDateString()).length
+        const total = leads.filter(l => new Date(l.updated_at).toDateString() === d.toDateString()).length
         leadsPorDia.push({ dia: label, total })
       }
 
@@ -207,44 +214,48 @@ export default function AdminDashboard() {
       ]
       const origens: OrigemStat[] = origensDef.map(o => ({
         ...o,
-        total: leads.filter(l => (l.origem || 'manual') === o.origem).length,
+        total: 0,
       })).filter(o => o.total > 0).sort((a, b) => b.total - a.total)
 
       // ── Alertas ──
       const alertas: { tipo: string; msg: string; href: string }[] = []
       const semContato = leads.filter(l => {
-        if (!l.ultimo_contato) return true
-        const dias = (Date.now() - new Date(l.ultimo_contato).getTime()) / 86400000
-        return dias > 3 && l.etapa !== 'ganho' && l.etapa !== 'perdido'
+        const hrs = (Date.now() - new Date(l.updated_at).getTime()) / 3600000
+        return hrs > 24 && (l.etapa_agente ?? 0) >= 1 && (l.etapa_agente ?? 0) <= 6
       })
       if (semContato.length > 0)
-        alertas.push({ tipo: 'warn', msg: `${semContato.length} leads sem contato há +3 dias`, href: '/admin/crm' })
-      const quentes = leads.filter(l => l.temperatura === 'quente' && l.etapa !== 'ganho' && l.etapa !== 'perdido')
+        alertas.push({ tipo: 'warn', msg: `${semContato.length} leads sem atualização há +24h`, href: '/admin/crm' })
+      const quentes = leads.filter(l => l.temperatura === 'quente' && (l.etapa_agente ?? 0) < 7)
       if (quentes.length > 0)
         alertas.push({ tipo: 'hot', msg: `${quentes.length} leads quentes no funil — prioridade máxima`, href: '/admin/crm' })
-      const pendentesRef = referidos.filter(r => r.status === 'pendente').length
+      const pendentesRef = referidos.filter(r => r.status === 'aguardando').length
       if (pendentesRef > 0)
-        alertas.push({ tipo: 'info', msg: `${pendentesRef} referidos pendentes de validação`, href: '/admin/crm' })
+        alertas.push({ tipo: 'info', msg: `${pendentesRef} referidos aguardando contato`, href: '/admin/crm' })
 
-      // ── Agent stats ──
-      const msgsHoje = msgs.filter(m => new Date(m.enviado_em).toDateString() === hoje)
-      const msgsSaidas = msgsHoje.filter(m => m.direcao === 'saida')
-      const msgsEntradas = msgsHoje.filter(m => m.direcao === 'entrada')
+      // ── Agent stats from historico ──
+      const msgsHoje = allMessages.filter(m => new Date(m.ts).toDateString() === hoje)
+      const msgsSaidas = msgsHoje.filter(m => m.role === 'assistant')
+      const msgsEntradas = msgsHoje.filter(m => m.role === 'user')
       const taxaResposta = msgsEntradas.length > 0
         ? Math.round(msgsSaidas.length / msgsEntradas.length * 100)
         : 0
 
-      const conversasAtivas = convs.filter(c => c.status === 'ativo').length
-      const conversasHoje = convs.filter(c => new Date(c.iniciado_em).toDateString() === hoje).length
-      const referidosColetadosAgente = convs.reduce((acc, c) => acc + (c.referidos_coletados ?? 0), 0)
+      const conversasAtivas = leads.filter(l => {
+        const hrs = (Date.now() - new Date(l.updated_at).getTime()) / 3600000
+        return hrs < 24 && (l.etapa_agente ?? 0) >= 1 && (l.etapa_agente ?? 0) <= 8
+      }).length
 
-      // Distribuição de etapas das conversas ativas
-      const etapaConvCount: Record<string, number> = {}
-      convs.filter(c => c.status === 'ativo').forEach(c => {
-        etapaConvCount[c.etapa] = (etapaConvCount[c.etapa] ?? 0) + 1
+      const conversasHoje = leads.filter(l => new Date(l.updated_at).toDateString() === hoje).length
+
+      const referidosColetadosAgente = leads.reduce((acc, l) => acc + (l.total_referidos ?? 0), 0)
+
+      // Distribuição de etapas
+      const etapaConvCount: Record<number, number> = {}
+      leads.forEach(l => {
+        if (l.etapa_agente) etapaConvCount[l.etapa_agente] = (etapaConvCount[l.etapa_agente] ?? 0) + 1
       })
       const etapaDistribuicao = Object.entries(etapaConvCount)
-        .map(([etapa, total]) => ({ etapa, total }))
+        .map(([etapa, total]) => ({ etapa: etapaAgentLabels[Number(etapa)] ?? etapa, total }))
         .sort((a, b) => b.total - a.total)
 
       // Mensagens por hora (últimas 12h)
@@ -252,44 +263,45 @@ export default function AdminDashboard() {
       for (let i = 11; i >= 0; i--) {
         const h = new Date(); h.setHours(h.getHours() - i, 0, 0, 0)
         const label = h.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-        const enviadas = msgs.filter(m => {
-          const t = new Date(m.enviado_em)
-          return t.getHours() === h.getHours() && t.toDateString() === h.toDateString() && m.direcao === 'saida'
+        const enviadas = allMessages.filter(m => {
+          const t = new Date(m.ts)
+          return t.getHours() === h.getHours() && t.toDateString() === h.toDateString() && m.role === 'assistant'
         }).length
-        const recebidas = msgs.filter(m => {
-          const t = new Date(m.enviado_em)
-          return t.getHours() === h.getHours() && t.toDateString() === h.toDateString() && m.direcao === 'entrada'
+        const recebidas = allMessages.filter(m => {
+          const t = new Date(m.ts)
+          return t.getHours() === h.getHours() && t.toDateString() === h.toDateString() && m.role === 'user'
         }).length
         mensagensPorHora.push({ hora: label, enviadas, recebidas })
       }
 
-      // Tempo médio de resposta (minutos) — estimativa
+      // Tempo médio de resposta
       let tempoMedioResposta = 0
-      const sortedMsgs = [...msgs].sort((a, b) => new Date(a.enviado_em).getTime() - new Date(b.enviado_em).getTime())
+      const sortedMsgs = [...allMessages].sort((a,b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
       const deltas: number[] = []
       for (let i = 1; i < sortedMsgs.length; i++) {
-        if (sortedMsgs[i].direcao === 'saida' && sortedMsgs[i-1].direcao === 'entrada' &&
-            sortedMsgs[i].conversation_id === sortedMsgs[i-1].conversation_id) {
-          const delta = (new Date(sortedMsgs[i].enviado_em).getTime() - new Date(sortedMsgs[i-1].enviado_em).getTime()) / 60000
+        if (sortedMsgs[i].role === 'assistant' && sortedMsgs[i-1].role === 'user' &&
+            sortedMsgs[i].leadId === sortedMsgs[i-1].leadId) {
+          const delta = (new Date(sortedMsgs[i].ts).getTime() - new Date(sortedMsgs[i-1].ts).getTime()) / 60000
           if (delta < 60) deltas.push(delta)
         }
       }
       if (deltas.length > 0) tempoMedioResposta = Math.round(deltas.reduce((a,b) => a+b, 0) / deltas.length)
 
-      // Alerta: conversa parada há mais de 1h
-      const convsPausadas = convs.filter(c => {
-        if (c.status !== 'ativo') return false
-        const mins = (Date.now() - new Date(c.atualizado_em).getTime()) / 60000
-        return mins > 60
-      })
-      if (convsPausadas.length > 0)
-        alertas.push({ tipo: 'warn', msg: `${convsPausadas.length} conversas ativas sem resposta há +1h`, href: '/admin/crm' })
+      // ── Referidos com score ──
+      const referidosComScore: ReferidoComScore[] = referidos.map(r => ({
+        ...r,
+        score: calcScore(r.profissao, r.hobby)
+      })).sort((a, b) => b.score - a.score)
+
+      const topReferidos = referidosComScore.filter(r => r.status === 'aguardando').slice(0, 8)
 
       setStats({
         totalLeads: leads.length, leadsHoje, ganhos, perdidos,
         referidosTotais: referidos.length, referidosValidados,
         etapaCount, temperaturaCounts, leadsPorDia,
         recentLeads: leads.slice(0, 6), alertas, origens,
+        referidosComScore,
+        topReferidos,
         agente: {
           conversasAtivas, conversasHoje,
           mensagensHoje: msgsHoje.length,
@@ -297,7 +309,6 @@ export default function AdminDashboard() {
           taxaResposta, referidosColetadosAgente,
           etapaDistribuicao,
           mensagensPorHora,
-          conversasRecentes: convs.slice(0, 5),
           tempoMedioResposta,
         },
       })
@@ -328,6 +339,15 @@ export default function AdminDashboard() {
 
   const agentScoreColor = agentScore >= 70 ? '#22C55E' : agentScore >= 40 ? '#F59E0B' : '#EF4444'
   const agentScoreLabel = agentScore >= 70 ? 'Excelente' : agentScore >= 40 ? 'Regular' : 'Atenção'
+
+  // Funil chart data
+  const etapaChartData = [1,2,3,4,5,6,7,8]
+    .filter(n => (stats?.etapaCount[n] ?? 0) > 0)
+    .map(n => ({
+      etapa: etapaAgentLabels[n],
+      total: stats?.etapaCount[n] ?? 0,
+      fill: etapaAgentColors[n],
+    }))
 
   return (
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
@@ -398,8 +418,8 @@ export default function AdminDashboard() {
             {[
               { label: 'Total Leads', value: loading ? '…' : kpi(stats?.totalLeads ?? 0), icon: <Users className="w-5 h-5" />, color: '#7B3FE4', sub: `+${stats?.leadsHoje ?? 0} hoje` },
               { label: 'Clientes Fechados', value: loading ? '…' : kpi(stats?.ganhos ?? 0), icon: <CheckCircle2 className="w-5 h-5" />, color: '#22C55E', sub: `Taxa ${taxaConversao}%` },
-              { label: 'Taxa Conversão', value: loading ? '…' : `${taxaConversao}%`, icon: <Target className="w-5 h-5" />, color: '#3B82F6', sub: `${stats?.perdidos ?? 0} perdidos` },
-              { label: 'Referidos Coletados', value: loading ? '…' : kpi(stats?.referidosTotais ?? 0), icon: <GitBranch className="w-5 h-5" />, color: '#06B6D4', sub: `${stats?.referidosValidados ?? 0} validados` },
+              { label: 'Taxa Conversão', value: loading ? '…' : `${taxaConversao}%`, icon: <Target className="w-5 h-5" />, color: '#3B82F6', sub: `etapas 7-8` },
+              { label: 'Referidos Coletados', value: loading ? '…' : kpi(stats?.referidosTotais ?? 0), icon: <GitBranch className="w-5 h-5" />, color: '#06B6D4', sub: `${stats?.referidosValidados ?? 0} vendidos` },
               { label: 'Potencial Rede', value: loading ? '…' : kpi(potencialRede), icon: <Network className="w-5 h-5" />, color: '#F59E0B', sub: 'clientes × 20' },
               { label: 'MRR Est.', value: loading ? '…' : `R$ ${kpi((stats?.ganhos ?? 0) * 2800)}`, icon: <DollarSign className="w-5 h-5" />, color: '#EF4444', sub: 'ticket médio R$2.8k' },
             ].map((k, i) => (
@@ -497,7 +517,7 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Conversas ativas por etapa + recentes */}
+              {/* Conversas ativas por etapa */}
               <div className="bg-[#0A0A0B] border border-[#1C1C1E] rounded-2xl p-4 flex flex-col gap-4">
                 <h4 className="text-sm font-semibold text-white flex items-center gap-2">
                   <Kanban className="w-4 h-4 text-[#25D366]" /> Conversas por Etapa
@@ -508,15 +528,17 @@ export default function AdminDashboard() {
                   <div className="space-y-2">
                     {ag.etapaDistribuicao.map((e, i) => {
                       const max = Math.max(...ag.etapaDistribuicao.map(x => x.total), 1)
+                      const etapaNum = Object.entries(etapaAgentLabels).find(([, v]) => v === e.etapa)?.[0]
+                      const color = etapaNum ? etapaAgentColors[Number(etapaNum)] : '#7B3FE4'
                       return (
                         <div key={i}>
                           <div className="flex items-center justify-between text-xs mb-1">
-                            <span className="text-[#A1A1AA]">{etapaLabels[e.etapa] ?? e.etapa}</span>
+                            <span className="text-[#A1A1AA]">{e.etapa}</span>
                             <span className="font-bold text-white">{e.total}</span>
                           </div>
                           <div className="h-1.5 bg-[#1C1C1E] rounded-full overflow-hidden">
                             <div className="h-full rounded-full transition-all duration-500"
-                              style={{ width: `${(e.total / max) * 100}%`, background: etapaColors[e.etapa] ?? '#7B3FE4' }} />
+                              style={{ width: `${(e.total / max) * 100}%`, background: color }} />
                           </div>
                         </div>
                       )
@@ -524,26 +546,6 @@ export default function AdminDashboard() {
                   </div>
                 ) : (
                   <p className="text-xs text-[#52525B] text-center py-4">Nenhuma conversa ativa</p>
-                )}
-
-                {/* Conversas recentes */}
-                {!loading && ag && ag.conversasRecentes.length > 0 && (
-                  <div className="pt-3 border-t border-[#1C1C1E]">
-                    <p className="text-xs font-medium text-[#52525B] mb-2">Recentes</p>
-                    <div className="space-y-2">
-                      {ag.conversasRecentes.map((c, i) => (
-                        <div key={i} className="flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: statusAgente[c.status]?.color ?? '#52525B' }} />
-                          <span className="text-xs text-[#A1A1AA] flex-1 truncate">{c.nome ?? 'Anônimo'}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full flex-shrink-0"
-                            style={{ background: (etapaColors[c.etapa] ?? '#52525B') + '20', color: etapaColors[c.etapa] ?? '#52525B' }}>
-                            {etapaLabels[c.etapa] ?? c.etapa}
-                          </span>
-                          <span className="text-[10px] text-[#52525B] flex-shrink-0">{timeAgo(c.atualizado_em)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
                 )}
               </div>
             </div>
@@ -564,16 +566,14 @@ export default function AdminDashboard() {
                 <div className="h-48 flex items-center justify-center text-[#52525B]">Carregando…</div>
               ) : (
                 <ResponsiveContainer width="100%" height={180}>
-                  <BarChart data={etapaOrder.filter(e => (stats?.etapaCount[e] ?? 0) > 0).map(e => ({
-                    etapa: etapaLabels[e], total: stats?.etapaCount[e] ?? 0, fill: etapaColors[e],
-                  }))} barSize={24}>
+                  <BarChart data={etapaChartData} barSize={24}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1C1C1E" vertical={false} />
                     <XAxis dataKey="etapa" tick={{ fill: '#71717A', fontSize: 10 }} axisLine={false} tickLine={false} />
                     <YAxis tick={{ fill: '#71717A', fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
                     <Tooltip contentStyle={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 12, color: '#fff' }} cursor={{ fill: 'rgba(255,255,255,0.03)' }} />
                     <Bar dataKey="total" name="Leads" radius={[6,6,0,0]}>
-                      {etapaOrder.filter(e => (stats?.etapaCount[e] ?? 0) > 0).map((e, i) => (
-                        <Cell key={i} fill={etapaColors[e]} />
+                      {etapaChartData.map((entry, i) => (
+                        <Cell key={i} fill={entry.fill} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -694,17 +694,12 @@ export default function AdminDashboard() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-white truncate">{lead.nome || '—'}</p>
-                        <p className="text-xs text-[#52525B] truncate">{lead.email}</p>
+                        <p className="text-xs text-[#52525B] truncate">{lead.telefone ?? '—'}</p>
                       </div>
-                      {lead.etapa && (
+                      {lead.etapa_agente && (
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0"
-                          style={{ background: etapaColors[lead.etapa] + '20', color: etapaColors[lead.etapa] }}>
-                          {etapaLabels[lead.etapa]}
-                        </span>
-                      )}
-                      {lead.origem && lead.origem !== 'manual' && (
-                        <span className="text-[10px] flex-shrink-0 px-1.5 py-0.5 rounded-full bg-[#1C1C1E] text-[#71717A]">
-                          {lead.origem === 'instagram' ? '📸' : lead.origem === 'referido' ? '🔗' : lead.origem === 'google' ? '🔍' : lead.origem === 'site' ? '🌐' : '💬'}
+                          style={{ background: etapaAgentColors[lead.etapa_agente] + '20', color: etapaAgentColors[lead.etapa_agente] }}>
+                          {etapaAgentLabels[lead.etapa_agente]}
                         </span>
                       )}
                       {lead.temperatura && (
@@ -712,7 +707,7 @@ export default function AdminDashboard() {
                           {lead.temperatura === 'quente' ? '🔥' : lead.temperatura === 'morno' ? '🟡' : '❄️'}
                         </span>
                       )}
-                      <span className="text-xs text-[#52525B] flex-shrink-0">{daysSince(lead.created_at)}</span>
+                      <span className="text-xs text-[#52525B] flex-shrink-0">{daysSince(lead.updated_at)}</span>
                     </div>
                   ))}
                   {(stats?.recentLeads?.length ?? 0) === 0 && (
@@ -757,7 +752,7 @@ export default function AdminDashboard() {
                     </div>
                     <div className="bg-[#0A0A0B] rounded-xl p-3 text-center">
                       <p className="text-xl font-bold text-emerald-400">{kpi(stats?.referidosValidados ?? 0)}</p>
-                      <p className="text-xs text-[#52525B] mt-0.5">Validados</p>
+                      <p className="text-xs text-[#52525B] mt-0.5">Vendidos</p>
                     </div>
                   </div>
                   <div className="bg-gradient-to-r from-[#7B3FE4]/10 to-[#06B6D4]/10 border border-[#7B3FE4]/20 rounded-xl p-3 text-center">
@@ -770,6 +765,77 @@ export default function AdminDashboard() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* ── 🎯 Top Referidos — Prioridade Ana ── */}
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-semibold text-white flex items-center gap-2">
+                <Target className="w-4 h-4 text-[#F59E0B]" /> 🎯 Top Referidos — Prioridade Ana
+              </h3>
+              <span className="text-xs text-[#52525B]">ordenado por score de potencial</span>
+            </div>
+            {loading ? (
+              <div className="h-32 flex items-center justify-center text-[#52525B]">Carregando…</div>
+            ) : !stats?.topReferidos?.length ? (
+              <p className="text-sm text-[#52525B] text-center py-8">Nenhum referido aguardando contato</p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left border-b border-[#1C1C1E]">
+                        <th className="pb-3 text-xs font-medium text-[#52525B] w-20">Score</th>
+                        <th className="pb-3 text-xs font-medium text-[#52525B]">Nome</th>
+                        <th className="pb-3 text-xs font-medium text-[#52525B] hidden md:table-cell">Profissão</th>
+                        <th className="pb-3 text-xs font-medium text-[#52525B] hidden lg:table-cell">Hobby</th>
+                        <th className="pb-3 text-xs font-medium text-[#52525B] hidden md:table-cell">Indicado por</th>
+                        <th className="pb-3 text-xs font-medium text-[#52525B]">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {stats.topReferidos.map((r, i) => {
+                        const statusColor = statusReferidoColors[r.status] ?? '#71717A'
+                        return (
+                          <tr key={r.id} className="border-b border-[#1C1C1E]/50 last:border-0 hover:bg-[#18181A] transition-colors">
+                            <td className="py-3 pr-3">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-bold text-white w-5 text-right">{i + 1}</span>
+                                <span className="text-[#F59E0B] font-mono text-xs tracking-tight">{scoreCircles(r.score)}</span>
+                              </div>
+                            </td>
+                            <td className="py-3 pr-3">
+                              <div>
+                                <p className="font-medium text-white text-sm">{r.nome}</p>
+                                {r.telefone && <p className="text-[10px] text-[#52525B]">{r.telefone}</p>}
+                              </div>
+                            </td>
+                            <td className="py-3 pr-3 hidden md:table-cell">
+                              <span className="text-xs text-[#A1A1AA]">{r.profissao || '—'}</span>
+                            </td>
+                            <td className="py-3 pr-3 hidden lg:table-cell">
+                              <span className="text-xs text-[#A1A1AA]">{r.hobby || '—'}</span>
+                            </td>
+                            <td className="py-3 pr-3 hidden md:table-cell">
+                              <span className="text-xs text-[#71717A]">{r.indicado_por_nome || r.indicado_por_telefone || '—'}</span>
+                            </td>
+                            <td className="py-3">
+                              <span className="text-xs px-2 py-0.5 rounded-full font-medium capitalize"
+                                style={{ background: statusColor + '20', color: statusColor }}>
+                                {r.status}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-[#52525B] mt-4 pt-3 border-t border-[#1C1C1E] text-center">
+                  Ana contata automaticamente nessa ordem
+                </p>
+              </>
+            )}
           </div>
 
         </main>
