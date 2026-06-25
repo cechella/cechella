@@ -20,7 +20,10 @@
       "name": "Webhook Evolution API",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
-      "position": [240, 300]
+      "position": [
+        240,
+        300
+      ]
     },
     {
       "parameters": {
@@ -59,7 +62,10 @@
       "name": "Filtrar Mensagens",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [460, 300],
+      "position": [
+        460,
+        300
+      ],
       "_note": "FIX 1: 2 condições — type=ReceivedCallback E fromMe is false. Sem converter tipos. Bloqueia mensagens da Ana (fromMe:true) de triggar o workflow."
     },
     {
@@ -70,7 +76,10 @@
       "name": "Extrair Mensagem",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [680, 300],
+      "position": [
+        680,
+        300
+      ],
       "_note": "fromMe já filtrado em Filtrar Mensagens — não precisa checar aqui novamente"
     },
     {
@@ -109,7 +118,10 @@
       "name": "Buscar Lead Supabase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [900, 300]
+      "position": [
+        900,
+        300
+      ]
     },
     {
       "parameters": {
@@ -119,7 +131,10 @@
       "name": "Processar Lead",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1120, 300]
+      "position": [
+        1120,
+        300
+      ]
     },
     {
       "parameters": {
@@ -129,7 +144,10 @@
       "name": "Montar Prompt",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1340, 300]
+      "position": [
+        1340,
+        300
+      ]
     },
     {
       "parameters": {
@@ -161,7 +179,10 @@
       "name": "Chamar Claude API",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1560, 300]
+      "position": [
+        1560,
+        300
+      ]
     },
     {
       "parameters": {
@@ -171,7 +192,10 @@
       "name": "Processar Resposta",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1780, 300]
+      "position": [
+        1780,
+        300
+      ]
     },
     {
       "parameters": {
@@ -195,17 +219,23 @@
       "name": "Enviar WhatsApp",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2000, 300]
+      "position": [
+        2000,
+        300
+      ]
     },
     {
       "parameters": {
-        "jsCode": "// FIX 5: cap absoluto — lê etapaAtual do DB (antes do Claude) via $('Processar Lead')\n// e proximaEtapa do output do Claude via $('Processar Resposta').\n// Nunca avança mais de +1 por mensagem, independente da ordem dos nós.\nconst SUPABASE_URL = 'https://rmsblsoqqhtantyomhsh.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtc2Jsc29xcWh0YW50eW9taHNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4OTI5MDgsImV4cCI6MjA5NjQ2ODkwOH0.PAje_eA_dYrwM_5f-4n9MMDY-GGtC0ZzEdRn7W3gg30';\n\nconst leadOriginal = $('Processar Lead').item.json;\nconst processar = $('Processar Resposta').item.json;\nconst telefone = $('Extrair Mensagem').item.json.telefone;\n\nconst leadId = leadOriginal.id;\nconst etapaAtual = parseInt(leadOriginal.etapa_agente) || 1;\nconst proximaEtapaClaude = parseInt(processar.proximaEtapa) || etapaAtual;\n\n// CAP ABSOLUTO: máximo +1 por mensagem, nunca regride, nunca passa de 8\nconst etapaSalvar = proximaEtapaClaude > etapaAtual\n  ? Math.min(etapaAtual + 1, 8)\n  : etapaAtual;\n\nconst body = {\n  telefone: telefone,\n  nome: processar.nomeLead || processar.nome || null,\n  etapa_agente: etapaSalvar,\n  dor_principal: processar.dorPrincipal || processar.dor_principal || null,\n  historico: processar.historico || [],\n  temperatura: processar.temperatura || 'morno',\n  origem_agente: 'whatsapp'\n};\n\ntry {\n  if (leadOriginal.isNew) {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `${SUPABASE_URL}/rest/v1/leads`,\n      headers: {\n        'Content-Type': 'application/json',\n        'apikey': SUPABASE_KEY,\n        'Authorization': 'Bearer ' + SUPABASE_KEY,\n        'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify(body),\n    });\n  } else {\n    await this.helpers.httpRequest({\n      method: 'PATCH',\n      url: `${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}`,\n      headers: {\n        'Content-Type': 'application/json',\n        'apikey': SUPABASE_KEY,\n        'Authorization': 'Bearer ' + SUPABASE_KEY,\n        'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify(body),\n    });\n  }\n} catch(e) {\n  console.error('Erro ao salvar lead:', e.message);\n}\n\nreturn [{ json: { saved: true, etapaSalva: etapaSalvar, etapaAnterior: etapaAtual, resposta: processar.resposta } }];"
+        "jsCode": "// FIX 5: cap absoluto — lê etapaAtual do DB (antes do Claude) via $('Processar Lead')\n// e proximaEtapa do output do Claude via $('Processar Resposta').\n// Nunca avança mais de +1 por mensagem, independente da ordem dos nós.\nconst SUPABASE_URL = 'https://rmsblsoqqhtantyomhsh.supabase.co';\nconst SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtc2Jsc29xcWh0YW50eW9taHNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4OTI5MDgsImV4cCI6MjA5NjQ2ODkwOH0.PAje_eA_dYrwM_5f-4n9MMDY-GGtC0ZzEdRn7W3gg30';\n\nconst leadOriginal = $('Processar Lead').item.json;\nconst processar = $('Processar Resposta').item.json;\nconst telefone = $('Extrair Mensagem').item.json.telefone;\n\nconst leadId = leadOriginal.id;\nconst etapaAtual = parseInt(leadOriginal.etapa_agente) || 1;\nconst proximaEtapaClaude = parseInt(processar.proximaEtapa) || etapaAtual;\n\n// CAP ABSOLUTO: máximo +1 por mensagem, nunca regride, nunca passa de 8\n// Etapa 6 = Aguardando Pagamento — só avança via webhook MP, NUNCA por mensagem\nconst etapaSalvar = (etapaAtual === 6)\n  ? 6\n  : (proximaEtapaClaude > etapaAtual ? Math.min(etapaAtual + 1, 8) : etapaAtual);\n\nconst body = {\n  telefone: telefone,\n  nome: processar.nomeLead || processar.nome || null,\n  etapa_agente: etapaSalvar,\n  dor_principal: processar.dorPrincipal || processar.dor_principal || null,\n  historico: processar.historico || [],\n  temperatura: processar.temperatura || 'morno',\n  origem_agente: 'whatsapp'\n};\n\ntry {\n  if (leadOriginal.isNew) {\n    await this.helpers.httpRequest({\n      method: 'POST',\n      url: `${SUPABASE_URL}/rest/v1/leads`,\n      headers: {\n        'Content-Type': 'application/json',\n        'apikey': SUPABASE_KEY,\n        'Authorization': 'Bearer ' + SUPABASE_KEY,\n        'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify(body),\n    });\n  } else {\n    await this.helpers.httpRequest({\n      method: 'PATCH',\n      url: `${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}`,\n      headers: {\n        'Content-Type': 'application/json',\n        'apikey': SUPABASE_KEY,\n        'Authorization': 'Bearer ' + SUPABASE_KEY,\n        'Prefer': 'return=minimal'\n      },\n      body: JSON.stringify(body),\n    });\n  }\n} catch(e) {\n  console.error('Erro ao salvar lead:', e.message);\n}\n\nreturn [{ json: { saved: true, etapaSalva: etapaSalvar, etapaAnterior: etapaAtual, resposta: processar.resposta } }];"
       },
       "id": "code-in-javascript",
       "name": "Code in JavaScript",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2220, 300],
+      "position": [
+        2220,
+        300
+      ],
       "_note": "FIX 4: substitui o nó HTTP 'Salvar Supabase' que fazia PATCH por telefone (falhava silenciosamente). Agora usa PATCH por id=eq.{leadId}."
     }
   ],
