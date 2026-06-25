@@ -81,6 +81,18 @@ try {
   });
 } catch(e) {}
 
+if (novoTotal < 20) {
+  const faltam = 20 - novoTotal;
+  try {
+    await this.helpers.httpRequest({
+      method: 'POST',
+      url: ZAPI_URL,
+      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+      body: JSON.stringify({ phone: telefone, message: `Vi que você me mandou ${novoTotal} contatos até agora! 🎉 Faltam só mais ${faltam} para completar os 20. Consegue enviar mais ${faltam} agora? 🥰` })
+    });
+  } catch(e) {}
+}
+
 if (novoTotal >= 20) {
   try {
     await this.helpers.httpRequest({
