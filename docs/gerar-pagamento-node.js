@@ -12,7 +12,7 @@
 const SUPABASE_URL = 'https://rmsblsoqqhtantyomhsh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtc2Jsc29xcWh0YW50eW9taHNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4OTI5MDgsImV4cCI6MjA5NjQ2ODkwOH0.PAje_eA_dYrwM_5f-4n9MMDY-GGtC0ZzEdRn7W3gg30';
 const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text';
-const ZAPI_TOKEN = 'F1b8ffae44d794f31bbab006821cdb31c5';
+const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS';
 const MP_TOKEN = 'APP_USR-1603783113978504-062408-d67a1021538897e0341f70bb7645fdcf-2669863266';
 
 const extrairMsg = $('Extrair Mensagem').item.json;
