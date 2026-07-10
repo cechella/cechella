@@ -279,8 +279,15 @@ export default function FinanceiroDashboard() {
                 </div>
               </div>
 
-              {/* Link para lista completa */}
-              <div className="flex justify-end">
+              {/* Links para módulos */}
+              <div className="flex items-center justify-between">
+                <Link
+                  href="/admin/financeiro/leads"
+                  className="flex items-center gap-2 text-sm text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  <ArrowUpRight className="w-4 h-4" />
+                  Ver funil de leads
+                </Link>
                 <Link
                   href="/admin/financeiro/pagamentos"
                   className="flex items-center gap-2 text-sm text-purple-400 hover:text-purple-300 transition-colors"
