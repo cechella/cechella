@@ -1,176 +1,359 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { Sidebar } from '@/components/layout/Sidebar'
+import { TopBar } from '@/components/layout/TopBar'
+import {
+  ArrowLeft, RefreshCw, AlertTriangle, CheckCircle2,
+  XCircle, Clock, Repeat, Copy, ExternalLink,
+} from 'lucide-react'
+import Link from 'next/link'
 
-interface Assinatura {
+type Assinatura = {
   id: string
+  created_at: string
+  lead_id: string
   lead_telefone: string
   nome: string | null
+  preapproval_id: string
   valor: number
-  status: string
   parcelas_pagas: number
   parcelas_total: number
   proxima_cobranca: string | null
-  created_at: string
+  status: string
+  payment_method_id: string | null
+  issuer_id: string | null
 }
 
-function fmt(n: number) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n / 100)
+type StatusInfo = {
+  label: string
+  color: string
+  icon: React.ReactNode
+  alerta?: string
 }
 
-function statusColor(s: string) {
-  const map: Record<string, string> = {
-    ativo: 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
-    pausado: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300',
-    cancelado: 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
-    concluido: 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
-    pendente: 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400',
+function getStatusInfo(a: Assinatura): StatusInfo {
+  const hoje = new Date()
+
+  if (a.status === 'concluido' || a.parcelas_pagas >= a.parcelas_total) {
+    return {
+      label: 'Concluído',
+      color: 'text-green-400 bg-green-500/10 border-green-500/20',
+      icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+    }
   }
-  return map[s] || 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400'
+
+  if (a.status === 'cancelado') {
+    return {
+      label: 'Cancelado',
+      color: 'text-red-400 bg-red-500/10 border-red-500/20',
+      icon: <XCircle className="w-3.5 h-3.5" />,
+      alerta: 'vermelho',
+    }
+  }
+
+  if (a.proxima_cobranca) {
+    const proxima = new Date(a.proxima_cobranca)
+    const diasAtraso = Math.floor((hoje.getTime() - proxima.getTime()) / (1000 * 60 * 60 * 24))
+    if (diasAtraso > 35) {
+      return {
+        label: 'Inadimplente',
+        color: 'text-red-400 bg-red-500/10 border-red-500/20',
+        icon: <AlertTriangle className="w-3.5 h-3.5" />,
+        alerta: 'vermelho',
+      }
+    }
+    if (diasAtraso > 0) {
+      return {
+        label: 'Atrasado',
+        color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+        icon: <AlertTriangle className="w-3.5 h-3.5" />,
+        alerta: 'amarelo',
+      }
+    }
+  }
+
+  // Verificar divergência parcelas esperadas vs pagas
+  if (a.created_at) {
+    const inicio = new Date(a.created_at)
+    const mesesDecorridos = Math.floor(
+      (hoje.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24 * 30)
+    )
+    const parcelasEsperadas = Math.min(mesesDecorridos + 1, a.parcelas_total)
+    if (a.parcelas_pagas < parcelasEsperadas - 1) {
+      return {
+        label: 'Revisar',
+        color: 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20',
+        icon: <AlertTriangle className="w-3.5 h-3.5" />,
+        alerta: 'amarelo',
+      }
+    }
+  }
+
+  return {
+    label: 'Ativo',
+    color: 'text-blue-400 bg-blue-500/10 border-blue-500/20',
+    icon: <Repeat className="w-3.5 h-3.5" />,
+  }
 }
+
+function fmt(v: number) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+function fmtData(iso: string | null) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleDateString('pt-BR')
+}
+
+function ProgressBar({ pagas, total }: { pagas: number; total: number }) {
+  const pct = Math.min(100, Math.round((pagas / total) * 100))
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-1.5 bg-zinc-700 rounded-full overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${pct >= 100 ? 'bg-green-500' : 'bg-purple-500'}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <span className="text-xs text-zinc-400 whitespace-nowrap">{pagas}/{total}</span>
+    </div>
+  )
+}
+
+const FILTROS = [
+  { label: 'Todos', value: '' },
+  { label: 'Ativos', value: 'ativo' },
+  { label: 'Concluídos', value: 'concluido' },
+  { label: 'Cancelados', value: 'cancelado' },
+]
 
 export default function AssinaturasPage() {
   const [assinaturas, setAssinaturas] = useState<Assinatura[]>([])
-  const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
-  const [status, setStatus] = useState('')
-  const [busca, setBusca] = useState('')
   const [loading, setLoading] = useState(true)
-  const limit = 20
+  const [filtro, setFiltro] = useState('')
+  const [atualizadoEm, setAtualizadoEm] = useState('')
 
-  const load = useCallback(async () => {
+  const carregar = useCallback(async () => {
     setLoading(true)
     try {
-      const params = new URLSearchParams({
-        page: String(page),
-        limit: String(limit),
-        ...(status ? { status } : {}),
-        ...(busca ? { busca } : {}),
-      })
-      const res = await fetch(`/api/admin/financeiro/assinaturas?${params}`)
-      const json = await res.json()
-      setAssinaturas(json.assinaturas || [])
-      setTotal(json.total || 0)
+      const r = await fetch('/api/admin/financeiro/assinaturas')
+      const d = await r.json()
+      setAssinaturas(d.assinaturas || [])
+      setAtualizadoEm(new Date().toLocaleTimeString('pt-BR'))
     } finally {
       setLoading(false)
     }
-  }, [page, status, busca])
+  }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { carregar() }, [carregar])
 
-  const totalPages = Math.ceil(total / limit)
+  function copiar(text: string) {
+    navigator.clipboard.writeText(text).catch(() => {})
+  }
+
+  const lista = filtro
+    ? assinaturas.filter(a => {
+        if (filtro === 'concluido') return a.status === 'concluido' || a.parcelas_pagas >= a.parcelas_total
+        if (filtro === 'cancelado') return a.status === 'cancelado'
+        if (filtro === 'ativo') return a.status === 'ativo' && a.parcelas_pagas < a.parcelas_total
+        return true
+      })
+    : assinaturas
+
+  const alertasVermelho = assinaturas.filter(a => getStatusInfo(a).alerta === 'vermelho').length
+  const alertasAmarelo = assinaturas.filter(a => getStatusInfo(a).alerta === 'amarelo').length
+  const ativas = assinaturas.filter(a => a.status === 'ativo' && a.parcelas_pagas < a.parcelas_total).length
+  const concluidas = assinaturas.filter(a => a.status === 'concluido' || a.parcelas_pagas >= a.parcelas_total).length
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center gap-3 flex-wrap">
-        <a href="/admin/financeiro" className="text-gray-500 hover:text-gray-700 text-sm">← Financeiro</a>
-        <h1 className="text-2xl font-bold">Assinaturas</h1>
-        <span className="text-sm text-gray-400">{total} registros</span>
-      </div>
+    <div className="flex h-screen bg-zinc-950 text-white overflow-hidden">
+      <Sidebar role="admin" />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        <TopBar />
 
-      <div className="flex gap-3 flex-wrap">
-        <input
-          className="border rounded px-3 py-1.5 text-sm dark:bg-gray-900 dark:border-gray-700"
-          placeholder="Buscar telefone..."
-          value={busca}
-          onChange={e => { setBusca(e.target.value); setPage(1) }}
-        />
-        <select
-          className="border rounded px-3 py-1.5 text-sm dark:bg-gray-900 dark:border-gray-700"
-          value={status}
-          onChange={e => { setStatus(e.target.value); setPage(1) }}
-        >
-          <option value="">Todos status</option>
-          <option value="ativo">Ativo</option>
-          <option value="pausado">Pausado</option>
-          <option value="cancelado">Cancelado</option>
-          <option value="concluido">Concluído</option>
-          <option value="pendente">Pendente</option>
-        </select>
-        <button
-          onClick={() => load()}
-          className="px-3 py-1.5 rounded text-sm bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700"
-        >
-          ↻ Atualizar
-        </button>
-      </div>
+        <main className="flex-1 overflow-y-auto p-6 space-y-5">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Link href="/admin/financeiro" className="text-zinc-500 hover:text-white transition-colors">
+                <ArrowLeft className="w-4 h-4" />
+              </Link>
+              <div>
+                <h1 className="text-xl font-bold text-white">Assinaturas Recorrentes</h1>
+                <p className="text-zinc-500 text-sm">{assinaturas.length} assinaturas no total</p>
+              </div>
+            </div>
+            <button
+              onClick={carregar}
+              disabled={loading}
+              className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+              {atualizadoEm || 'Atualizar'}
+            </button>
+          </div>
 
-      <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-50 dark:bg-gray-900 text-gray-500">
-            <tr>
-              <th className="px-4 py-3 text-left">Cliente</th>
-              <th className="px-4 py-3 text-left">Status</th>
-              <th className="px-4 py-3 text-left">Progresso</th>
-              <th className="px-4 py-3 text-left">Próx. cobrança</th>
-              <th className="px-4 py-3 text-right">Valor/mês</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
-            {loading && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Carregando...</td></tr>
+          {/* Cards de resumo */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+              <p className="text-zinc-500 text-xs uppercase tracking-wide mb-2">Ativas</p>
+              <p className="text-2xl font-bold text-blue-400">{ativas}</p>
+              <p className="text-zinc-600 text-xs mt-1">Em andamento</p>
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+              <p className="text-zinc-500 text-xs uppercase tracking-wide mb-2">Concluídas</p>
+              <p className="text-2xl font-bold text-green-400">{concluidas}</p>
+              <p className="text-zinc-600 text-xs mt-1">6/6 parcelas pagas</p>
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+              <p className="text-zinc-500 text-xs uppercase tracking-wide mb-2">Alertas</p>
+              <p className="text-2xl font-bold text-yellow-400">{alertasAmarelo}</p>
+              <p className="text-zinc-600 text-xs mt-1">Revisão necessária</p>
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+              <p className="text-zinc-500 text-xs uppercase tracking-wide mb-2">Críticos</p>
+              <p className="text-2xl font-bold text-red-400">{alertasVermelho}</p>
+              <p className="text-zinc-600 text-xs mt-1">Cancelados / Inadimplentes</p>
+            </div>
+          </div>
+
+          {/* Alertas */}
+          {(alertasVermelho > 0 || alertasAmarelo > 0) && (
+            <div className="space-y-2">
+              {alertasVermelho > 0 && (
+                <div className="flex items-center gap-3 bg-red-500/5 border border-red-500/20 rounded-xl px-4 py-3">
+                  <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  <p className="text-sm text-red-300">
+                    <span className="font-semibold">{alertasVermelho} assinatura{alertasVermelho > 1 ? 's' : ''}</span>
+                    {' '}com alerta crítico — cancelada ou inadimplente há mais de 35 dias.
+                  </p>
+                </div>
+              )}
+              {alertasAmarelo > 0 && (
+                <div className="flex items-center gap-3 bg-yellow-500/5 border border-yellow-500/20 rounded-xl px-4 py-3">
+                  <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0" />
+                  <p className="text-sm text-yellow-300">
+                    <span className="font-semibold">{alertasAmarelo} assinatura{alertasAmarelo > 1 ? 's' : ''}</span>
+                    {' '}com divergência de parcelas ou atraso — revisar manualmente.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Filtros */}
+          <div className="flex bg-zinc-800 rounded-lg p-0.5 w-fit">
+            {FILTROS.map(f => (
+              <button
+                key={f.value}
+                onClick={() => setFiltro(f.value)}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${
+                  filtro === f.value
+                    ? 'bg-purple-600 text-white'
+                    : 'text-zinc-400 hover:text-white'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tabela */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-800">
+                    <th className="text-left px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide">Lead</th>
+                    <th className="text-left px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide">Status</th>
+                    <th className="text-left px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide w-40">Progresso</th>
+                    <th className="text-left px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide">Próx. Cobrança</th>
+                    <th className="text-right px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide">Valor/mês</th>
+                    <th className="text-left px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide">Preapproval ID</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <tr key={i} className="border-b border-zinc-800/50">
+                        {Array.from({ length: 7 }).map((_, j) => (
+                          <td key={j} className="px-4 py-4">
+                            <div className="h-4 bg-zinc-800 rounded animate-pulse" style={{ width: `${50 + j * 8}%` }} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))
+                  ) : lista.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="px-4 py-12 text-center text-zinc-600">
+                        Nenhuma assinatura encontrada
+                      </td>
+                    </tr>
+                  ) : (
+                    lista.map(a => {
+                      const si = getStatusInfo(a)
+                      return (
+                        <tr
+                          key={a.id}
+                          className={`border-b border-zinc-800/50 hover:bg-zinc-800/30 transition-colors ${
+                            si.alerta === 'vermelho' ? 'bg-red-500/3' : si.alerta === 'amarelo' ? 'bg-yellow-500/3' : ''
+                          }`}
+                        >
+                          <td className="px-4 py-4">
+                            <div className="font-medium text-white text-sm">{a.nome || '—'}</div>
+                            <div className="text-zinc-500 text-xs">{a.lead_telefone}</div>
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${si.color}`}>
+                              {si.icon}
+                              {si.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <ProgressBar pagas={a.parcelas_pagas} total={a.parcelas_total} />
+                          </td>
+                          <td className="px-4 py-4 text-zinc-400 text-xs whitespace-nowrap">
+                            {a.proxima_cobranca ? fmtData(a.proxima_cobranca) : '—'}
+                          </td>
+                          <td className="px-4 py-4 text-right font-semibold text-white whitespace-nowrap">
+                            {fmt(a.valor)}
+                          </td>
+                          <td className="px-4 py-4">
+                            <span className="text-zinc-500 text-xs font-mono">
+                              {a.preapproval_id ? `${a.preapproval_id.toString().slice(0, 10)}…` : '—'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-4">
+                            <div className="flex items-center gap-2">
+                              {a.preapproval_id && (
+                                <button
+                                  onClick={() => copiar(a.preapproval_id)}
+                                  className="text-zinc-500 hover:text-white transition-colors"
+                                  title="Copiar Preapproval ID"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {!loading && lista.length > 0 && (
+              <div className="px-4 py-3 border-t border-zinc-800">
+                <p className="text-zinc-600 text-xs">{lista.length} registro{lista.length !== 1 ? 's' : ''}</p>
+              </div>
             )}
-            {!loading && assinaturas.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-400">Nenhuma assinatura encontrada</td></tr>
-            )}
-            {assinaturas.map(a => {
-              const pct = a.parcelas_total > 0 ? Math.round((a.parcelas_pagas / a.parcelas_total) * 100) : 0
-              const vencida = a.proxima_cobranca && new Date(a.proxima_cobranca) < new Date() && a.status === 'ativo'
-              return (
-                <tr key={a.id} className={`hover:bg-gray-50 dark:hover:bg-gray-900/50 ${vencida ? 'bg-amber-50 dark:bg-amber-950/20' : ''}`}>
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{a.nome || '—'}</p>
-                    <p className="text-gray-400 text-xs">{a.lead_telefone}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${statusColor(a.status)}`}>
-                      {a.status}
-                    </span>
-                    {vencida && <span className="ml-2 text-xs text-amber-600 font-medium">⚠ vencida</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-24 bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                        <div
-                          className="bg-indigo-500 h-1.5 rounded-full"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-gray-500">{a.parcelas_pagas}/{a.parcelas_total}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-gray-500 text-sm">
-                    {a.proxima_cobranca
-                      ? new Date(a.proxima_cobranca).toLocaleDateString('pt-BR')
-                      : '—'}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold">{fmt(a.valor)}</td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+          </div>
+        </main>
       </div>
-
-      {totalPages > 1 && (
-        <div className="flex gap-2 justify-end">
-          <button
-            disabled={page === 1}
-            onClick={() => setPage(p => p - 1)}
-            className="px-3 py-1 rounded border text-sm disabled:opacity-40 dark:border-gray-700"
-          >
-            ← Anterior
-          </button>
-          <span className="px-3 py-1 text-sm text-gray-500">{page} / {totalPages}</span>
-          <button
-            disabled={page === totalPages}
-            onClick={() => setPage(p => p + 1)}
-            className="px-3 py-1 rounded border text-sm disabled:opacity-40 dark:border-gray-700"
-          >
-            Próxima →
-          </button>
-        </div>
-      )}
     </div>
   )
 }
