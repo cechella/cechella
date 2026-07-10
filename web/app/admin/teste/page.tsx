@@ -50,7 +50,7 @@ export default function TestePage() {
     {
       action: 'resetar_lead',
       label: 'Resetar lead',
-      desc: 'Limpa histórico, volta etapa para 1, apaga nome e dor',
+      desc: 'Zera completamente o lead: etapa, histórico, nome, dor, pagamento e método',
       icon: <RotateCcw className="w-4 h-4" />,
       cor: 'from-yellow-500/20 to-yellow-600/10 border-yellow-500/30 text-yellow-400',
       semTelefone: false,
