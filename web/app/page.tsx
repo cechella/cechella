@@ -344,6 +344,13 @@ function LeadForm() {
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
+  const [utmSource, setUtmSource] = useState('landing_page')
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const source = params.get('utm_source')
+    if (source) setUtmSource(source)
+  }, [])
 
   const formatTelefone = (v: string) => {
     const digits = v.replace(/\D/g, '').slice(0, 11)
@@ -360,7 +367,7 @@ function LeadForm() {
       const res = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, origem: utmSource }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Erro ao cadastrar')

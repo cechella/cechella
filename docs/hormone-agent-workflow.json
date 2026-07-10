@@ -70,7 +70,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const body = $input.item.json.body;\n\nif (!body) return [];\n\nconst from = body.phone || '';\nconst messageText = body.text?.message || '';\n\nif (!from || !messageText) return [];\n\nreturn [{\n  json: {\n    telefone: from,\n    message: messageText,\n    messageType: 'text',\n    instanceName: 'hormone-clinica'\n  }\n}];"
+        "jsCode": "const body = $input.item.json.body;\nif (!body) return [];\n\nconst fromMe = body.fromMe || false;\nconst from = body.phone || '';\nconst messageText = body.text?.message || '';\n\n// Suporta tanto contactArray (múltiplos) quanto contact (único)\nconst contactArray = Array.isArray(body.contactArray) && body.contactArray.length > 0\n  ? body.contactArray\n  : (body.contact ? [body.contact] : []);\n\nconst hasContacts = contactArray.length > 0;\nconst messageId = body.messageId || '';\n\nif (fromMe || !from) return [];\nif (!messageText && !hasContacts) return [];\nif (!messageId || body.isEdit) return [];\n\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.processedIds) staticData.processedIds = {};\nconst now = Date.now();\nfor (const id in staticData.processedIds) {\n  if (now - staticData.processedIds[id] > 300000) delete staticData.processedIds[id];\n}\nif (staticData.processedIds[messageId]) return [];\nstaticData.processedIds[messageId] = now;\n\nreturn [{ json: {\n  telefone: from,\n  message: messageText,\n  messageType: hasContacts ? 'contact' : 'text',\n  instanceName: 'hormone-clinica',\n  messageId\n} }];"
       },
       "id": "extract-message",
       "name": "Extrair Mensagem",
@@ -80,7 +80,7 @@
         680,
         300
       ],
-      "_note": "fromMe já filtrado em Filtrar Mensagens — não precisa checar aqui novamente"
+      "_note": "Dedup por messageId (staticData, janela 5min) + bloqueio de vCards do pipeline Claude"
     },
     {
       "parameters": {
@@ -125,7 +125,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const leads = $input.item.json;\nconst telefone = $('Extrair Mensagem').item.json.telefone;\nconst message = $('Extrair Mensagem').item.json.message;\n\nlet lead = Array.isArray(leads) ? leads[0] : null;\nlet isNew = false;\n\nif (!lead) {\n  isNew = true;\n  lead = {\n    telefone: telefone,\n    etapa_agente: 1,\n    temperatura: 'morno',\n    historico: [],\n    dor_principal: null,\n    nome: null\n  };\n}\n\nconst historico = lead.historico || [];\n// Adiciona mensagem do usuário UMA VEZ aqui — Processar Resposta NÃO deve adicionar novamente\nhistorico.push({ role: 'user', content: message, ts: new Date().toISOString() });\n\nreturn [{\n  json: {\n    ...lead,\n    telefone,\n    message,\n    isNew,\n    historico\n  }\n}];"
+        "jsCode": "const leads = $input.item.json;\nconst telefone = $('Extrair Mensagem').item.json.telefone;\nconst message = $('Extrair Mensagem').item.json.message;\n\nlet lead = Array.isArray(leads) ? leads[0] : null;\nlet isNew = false;\n\nif (!lead) {\n  isNew = true;\n  lead = {\n    telefone: telefone,\n    etapa_agente: 1,\n    temperatura: 'morno',\n    historico: [],\n    dor_principal: null,\n    nome: null\n  };\n} else {\n  lead.etapa_agente = lead.etapa_agente || 1;\n  // Deduplicação: bloqueia mesma mensagem recebida em menos de 10 segundos\n  const hist = Array.isArray(lead.historico) ? lead.historico : [];\n  const lastUser = [...hist].reverse().find(m => m.role === 'user');\n  if (lastUser && lastUser.content === message) {\n    const diff = Date.now() - new Date(lastUser.ts).getTime();\n    if (diff < 10000) return [];\n  }\n}\n\nconst historico = lead.historico || [];\n// Adiciona mensagem do usuário UMA VEZ aqui — Processar Resposta NÃO deve adicionar novamente\nhistorico.push({ role: 'user', content: message, ts: new Date().toISOString() });\n\nreturn [{\n  json: {\n    ...lead,\n    telefone,\n    message,\n    isNew,\n    historico\n  }\n}];"
       },
       "id": "processar-lead",
       "name": "Processar Lead",
@@ -207,6 +207,10 @@
             {
               "name": "Content-Type",
               "value": "application/json"
+            },
+            {
+              "name": "Client-Token",
+              "value": "F16a4d3e95c034a14b42b138d8165a90cS"
             }
           ]
         },

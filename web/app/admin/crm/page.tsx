@@ -7,87 +7,92 @@ import { createBrowserClient } from '@supabase/ssr'
 import {
   MessageSquare, Phone, Search, RefreshCw,
   Flame, Minus, Snowflake, X, Plus, Eye,
-  Users, CheckCircle, PhoneCall, Share2
+  Users, CheckCircle, Share2
 } from 'lucide-react'
 
-type Etapa = 'instagram' | 'site' | 'whatsapp' | 'apresentacao' | 'conexao' | 'di' | 'speech' | 'fechamento' | 'referidos' | 'validacao' | 'ganho' | 'perdido'
 type Temperatura = 'quente' | 'morno' | 'frio'
-type StatusReferido = 'pendente' | 'mensagem_enviada' | 'respondeu' | 'conversa_iniciada' | 'validado' | 'invalido'
 
 interface Lead {
   id: string
-  nome: string
-  email: string
-  telefone: string | null
-  whatsapp: string | null
-  origem: string
-  etapa: Etapa
-  temperatura: Temperatura
-  ultimo_contato: string | null
-  notas: string | null
-  created_at: string
-}
-
-interface Referido {
-  id: string
-  lead_origem_id: string
   nome: string | null
-  telefone: string
-  tipo: 'normal' | 'nao_fechou'
-  status: StatusReferido
-  mensagem_enviada_em: string | null
-  conversa_iniciada_em: string | null
-  validado_em: string | null
-  notas: string | null
+  telefone: string | null
+  etapa_agente: number | null
+  temperatura: Temperatura
+  total_referidos: number | null
+  updated_at: string
+  dor_principal: string | null
+  historico: Array<{role: string; content: string; ts?: string}> | null
+  origem: string | null
+}
+
+interface ContatoReferido {
+  id: string
+  nome: string | null
+  telefone: string | null
+  profissao: string | null
+  hobby: string | null
+  status: string
+  indicado_por_telefone: string | null
+  indicado_por_nome: string | null
   created_at: string
 }
 
-const etapaLabels: Record<Etapa, string> = {
-  instagram: 'Instagram',
-  site: 'Site',
-  whatsapp: 'WhatsApp',
-  apresentacao: 'Apresentação',
-  conexao: 'Conexão',
-  di: 'D.I.',
-  speech: 'Speech',
-  fechamento: 'Fechamento',
-  referidos: 'Referidos',
-  validacao: 'Validação',
-  ganho: 'Ganho',
-  perdido: 'Perdido',
+const etapaAgentLabels: Record<number, string> = {
+  1: 'Apresentação', 2: 'Conexão', 3: 'D.I.', 4: 'Speech',
+  5: 'Fechamento', 6: 'Pag. Pendente', 7: 'Referidos', 8: 'Validação'
+}
+const etapaAgentColors: Record<number, string> = {
+  1: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  2: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
+  3: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  4: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
+  5: 'bg-red-500/20 text-red-400 border-red-500/30',
+  6: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
+  7: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+  8: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
 }
 
-const etapaColors: Record<Etapa, string> = {
-  instagram: 'bg-pink-500/20 text-pink-400 border-pink-500/30',
-  site: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-  whatsapp: 'bg-green-500/20 text-green-400 border-green-500/30',
-  apresentacao: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-  conexao: 'bg-violet-500/20 text-violet-400 border-violet-500/30',
-  di: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-  speech: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  fechamento: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-  referidos: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
-  validacao: 'bg-teal-500/20 text-teal-400 border-teal-500/30',
-  ganho: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  perdido: 'bg-red-500/20 text-red-400 border-red-500/30',
+const statusContatoColors: Record<string, string> = {
+  aguardando: 'bg-yellow-500/20 text-yellow-400',
+  contatado: 'bg-blue-500/20 text-blue-400',
+  interessado: 'bg-orange-500/20 text-orange-400',
+  vendido: 'bg-emerald-500/20 text-emerald-400',
 }
 
-const statusReferidoLabels: Record<StatusReferido, string> = {
-  pendente: 'Pendente',
-  mensagem_enviada: 'Msg Enviada',
-  respondeu: 'Respondeu',
-  conversa_iniciada: 'Conversa',
-  validado: 'Validado',
-  invalido: 'Inválido',
+function calcScore(profissao: string | null | undefined, hobby: string | null | undefined): number {
+  const prof = (profissao || '').toLowerCase()
+  let renda = 1
+  if (/médic|medic|dentist|advogad|empresár|empresar|jogador|diretor|engenheiro|arquitet|farmacêut/.test(prof)) renda = 5
+  else if (/enfermeir|fisio|psicólog|psicolog|nutricionist|veterinár/.test(prof)) renda = 3
+  else if (/professor|comerciant|secretár|recepcion|vendedor|técnic|tecnic|cabelerei/.test(prof)) renda = 2
+  let dados = 0
+  if (profissao && hobby) dados = 3
+  else if (profissao || hobby) dados = 1
+  return renda + dados
 }
 
-const statusReferidoColors: Record<StatusReferido, string> = {
-  pendente: 'bg-zinc-500/20 text-zinc-400',
-  mensagem_enviada: 'bg-blue-500/20 text-blue-400',
-  respondeu: 'bg-yellow-500/20 text-yellow-400',
-  conversa_iniciada: 'bg-purple-500/20 text-purple-400',
-  validado: 'bg-emerald-500/20 text-emerald-400',
-  invalido: 'bg-red-500/20 text-red-400',
+function scoreCircles(score: number): string {
+  const filled = Math.round((score / 8) * 5)
+  return '●'.repeat(filled) + '○'.repeat(5 - filled)
+}
+
+const ORIGEM_CONFIG: Record<string, { label: string; color: string; emoji: string }> = {
+  instagram:    { label: 'Instagram', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30', emoji: '📸' },
+  referido:     { label: 'Referido',  color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', emoji: '🔗' },
+  landing_page: { label: 'Site',      color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', emoji: '🌐' },
+  google:       { label: 'Google',    color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', emoji: '🔍' },
+  whatsapp:     { label: 'WhatsApp',  color: 'bg-green-500/20 text-green-400 border-green-500/30', emoji: '💬' },
+  manual:       { label: 'Manual',    color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', emoji: '✍️' },
+  organico:     { label: 'Orgânico',  color: 'bg-teal-500/20 text-teal-400 border-teal-500/30', emoji: '🌿' },
+}
+
+function OrigemBadge({ origem }: { origem: string | null }) {
+  const cfg = ORIGEM_CONFIG[origem || ''] || { label: origem || '—', color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', emoji: '📌' }
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${cfg.color}`}>
+      {cfg.emoji} {cfg.label}
+    </span>
+  )
 }
 
 function TemperaturaIcon({ t }: { t: Temperatura }) {
@@ -112,18 +117,17 @@ type Aba = 'leads' | 'referidos'
 export default function CRMPage() {
   const [aba, setAba] = useState<Aba>('leads')
   const [leads, setLeads] = useState<Lead[]>([])
-  const [referidos, setReferidos] = useState<Referido[]>([])
+  const [contatos, setContatos] = useState<ContatoReferido[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [filtroEtapa, setFiltroEtapa] = useState<Etapa | 'todas'>('todas')
+  const [filtroEtapa, setFiltroEtapa] = useState<number | 0>(0)
   const [filtroTemp, setFiltroTemp] = useState<Temperatura | 'todas'>('todas')
   const [showModal, setShowModal] = useState(false)
   const [leadSelecionado, setLeadSelecionado] = useState<Lead | null>(null)
   const [showNovoLead, setShowNovoLead] = useState(false)
-  const [showNovoReferido, setShowNovoReferido] = useState(false)
-  const [novoLead, setNovoLead] = useState({ nome: '', email: '', telefone: '', whatsapp: '', origem: 'manual', etapa: 'site' as Etapa, temperatura: 'frio' as Temperatura })
-  const [novoReferido, setNovoReferido] = useState({ lead_origem_id: '', nome: '', telefone: '', tipo: 'normal' as 'normal' | 'nao_fechou' })
+  const [novoLead, setNovoLead] = useState({ nome: '', telefone: '', etapa_agente: 1, temperatura: 'frio' as Temperatura })
   const [salvando, setSalvando] = useState(false)
+  const [filtroOrigem, setFiltroOrigem] = useState<string>('todas')
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -132,15 +136,19 @@ export default function CRMPage() {
 
   const carregarLeads = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('leads').select('*').order('created_at', { ascending: false })
+    const { data } = await supabase.from('leads')
+      .select('id,nome,telefone,etapa_agente,temperatura,total_referidos,updated_at,dor_principal,historico,origem')
+      .order('updated_at', { ascending: false })
     if (data) setLeads(data as Lead[])
     setLoading(false)
   }, [supabase])
 
   const carregarReferidos = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase.from('referidos').select('*').order('created_at', { ascending: false })
-    if (data) setReferidos(data as Referido[])
+    const { data } = await supabase.from('contatos_referidos')
+      .select('id,nome,telefone,profissao,hobby,status,indicado_por_telefone,indicado_por_nome,created_at')
+      .order('created_at', { ascending: false })
+    if (data) setContatos(data as ContatoReferido[])
     setLoading(false)
   }, [supabase])
 
@@ -150,22 +158,22 @@ export default function CRMPage() {
   }, [carregarLeads, carregarReferidos])
 
   const leadsFiltrados = leads.filter(l => {
-    const matchSearch = l.nome.toLowerCase().includes(search.toLowerCase()) ||
-      l.email.toLowerCase().includes(search.toLowerCase()) ||
+    const matchSearch = (l.nome || '').toLowerCase().includes(search.toLowerCase()) ||
       (l.telefone || '').includes(search)
-    const matchEtapa = filtroEtapa === 'todas' || l.etapa === filtroEtapa
+    const matchEtapa = filtroEtapa === 0 || l.etapa_agente === filtroEtapa
     const matchTemp = filtroTemp === 'todas' || l.temperatura === filtroTemp
-    return matchSearch && matchEtapa && matchTemp
+    const matchOrigem = filtroOrigem === 'todas' || l.origem === filtroOrigem
+    return matchSearch && matchEtapa && matchTemp && matchOrigem
   })
 
-  const referidosFiltrados = referidos.filter(r =>
+  const referidosFiltrados = contatos.filter(r =>
     (r.nome || '').toLowerCase().includes(search.toLowerCase()) ||
-    r.telefone.includes(search)
+    (r.telefone || '').includes(search)
   )
 
-  const atualizarEtapa = async (id: string, etapa: Etapa) => {
-    await supabase.from('leads').update({ etapa, updated_at: new Date().toISOString() }).eq('id', id)
-    setLeads(prev => prev.map(l => l.id === id ? { ...l, etapa } : l))
+  const atualizarEtapa = async (id: string, etapa: number) => {
+    await supabase.from('leads').update({ etapa_agente: etapa, updated_at: new Date().toISOString() }).eq('id', id)
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, etapa_agente: etapa } : l))
   }
 
   const atualizarTemperatura = async (id: string, temperatura: Temperatura) => {
@@ -173,54 +181,41 @@ export default function CRMPage() {
     setLeads(prev => prev.map(l => l.id === id ? { ...l, temperatura } : l))
   }
 
-  const atualizarStatusReferido = async (id: string, status: StatusReferido) => {
-    const update: Record<string, string> = { status }
-    if (status === 'mensagem_enviada') update.mensagem_enviada_em = new Date().toISOString()
-    if (status === 'conversa_iniciada') update.conversa_iniciada_em = new Date().toISOString()
-    if (status === 'validado') update.validado_em = new Date().toISOString()
-    await supabase.from('referidos').update(update).eq('id', id)
-    setReferidos(prev => prev.map(r => r.id === id ? { ...r, status, ...update } : r))
+  const atualizarStatusReferido = async (id: string, status: string) => {
+    await supabase.from('contatos_referidos').update({ status }).eq('id', id)
+    setContatos(prev => prev.map(r => r.id === id ? { ...r, status } : r))
   }
 
   const criarLead = async () => {
-    if (!novoLead.nome || !novoLead.email) return
+    if (!novoLead.nome && !novoLead.telefone) return
     setSalvando(true)
-    const { error } = await supabase.from('leads').insert({ ...novoLead, ultimo_contato: new Date().toISOString() })
+    const { error } = await supabase.from('leads').insert({
+      nome: novoLead.nome,
+      telefone: novoLead.telefone,
+      etapa_agente: novoLead.etapa_agente,
+      temperatura: novoLead.temperatura,
+    })
     if (!error) {
       setShowNovoLead(false)
-      setNovoLead({ nome: '', email: '', telefone: '', whatsapp: '', origem: 'manual', etapa: 'site', temperatura: 'frio' })
+      setNovoLead({ nome: '', telefone: '', etapa_agente: 1, temperatura: 'frio' })
       carregarLeads()
     }
     setSalvando(false)
   }
 
-  const criarReferido = async () => {
-    if (!novoReferido.telefone || !novoReferido.lead_origem_id) return
-    setSalvando(true)
-    const { error } = await supabase.from('referidos').insert(novoReferido)
-    if (!error) {
-      setShowNovoReferido(false)
-      setNovoReferido({ lead_origem_id: '', nome: '', telefone: '', tipo: 'normal' })
-      carregarReferidos()
-    }
-    setSalvando(false)
-  }
-
-  // Métricas funil (só etapas do agente)
-  const etapasFunil: Etapa[] = ['whatsapp', 'apresentacao', 'conexao', 'di', 'speech', 'fechamento', 'referidos', 'validacao', 'ganho']
-  const funil = etapasFunil.map(etapa => ({
-    etapa,
-    label: etapaLabels[etapa],
-    count: leads.filter(l => l.etapa === etapa).length,
+  // Métricas funil
+  const funil = [1,2,3,4,5,6,7,8].map(n => ({
+    n,
+    label: etapaAgentLabels[n],
+    count: leads.filter(l => l.etapa_agente === n).length,
   }))
 
   // Métricas referidos
-  const totalReferidos = referidos.length
-  const referidosNormal = referidos.filter(r => r.tipo === 'normal').length
-  const referidosNaoFechou = referidos.filter(r => r.tipo === 'nao_fechou').length
-  const referidosValidados = referidos.filter(r => r.status === 'validado').length
-  const conversasIniciadas = referidos.filter(r => r.status === 'conversa_iniciada' || r.status === 'validado').length
-  const mensagensEnviadas = referidos.filter(r => r.status !== 'pendente').length
+  const totalReferidos = contatos.length
+  const referidosVendidos = contatos.filter(r => r.status === 'vendido').length
+  const referidosAguardando = contatos.filter(r => r.status === 'aguardando').length
+  const referidosContatados = contatos.filter(r => r.status === 'contatado').length
+  const referidosInteressados = contatos.filter(r => r.status === 'interessado').length
 
   return (
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
@@ -249,13 +244,13 @@ export default function CRMPage() {
           {aba === 'leads' && (
             <>
               {/* Funil */}
-              <div className="grid grid-cols-9 gap-2">
+              <div className="grid grid-cols-8 gap-2">
                 {funil.map((f, i) => (
                   <button
-                    key={f.etapa}
-                    onClick={() => setFiltroEtapa(f.etapa === filtroEtapa ? 'todas' : f.etapa)}
+                    key={f.n}
+                    onClick={() => setFiltroEtapa(f.n === filtroEtapa ? 0 : f.n)}
                     className={`rounded-xl p-3 border text-center transition-all ${
-                      filtroEtapa === f.etapa
+                      filtroEtapa === f.n
                         ? 'border-[#7B3FE4] bg-[#7B3FE4]/20'
                         : 'border-[#1C1C1E] bg-[#111113] hover:border-[#7B3FE4]/50'
                     }`}
@@ -278,7 +273,7 @@ export default function CRMPage() {
                   <input
                     value={search}
                     onChange={e => setSearch(e.target.value)}
-                    placeholder="Buscar por nome, email ou telefone..."
+                    placeholder="Buscar por nome ou telefone..."
                     className="w-full bg-[#111113] border border-[#1C1C1E] rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-[#71717A] focus:outline-none focus:border-[#7B3FE4]"
                   />
                 </div>
@@ -292,6 +287,20 @@ export default function CRMPage() {
                   <option value="morno">🟡 Morno</option>
                   <option value="frio">❄️ Frio</option>
                 </select>
+                <select
+                  value={filtroOrigem}
+                  onChange={e => setFiltroOrigem(e.target.value)}
+                  className="bg-[#111113] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#7B3FE4]"
+                >
+                  <option value="todas">📌 Origem</option>
+                  <option value="instagram">📸 Instagram</option>
+                  <option value="referido">🔗 Referido</option>
+                  <option value="landing_page">🌐 Site</option>
+                  <option value="google">🔍 Google</option>
+                  <option value="whatsapp">💬 WhatsApp</option>
+                  <option value="organico">🌿 Orgânico</option>
+                  <option value="manual">✍️ Manual</option>
+                </select>
                 <button onClick={carregarLeads} className="p-2.5 bg-[#111113] border border-[#1C1C1E] rounded-xl text-[#71717A] hover:text-white hover:border-[#7B3FE4] transition-all">
                   <RefreshCw className="w-4 h-4" />
                 </button>
@@ -304,7 +313,7 @@ export default function CRMPage() {
               <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-[#1C1C1E]">
                   <h2 className="text-sm font-semibold text-white">{leadsFiltrados.length} leads</h2>
-                  <span className="text-xs text-[#71717A]">{leads.filter(l => l.etapa === 'ganho').length} ganhos · {leads.filter(l => l.etapa === 'perdido').length} perdidos</span>
+                  <span className="text-xs text-[#71717A]">{leads.filter(l => (l.etapa_agente ?? 0) >= 7).length} ganhos</span>
                 </div>
                 {loading ? (
                   <div className="flex items-center justify-center py-16">
@@ -323,92 +332,87 @@ export default function CRMPage() {
                           <th className="text-left text-xs text-[#71717A] font-medium px-6 py-3">Lead</th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Etapa</th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Temp.</th>
+                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Origem</th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Referidos</th>
-                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Último contato</th>
+                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Dor Principal</th>
+                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Atualizado</th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {leadsFiltrados.map(lead => {
-                          const refs = referidos.filter(r => r.lead_origem_id === lead.id)
-                          const refsValidados = refs.filter(r => r.status === 'validado').length
-                          return (
-                            <tr key={lead.id} className="border-b border-[#1C1C1E] hover:bg-[#18181A] transition-colors">
-                              <td className="px-6 py-4">
-                                <p className="text-sm font-medium text-white">{lead.nome}</p>
-                                <p className="text-xs text-[#71717A]">{lead.email}</p>
-                                {(lead.whatsapp || lead.telefone) && (
-                                  <p className="text-xs text-[#71717A]">{lead.whatsapp || lead.telefone}</p>
-                                )}
-                              </td>
-                              <td className="px-4 py-4">
-                                <select
-                                  value={lead.etapa}
-                                  onChange={e => atualizarEtapa(lead.id, e.target.value as Etapa)}
-                                  className={`text-xs px-2 py-1 rounded-lg border bg-transparent cursor-pointer focus:outline-none ${etapaColors[lead.etapa]}`}
-                                >
-                                  {(Object.keys(etapaLabels) as Etapa[]).map(e => (
-                                    <option key={e} value={e} className="bg-[#111113] text-white">{etapaLabels[e]}</option>
-                                  ))}
-                                </select>
-                              </td>
-                              <td className="px-4 py-4">
-                                <select
-                                  value={lead.temperatura}
-                                  onChange={e => atualizarTemperatura(lead.id, e.target.value as Temperatura)}
-                                  className="bg-transparent text-xs focus:outline-none cursor-pointer"
-                                >
-                                  <option value="quente" className="bg-[#111113]">🔥 Quente</option>
-                                  <option value="morno" className="bg-[#111113]">🟡 Morno</option>
-                                  <option value="frio" className="bg-[#111113]">❄️ Frio</option>
-                                </select>
-                              </td>
-                              <td className="px-4 py-4">
-                                {refs.length > 0 ? (
-                                  <div className="flex items-center gap-1">
-                                    <Share2 className="w-3 h-3 text-indigo-400" />
-                                    <span className="text-xs text-white">{refs.length}</span>
-                                    <span className="text-xs text-[#71717A]">/ {refsValidados} válidos</span>
-                                  </div>
-                                ) : (
-                                  <span className="text-xs text-[#71717A]">—</span>
-                                )}
-                              </td>
-                              <td className="px-4 py-4 text-xs text-[#71717A]">
-                                {tempoRelativo(lead.ultimo_contato || lead.created_at)}
-                              </td>
-                              <td className="px-4 py-4">
-                                <div className="flex items-center gap-2">
-                                  <button
-                                    onClick={() => { setLeadSelecionado(lead); setShowModal(true) }}
-                                    className="p-1.5 text-[#71717A] hover:text-white hover:bg-[#1C1C1E] rounded-lg transition-colors"
-                                    title="Ver detalhes"
-                                  >
-                                    <Eye className="w-4 h-4" />
-                                  </button>
-                                  {(lead.whatsapp || lead.telefone) && (
-                                    <a
-                                      href={`https://wa.me/55${(lead.whatsapp || lead.telefone || '').replace(/\D/g, '')}`}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors"
-                                      title="Abrir WhatsApp"
-                                    >
-                                      <Phone className="w-4 h-4" />
-                                    </a>
-                                  )}
-                                  <button
-                                    onClick={() => { setNovoReferido(prev => ({ ...prev, lead_origem_id: lead.id })); setShowNovoReferido(true) }}
-                                    className="p-1.5 text-[#71717A] hover:text-indigo-400 hover:bg-[#1C1C1E] rounded-lg transition-colors"
-                                    title="Adicionar referido"
-                                  >
-                                    <Share2 className="w-4 h-4" />
-                                  </button>
+                        {leadsFiltrados.map(lead => (
+                          <tr key={lead.id} className="border-b border-[#1C1C1E] hover:bg-[#18181A] transition-colors">
+                            <td className="px-6 py-4">
+                              <p className="text-sm font-medium text-white">{lead.nome || '—'}</p>
+                              {lead.telefone && (
+                                <p className="text-xs text-[#71717A]">{lead.telefone}</p>
+                              )}
+                            </td>
+                            <td className="px-4 py-4">
+                              <select
+                                value={lead.etapa_agente ?? ''}
+                                onChange={e => atualizarEtapa(lead.id, Number(e.target.value))}
+                                className={`text-xs px-2 py-1 rounded-lg border bg-transparent cursor-pointer focus:outline-none ${lead.etapa_agente ? etapaAgentColors[lead.etapa_agente] : 'text-[#71717A] border-[#1C1C1E]'}`}
+                              >
+                                {[1,2,3,4,5,6,7,8].map(n => (
+                                  <option key={n} value={n} className="bg-[#111113] text-white">{etapaAgentLabels[n]}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="px-4 py-4">
+                              <select
+                                value={lead.temperatura}
+                                onChange={e => atualizarTemperatura(lead.id, e.target.value as Temperatura)}
+                                className="bg-transparent text-xs focus:outline-none cursor-pointer"
+                              >
+                                <option value="quente" className="bg-[#111113]">🔥 Quente</option>
+                                <option value="morno" className="bg-[#111113]">🟡 Morno</option>
+                                <option value="frio" className="bg-[#111113]">❄️ Frio</option>
+                              </select>
+                            </td>
+                            <td className="px-4 py-4">
+                              <OrigemBadge origem={lead.origem} />
+                            </td>
+                            <td className="px-4 py-4">
+                              {(lead.total_referidos ?? 0) > 0 ? (
+                                <div className="flex items-center gap-1">
+                                  <Share2 className="w-3 h-3 text-indigo-400" />
+                                  <span className="text-xs text-white">{lead.total_referidos}</span>
                                 </div>
-                              </td>
-                            </tr>
-                          )
-                        })}
+                              ) : (
+                                <span className="text-xs text-[#71717A]">—</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-4 text-xs text-[#71717A] max-w-[200px] truncate">
+                              {lead.dor_principal || '—'}
+                            </td>
+                            <td className="px-4 py-4 text-xs text-[#71717A]">
+                              {tempoRelativo(lead.updated_at)}
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => { setLeadSelecionado(lead); setShowModal(true) }}
+                                  className="p-1.5 text-[#71717A] hover:text-white hover:bg-[#1C1C1E] rounded-lg transition-colors"
+                                  title="Ver detalhes"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
+                                {lead.telefone && (
+                                  <a
+                                    href={`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors"
+                                    title="Abrir WhatsApp"
+                                  >
+                                    <Phone className="w-4 h-4" />
+                                  </a>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -423,16 +427,15 @@ export default function CRMPage() {
               <div className="grid grid-cols-5 gap-4">
                 {[
                   { label: 'Total Referidos', value: totalReferidos, icon: <Users className="w-5 h-5" />, color: 'text-indigo-400' },
-                  { label: 'De Fechamentos', value: referidosNormal, icon: <Share2 className="w-5 h-5" />, color: 'text-emerald-400', sub: '20 por cliente' },
-                  { label: 'De Não-Fechou', value: referidosNaoFechou, icon: <Share2 className="w-5 h-5" />, color: 'text-orange-400', sub: '4 por cliente' },
-                  { label: 'Msgs Enviadas', value: mensagensEnviadas, icon: <MessageSquare className="w-5 h-5" />, color: 'text-blue-400' },
-                  { label: 'Validados', value: referidosValidados, icon: <CheckCircle className="w-5 h-5" />, color: 'text-emerald-400' },
+                  { label: 'Aguardando', value: referidosAguardando, icon: <Share2 className="w-5 h-5" />, color: 'text-yellow-400' },
+                  { label: 'Contatados', value: referidosContatados, icon: <MessageSquare className="w-5 h-5" />, color: 'text-blue-400' },
+                  { label: 'Interessados', value: referidosInteressados, icon: <Share2 className="w-5 h-5" />, color: 'text-orange-400' },
+                  { label: 'Vendidos', value: referidosVendidos, icon: <CheckCircle className="w-5 h-5" />, color: 'text-emerald-400' },
                 ].map(m => (
                   <div key={m.label} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4">
                     <div className={`mb-2 ${m.color}`}>{m.icon}</div>
                     <p className="text-2xl font-bold text-white">{m.value}</p>
                     <p className="text-xs text-[#71717A] mt-0.5">{m.label}</p>
-                    {m.sub && <p className="text-[10px] text-[#3B82F6] mt-0.5">{m.sub}</p>}
                   </div>
                 ))}
               </div>
@@ -450,9 +453,6 @@ export default function CRMPage() {
                 </div>
                 <button onClick={carregarReferidos} className="p-2.5 bg-[#111113] border border-[#1C1C1E] rounded-xl text-[#71717A] hover:text-white hover:border-[#7B3FE4] transition-all">
                   <RefreshCw className="w-4 h-4" />
-                </button>
-                <button onClick={() => setShowNovoReferido(true)} className="flex items-center gap-2 px-4 py-2.5 bg-[#7B3FE4] hover:bg-[#6B2FD4] rounded-xl text-sm font-medium text-white transition-colors">
-                  <Plus className="w-4 h-4" /> Novo Referido
                 </button>
               </div>
 
@@ -476,56 +476,58 @@ export default function CRMPage() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-[#1C1C1E]">
-                          <th className="text-left text-xs text-[#71717A] font-medium px-6 py-3">Contato</th>
-                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Tipo</th>
+                          <th className="text-left text-xs text-[#71717A] font-medium px-6 py-3">Nome</th>
+                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Telefone</th>
+                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Profissão</th>
+                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Hobby</th>
+                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Score</th>
+                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Indicado por</th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Status</th>
-                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Msg enviada</th>
-                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Conversa</th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {referidosFiltrados.map(ref => (
-                          <tr key={ref.id} className="border-b border-[#1C1C1E] hover:bg-[#18181A] transition-colors">
-                            <td className="px-6 py-4">
-                              <p className="text-sm font-medium text-white">{ref.nome || '—'}</p>
-                              <p className="text-xs text-[#71717A]">{ref.telefone}</p>
-                            </td>
-                            <td className="px-4 py-4">
-                              <span className={`text-xs px-2 py-1 rounded-lg ${ref.tipo === 'normal' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-orange-500/20 text-orange-400'}`}>
-                                {ref.tipo === 'normal' ? '20 refs' : '4 refs'}
-                              </span>
-                            </td>
-                            <td className="px-4 py-4">
-                              <select
-                                value={ref.status}
-                                onChange={e => atualizarStatusReferido(ref.id, e.target.value as StatusReferido)}
-                                className={`text-xs px-2 py-1 rounded-lg bg-transparent cursor-pointer focus:outline-none ${statusReferidoColors[ref.status]}`}
-                              >
-                                {(Object.keys(statusReferidoLabels) as StatusReferido[]).map(s => (
-                                  <option key={s} value={s} className="bg-[#111113] text-white">{statusReferidoLabels[s]}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="px-4 py-4 text-xs text-[#71717A]">
-                              {tempoRelativo(ref.mensagem_enviada_em)}
-                            </td>
-                            <td className="px-4 py-4 text-xs text-[#71717A]">
-                              {tempoRelativo(ref.conversa_iniciada_em)}
-                            </td>
-                            <td className="px-4 py-4">
-                              <a
-                                href={`https://wa.me/55${ref.telefone.replace(/\D/g, '')}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors inline-flex"
-                                title="Abrir WhatsApp"
-                              >
-                                <Phone className="w-4 h-4" />
-                              </a>
-                            </td>
-                          </tr>
-                        ))}
+                        {referidosFiltrados.map(ref => {
+                          const score = calcScore(ref.profissao, ref.hobby)
+                          return (
+                            <tr key={ref.id} className="border-b border-[#1C1C1E] hover:bg-[#18181A] transition-colors">
+                              <td className="px-6 py-4 text-sm font-medium text-white">{ref.nome || '—'}</td>
+                              <td className="px-4 py-4 text-xs text-[#71717A]">{ref.telefone || '—'}</td>
+                              <td className="px-4 py-4 text-xs text-[#A1A1AA]">{ref.profissao || '—'}</td>
+                              <td className="px-4 py-4 text-xs text-[#A1A1AA]">{ref.hobby || '—'}</td>
+                              <td className="px-4 py-4">
+                                <span className="text-[#F59E0B] font-mono text-xs tracking-tight">{scoreCircles(score)}</span>
+                              </td>
+                              <td className="px-4 py-4 text-xs text-[#71717A]">
+                                {ref.indicado_por_nome || ref.indicado_por_telefone || '—'}
+                              </td>
+                              <td className="px-4 py-4">
+                                <select
+                                  value={ref.status}
+                                  onChange={e => atualizarStatusReferido(ref.id, e.target.value)}
+                                  className={`text-xs px-2 py-1 rounded-lg bg-transparent cursor-pointer focus:outline-none ${statusContatoColors[ref.status] ?? 'bg-zinc-500/20 text-zinc-400'}`}
+                                >
+                                  {['aguardando', 'contatado', 'interessado', 'vendido'].map(s => (
+                                    <option key={s} value={s} className="bg-[#111113] text-white capitalize">{s}</option>
+                                  ))}
+                                </select>
+                              </td>
+                              <td className="px-4 py-4">
+                                {ref.telefone && (
+                                  <a
+                                    href={`https://wa.me/55${ref.telefone.replace(/\D/g, '')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors inline-flex"
+                                    title="Abrir WhatsApp"
+                                  >
+                                    <Phone className="w-4 h-4" />
+                                  </a>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -541,16 +543,13 @@ export default function CRMPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl w-full max-w-md p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-white">{leadSelecionado.nome}</h3>
+              <h3 className="text-lg font-semibold text-white">{leadSelecionado.nome || '—'}</h3>
               <button onClick={() => setShowModal(false)} className="text-[#71717A] hover:text-white"><X className="w-5 h-5" /></button>
             </div>
             <div className="space-y-3 text-sm">
               {[
-                ['Email', leadSelecionado.email],
                 ['Telefone', leadSelecionado.telefone || '—'],
-                ['WhatsApp', leadSelecionado.whatsapp || '—'],
-                ['Origem', leadSelecionado.origem],
-                ['Cadastrado', new Date(leadSelecionado.created_at).toLocaleDateString('pt-BR')],
+                ['Total Referidos', String(leadSelecionado.total_referidos ?? 0)],
               ].map(([k, v]) => (
                 <div key={k} className="flex justify-between">
                   <span className="text-[#71717A]">{k}</span>
@@ -559,7 +558,11 @@ export default function CRMPage() {
               ))}
               <div className="flex justify-between">
                 <span className="text-[#71717A]">Etapa</span>
-                <span className={`px-2 py-0.5 rounded-lg text-xs border ${etapaColors[leadSelecionado.etapa]}`}>{etapaLabels[leadSelecionado.etapa]}</span>
+                {leadSelecionado.etapa_agente ? (
+                  <span className={`px-2 py-0.5 rounded-lg text-xs border ${etapaAgentColors[leadSelecionado.etapa_agente]}`}>
+                    {etapaAgentLabels[leadSelecionado.etapa_agente]}
+                  </span>
+                ) : <span className="text-[#71717A]">—</span>}
               </div>
               <div className="flex justify-between">
                 <span className="text-[#71717A]">Temperatura</span>
@@ -568,29 +571,20 @@ export default function CRMPage() {
                   <span className="text-white capitalize">{leadSelecionado.temperatura}</span>
                 </div>
               </div>
-              {leadSelecionado.notas && (
+              {leadSelecionado.dor_principal && (
                 <div>
-                  <span className="text-[#71717A]">Notas</span>
-                  <p className="mt-1 text-white bg-[#18181A] rounded-lg p-3 text-xs">{leadSelecionado.notas}</p>
+                  <span className="text-[#71717A]">Dor Principal</span>
+                  <p className="mt-1 text-white bg-[#18181A] rounded-lg p-3 text-xs">{leadSelecionado.dor_principal}</p>
                 </div>
               )}
-              <div className="pt-2 border-t border-[#1C1C1E]">
-                <span className="text-[#71717A] text-xs">Referidos</span>
-                <div className="mt-1 flex items-center gap-4">
-                  {(() => {
-                    const refs = referidos.filter(r => r.lead_origem_id === leadSelecionado.id)
-                    return <>
-                      <span className="text-white text-sm">{refs.length} gerados</span>
-                      <span className="text-emerald-400 text-sm">{refs.filter(r => r.status === 'validado').length} validados</span>
-                      <span className="text-blue-400 text-sm">{refs.filter(r => ['conversa_iniciada', 'validado'].includes(r.status)).length} conversas</span>
-                    </>
-                  })()}
-                </div>
+              <div className="flex justify-between text-xs text-[#71717A]">
+                <span>Atualizado</span>
+                <span>{tempoRelativo(leadSelecionado.updated_at)}</span>
               </div>
             </div>
-            {(leadSelecionado.whatsapp || leadSelecionado.telefone) && (
+            {leadSelecionado.telefone && (
               <a
-                href={`https://wa.me/55${(leadSelecionado.whatsapp || leadSelecionado.telefone || '').replace(/\D/g, '')}`}
+                href={`https://wa.me/55${leadSelecionado.telefone.replace(/\D/g, '')}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-xl text-sm font-medium transition-colors"
@@ -612,16 +606,14 @@ export default function CRMPage() {
             </div>
             <div className="space-y-3">
               {[
-                { label: 'Nome *', key: 'nome', type: 'text' },
-                { label: 'Email *', key: 'email', type: 'email' },
-                { label: 'Telefone', key: 'telefone', type: 'tel' },
-                { label: 'WhatsApp', key: 'whatsapp', type: 'tel' },
+                { label: 'Nome', key: 'nome', type: 'text' },
+                { label: 'Telefone *', key: 'telefone', type: 'tel' },
               ].map(f => (
                 <div key={f.key}>
                   <label className="text-xs text-[#71717A] mb-1 block">{f.label}</label>
                   <input
                     type={f.type}
-                    value={novoLead[f.key as keyof typeof novoLead]}
+                    value={novoLead[f.key as keyof typeof novoLead] as string}
                     onChange={e => setNovoLead(prev => ({ ...prev, [f.key]: e.target.value }))}
                     className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#7B3FE4]"
                   />
@@ -630,9 +622,9 @@ export default function CRMPage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-xs text-[#71717A] mb-1 block">Etapa</label>
-                  <select value={novoLead.etapa} onChange={e => setNovoLead(prev => ({ ...prev, etapa: e.target.value as Etapa }))}
+                  <select value={novoLead.etapa_agente} onChange={e => setNovoLead(prev => ({ ...prev, etapa_agente: Number(e.target.value) }))}
                     className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#7B3FE4]">
-                    {(Object.keys(etapaLabels) as Etapa[]).map(e => <option key={e} value={e}>{etapaLabels[e]}</option>)}
+                    {[1,2,3,4,5,6,7,8].map(n => <option key={n} value={n}>{etapaAgentLabels[n]}</option>)}
                   </select>
                 </div>
                 <div>
@@ -646,53 +638,9 @@ export default function CRMPage() {
                 </div>
               </div>
             </div>
-            <button onClick={criarLead} disabled={salvando || !novoLead.nome || !novoLead.email}
+            <button onClick={criarLead} disabled={salvando || (!novoLead.nome && !novoLead.telefone)}
               className="w-full bg-[#7B3FE4] hover:bg-[#6B2FD4] disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">
               {salvando ? 'Salvando...' : 'Criar Lead'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Modal novo referido */}
-      {showNovoReferido && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl w-full max-w-md p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-white">Novo Referido</h3>
-              <button onClick={() => setShowNovoReferido(false)} className="text-[#71717A] hover:text-white"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs text-[#71717A] mb-1 block">Lead de origem *</label>
-                <select value={novoReferido.lead_origem_id} onChange={e => setNovoReferido(prev => ({ ...prev, lead_origem_id: e.target.value }))}
-                  className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#7B3FE4]">
-                  <option value="">Selecione o lead...</option>
-                  {leads.map(l => <option key={l.id} value={l.id}>{l.nome}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="text-xs text-[#71717A] mb-1 block">Nome</label>
-                <input type="text" value={novoReferido.nome} onChange={e => setNovoReferido(prev => ({ ...prev, nome: e.target.value }))}
-                  className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#7B3FE4]" />
-              </div>
-              <div>
-                <label className="text-xs text-[#71717A] mb-1 block">Telefone/WhatsApp *</label>
-                <input type="tel" value={novoReferido.telefone} onChange={e => setNovoReferido(prev => ({ ...prev, telefone: e.target.value }))}
-                  className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#7B3FE4]" />
-              </div>
-              <div>
-                <label className="text-xs text-[#71717A] mb-1 block">Tipo</label>
-                <select value={novoReferido.tipo} onChange={e => setNovoReferido(prev => ({ ...prev, tipo: e.target.value as 'normal' | 'nao_fechou' }))}
-                  className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#7B3FE4]">
-                  <option value="normal">20 referidos (fechou)</option>
-                  <option value="nao_fechou">4 referidos (não fechou)</option>
-                </select>
-              </div>
-            </div>
-            <button onClick={criarReferido} disabled={salvando || !novoReferido.telefone || !novoReferido.lead_origem_id}
-              className="w-full bg-[#7B3FE4] hover:bg-[#6B2FD4] disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">
-              {salvando ? 'Salvando...' : 'Adicionar Referido'}
             </button>
           </div>
         </div>

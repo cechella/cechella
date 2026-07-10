@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+const N8N_WEBHOOK_URL = `${process.env.NEXT_PUBLIC_SITE_URL || 'https://www.hormoneecosystem.com'}/api/n8n-proxy`
+
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -78,13 +80,34 @@ async function sendWelcomeEmail(nome: string, email: string, senha: string, logi
   })
 }
 
+async function acionarAna(nome: string, telefone: string, origem: string) {
+  try {
+    await fetch(N8N_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        telefone: telefone.replace(/\D/g, ''),
+        nome,
+        origem,
+        etapa_agente: 1,
+        trigger: 'landing_page',
+      }),
+      signal: AbortSignal.timeout(8000),
+    })
+  } catch {
+    // Ana será acionada quando o lead responder no WhatsApp
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { nome, email, telefone } = await req.json()
+    const { nome, email, telefone, origem: origemBody } = await req.json()
 
     if (!nome || !email || !telefone) {
       return NextResponse.json({ error: 'Preencha todos os campos.' }, { status: 400 })
     }
+
+    const origem = origemBody || 'landing_page'
 
     const emailLower = email.toLowerCase().trim()
     const senha = generatePassword()
@@ -103,7 +126,7 @@ export async function POST(req: NextRequest) {
     if (authError) {
       if (authError.message.includes('already been registered') || authError.status === 422) {
         await supabaseAdmin.from('leads').upsert(
-          { email: emailLower, nome, telefone, origem: 'landing_page', updated_at: new Date().toISOString() },
+          { email: emailLower, nome, telefone, origem, updated_at: new Date().toISOString() },
           { onConflict: 'email' }
         )
         // Usuário já existe — gera nova senha e envia por email
@@ -114,6 +137,7 @@ export async function POST(req: NextRequest) {
           await supabaseAdmin.auth.admin.updateUserById(user.id, { password: novaSenha })
         }
         await sendWelcomeEmail(nome, emailLower, novaSenha, loginUrl)
+        await acionarAna(nome, telefone, origem)
         return NextResponse.json({ success: true, existing: true })
       }
       throw authError
@@ -130,11 +154,12 @@ export async function POST(req: NextRequest) {
     })
 
     await supabaseAdmin.from('leads').upsert(
-      { email: emailLower, nome, telefone, origem: 'landing_page', user_id: userId, updated_at: new Date().toISOString() },
+      { email: emailLower, nome, telefone, origem, user_id: userId, updated_at: new Date().toISOString() },
       { onConflict: 'email' }
     )
 
     await sendWelcomeEmail(nome, emailLower, senha, loginUrl)
+    await acionarAna(nome, telefone, origem)
 
     return NextResponse.json({ success: true })
   } catch (err: any) {

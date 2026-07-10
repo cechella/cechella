@@ -26,8 +26,8 @@ import {
   Bot,
   Share2,
   TrendingUp,
-  DollarSign,
   TestTube2,
+  DollarSign,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'

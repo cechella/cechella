@@ -17,7 +17,11 @@ function extrairFoneVcard(phones) {
 }
 
 const extrairMsg = $('Extrair Mensagem').item.json;
-const telefone = extrairMsg.telefone || '';
+const telefoneRaw = extrairMsg.telefone || '';
+let telefone = telefoneRaw;
+if (telefone.length === 12 && telefone.startsWith('55')) {
+  telefone = telefone.slice(0, 4) + '9' + telefone.slice(4);
+}
 const mensagem = extrairMsg.message || '';
 
 const webhookRaw = $('Webhook Evolution API').item.json;
@@ -27,22 +31,23 @@ const vcardContacts = Array.isArray(bodyRaw.contactArray) && bodyRaw.contactArra
   ? bodyRaw.contactArray
   : (bodyRaw.contact ? [bodyRaw.contact] : []);
 
-// Se não tem vCards reais, encerra sem fazer nada
 if (vcardContacts.length === 0) {
   return [{ json: { salvos: 0, status: 'nenhum_vcard', telefone } }];
 }
 
 let indicado_por_nome = '';
 let totalAtual = 0;
+let etapaAtual = 1;
 try {
   const r = await this.helpers.httpRequest({
     method: 'GET',
-    url: `${SUPABASE_URL}/rest/v1/leads?telefone=eq.${telefone}&select=nome,total_referidos`,
+    url: `${SUPABASE_URL}/rest/v1/leads?telefone=eq.${telefoneRaw}&select=nome,total_referidos,etapa_agente`,
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
   });
   const lead = Array.isArray(r) ? r[0] : r;
   indicado_por_nome = lead?.nome || '';
   totalAtual = lead?.total_referidos || 0;
+  etapaAtual = lead?.etapa_agente || 1;
 } catch(e) {}
 
 const referidos = [];
@@ -52,7 +57,6 @@ for (const c of vcardContacts) {
   const nome = c.displayName || null;
   const fone = extrairFoneVcard(c.phones);
   if (!fone) {
-    // Contato sem número — não pode ser salvo nem contado
     if (nome) semFone++;
     continue;
   }
@@ -63,40 +67,43 @@ for (const c of vcardContacts) {
     telefone: fone,
     profissao: null,
     hobby: null,
+    tipo_envio: 'cartao',
     prioridade: 2,
     status: 'aguardando',
   });
 }
 
 if (referidos.length === 0) {
-  // Todos os contatos vieram sem número de telefone salvo
   if (semFone > 0) {
     try {
       await this.helpers.httpRequest({
         method: 'POST',
         url: ZAPI_URL,
         headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-        body: JSON.stringify({ phone: telefone, message: `Ops! Recebi ${semFone} contato${semFone > 1 ? 's' : ''} mas sem número de telefone salvo. 😅\nPara eu conseguir contar, preciso que o número esteja salvo na agenda. Consegue abrir o WhatsApp, ir em Contatos, editar esse contato e adicionar o número? Depois é só reenviar! 🙏` })
+        body: JSON.stringify({ phone: telefone, message: `Ops! Recebi ${semFone} contato${semFone > 1 ? 's' : ''} mas sem número de telefone salvo. 😅\nPara eu conseguir contar, preciso que o número esteja salvo na agenda. Consegue editar o contato e adicionar o número? Depois é só reenviar! 🙏` })
       });
     } catch(e) {}
   }
   return [{ json: { salvos: 0, status: 'nenhum_referido', telefone, etapa_agente: totalAtual } }];
 }
 
-// Primeira camada: verificar existentes para evitar race condition
 const existentes = await this.helpers.httpRequest({
   method: 'GET',
   url: `${SUPABASE_URL}/rest/v1/contatos_referidos?indicado_por_telefone=eq.${telefone}&select=telefone`,
   headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
 });
 const fonesExistentes = new Set((Array.isArray(existentes) ? existentes : []).map(e => e.telefone));
-const referidosNovos = referidos.filter(r => !fonesExistentes.has(r.telefone));
+const fonesLote = new Set();
+const referidosNovos = referidos.filter(r => {
+  if (fonesExistentes.has(r.telefone) || fonesLote.has(r.telefone)) return false;
+  fonesLote.add(r.telefone);
+  return true;
+});
 
 if (referidosNovos.length === 0) {
   return [{ json: { salvos: 0, status: 'todos_ja_existem', telefone } }];
 }
 
-// Segunda camada: upsert com ignore-duplicates (unique constraint no DB)
 try {
   await this.helpers.httpRequest({
     method: 'POST',
@@ -111,18 +118,26 @@ try {
   });
 } catch(e) {}
 
-// Total = existentes antes + novos inseridos (sem chamada extra ao banco)
-const novoTotal = fonesExistentes.size + referidosNovos.length;
+// Busca total real do banco após inserção — usa telefone (13 dígitos) pois é como ficam salvos
+let novoTotal = totalAtual + referidosNovos.length;
+try {
+  const totalResp = await this.helpers.httpRequest({
+    method: 'GET',
+    url: `${SUPABASE_URL}/rest/v1/contatos_referidos?indicado_por_telefone=eq.${telefone}&select=telefone`,
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+  });
+  if (Array.isArray(totalResp)) novoTotal = totalResp.length;
+} catch(e) {}
 
 try {
   await this.helpers.httpRequest({
     method: 'PATCH',
-    url: `${SUPABASE_URL}/rest/v1/leads?telefone=eq.${telefone}`,
+    url: `${SUPABASE_URL}/rest/v1/leads?telefone=eq.${telefoneRaw}`,
     headers: {
       'Content-Type': 'application/json',
       'apikey': SUPABASE_KEY,
       'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Prefer': 'resolution=ignore-duplicates,return=minimal',
+      'Prefer': 'return=minimal',
     },
     body: JSON.stringify({ total_referidos: novoTotal }),
   });
@@ -140,32 +155,85 @@ if (novoTotal < 20) {
   } catch(e) {}
 }
 
-if (novoTotal >= 20) {
+if (novoTotal >= 20 && etapaAtual < 8) {
+  let etapaAtualizada = false;
   try {
-    await this.helpers.httpRequest({
+    const patchResp = await this.helpers.httpRequest({
       method: 'PATCH',
-      url: `${SUPABASE_URL}/rest/v1/leads?telefone=eq.${telefone}`,
+      url: `${SUPABASE_URL}/rest/v1/leads?telefone=eq.${telefoneRaw}&etapa_agente=lt.8`,
       headers: {
         'Content-Type': 'application/json',
         'apikey': SUPABASE_KEY,
         'Authorization': 'Bearer ' + SUPABASE_KEY,
-        'Prefer': 'return=minimal',
+        'Prefer': 'return=representation',
       },
       body: JSON.stringify({ etapa_agente: 8 }),
     });
+    etapaAtualizada = Array.isArray(patchResp) ? patchResp.length > 0 : !!patchResp;
   } catch(e) {}
 
-  const mensagemEtapa8 = `Maravilhoso! 🎉 Você é incrível!\nO sistema confirmou que recebi ${novoTotal} contatos seus. ✅\nAgora me ajuda com uma coisa rápida — alguma das mulheres que você indicou já te respondeu dizendo que não quer receber contato? 😊\nSe sim, me fala o nome que eu já retiro da lista.\nSe todas toparam, me fala 'todas ok' e a gente segue!`;
+  if (!etapaAtualizada) {
+    return [{ json: { salvos: referidosNovos.length, total_acumulado: novoTotal, status: 'etapa8_ja_enviada', telefone } }];
+  }
 
+  // Buscar primeiros 5 contatos do banco
+  let primeiros5 = [];
+  try {
+    let telefone13 = telefone;
+    const contatosResp = await this.helpers.httpRequest({
+      method: 'GET',
+      url: `${SUPABASE_URL}/rest/v1/contatos_referidos?indicado_por_telefone=eq.${telefone13}&select=nome&order=id.asc&limit=5`,
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
+    });
+    primeiros5 = Array.isArray(contatosResp) ? contatosResp : [];
+  } catch(e) {}
+
+  // MSG 1: Confirmação
   try {
     await this.helpers.httpRequest({
       method: 'POST',
       url: ZAPI_URL,
-      headers: {
-        'Content-Type': 'application/json',
-        'Client-Token': ZAPI_TOKEN,
-      },
-      body: JSON.stringify({ phone: telefone, message: mensagemEtapa8 }),
+      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+      body: JSON.stringify({ phone: telefone, message: `Maravilhoso! 🎉 Você é incrível!\nO sistema confirmou que recebi ${novoTotal} contatos seus. ✅` }),
+    });
+  } catch(e) {}
+
+  await new Promise(r => setTimeout(r, 1500));
+
+  // MSG 2: Intro das mensagens individuais
+  try {
+    await this.helpers.httpRequest({
+      method: 'POST',
+      url: ZAPI_URL,
+      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+      body: JSON.stringify({ phone: telefone, message: `Agora vou te mandar 5 mensagens prontas — uma para cada contato. É só encaminhar direto para cada uma delas! 📱✨` }),
+    });
+  } catch(e) {}
+
+  await new Promise(r => setTimeout(r, 1500));
+
+  // MSG individuais: uma por contato (primeiros 5)
+  for (const contato of primeiros5) {
+    const nomeContato = (contato.nome || 'amiga').split(' ')[0];
+    const msg = `*Oi ${nomeContato}! Tudo bem?* 😊\nAcabei de fazer uma coisa incrível pela minha saúde e pensei em você! Uma consultora chamada Ana do Hormone Ecosystem vai te mandar uma mensagem agora — pode responder ela, vale muito a pena ouvir! 🌸`;
+    try {
+      await this.helpers.httpRequest({
+        method: 'POST',
+        url: ZAPI_URL,
+        headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+        body: JSON.stringify({ phone: telefone, message: msg }),
+      });
+    } catch(e) {}
+    await new Promise(r => setTimeout(r, 1500));
+  }
+
+  // MSG final: aguarda confirmação antes de enviar próximas 5
+  try {
+    await this.helpers.httpRequest({
+      method: 'POST',
+      url: ZAPI_URL,
+      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+      body: JSON.stringify({ phone: telefone, message: `Conseguiu encaminhar as 5? Me avisa quando terminar que mando mais 5! 😊💜` }),
     });
   } catch(e) {}
 

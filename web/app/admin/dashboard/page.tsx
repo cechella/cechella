@@ -26,7 +26,10 @@ type Lead = {
   historico?: Array<{role: string; content: string; ts?: string}>
   total_referidos?: number
   updated_at: string
+  created_at?: string
   dor_principal?: string
+  origem?: string | null
+  atendimento_humano?: boolean
 }
 
 type Referido = {
@@ -79,6 +82,12 @@ type Stats = {
   origens: OrigemStat[]
   referidosComScore: ReferidoComScore[]
   topReferidos: ReferidoComScore[]
+  // CEO Cockpit
+  faturamentoHoje: number
+  faturamentoOntem: number
+  leadsNovosHoje: number
+  mediaLeads7d: number
+  maiorSangramento: { de: string; para: string; perdeu: number; pct: number } | null
 }
 
 // ─── Constants ───────────────────────────────────────────
@@ -151,18 +160,35 @@ function getSupabase() {
   return supabaseClient
 }
 
+// ─── Pipeline ticker types ────────────────────────────────
+type PipelineEtapa = {
+  n: number
+  label: string
+  shortLabel: string
+  count: number
+  color: string
+  pulse?: boolean
+}
+
+const etapaShortLabels: Record<number, string> = {
+  1: 'Apresentação', 2: 'Conexão', 3: 'D.I.', 4: 'Speech',
+  5: 'Fechamento', 6: 'Pag. Pend.', 7: 'Referidos', 8: 'Validação',
+}
+
 // ─── Component ───────────────────────────────────────────
 export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [lastRefresh, setLastRefresh] = useState(new Date())
+  const [pipeline, setPipeline] = useState<PipelineEtapa[]>([])
+  const [pipelineFlash, setPipelineFlash] = useState<number | null>(null)
 
   const supabase = getSupabase()
 
   async function load() {
     try {
       const [leadsRes, referidosRes] = await Promise.all([
-        supabase.from('leads').select('id,nome,telefone,etapa_agente,temperatura,historico,total_referidos,updated_at,dor_principal').order('updated_at', { ascending: false }),
+        supabase.from('leads').select('id,nome,telefone,etapa_agente,temperatura,historico,total_referidos,updated_at,created_at,dor_principal,origem,atendimento_humano').order('updated_at', { ascending: false }),
         supabase.from('contatos_referidos').select('id,nome,telefone,profissao,hobby,status,indicado_por_telefone,indicado_por_nome,created_at').order('created_at', { ascending: false }),
       ])
 
@@ -199,23 +225,32 @@ export default function AdminDashboard() {
       for (let i = 6; i >= 0; i--) {
         const d = new Date(); d.setDate(d.getDate() - i)
         const label = d.toLocaleDateString('pt-BR', { weekday: 'short' })
-        const total = leads.filter(l => new Date(l.updated_at).toDateString() === d.toDateString()).length
+        const dStr = d.toDateString()
+        const total = leads.filter(l => {
+          const ref = l.created_at || l.updated_at
+          return new Date(ref).toDateString() === dStr
+        }).length
         leadsPorDia.push({ dia: label, total })
       }
 
-      // ── Origens ──
+      // ── Origens — conta do banco real ──
       const origensDef = [
-        { origem: 'instagram', label: 'Instagram / ManyChat', cor: '#E1306C', emoji: '📸' },
-        { origem: 'referido',  label: 'Referidos (Ana IA)',   cor: '#7B3FE4', emoji: '🔗' },
-        { origem: 'site',      label: 'Site / Formulário',    cor: '#3B82F6', emoji: '🌐' },
-        { origem: 'google',    label: 'Google Ads',           cor: '#F59E0B', emoji: '🔍' },
-        { origem: 'whatsapp',  label: 'WhatsApp Direto',      cor: '#25D366', emoji: '💬' },
-        { origem: 'manual',    label: 'Cadastro Manual',      cor: '#71717A', emoji: '✏️' },
+        { origem: 'instagram',    label: 'Instagram / ManyChat', cor: '#E1306C', emoji: '📸' },
+        { origem: 'landing_page', label: 'Landing Page',         cor: '#3B82F6', emoji: '🌐' },
+        { origem: 'referido',     label: 'Referidos (Ana IA)',   cor: '#7B3FE4', emoji: '🔗' },
+        { origem: 'google',       label: 'Google Ads',           cor: '#F59E0B', emoji: '🔍' },
+        { origem: 'whatsapp',     label: 'WhatsApp Direto',      cor: '#25D366', emoji: '💬' },
+        { origem: 'manual',       label: 'Cadastro Manual',      cor: '#71717A', emoji: '✏️' },
       ]
-      const origens: OrigemStat[] = origensDef.map(o => ({
-        ...o,
-        total: 0,
-      })).filter(o => o.total > 0).sort((a, b) => b.total - a.total)
+      const contagemOrigens: Record<string, number> = {}
+      leads.forEach(l => {
+        const o = l.origem || 'desconhecido'
+        contagemOrigens[o] = (contagemOrigens[o] ?? 0) + 1
+      })
+      const origens: OrigemStat[] = origensDef
+        .map(o => ({ ...o, total: contagemOrigens[o.origem] ?? 0 }))
+        .filter(o => o.total > 0)
+        .sort((a, b) => b.total - a.total)
 
       // ── Alertas ──
       const alertas: { tipo: string; msg: string; href: string }[] = []
@@ -230,7 +265,15 @@ export default function AdminDashboard() {
         alertas.push({ tipo: 'hot', msg: `${quentes.length} leads quentes no funil — prioridade máxima`, href: '/admin/crm' })
       const pendentesRef = referidos.filter(r => r.status === 'aguardando').length
       if (pendentesRef > 0)
-        alertas.push({ tipo: 'info', msg: `${pendentesRef} referidos aguardando contato`, href: '/admin/crm' })
+        alertas.push({ tipo: 'info', msg: `${pendentesRef} referidos aguardando contato`, href: '/admin/referidos' })
+      // Atendimento humano ativo
+      const emAtendimentoHumano = leads.filter(l => l.atendimento_humano === true).length
+      if (emAtendimentoHumano > 0)
+        alertas.push({ tipo: 'human', msg: `${emAtendimentoHumano} lead${emAtendimentoHumano !== 1 ? 's' : ''} em atendimento humano ativo`, href: '/admin/agente' })
+      // Leads aguardando primeiro contato
+      const aguardandoContato = leads.filter(l => !l.historico || !Array.isArray(l.historico) || l.historico.length === 0).length
+      if (aguardandoContato > 0)
+        alertas.push({ tipo: 'info', msg: `${aguardandoContato} lead${aguardandoContato !== 1 ? 's' : ''} aguardando primeiro contato da Ana`, href: '/admin/referidos' })
 
       // ── Agent stats from historico ──
       const msgsHoje = allMessages.filter(m => new Date(m.ts).toDateString() === hoje)
@@ -287,6 +330,40 @@ export default function AdminDashboard() {
       }
       if (deltas.length > 0) tempoMedioResposta = Math.round(deltas.reduce((a,b) => a+b, 0) / deltas.length)
 
+      // ── CEO Cockpit metrics ──
+      const ontem = new Date(); ontem.setDate(ontem.getDate() - 1)
+      const ontemStr = ontem.toDateString()
+
+      // Faturamento: leads que fecharam (etapa >= 7) × R$5.000
+      const TICKET = 5000
+      const fechadosHoje = leads.filter(l => (l.etapa_agente ?? 0) >= 7 && new Date(l.updated_at).toDateString() === hoje).length
+      const fechadosOntem = leads.filter(l => (l.etapa_agente ?? 0) >= 7 && new Date(l.updated_at).toDateString() === ontemStr).length
+      const faturamentoHoje = fechadosHoje * TICKET
+      const faturamentoOntem = fechadosOntem * TICKET
+
+      // Leads novos hoje vs média 7d (usa created_at)
+      const leadsNovosHoje = leads.filter(l => l.created_at && new Date(l.created_at).toDateString() === hoje).length
+      let totalUltimos7 = 0
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(); d.setDate(d.getDate() - i)
+        totalUltimos7 += leads.filter(l => l.created_at && new Date(l.created_at).toDateString() === d.toDateString()).length
+      }
+      const mediaLeads7d = Math.round((totalUltimos7 / 7) * 10) / 10
+
+      // Maior sangramento do funil: maior queda absoluta entre etapas consecutivas
+      let maiorSangramento: { de: string; para: string; perdeu: number; pct: number } | null = null
+      for (let n = 1; n <= 7; n++) {
+        const atual = etapaCount[n] ?? 0
+        const proximo = etapaCount[n + 1] ?? 0
+        if (atual > 0) {
+          const perdeu = atual - proximo
+          const pct = Math.round((perdeu / atual) * 100)
+          if (!maiorSangramento || perdeu > maiorSangramento.perdeu) {
+            maiorSangramento = { de: etapaAgentLabels[n], para: etapaAgentLabels[n + 1], perdeu, pct }
+          }
+        }
+      }
+
       // ── Referidos com score ──
       const referidosComScore: ReferidoComScore[] = referidos.map(r => ({
         ...r,
@@ -299,9 +376,10 @@ export default function AdminDashboard() {
         totalLeads: leads.length, leadsHoje, ganhos, perdidos,
         referidosTotais: referidos.length, referidosValidados,
         etapaCount, temperaturaCounts, leadsPorDia,
-        recentLeads: leads.slice(0, 6), alertas, origens,
+        recentLeads: leads, alertas, origens,
         referidosComScore,
         topReferidos,
+        faturamentoHoje, faturamentoOntem, leadsNovosHoje, mediaLeads7d, maiorSangramento,
         agente: {
           conversasAtivas, conversasHoje,
           mensagensHoje: msgsHoje.length,
@@ -318,11 +396,56 @@ export default function AdminDashboard() {
     }
   }
 
+  // Update pipeline whenever stats changes
+  useEffect(() => {
+    if (!stats) return
+    setPipeline([1,2,3,4,5,6,7,8].map(n => ({
+      n,
+      label: etapaAgentLabels[n],
+      shortLabel: etapaShortLabels[n],
+      count: stats.etapaCount[n] ?? 0,
+      color: etapaAgentColors[n],
+    })))
+  }, [stats])
+
   useEffect(() => {
     load()
     // Auto-refresh a cada 60s
     const interval = setInterval(load, 60000)
-    return () => clearInterval(interval)
+
+    // Supabase Realtime — atualiza pipeline instantaneamente quando lead muda de etapa
+    const channel = supabase
+      .channel('leads-pipeline')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads' }, (payload: any) => {
+        const newEtapa = (payload.new as any).etapa_agente as number | null
+        const oldEtapa = (payload.old as any).etapa_agente as number | null
+        if (newEtapa && newEtapa !== oldEtapa) {
+          setPipeline(prev => prev.map(e => ({
+            ...e,
+            count: e.n === newEtapa
+              ? e.count + 1
+              : e.n === oldEtapa
+                ? Math.max(0, e.count - 1)
+                : e.count,
+          })))
+          setPipelineFlash(newEtapa)
+          setTimeout(() => setPipelineFlash(null), 2000)
+        }
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, (payload: any) => {
+        const etapa = (payload.new as any).etapa_agente as number | null
+        if (etapa) {
+          setPipeline(prev => prev.map(e => e.n === etapa ? { ...e, count: e.count + 1 } : e))
+          setPipelineFlash(etapa)
+          setTimeout(() => setPipelineFlash(null), 2000)
+        }
+      })
+      .subscribe()
+
+    return () => {
+      clearInterval(interval)
+      supabase.removeChannel(channel)
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -393,6 +516,125 @@ export default function AdminDashboard() {
             </div>
           </div>
 
+          {/* ── CEO Cockpit — 5 números inescapáveis ── */}
+          {!loading && stats && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
+              {/* 1. Faturamento hoje */}
+              {(() => {
+                const delta = stats.faturamentoOntem > 0
+                  ? Math.round(((stats.faturamentoHoje - stats.faturamentoOntem) / stats.faturamentoOntem) * 100)
+                  : stats.faturamentoHoje > 0 ? 100 : 0
+                const isUp = delta >= 0
+                return (
+                  <div className="bg-[#111113] border border-emerald-500/20 rounded-2xl p-4 flex flex-col gap-1 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-emerald-500/0 via-emerald-500 to-emerald-500/0" />
+                    <span className="text-[10px] font-semibold tracking-widest uppercase text-emerald-500/70">Faturamento Hoje</span>
+                    <p className="text-2xl font-black text-white tabular-nums">
+                      {stats.faturamentoHoje > 0 ? `R$ ${(stats.faturamentoHoje / 1000).toFixed(0)}k` : 'R$ 0'}
+                    </p>
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className={isUp ? 'text-emerald-400' : 'text-red-400'}>{isUp ? '▲' : '▼'} {Math.abs(delta)}%</span>
+                      <span className="text-[#52525B]">vs ontem R$ {stats.faturamentoOntem > 0 ? `${(stats.faturamentoOntem/1000).toFixed(0)}k` : '0'}</span>
+                    </div>
+                    <p className="text-[10px] text-[#52525B] mt-1">{stats.ganhos} fechamentos × R$5k <span className="text-amber-500/60">— estimado</span></p>
+                  </div>
+                )
+              })()}
+
+              {/* 2. Leads novos hoje vs média 7d */}
+              {(() => {
+                const isUp = stats.leadsNovosHoje >= stats.mediaLeads7d
+                return (
+                  <div className="bg-[#111113] border border-blue-500/20 rounded-2xl p-4 flex flex-col gap-1 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500/0 via-blue-500 to-blue-500/0" />
+                    <span className="text-[10px] font-semibold tracking-widest uppercase text-blue-400/70">Leads Novos Hoje</span>
+                    <p className="text-2xl font-black text-white tabular-nums">+{stats.leadsNovosHoje}</p>
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className={isUp ? 'text-emerald-400' : 'text-amber-400'}>{isUp ? '▲' : '▼'}</span>
+                      <span className="text-[#52525B]">média 7d: {stats.mediaLeads7d}/dia</span>
+                    </div>
+                    <p className="text-[10px] text-[#52525B] mt-1">{stats.leadsHoje} ativos hoje no total</p>
+                  </div>
+                )
+              })()}
+
+              {/* 3. Maior sangramento */}
+              {(() => {
+                const s = stats.maiorSangramento
+                return (
+                  <div className="bg-[#111113] border border-red-500/20 rounded-2xl p-4 flex flex-col gap-1 relative overflow-hidden">
+                    <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-red-500/0 via-red-500 to-red-500/0" />
+                    <span className="text-[10px] font-semibold tracking-widest uppercase text-red-400/70">Funil Sangrando</span>
+                    {s && s.perdeu > 0 ? (
+                      <>
+                        <p className="text-2xl font-black text-red-400 tabular-nums">−{s.perdeu}</p>
+                        <div className="text-xs text-[#A1A1AA]">{s.de} → {s.para}</div>
+                        <p className="text-[10px] text-[#52525B] mt-1">{s.pct}% de queda nessa transição</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-2xl font-black text-emerald-400">OK</p>
+                        <p className="text-[10px] text-[#52525B] mt-1">Sem queda expressiva no funil</p>
+                      </>
+                    )}
+                  </div>
+                )
+              })()}
+
+              {/* 4. Saúde da Ana */}
+              <div className="bg-[#111113] border border-[#25D366]/20 rounded-2xl p-4 flex flex-col gap-1 relative overflow-hidden">
+                <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-[#25D366]/0 via-[#25D366] to-[#25D366]/0" />
+                <span className="text-[10px] font-semibold tracking-widest uppercase text-[#25D366]/70">Saúde da Ana</span>
+                <p className="text-2xl font-black tabular-nums" style={{ color: agentScoreColor }}>{agentScore}</p>
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span style={{ color: agentScoreColor }}>{agentScoreLabel}</span>
+                  <span className="text-[#52525B]">· {ag?.taxaResposta ?? 0}% resp.</span>
+                </div>
+                <p className="text-[10px] text-[#52525B] mt-1">
+                  {ag?.tempoMedioResposta ? `${ag.tempoMedioResposta}min tempo médio` : 'Sem mensagens hoje'}
+                </p>
+              </div>
+
+              {/* 5. Anomalia principal */}
+              {(() => {
+                const top = stats.alertas[0]
+                return (
+                  <div className={`bg-[#111113] rounded-2xl p-4 flex flex-col gap-1 relative overflow-hidden border ${
+                    top?.tipo === 'hot' ? 'border-red-500/30' :
+                    top?.tipo === 'warn' ? 'border-amber-500/30' :
+                    'border-[#1C1C1E]'
+                  }`}>
+                    <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r ${
+                      top?.tipo === 'hot' ? 'from-red-500/0 via-red-500 to-red-500/0' :
+                      top?.tipo === 'warn' ? 'from-amber-500/0 via-amber-500 to-amber-500/0' :
+                      'from-emerald-500/0 via-emerald-500 to-emerald-500/0'
+                    }`} />
+                    <span className={`text-[10px] font-semibold tracking-widest uppercase ${
+                      top?.tipo === 'hot' ? 'text-red-400/70' :
+                      top?.tipo === 'warn' ? 'text-amber-400/70' :
+                      'text-emerald-400/70'
+                    }`}>Anomalia</span>
+                    {top ? (
+                      <>
+                        <p className={`text-sm font-bold leading-tight mt-1 ${
+                          top.tipo === 'hot' ? 'text-red-300' :
+                          top.tipo === 'warn' ? 'text-amber-300' :
+                          'text-blue-300'
+                        }`}>{top.msg}</p>
+                        <p className="text-[10px] text-[#52525B] mt-1">{stats.alertas.length} alerta{stats.alertas.length !== 1 ? 's' : ''} no total</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-2xl font-black text-emerald-400">✓</p>
+                        <p className="text-[10px] text-[#52525B] mt-1">Nenhuma anomalia detectada</p>
+                      </>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
+          )}
+
           {/* ── Alertas ── */}
           {stats && stats.alertas.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
@@ -401,10 +643,12 @@ export default function AdminDashboard() {
                   className={`flex items-center gap-3 px-4 py-3 rounded-2xl border text-sm font-medium transition-all hover:brightness-110 ${
                     a.tipo === 'hot' ? 'bg-red-500/10 border-red-500/30 text-red-400' :
                     a.tipo === 'warn' ? 'bg-amber-500/10 border-amber-500/30 text-amber-400' :
+                    a.tipo === 'human' ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' :
                     'bg-blue-500/10 border-blue-500/30 text-blue-400'
                   }`}>
                   {a.tipo === 'hot' ? <Flame className="w-4 h-4 flex-shrink-0" /> :
                    a.tipo === 'warn' ? <AlertTriangle className="w-4 h-4 flex-shrink-0" /> :
+                   a.tipo === 'human' ? <UserPlus className="w-4 h-4 flex-shrink-0" /> :
                    <Clock className="w-4 h-4 flex-shrink-0" />}
                   <span className="truncate">{a.msg}</span>
                   <ArrowUpRight className="w-3.5 h-3.5 ml-auto flex-shrink-0 opacity-60" />
@@ -433,6 +677,89 @@ export default function AdminDashboard() {
               </div>
             ))}
           </div>
+
+          {/* ── Pipeline ao Vivo ── */}
+          {pipeline.length > 0 && (
+            <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4 overflow-hidden">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-xs font-semibold text-white">Pipeline ao Vivo</span>
+                  <span className="text-xs text-[#52525B]">— atualiza em tempo real</span>
+                </div>
+                <span className="text-xs text-[#52525B]">
+                  {pipeline.reduce((s, e) => s + e.count, 0)} leads no funil
+                </span>
+              </div>
+              <div className="grid grid-cols-8 gap-2">
+                {pipeline.map((etapa) => {
+                  const isFlashing = pipelineFlash === etapa.n
+                  const isActive = etapa.count > 0
+                  const isPaid = etapa.n === 7 || etapa.n === 8
+                  return (
+                    <div
+                      key={etapa.n}
+                      className={`relative rounded-xl p-3 border text-center transition-all duration-500 ${
+                        isFlashing
+                          ? 'scale-105 shadow-lg'
+                          : ''
+                      }`}
+                      style={{
+                        borderColor: isFlashing ? etapa.color : isActive ? etapa.color + '40' : '#1C1C1E',
+                        background: isFlashing
+                          ? etapa.color + '30'
+                          : isActive
+                            ? etapa.color + '10'
+                            : '#0D0D0F',
+                        boxShadow: isFlashing ? `0 0 20px ${etapa.color}60` : undefined,
+                      }}
+                    >
+                      {/* Número da etapa */}
+                      <div className="text-[10px] font-bold mb-1" style={{ color: isActive ? etapa.color : '#3F3F46' }}>
+                        E{etapa.n}
+                      </div>
+                      {/* Contador — grande e em destaque */}
+                      <div
+                        className={`text-2xl font-bold transition-all ${isFlashing ? 'scale-110' : ''}`}
+                        style={{ color: isActive ? etapa.color : '#3F3F46' }}
+                      >
+                        {etapa.count}
+                      </div>
+                      {/* Label curto */}
+                      <div className="text-[9px] leading-tight mt-1 truncate" style={{ color: isActive ? '#A1A1AA' : '#3F3F46' }}>
+                        {etapa.shortLabel}
+                      </div>
+                      {/* Badge "$" quando dinheiro entrou (etapa 7+) */}
+                      {isPaid && etapa.count > 0 && (
+                        <div className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
+                          <span className="text-[8px] font-bold text-white">$</span>
+                        </div>
+                      )}
+                      {/* Flash de nova entrada */}
+                      {isFlashing && (
+                        <div className="absolute inset-0 rounded-xl animate-ping opacity-20"
+                          style={{ background: etapa.color }} />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+              {/* Barra de progresso do funil */}
+              <div className="flex gap-0.5 mt-3 h-1 rounded-full overflow-hidden">
+                {pipeline.map(etapa => {
+                  const total = pipeline.reduce((s, e) => s + e.count, 0)
+                  const pct = total > 0 ? (etapa.count / total) * 100 : 0
+                  return (
+                    <div
+                      key={etapa.n}
+                      className="h-full transition-all duration-700 rounded-sm"
+                      style={{ width: `${pct}%`, background: etapa.color, opacity: etapa.count > 0 ? 1 : 0 }}
+                    />
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
           {/* ══════════════════════════════════════════
               AGENTE DE IA — PERFORMANCE
@@ -548,6 +875,70 @@ export default function AdminDashboard() {
                   <p className="text-xs text-[#52525B] text-center py-4">Nenhuma conversa ativa</p>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* ── Leads ao Vivo ── */}
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#1C1C1E]">
+              <h3 className="font-semibold text-white flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#7B3FE4]" /> Leads ao Vivo
+              </h3>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-[#52525B]">{stats?.totalLeads ?? 0} total</span>
+                <Link href="/admin/crm" className="text-xs text-[#7B3FE4] hover:text-[#9558EE] flex items-center gap-1">
+                  Ver CRM <ChevronRight className="w-3 h-3" />
+                </Link>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-[#1C1C1E]">
+                    <th className="text-left text-xs text-[#52525B] font-medium px-6 py-3">Lead</th>
+                    <th className="text-left text-xs text-[#52525B] font-medium px-4 py-3">Etapa</th>
+                    <th className="text-left text-xs text-[#52525B] font-medium px-4 py-3">Temp.</th>
+                    <th className="text-left text-xs text-[#52525B] font-medium px-4 py-3">Referidos</th>
+                    <th className="text-left text-xs text-[#52525B] font-medium px-4 py-3">Dor</th>
+                    <th className="text-left text-xs text-[#52525B] font-medium px-4 py-3">Atualizado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(stats?.recentLeads ?? []).map((lead, i) => (
+                    <tr key={i} className="border-b border-[#1C1C1E] last:border-0 hover:bg-[#18181A] transition-colors">
+                      <td className="px-6 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#7B3FE4]/20 to-[#3B82F6]/20 flex items-center justify-center text-xs font-bold text-[#7B3FE4] flex-shrink-0">
+                            {(lead.nome || '?').charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-white">{lead.nome || '—'}</p>
+                            <p className="text-xs text-[#52525B]">{lead.telefone || '—'}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                          style={{ background: (etapaAgentColors[lead.etapa_agente ?? 0] ?? '#52525B') + '20', color: etapaAgentColors[lead.etapa_agente ?? 0] ?? '#52525B' }}>
+                          {etapaAgentLabels[lead.etapa_agente ?? 0] ?? '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        {lead.temperatura === 'quente' ? '🔥' : lead.temperatura === 'morno' ? '🟡' : lead.temperatura === 'frio' ? '❄️' : '—'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-white font-medium">
+                        {lead.total_referidos ?? 0}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-[#71717A] max-w-[200px] truncate">
+                        {lead.dor_principal || '—'}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-[#52525B]">
+                        {timeAgo(lead.updated_at)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 

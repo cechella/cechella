@@ -34,7 +34,8 @@ try {
 
 const status = pagamento.status || '';
 const paymentId = String(pagamento.id || '');
-const telefone = pagamento.metadata?.telefone || '';
+// PIX: telefone vem em metadata.telefone | Cartão: vem em external_reference
+const telefone = pagamento.metadata?.telefone || pagamento.external_reference || '';
 
 if (status !== 'approved') {
   return [{ json: { recebido: true, ignorado: true, status, motivo: 'pagamento não aprovado' } }];
@@ -76,7 +77,7 @@ if (leadId) {
       'Authorization': `Bearer ${SUPABASE_KEY}`,
       'Content-Type': 'application/json'
     },
-    body: { etapa_agente: 7 }
+    body: { etapa_agente: 7, metodo_pagamento: pagamento.metadata?.metodo || 'pix' }
   });
 }
 
