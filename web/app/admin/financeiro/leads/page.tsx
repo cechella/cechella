@@ -17,6 +17,7 @@ type Lead = {
   tentativas_pagamento: number
   created_at: string
   etapa: number | null
+  ultimo_pagamento: string | null
 }
 
 type Funil = {
@@ -30,6 +31,7 @@ const FILTROS = [
   { label: 'Pagos', value: 'pago' },
   { label: 'Em Recuperação', value: 'recuperacao' },
   { label: 'Sem tentativa', value: 'sem_tentativa' },
+  { label: 'Assinatura Concluída', value: 'assinatura_concluida' },
 ]
 
 function statusInfo(s: string | null) {
@@ -183,7 +185,7 @@ export default function LeadsPage() {
             </form>
 
             {/* Status */}
-            <div className="flex bg-zinc-800 rounded-lg p-0.5">
+            <div className="flex flex-wrap bg-zinc-800 rounded-lg p-0.5">
               {FILTROS.map(f => (
                 <button
                   key={f.value}
@@ -210,15 +212,16 @@ export default function LeadsPage() {
                   <th className="text-center px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide">Tentativas</th>
                   <th className="text-center px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide">Etapa</th>
                   <th className="text-left px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide">Cadastro</th>
+                  <th className="text-left px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide">Último Pagamento</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800">
                 {loading && (
-                  <tr><td colSpan={6} className="px-4 py-10 text-center text-zinc-500">Carregando...</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-10 text-center text-zinc-500">Carregando...</td></tr>
                 )}
                 {!loading && leads.length === 0 && (
-                  <tr><td colSpan={6} className="px-4 py-10 text-center text-zinc-500">Nenhum lead encontrado</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-10 text-center text-zinc-500">Nenhum lead encontrado</td></tr>
                 )}
                 {leads.map(l => {
                   const st = statusInfo(l.status_pagamento)
@@ -244,6 +247,7 @@ export default function LeadsPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3 text-zinc-400 text-xs">{fmtData(l.created_at)}</td>
+                      <td className="px-4 py-3 text-zinc-400 text-xs">{l.ultimo_pagamento ? fmtData(l.ultimo_pagamento) : '—'}</td>
                       <td className="px-4 py-3 text-right">
                         <Link
                           href={`/admin/crm?telefone=${l.telefone}`}

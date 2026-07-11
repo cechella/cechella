@@ -6,6 +6,7 @@ import { TopBar } from '@/components/layout/TopBar'
 import {
   ArrowLeft, RefreshCw, AlertTriangle, CheckCircle2,
   XCircle, Clock, Repeat, Copy, ExternalLink,
+  MessageSquare, CheckCheck, Ban,
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -133,6 +134,8 @@ export default function AssinaturasPage() {
   const [loading, setLoading] = useState(true)
   const [filtro, setFiltro] = useState('')
   const [atualizadoEm, setAtualizadoEm] = useState('')
+  const [loadingAcao, setLoadingAcao] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState<string | null>(null)
 
   const carregar = useCallback(async () => {
     setLoading(true)
@@ -150,6 +153,29 @@ export default function AssinaturasPage() {
 
   function copiar(text: string) {
     navigator.clipboard.writeText(text).catch(() => {})
+  }
+
+  async function executarAcao(action: string, id: string, telefone: string, nome: string | null) {
+    setLoadingAcao(id + action)
+    try {
+      const r = await fetch('/api/admin/financeiro/assinaturas', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, id, telefone, nome }),
+      })
+      const d = await r.json()
+      if (r.ok) {
+        await carregar()
+        setFeedback(d.message || 'Ação executada com sucesso.')
+      } else {
+        setFeedback(d.error || 'Erro ao executar ação.')
+      }
+    } catch {
+      setFeedback('Erro de conexão ao executar ação.')
+    } finally {
+      setLoadingAcao(null)
+      setTimeout(() => setFeedback(null), 3000)
+    }
   }
 
   const lista = filtro
@@ -173,6 +199,13 @@ export default function AssinaturasPage() {
         <TopBar />
 
         <main className="flex-1 overflow-y-auto p-6 space-y-5">
+          {/* Feedback toast */}
+          {feedback && (
+            <div className="fixed top-4 right-4 z-50 bg-zinc-800 border border-zinc-700 text-white text-sm px-4 py-3 rounded-xl shadow-lg max-w-sm">
+              {feedback}
+            </div>
+          )}
+
           {/* Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -334,6 +367,36 @@ export default function AssinaturasPage() {
                                   title="Copiar Preapproval ID"
                                 >
                                   <Copy className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                              <button
+                                onClick={() => executarAcao('enviar_lembrete', a.id, a.lead_telefone, a.nome)}
+                                disabled={loadingAcao === a.id + 'enviar_lembrete'}
+                                className="text-blue-400 hover:text-blue-300 disabled:opacity-40 transition-colors"
+                                title="Enviar lembrete WhatsApp"
+                              >
+                                <MessageSquare className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => executarAcao('marcar_pago', a.id, a.lead_telefone, a.nome)}
+                                disabled={loadingAcao === a.id + 'marcar_pago' || a.parcelas_pagas >= a.parcelas_total}
+                                className="text-green-400 hover:text-green-300 disabled:opacity-40 transition-colors"
+                                title="Marcar parcela paga"
+                              >
+                                <CheckCheck className="w-3.5 h-3.5" />
+                              </button>
+                              {a.status !== 'cancelado' && (
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`Cancelar assinatura de ${a.nome || a.lead_telefone}?`)) {
+                                      executarAcao('cancelar', a.id, a.lead_telefone, a.nome)
+                                    }
+                                  }}
+                                  disabled={loadingAcao === a.id + 'cancelar'}
+                                  className="text-red-400 hover:text-red-300 disabled:opacity-40 transition-colors"
+                                  title="Cancelar assinatura"
+                                >
+                                  <Ban className="w-3.5 h-3.5" />
                                 </button>
                               )}
                             </div>
