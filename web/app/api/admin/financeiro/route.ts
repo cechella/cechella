@@ -50,7 +50,7 @@ export async function GET(req: NextRequest) {
     const taxaConversao = totalLeads > 0 ? Math.round((leadsPagantes / totalLeads) * 100) : 0
 
     const aVistaTotais = pagamentos.filter(p => p.metodo === 'cartao_avista')
-    const recorrenteTotais = pagamentos.filter(p => p.metodo !== 'cartao_avista')
+    const recorrenteTotais = pagamentos.filter(p => p.metodo === 'cartao_recorrente')
 
     const porDia: Record<string, number> = {}
     grafData.forEach(p => {
