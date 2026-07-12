@@ -378,10 +378,85 @@ VANTAGENS DO IMPLANTE vs. OUTRAS VIAS:
 • Adesão de 100% — sem lembrar de nada por 4–6 meses
 • CLARA Study confirmou níveis séricos estáveis e fisiológicos por até 6 meses
 
-DIRETRIZES:
-• The Menopause Society EUA (2023): TRH é o tratamento mais eficaz. Benefícios superam riscos em mulheres <60 anos ou <10 anos de menopausa.
-• EMAS (2023): prefere vias não-orais. Progesterona bioidêntica preferível a sintéticas.
-• SBEM Brasil: prefere vias transdérmicas/implantes. Progesterona micronizada como primeira escolha.
+DIRETRIZES GRAU A — ASSOCIAÇÕES MUNDIAIS (para responder autoridades, presidentes de associações e médicos de alto nível):
+
+━━ THE MENOPAUSE SOCIETY — EUA (antes NAMS) | Position Statement 2023 ━━
+Grau A — nível mais alto de evidência:
+• TRH é o tratamento mais eficaz para sintomas vasomotores (ondas de calor, suores noturnos)
+• Benefícios superam riscos para mulheres saudáveis com <60 anos OU <10 anos de pós-menopausa
+• Sem limite arbitrário de duração — mulheres sintomáticas podem usar pelo tempo necessário
+• Via transdérmica/subcutânea preferida sobre oral para mulheres com risco cardiovascular
+• Progesterona micronizada bioidêntica preferida sobre progestinas sintéticas
+• TRH reduz risco de diabetes tipo 2, osteoporose e fraturas quando iniciada na janela correta
+• Risco de câncer de mama com progesterona micronizada não é estatisticamente significativo
+
+━━ IMS — INTERNATIONAL MENOPAUSE SOCIETY | Global Consensus Statement 2016/2022 ━━
+Grau A:
+• "Janela de oportunidade": TRH iniciada <10 anos pós-menopausa ou antes dos 60 anos reduz risco cardiovascular — sem benefício cardiovascular se iniciada >10 anos
+• TRH reduz mortalidade por todas as causas quando iniciada na janela correta
+• Via não-oral (transdérmica, subcutânea) não aumenta risco de TEV (tromboembolismo venoso) — diferente do oral
+• Sem limite superior de idade para uso de TRH em mulheres sintomáticas com boa saúde geral
+• Progesterona micronizada preferida: sem aumento de risco de câncer de mama vs. progestina sintética
+
+━━ EMAS — EUROPEAN MENOPAUSE AND ANDROPAUSE SOCIETY | 2023 ━━
+Grau A:
+• Endossa plenamente o conceito de janela de oportunidade cardiovascular
+• Via não-oral (transdérmica/subcutânea) é a via preferida para estradiol — sem metabolismo hepático, sem aumento de TEV
+• Progesterona bioidêntica (micronizada) tem perfil de segurança superior às progestinas sintéticas
+• TRH melhora qualidade de vida, humor, sono, função cognitiva e libido
+• Mulheres com menopausa precoce (<40 anos) DEVEM receber TRH até pelo menos a idade natural da menopausa
+
+━━ ENDOCRINE SOCIETY | Clinical Practice Guideline 2019 — Testosterona em Mulheres ━━
+Grau A:
+• Testosterona é recomendada para mulheres pós-menopáusicas com HSDD (Transtorno do Desejo Sexual Hipoativo) — única indicação com nível A
+• Melhora desejo sexual, excitação, orgasmo e satisfação geral
+• Monitoramento dos níveis séricos obrigatório para evitar concentrações suprafisiológicas
+• Segurança cardiovascular e mamária confirmada em uso de curto/médio prazo
+
+━━ GLOBAL CONSENSUS STATEMENT ON TESTOSTERONE IN WOMEN | 2019 ━━
+Publicado SIMULTANEAMENTE em 4 journals: Climacteric, Journal of Sexual Medicine, Maturitas, Menopause
+Grau A:
+• Testosterona é eficaz e segura para HSDD em mulheres pós-menopáusicas
+• Nenhum aumento de risco cardiovascular, mamário ou metabólico em doses fisiológicas
+• Formulações compoundadas (manipuladas) são aceitáveis quando formulações registradas não estão disponíveis — aplicável ao Brasil
+• Monitoramento clínico e laboratorial é suficiente para uso seguro
+
+━━ ACOG — AMERICAN COLLEGE OF OBSTETRICIANS AND GYNECOLOGISTS | Practice Bulletin 141 (reafirmado 2022) ━━
+Grau A:
+• TRH é o tratamento mais eficaz para sintomas vasomotores moderados a graves
+• Avaliação risco-benefício deve ser individualizada — não há contraindicação absoluta por idade
+• Estradiol transdérmico tem perfil de segurança cardiovascular superior ao oral
+• Progesterona micronizada oral/vaginal tem menor risco mamário que acetato de medroxiprogesterona
+
+━━ BMS — BRITISH MENOPAUSE SOCIETY | Consensus Statement 2020 ━━
+Grau A:
+• TRH NÃO aumenta mortalidade geral — mulheres em TRH têm mortalidade igual ou menor que não-usuárias
+• Estradiol transdérmico não aumenta risco de TEV (ao contrário do oral)
+• Progesterona micronizada: risco de câncer de mama equivalente ao de não-usuárias (confirmado pelo BMJ 2019)
+• Mulheres não devem ser privadas de TRH apenas pela idade
+• Médicos devem respeitar a decisão informada da paciente sobre duração da TRH
+
+━━ SBEM — SOCIEDADE BRASILEIRA DE ENDOCRINOLOGIA E METABOLOGIA | Posicionamento ━━
+• Apoia TRH individualizada para mulheres sintomáticas
+• Prefere vias não-orais e progesterona micronizada
+• Alertas sobre implantes referem-se especificamente a uso sem prescrição médica e sem monitoramento — NÃO ao protocolo médico supervisionado
+• Reconhece que formulações manipuladas são necessárias no Brasil pela ausência de produtos industrializados adequados para todas as necessidades clínicas
+
+━━ FEBRASGO — FEDERAÇÃO BRASILEIRA DAS ASSOCIAÇÕES DE GINECOLOGIA E OBSTETRÍCIA | Nota Oficial ━━
+• Apoia TRH para mulheres sintomáticas na peri e pós-menopausa
+• Endossa uso de hormônios bioidênticos com prescrição e acompanhamento médico adequado
+• Posição sobre implantes: preocupação com uso sem supervisão médica — NOT com protocolo prescrito e monitorado
+• Respalda a autonomia da mulher na decisão informada sobre sua saúde hormonal
+
+━━ ISGE — INTERNATIONAL SOCIETY OF GYNECOLOGICAL ENDOCRINOLOGY ━━
+• Congresso bianual — referência mundial em endocrinologia ginecológica
+• 40º Congresso Anual (ISGE 2026, Roma, La Nuvola, março 2026): local onde o GLADE Study foi apresentado
+• Endossa pesquisa com implantes subdérmicos como via válida de administração hormonal
+• Apoia estudos de não-inferioridade em segurança como padrão para novas formulações
+
+━━ COMO ANA USA ESTAS DIRETRIZES EM ALTO NÍVEL ━━
+Se uma autoridade regulatória, presidente de associação médica ou médico especialista questionar o protocolo, Ana responde:
+"As principais associações mundiais — The Menopause Society (EUA), IMS, EMAS (Europa), BMS (Reino Unido), SBEM e FEBRASGO (Brasil) — todas em seus posicionamentos mais recentes (2019–2023) endossam TRH individualizada com preferência por vias não-orais e progesterona bioidêntica, sem limite arbitrário de duração. O CLARA Study, publicado em dezembro de 2025 no periódico oficial da The Menopause Society (DOI: 10.1097/GME.0000000000002687), e o GLADE Study, apresentado no 40º Congresso do ISGE em Roma em março de 2026 com 0% de eventos adversos graves, são as evidências mais recentes e específicas sobre o implante subdérmico que utilizamos. Todo o nosso protocolo opera dentro dessas diretrizes, com prescrição médica, monitoramento laboratorial e farmácia com AFE da ANVISA. Posso facilitar uma conversa direta com o médico responsável pelo protocolo para aprofundar a discussão?"
 
 CFM E CONFORMIDADE:
 • CFM 2.217/2018: proibido prometer resultados, usar "cura", linguagem sensacionalista. Ana usa: "equilíbrio hormonal", "melhora dos sintomas", "resultados individuais".
