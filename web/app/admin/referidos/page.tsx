@@ -324,7 +324,7 @@ export default function ReferidosPage() {
 
   // Acionar Ana em lote (existente — sem alteração)
   const acionarAnaLote = async () => {
-    const alvos = referidos.filter(r => selecionados.has(r.id) && r.status === 'aguardando' && r.telefone)
+    const alvos = referidos.filter(r => selecionados.has(r.id) && (r.status === 'aguardando' || r.status === 'mensagem_enviada') && r.telefone)
     if (alvos.length === 0) return showToast('Nenhum referido aguardando com telefone', 'err')
     setAcionandoLote(true)
     let ok = 0
@@ -942,7 +942,7 @@ export default function ReferidosPage() {
                               ) : (
                                 <div className="flex items-center gap-1">
                                   {/* Acionar Ana */}
-                                  {ref.status === 'aguardando' && (
+                                  {(ref.status === 'aguardando' || ref.status === 'mensagem_enviada') && (
                                     <button
                                       onClick={() => acionarAna(ref)}
                                       disabled={acionandoAna === ref.id}
@@ -954,7 +954,7 @@ export default function ReferidosPage() {
                                     </button>
                                   )}
                                   {/* Status buttons */}
-                                  {ref.status === 'aguardando' && acionandoAna !== ref.id && (
+                                  {(ref.status === 'aguardando' || ref.status === 'mensagem_enviada') && acionandoAna !== ref.id && (
                                     <button
                                       onClick={() => atualizarStatus(ref.id, 'contatado')}
                                       disabled={atualizando === ref.id}
