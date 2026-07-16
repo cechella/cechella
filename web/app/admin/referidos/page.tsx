@@ -49,8 +49,8 @@ const statusConfig: Record<StatusReferido, { label: string; color: string; icon:
     icon: <Clock className="w-3 h-3" />,
   },
   mensagem_enviada: {
-    label: 'Msg Enviada',
-    color: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
+    label: 'Aguardando',
+    color: 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20',
     icon: <Clock className="w-3 h-3" />,
   },
   contatado: {
