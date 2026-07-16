@@ -54,7 +54,7 @@ await this.helpers.httpRequest({
     'Authorization': `Bearer ${SUPABASE_KEY}`,
     'Content-Type': 'application/json'
   },
-  body: { status: 'approved', updated_at: new Date().toISOString() }
+  body: { status: 'approved', updated_at: new Date().toISOString(), valor: pagamento.transaction_amount }
 });
 
 // Buscar id do lead pelo telefone (PATCH por id — evita falha silenciosa por formato)
