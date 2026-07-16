@@ -108,7 +108,13 @@ ${listaGrupos[0]}
 
 Fica à vontade para simplificar, ex: Profissão: enfermeira / Hobby: caminhada"
 
-REGRA: Envie apenas este grupo. Não invente nomes. Não antecipe próximos grupos.
+REGRAS ABSOLUTAS:
+- Envie APENAS o bloco acima com Profissão e Hobby
+- PROIBIDO pedir telefone, email ou qualquer outro dado
+- PROIBIDO inventar nomes ou criar perguntas extras
+- PROIBIDO antecipar próximos grupos
+- Se o lead mandar os dados preenchidos, agradeça e aguarde o sistema processar
+- NÃO peça confirmação, NÃO faça perguntas adicionais
 
 RESPONDA EM JSON:
 {
