@@ -6,7 +6,7 @@ import { TopBar } from '@/components/layout/TopBar'
 import { createBrowserClient } from '@supabase/ssr'
 import { Flame, Circle, Phone, RefreshCw, Search, CheckCircle, Clock, PhoneCall, Copy, Check, CreditCard, Users, TrendingUp, Pencil, X, Bot, UserCheck, ToggleLeft, ToggleRight } from 'lucide-react'
 
-type StatusReferido = 'aguardando' | 'contatado' | 'fechado'
+type StatusReferido = 'aguardando' | 'mensagem_enviada' | 'contatado' | 'fechado'
 type FiltroPrioridade = 'todas' | '1' | '2'
 type FiltroStatus = 'todos' | StatusReferido
 type TabAtiva = 'todos' | 'leads' | 'referidos'
@@ -46,6 +46,11 @@ const statusConfig: Record<StatusReferido, { label: string; color: string; icon:
   aguardando: {
     label: 'Aguardando',
     color: 'bg-zinc-500/20 text-zinc-400 border-zinc-500/30',
+    icon: <Clock className="w-3 h-3" />,
+  },
+  mensagem_enviada: {
+    label: 'Msg Enviada',
+    color: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
     icon: <Clock className="w-3 h-3" />,
   },
   contatado: {
