@@ -16,6 +16,32 @@ if (telefone) {
     const msgAtual = (data.message || data.mensagem || '');
     if (msgAtual.includes('Profiss') || msgAtual.includes('Hobby')) {
       const blocos = msgAtual.split(/\n\s*\n/);
+
+      // CORREÇÃO 1: busca todos os contatos UMA VEZ e usa Set para evitar colisão de nomes
+      let todosRef = [];
+      try {
+        todosRef = await this.helpers.httpRequest({
+          method: 'GET',
+          url: `${SUPABASE_URL}/rest/v1/contatos_referidos?indicado_por_telefone=eq.${telefone13}&select=id,nome&order=id.asc`,
+          headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+        });
+        if (!Array.isArray(todosRef)) todosRef = [];
+      } catch(e) {}
+
+      const jaUsados = new Set();
+
+      // Busca o melhor match para um nome, sem repetir contatos já usados
+      const encontrarMelhor = (nomeForm) => {
+        const palavras = nomeForm.toLowerCase().replace(/\*/g, '').trim().split(/\s+/).filter(p => p.length > 1);
+        // Tenta match progressivamente menor (todas as palavras → primeira)
+        for (let n = palavras.length; n >= 1; n--) {
+          const trecho = palavras.slice(0, n).join(' ');
+          const match = todosRef.find(r => !jaUsados.has(r.id) && r.nome && r.nome.toLowerCase().includes(trecho));
+          if (match) return match;
+        }
+        return null;
+      };
+
       for (const bloco of blocos) {
         const linhas = bloco.split('\n').map(l => l.trim()).filter(l => l.length > 0);
         let nomeBloco = null, profissaoBloco = null, hobbyBloco = null;
@@ -24,6 +50,9 @@ if (telefone) {
             nomeBloco = linha.replace(/.*Nome\s*:\s*/i, '').trim();
           } else if (/^\*(.+)\*\s*$/.test(linha)) {
             nomeBloco = linha.replace(/\*/g, '').trim();
+          } else if (/^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ]/.test(linha) && !(/Profiss|Hobby/i.test(linha))) {
+            // linha começa com maiúscula e não é campo → trata como nome sem asterisco
+            if (!nomeBloco) nomeBloco = linha.trim();
           } else if (/Profiss[aã]o\s*:/i.test(linha)) {
             profissaoBloco = linha.replace(/.*Profiss[aã]o\s*:\s*/i, '').trim();
           } else if (/Hobby\s*:/i.test(linha)) {
@@ -32,14 +61,9 @@ if (telefone) {
         }
         if (nomeBloco && (profissaoBloco || hobbyBloco)) {
           try {
-            const primeiraPalavra = nomeBloco.toLowerCase().split(' ')[0];
-            const todosRef = await this.helpers.httpRequest({
-              method: 'GET',
-              url: `${SUPABASE_URL}/rest/v1/contatos_referidos?indicado_por_telefone=eq.${telefone13}&select=id,nome`,
-              headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
-            });
-            const encontrado = Array.isArray(todosRef) ? todosRef.find(r => r.nome && r.nome.toLowerCase().includes(primeiraPalavra)) : null;
+            const encontrado = encontrarMelhor(nomeBloco);
             if (encontrado) {
+              jaUsados.add(encontrado.id);
               const patch = {};
               if (profissaoBloco) patch.profissao = profissaoBloco;
               if (hobbyBloco) patch.hobby = hobbyBloco;
@@ -95,12 +119,12 @@ RESPONDA EM JSON:
   "observacao": "coleta de profissao e hobby concluida"
 }`
 : `Você é Ana, consultora do Hormone Ecosystem. Etapa 8 — coleta de profissão e hobby.
-CONTEXTO DO LEAD: ${contextoOrigem}
 
-Você precisa coletar profissão e hobby dos contatos indicados, um grupo de 5 por vez.
-Quando o lead mandar qualquer confirmação (sim, ok, pronto, enviou), envie o grupo abaixo pedindo que preencham e mandem de volta.
+INSTRUÇÃO OBRIGATÓRIA — IGNORAR HISTÓRICO:
+O sistema já processou os dados recebidos. Sua ÚNICA tarefa agora é enviar o próximo grupo abaixo.
+NÃO leia o histórico para decidir o que fazer. Siga apenas esta instrução.
 
-Envie exatamente neste formato:
+Envie EXATAMENTE esta mensagem, sem alterar nada:
 "Ótimo! 🌸 Agora me ajuda com uma coisinha rápida?
 Me manda a profissão e o hobby dessas pessoas — pode copiar, preencher e me mandar de volta! 😊
 
@@ -109,16 +133,15 @@ ${listaGrupos[0]}
 Fica à vontade para simplificar, ex: Profissão: enfermeira / Hobby: caminhada"
 
 REGRAS ABSOLUTAS:
-- Envie APENAS o bloco acima com Profissão e Hobby
+- Copie e envie o bloco acima EXATAMENTE como está
+- PROIBIDO agradecer, encerrar, ou gerar qualquer outra mensagem
 - PROIBIDO pedir telefone, email ou qualquer outro dado
-- PROIBIDO inventar nomes ou criar perguntas extras
-- PROIBIDO antecipar próximos grupos
-- Se o lead mandar os dados preenchidos, agradeça e aguarde o sistema processar
-- NÃO peça confirmação, NÃO faça perguntas adicionais
+- PROIBIDO inventar nomes ou antecipar próximos grupos
+- PROIBIDO fechar o atendimento — isso só acontece quando o sistema enviar proxima_etapa: 9
 
 RESPONDA EM JSON:
 {
-  "resposta": "sua mensagem aqui",
+  "resposta": "Ótimo! 🌸 Agora me ajuda com uma coisinha rápida?\nMe manda a profissão e o hobby dessas pessoas — pode copiar, preencher e me mandar de volta! 😊\n\n${listaGrupos[0]}\n\nFica à vontade para simplificar, ex: Profissão: enfermeira / Hobby: caminhada",
   "proxima_etapa": 8,
   "nome_lead": "${nome}",
   "dor_principal": "${dor}",
