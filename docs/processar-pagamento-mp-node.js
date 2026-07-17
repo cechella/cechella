@@ -1,9 +1,3 @@
-// ═══════════════════════════════════════════════════════════════
-// NÓ: Processar Pagamento MP — My workflow
-// Recebe webhook do Mercado Pago, valida pagamento aprovado,
-// avança lead para etapa 7 (Referidos) e envia confirmação WhatsApp
-// ═══════════════════════════════════════════════════════════════
-
 const SUPABASE_URL = 'https://rmsblsoqqhtantyomhsh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtc2Jsc29xcWh0YW50eW9taHNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4OTI5MDgsImV4cCI6MjA5NjQ2ODkwOH0.PAje_eA_dYrwM_5f-4n9MMDY-GGtC0ZzEdRn7W3gg30';
 const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text';
@@ -12,12 +6,54 @@ const MP_TOKEN = 'APP_USR-1603783113978504-062408-d67a1021538897e0341f70bb7645fd
 
 const body = $input.item.json.body || $input.item.json;
 
-// MP envia o tipo e id do recurso
 const type = body.type || '';
 const dataId = body.data?.id || body.id || '';
 
-if (!dataId || type !== 'payment') {
+if (!dataId || (type !== 'payment' && type !== 'subscription_authorized_payment')) {
   return [{ json: { recebido: true, ignorado: true, motivo: 'não é pagamento' } }];
+}
+
+// ASSINATURA RECORRENTE
+if (type === 'subscription_authorized_payment') {
+  let autorizado;
+  try {
+    autorizado = await this.helpers.httpRequest({
+      method: 'GET',
+      url: `https://api.mercadopago.com/authorized_payments/${dataId}`,
+      headers: { 'Authorization': `Bearer ${MP_TOKEN}` }
+    });
+  } catch(err) {
+    return [{ json: { erro: 'Falha ao buscar autorized_payment', detalhe: err.message } }];
+  }
+  if (autorizado.status !== 'approved') {
+    return [{ json: { ignorado: true, motivo: 'parcela não aprovada', status: autorizado.status } }];
+  }
+  const preapprovalId = String(autorizado.preapproval_id || '');
+  const valor = autorizado.transaction_amount;
+  const recorrentes = await this.helpers.httpRequest({
+    method: 'GET',
+    url: `${SUPABASE_URL}/rest/v1/pagamentos_recorrentes?preapproval_id=eq.${preapprovalId}&select=id,parcelas_pagas,parcelas_total,lead_telefone`,
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+  });
+  const rec = recorrentes?.[0];
+  if (rec) {
+    const novasParcelas = (rec.parcelas_pagas || 0) + 1;
+    const novoStatus = novasParcelas >= rec.parcelas_total ? 'concluido' : 'ativo';
+    await this.helpers.httpRequest({
+      method: 'PATCH',
+      url: `${SUPABASE_URL}/rest/v1/pagamentos_recorrentes?id=eq.${rec.id}`,
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+      body: { parcelas_pagas: novasParcelas, status: novoStatus }
+    });
+    const msg = `✅ *Parcela ${novasParcelas}/${rec.parcelas_total} confirmada!*\n\nCobrança de R$ ${valor} processada com sucesso. 💜`;
+    await this.helpers.httpRequest({
+      method: 'POST',
+      url: ZAPI_URL,
+      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+      body: { phone: rec.lead_telefone, message: msg }
+    });
+  }
+  return [{ json: { sucesso: true, preapprovalId } }];
 }
 
 // Buscar detalhes do pagamento no MP
@@ -34,7 +70,6 @@ try {
 
 const status = pagamento.status || '';
 const paymentId = String(pagamento.id || '');
-// PIX: telefone vem em metadata.telefone | Cartão: vem em external_reference
 const telefone = pagamento.metadata?.telefone || pagamento.external_reference || '';
 
 if (status !== 'approved') {
@@ -45,7 +80,7 @@ if (!telefone) {
   return [{ json: { recebido: true, ignorado: true, motivo: 'telefone não encontrado nos metadados' } }];
 }
 
-// Atualizar status na tabela pagamentos
+// Atualizar status no Supabase
 await this.helpers.httpRequest({
   method: 'PATCH',
   url: `${SUPABASE_URL}/rest/v1/pagamentos?payment_id=eq.${paymentId}`,
@@ -57,10 +92,10 @@ await this.helpers.httpRequest({
   body: { status: 'approved', updated_at: new Date().toISOString(), valor: pagamento.transaction_amount }
 });
 
-// Buscar id do lead pelo telefone (PATCH por id — evita falha silenciosa por formato)
+// Buscar lead pelo telefone
 const leads = await this.helpers.httpRequest({
   method: 'GET',
-  url: `${SUPABASE_URL}/rest/v1/leads?telefone=eq.${telefone}&select=id`,
+  url: `${SUPABASE_URL}/rest/v1/leads?telefone=eq.${telefone}&select=id,nome`,
   headers: {
     'apikey': SUPABASE_KEY,
     'Authorization': `Bearer ${SUPABASE_KEY}`
@@ -77,12 +112,14 @@ if (leadId) {
       'Authorization': `Bearer ${SUPABASE_KEY}`,
       'Content-Type': 'application/json'
     },
-    body: { etapa_agente: 7, metodo_pagamento: pagamento.metadata?.metodo || 'pix' }
+    body: { etapa_agente: 7 }
   });
 }
 
-// Enviar mensagem de confirmação via WhatsApp
-const mensagem = `✅ Pagamento confirmado!\n\nSeu acesso ao Programa Hormonal do Dr. Vinicius foi liberado! 🎉\n\nEm breve nossa equipe entrará em contato com os próximos passos.\n\nObrigado pela confiança! 💙`;
+// Enviar confirmação de pagamento + abertura da Etapa 7 (iPhone/Android) em uma mensagem
+const nomeLead = leads?.[0]?.nome || 'você';
+
+const mensagem = `✅ ${nomeLead}, seu pagamento foi confirmado! 🎉💜 Seja bem-vinda ao Hormone Ecosystem!\nNossa equipe vai entrar em contato em breve para agendar seu procedimento.\n\nEnquanto isso, posso te pedir um favor? 🌸\nVocê acabou de tomar uma das melhores decisões da sua saúde. Tenho certeza que você conhece outras mulheres passando pelo mesmo que você passou.\nVou te ensinar agora como me mandar os contatos direto pelo WhatsApp. É super fácil! 😊\n\n👉 Você tem iPhone ou Android?`;
 
 await this.helpers.httpRequest({
   method: 'POST',
@@ -90,5 +127,26 @@ await this.helpers.httpRequest({
   headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
   body: { phone: telefone, message: mensagem }
 });
+
+// Salvar mensagem no historico do lead
+if (leadId) {
+  const leadAtual = await this.helpers.httpRequest({
+    method: 'GET',
+    url: `${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}&select=historico`,
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` }
+  });
+  const historicoAtual = leadAtual?.[0]?.historico || [];
+  historicoAtual.push({ role: 'assistant', content: mensagem, ts: new Date().toISOString() });
+  await this.helpers.httpRequest({
+    method: 'PATCH',
+    url: `${SUPABASE_URL}/rest/v1/leads?id=eq.${leadId}`,
+    headers: {
+      'apikey': SUPABASE_KEY,
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: { historico: historicoAtual }
+  });
+}
 
 return [{ json: { sucesso: true, telefone, paymentId, status: 'approved' } }];
