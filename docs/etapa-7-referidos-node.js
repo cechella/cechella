@@ -5,7 +5,6 @@ const SUPABASE_URL = 'https://rmsblsoqqhtantyomhsh.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJtc2Jsc29xcWh0YW50eW9taHNoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4OTI5MDgsImV4cCI6MjA5NjQ2ODkwOH0.PAje_eA_dYrwM_5f-4n9MMDY-GGtC0ZzEdRn7W3gg30';
 
 let contatosNaoEnviados = [];
-let contatosRefs = [];
 let telBusca = data.telefone || '';
 if (telBusca.length === 12 && telBusca.startsWith('55')) {
   telBusca = telBusca.slice(0, 4) + '9' + telBusca.slice(4);
@@ -19,13 +18,11 @@ try {
   });
   const respData = Array.isArray(resp) ? resp : [];
   contatosNaoEnviados = respData.map(c => c.nome);
-  contatosRefs = respData.map(c => c.telefone);
 } catch(e) {}
 
 const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text';
 const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS';
 
-// Busca total real direto do banco (evita valor cacheado do Prep Comun)
 let totalReferidosReal = Number(totalReferidos) || 0;
 try {
   const countResp = await this.helpers.httpRequest({
@@ -66,18 +63,17 @@ if (totalReferidosReal >= 20 && contatosNaoEnviados.length > 0) {
     await new Promise(r => setTimeout(r, 2000));
   }
 
-  for (const contato of contatosNaoEnviados) {
-    await this.helpers.httpRequest({
-      method: 'POST',
-      url: ZAPI_URL,
-      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-      body: JSON.stringify({
-        phone: data.telefone,
-        message: `Oi ${contato}! Tudo bem? 😊\nAcabei de fazer uma coisa incrível pela minha saúde e pensei em você! Uma consultora chamada Ana do Hormone Ecosystem vai te mandar uma mensagem agora — pode responder ela, vale muito a pena ouvir! 🌸`
-      })
-    });
-    await new Promise(r => setTimeout(r, 1500));
-  }
+  // Mensagem única para o lead encaminhar para todos
+  await this.helpers.httpRequest({
+    method: 'POST',
+    url: ZAPI_URL,
+    headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+    body: JSON.stringify({
+      phone: data.telefone,
+      message: `Oi! Tudo bem? 😊\nAcabei de fazer uma coisa incrível pela minha saúde e pensei em você! Uma consultora chamada Ana do Hormone Ecosystem vai te mandar uma mensagem agora — pode responder ela, vale muito a pena ouvir! 🌸`
+    })
+  });
+  await new Promise(r => setTimeout(r, 1500));
 
   await this.helpers.httpRequest({
     method: 'POST',
@@ -85,25 +81,23 @@ if (totalReferidosReal >= 20 && contatosNaoEnviados.length > 0) {
     headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
     body: JSON.stringify({
       phone: data.telefone,
-      message: `Conseguiu encaminhar essas? Me avisa que mando mais! 😊💜`
+      message: `👆 Segura essa mensagem → clica em Encaminhar → seleciona 5 amigas → envia. Repete mais 3 vezes até cobrir as 20! 😊\n\nO WhatsApp permite 5 por vez — são só 4 encaminhamentos rápidos! 💜\n\nMe avisa quando terminar! 🥰`
     })
   });
 
-  // Marca contatos como enviados
+  // Marca TODOS os contatos como mensagem_enviada de uma vez
   try {
-    for (const telContato of contatosRefs) {
-      await this.helpers.httpRequest({
-        method: 'PATCH',
-        url: `${SUPABASE_URL}/rest/v1/contatos_referidos?indicado_por_telefone=eq.${telBusca}&telefone=eq.${telContato}`,
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_KEY,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify({ status: 'mensagem_enviada' })
-      });
-    }
+    await this.helpers.httpRequest({
+      method: 'PATCH',
+      url: `${SUPABASE_URL}/rest/v1/contatos_referidos?indicado_por_telefone=eq.${telBusca}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ status: 'mensagem_enviada' })
+    });
   } catch(e) {}
 
   return [{ json: { ...data, _mensagensEnviadas: true, claudeBody: null } }];
