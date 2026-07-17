@@ -5,6 +5,8 @@ const data = $input.item.json;
 const { nome, dor, contextoOrigem, totalReferidos, telefone } = data;
 
 let listaGrupos = [];
+let jaPreenchidos = 0;
+let faltamPreenchidos = 0;
 
 if (telefone) {
   try {
@@ -17,12 +19,11 @@ if (telefone) {
     if (msgAtual.includes('Profiss') || msgAtual.includes('Hobby')) {
       const blocos = msgAtual.split(/\n\s*\n/);
 
-      // CORREÇÃO 1: busca todos os contatos UMA VEZ e usa Set para evitar colisão de nomes
       let todosRef = [];
       try {
         todosRef = await this.helpers.httpRequest({
           method: 'GET',
-          url: `${SUPABASE_URL}/rest/v1/contatos_referidos?indicado_por_telefone=eq.${telefone13}&select=id,nome&order=id.asc`,
+          url: `${SUPABASE_URL}/rest/v1/contatos_referidos?indicado_por_telefone=eq.${telefone13}&select=id,nome,profissao&order=id.asc`,
           headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
         });
         if (!Array.isArray(todosRef)) todosRef = [];
@@ -30,13 +31,18 @@ if (telefone) {
 
       const jaUsados = new Set();
 
-      // Busca o melhor match para um nome, sem repetir contatos já usados
       const encontrarMelhor = (nomeForm) => {
-        const palavras = nomeForm.toLowerCase().replace(/\*/g, '').trim().split(/\s+/).filter(p => p.length > 1);
-        // Tenta match progressivamente menor (todas as palavras → primeira)
+        const nomeClean = nomeForm.toLowerCase().replace(/\*/g, '').trim();
+        const palavras = nomeClean.split(/\s+/).filter(p => p.length > 1);
+
+        // Nomes muito curtos: usa match exato
+        if (palavras.length === 0) {
+          return todosRef.find(r => !jaUsados.has(r.id) && !r.profissao && r.nome && r.nome.toLowerCase() === nomeClean) || null;
+        }
+
         for (let n = palavras.length; n >= 1; n--) {
           const trecho = palavras.slice(0, n).join(' ');
-          const match = todosRef.find(r => !jaUsados.has(r.id) && r.nome && r.nome.toLowerCase().includes(trecho));
+          const match = todosRef.find(r => !jaUsados.has(r.id) && !r.profissao && r.nome && r.nome.toLowerCase().includes(trecho));
           if (match) return match;
         }
         return null;
@@ -51,7 +57,6 @@ if (telefone) {
           } else if (/^\*(.+)\*\s*$/.test(linha)) {
             nomeBloco = linha.replace(/\*/g, '').trim();
           } else if (/^[A-ZÁÉÍÓÚÂÊÎÔÛÃÕÇ]/.test(linha) && !(/Profiss|Hobby/i.test(linha))) {
-            // linha começa com maiúscula e não é campo → trata como nome sem asterisco
             if (!nomeBloco) nomeBloco = linha.trim();
           } else if (/Profiss[aã]o\s*:/i.test(linha)) {
             profissaoBloco = linha.replace(/.*Profiss[aã]o\s*:\s*/i, '').trim();
@@ -86,6 +91,8 @@ if (telefone) {
     });
     const contatos = Array.isArray(resp) ? resp : [];
     const semProfissao = contatos.filter(c => !c.profissao);
+    jaPreenchidos = contatos.length - semProfissao.length;
+    faltamPreenchidos = semProfissao.length;
     if (semProfissao.length > 0) {
       const proximoGrupo = semProfissao.slice(0, 5);
       listaGrupos.push(proximoGrupo.map(c => `*${c.nome}*\nProfissão: \nHobby: `).join('\n\n'));
@@ -94,6 +101,34 @@ if (telefone) {
 }
 
 const todosColetados = listaGrupos.length === 0;
+
+const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text';
+const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS';
+
+if (!todosColetados) {
+  let introMsg;
+  if (jaPreenchidos === 0) {
+    introMsg = `Ótimo! 🌸 Agora me ajuda com uma coisinha rápida?\nMe manda a profissão e o hobby dessas pessoas — pode copiar, preencher e me mandar de volta! 😊`;
+  } else if (jaPreenchidos <= 5) {
+    introMsg = `Incrível! Já tenho os dados das primeiras ${jaPreenchidos}! 🎉 Faltam mais ${faltamPreenchidos} — me manda esse próximo grupo! 😊`;
+  } else if (jaPreenchidos <= 10) {
+    introMsg = `Metade feita! 🙌 Já temos ${jaPreenchidos} preenchidos, faltam mais ${faltamPreenchidos} — bora continuar com mais esse grupo! 😊`;
+  } else {
+    introMsg = `Quase lá! Faltam só mais ${faltamPreenchidos} e terminamos! 🏁 Me manda essas últimas! 😊`;
+  }
+  try {
+    await this.helpers.httpRequest({
+      method: 'POST',
+      url: ZAPI_URL,
+      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+      body: JSON.stringify({
+        phone: telefone,
+        message: `${introMsg}\n\n${listaGrupos[0]}`
+      })
+    });
+  } catch(e) {}
+  return [{ json: { ...data, _mensagensEnviadas: true, claudeBody: null } }];
+}
 
 const systemPrompt = todosColetados
 ? `Você é Ana, consultora do Hormone Ecosystem.
@@ -128,9 +163,7 @@ Envie EXATAMENTE esta mensagem, sem alterar nada:
 "Ótimo! 🌸 Agora me ajuda com uma coisinha rápida?
 Me manda a profissão e o hobby dessas pessoas — pode copiar, preencher e me mandar de volta! 😊
 
-${listaGrupos[0]}
-
-Fica à vontade para simplificar, ex: Profissão: enfermeira / Hobby: caminhada"
+${listaGrupos[0]}"
 
 REGRAS ABSOLUTAS:
 - Copie e envie o bloco acima EXATAMENTE como está
@@ -141,7 +174,7 @@ REGRAS ABSOLUTAS:
 
 RESPONDA EM JSON:
 {
-  "resposta": "Ótimo! 🌸 Agora me ajuda com uma coisinha rápida?\nMe manda a profissão e o hobby dessas pessoas — pode copiar, preencher e me mandar de volta! 😊\n\n${listaGrupos[0]}\n\nFica à vontade para simplificar, ex: Profissão: enfermeira / Hobby: caminhada",
+  "resposta": "Ótimo! 🌸 Agora me ajuda com uma coisinha rápida?\nMe manda a profissão e o hobby dessas pessoas — pode copiar, preencher e me mandar de volta! 😊\n\n${listaGrupos[0]}",
   "proxima_etapa": 8,
   "nome_lead": "${nome}",
   "dor_principal": "${dor}",
