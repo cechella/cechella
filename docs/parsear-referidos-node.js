@@ -176,81 +176,52 @@ if (novoTotal >= 20 && etapaAtual < 8) {
     return [{ json: { salvos: referidosNovos.length, total_acumulado: novoTotal, status: 'etapa8_ja_enviada', telefone } }];
   }
 
-  // Buscar primeiros 5 contatos do banco
-  let primeiros5 = [];
-  try {
-    const contatosResp = await this.helpers.httpRequest({
-      method: 'GET',
-      url: `${SUPABASE_URL}/rest/v1/contatos_referidos?indicado_por_telefone=eq.${telefone}&select=nome,telefone&order=created_at.asc&limit=5`,
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY },
-    });
-    primeiros5 = Array.isArray(contatosResp) ? contatosResp : [];
-  } catch(e) {}
-
-  // MSG 1: Confirmação + pedido de favor (unificada)
+  // MSG 1: Confirmação + pedido de favor
   try {
     await this.helpers.httpRequest({
       method: 'POST',
       url: ZAPI_URL,
       headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-      body: JSON.stringify({ phone: telefone, message: `Maravilhoso! 🎉 Você é incrível!\nO sistema confirmou que recebi ${novoTotal} contatos seus. ✅\n\nAgora preciso de um último favor seu 🙏\nPara que suas amigas saibam que vou entrar em contato, me ajuda a enviar uma mensagem para cada uma delas?\n\nMe avisa se tiver alguma negativa — se não, todas ok! 💜` }),
+      body: JSON.stringify({ phone: telefone, message: `Maravilhoso! 🎉 Você é incrível!\nO sistema confirmou que recebi ${novoTotal} contatos seus. ✅\n\nAgora preciso de um último favor seu 🙏\nPara que suas amigas saibam que vou entrar em contato, me ajuda a encaminhar uma mensagem para cada uma delas?\n\nMe avisa se tiver alguma negativa — se não, todas ok! 💜` }),
     });
   } catch(e) {}
 
   await new Promise(r => setTimeout(r, 1500));
 
-  // MSG 2: Intro das 5 mensagens individuais
+  // MSG 2: Mensagem pronta para encaminhar (sem nome)
   try {
     await this.helpers.httpRequest({
       method: 'POST',
       url: ZAPI_URL,
       headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-      body: JSON.stringify({ phone: telefone, message: `Agora vou te mandar 5 mensagens prontas — uma para cada contato. É só encaminhar direto para cada uma delas! 📱✨` }),
+      body: JSON.stringify({ phone: telefone, message: `Oi! Tudo bem? 😊\nAcabei de fazer uma coisa incrível pela minha saúde e pensei em você! Uma consultora chamada Ana do Hormone Ecosystem vai te mandar uma mensagem agora — pode responder ela, vale muito a pena ouvir! 🌸` }),
     });
   } catch(e) {}
 
   await new Promise(r => setTimeout(r, 1500));
 
-  // MSG 3-7: Uma mensagem individual por contato (primeiros 5)
-  for (const contato of primeiros5) {
-    const nomeContato = (contato.nome || 'amiga').split(' ')[0];
-    const msg = `*Oi ${nomeContato}! Tudo bem?* 😊\nAcabei de fazer uma coisa incrível pela minha saúde e pensei em você! Uma consultora chamada Ana do Hormone Ecosystem vai te mandar uma mensagem agora — pode responder ela, vale muito a pena ouvir! 🌸`;
-    try {
-      await this.helpers.httpRequest({
-        method: 'POST',
-        url: ZAPI_URL,
-        headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-        body: JSON.stringify({ phone: telefone, message: msg }),
-      });
-    } catch(e) {}
-    await new Promise(r => setTimeout(r, 1500));
-  }
-
-  // Marca primeiros 5 como enviados para Etapa 7 não repetir
-  try {
-    for (const contato of primeiros5) {
-      if (!contato.telefone) continue;
-      await this.helpers.httpRequest({
-        method: 'PATCH',
-        url: `${SUPABASE_URL}/rest/v1/contatos_referidos?indicado_por_telefone=eq.${telefone}&telefone=eq.${contato.telefone}`,
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_KEY,
-          'Authorization': 'Bearer ' + SUPABASE_KEY,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify({ status: 'mensagem_enviada' })
-      });
-    }
-  } catch(e) {}
-
-  // MSG final: aguarda confirmação antes de enviar próximas 5
+  // MSG 3: Instrução de encaminhamento (5 por vez)
   try {
     await this.helpers.httpRequest({
       method: 'POST',
       url: ZAPI_URL,
       headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-      body: JSON.stringify({ phone: telefone, message: `Conseguiu encaminhar as 5? Me avisa quando terminar que mando mais 5! 😊💜` }),
+      body: JSON.stringify({ phone: telefone, message: `👆 Segura essa mensagem → clica em Encaminhar → seleciona 5 amigas → envia. Repete mais 3 vezes até cobrir as 20! 😊\n\nO WhatsApp permite 5 por vez — são só 4 encaminhamentos rápidos! 💜\n\nMe avisa quando terminar! 🥰` }),
+    });
+  } catch(e) {}
+
+  // Marca todos os contatos como enviados de uma vez
+  try {
+    await this.helpers.httpRequest({
+      method: 'PATCH',
+      url: `${SUPABASE_URL}/rest/v1/contatos_referidos?indicado_por_telefone=eq.${telefone}`,
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({ status: 'mensagem_enviada' })
     });
   } catch(e) {}
 
