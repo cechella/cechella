@@ -42,8 +42,8 @@ if (type === 'subscription_authorized_payment') {
     await this.helpers.httpRequest({
       method: 'PATCH',
       url: `${SUPABASE_URL}/rest/v1/pagamentos_recorrentes?id=eq.${rec.id}`,
-      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
-      body: { parcelas_pagas: novasParcelas, status: novoStatus }
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ parcelas_pagas: novasParcelas, status: novoStatus })
     });
     const msg = `✅ *Parcela ${novasParcelas}/${rec.parcelas_total} confirmada!*\n\nCobrança de R$ ${valor} processada com sucesso. 💜`;
     await this.helpers.httpRequest({

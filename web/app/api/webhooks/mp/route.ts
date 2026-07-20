@@ -39,14 +39,13 @@ export async function POST(req: NextRequest) {
         const novasParcelas = (recorrente.parcelas_pagas || 0) + 1
         const novoStatus = novasParcelas >= recorrente.parcelas_total ? 'concluido' : 'ativo'
 
-        supabase.from('pagamentos_recorrentes').update({
+        await supabase.from('pagamentos_recorrentes').update({
           parcelas_pagas: novasParcelas,
           proxima_cobranca: proximaData(),
           status: novoStatus,
-        }).eq('id', recorrente.id).then(() => {})
+        }).eq('id', recorrente.id)
 
-        // Registrar cada parcela na tabela pagamentos
-        supabase.from('pagamentos').insert({
+        await supabase.from('pagamentos').insert({
           lead_telefone: recorrente.lead_telefone,
           payment_id: String(eventId),
           metodo: 'cartao_recorrente',
@@ -54,13 +53,11 @@ export async function POST(req: NextRequest) {
           status: 'approved',
           parcelas: recorrente.parcelas_total,
           recorrente: true,
-        }).then(() => {})
+        })
 
-        // Marcar lead como pago na primeira parcela recorrente aprovada
-        supabase.from('leads')
+        await supabase.from('leads')
           .update({ status_pagamento: 'pago' })
           .eq('telefone', recorrente.lead_telefone)
-          .then(() => {})
 
         console.log('[webhook/mp] Parcela', novasParcelas, '/', recorrente.parcelas_total, 'registrada')
       }
