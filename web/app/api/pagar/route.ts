@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-export const maxDuration = 10
+export const maxDuration = 20
 
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN || 'APP_USR-1603783113978504-062408-d67a1021538897e0341f70bb7645fdcf-2669863266'
 const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text'
@@ -110,11 +110,11 @@ export async function POST(req: NextRequest) {
       const nomeLead = leadNomeRow?.nome?.split(' ')[0] || 'você'
       await supabase.from('leads').update({ status_pagamento: 'pago', etapa_agente: 7 }).eq('id', lead.id)
       const mensagem = `✅ ${nomeLead}, seu pagamento foi confirmado! 🎉💜 Seja bem-vinda ao Hormone Ecosystem!\nNossa equipe vai entrar em contato em breve para agendar seu procedimento.\n\nEnquanto isso, posso te pedir um favor? 🌸\nVocê acabou de tomar uma das melhores decisões da sua saúde. Tenho certeza que você conhece outras mulheres passando pelo mesmo que você passou.\nVou te ensinar agora como me mandar os contatos direto pelo WhatsApp. É super fácil! 😊\n\n👉 Você tem iPhone ou Android?`
-      fetch(ZAPI_URL, {
+      await fetch(ZAPI_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
         body: JSON.stringify({ phone: telefone, message: mensagem }),
-      }).then(() => {})
+      })
       const historico = leadNomeRow?.historico || []
       historico.push({ role: 'assistant', content: mensagem, ts: new Date().toISOString() })
       supabase.from('leads').update({ historico }).eq('id', lead.id).then(() => {})
