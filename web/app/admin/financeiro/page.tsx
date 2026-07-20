@@ -168,6 +168,7 @@ export default function FinanceiroDashboard() {
                   value={fmt(resumo.mrrAtivo)}
                   sub={`${resumo.assinaturasAtivas} assinaturas ativas`}
                   color="blue"
+                  href="/admin/financeiro/assinaturas"
                 />
                 <KpiCard
                   icon={<TrendingUp className="w-5 h-5" />}
