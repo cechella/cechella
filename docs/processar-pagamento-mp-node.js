@@ -112,7 +112,7 @@ if (leadId) {
       'Authorization': `Bearer ${SUPABASE_KEY}`,
       'Content-Type': 'application/json'
     },
-    body: { etapa_agente: 7 }
+    body: { etapa_agente: 7, status_pagamento: 'pago' }
   });
 }
 

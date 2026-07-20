@@ -26,6 +26,7 @@ type Pagamento = {
 const METODOS: Record<string, { label: string; color: string }> = {
   cartao_avista: { label: 'À Vista', color: 'text-green-400 bg-green-500/10' },
   cartao_recorrente: { label: 'Recorrente', color: 'text-blue-400 bg-blue-500/10' },
+  pix: { label: 'PIX', color: 'text-purple-400 bg-purple-500/10' },
 }
 
 const STATUS_COLORS: Record<string, string> = {

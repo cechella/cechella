@@ -26,6 +26,8 @@ type Resumo = {
   aVistaTotal: number
   recorrenteCount: number
   recorrenteTotal: number
+  pixCount: number
+  pixTotal: number
   graficoReceita: { data: string; valor: number }[]
 }
 
@@ -157,7 +159,7 @@ export default function FinanceiroDashboard() {
                   icon={<DollarSign className="w-5 h-5" />}
                   label="Total Recebido"
                   value={fmt(resumo.totalRecebido)}
-                  sub={`${resumo.aVistaCount + resumo.recorrenteCount} transações`}
+                  sub={`${resumo.aVistaCount + resumo.recorrenteCount + resumo.pixCount} transações`}
                   color="purple"
                 />
                 <KpiCard
@@ -199,6 +201,14 @@ export default function FinanceiroDashboard() {
                   sub={fmt(resumo.recorrenteTotal)}
                   color="blue"
                   href="/admin/financeiro/pagamentos?metodo=cartao_recorrente"
+                />
+                <KpiCard
+                  icon={<DollarSign className="w-5 h-5" />}
+                  label="PIX Aprovados"
+                  value={String(resumo.pixCount)}
+                  sub={fmt(resumo.pixTotal)}
+                  color="purple"
+                  href="/admin/financeiro/pagamentos?metodo=pix"
                 />
                 <KpiCard
                   icon={<CheckCircle2 className="w-5 h-5" />}

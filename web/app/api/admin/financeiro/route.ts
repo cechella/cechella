@@ -51,6 +51,7 @@ export async function GET(req: NextRequest) {
 
     const aVistaTotais = pagamentos.filter(p => p.metodo === 'cartao_avista')
     const recorrenteTotais = pagamentos.filter(p => p.metodo === 'cartao_recorrente')
+    const pixTotais = pagamentos.filter(p => p.metodo === 'pix')
 
     const porDia: Record<string, number> = {}
     grafData.forEach(p => {
@@ -74,6 +75,8 @@ export async function GET(req: NextRequest) {
       aVistaTotal: aVistaTotais.reduce((s, p) => s + (p.valor || 0), 0),
       recorrenteCount: recorrenteTotais.length,
       recorrenteTotal: recorrenteTotais.reduce((s, p) => s + (p.valor || 0), 0),
+      pixCount: pixTotais.length,
+      pixTotal: pixTotais.reduce((s, p) => s + (p.valor || 0), 0),
       graficoReceita,
     })
   }
