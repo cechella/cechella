@@ -349,12 +349,6 @@ export default function PagarPage() {
 
         {stage === 'options' && (
           <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-6">
-            {debugLog.length > 0 && (
-              <div className="mb-4 bg-[#1a1a1a] border border-[#333] rounded-xl p-3">
-                <p className="text-zinc-500 text-xs uppercase tracking-wider mb-1">Log</p>
-                {debugLog.map((l, i) => <p key={i} className="text-xs font-mono text-zinc-400 break-all">{l}</p>)}
-              </div>
-            )}
             <div className="text-3xl mb-3 text-center">💜</div>
             <h2 className="text-white font-semibold text-lg mb-1 text-center">Preparamos opções especiais</h2>
             <p className="text-zinc-400 text-sm mb-5 text-center">Nossa equipe separou condições exclusivas para você:</p>
@@ -380,12 +374,6 @@ export default function PagarPage() {
             <div className="text-4xl mb-4">⚠️</div>
             <p className="text-white font-medium mb-2">Não foi possível continuar</p>
             <p className="text-zinc-400 text-sm mb-4">{errorMsg}</p>
-            {debugLog.length > 0 && (
-              <div className="text-left bg-[#1a1a1a] border border-[#333] rounded-xl p-4">
-                <p className="text-zinc-500 text-xs uppercase tracking-wider mb-2">Log de diagnóstico</p>
-                {debugLog.map((l, i) => <p key={i} className="text-xs font-mono text-zinc-400 break-all">{l}</p>)}
-              </div>
-            )}
           </div>
         )}
 
