@@ -70,11 +70,11 @@ export async function POST(req: NextRequest) {
   const issuerId = tokenResp.issuer_id ? String(tokenResp.issuer_id) : ''
 
   const leadResult = await Promise.race([
-    supabase.from('leads').select('id, telefone, tentativas_pagamento').eq('payment_token', token).single(),
+    supabase.from('leads').select('id, telefone, nome, tentativas_pagamento').eq('payment_token', token).single(),
     new Promise<{ data: null; error: string }>(resolve => setTimeout(() => resolve({ data: null, error: 'timeout' }), 2500))
   ])
 
-  const lead = (leadResult as any).data as { id: string; telefone: string; tentativas_pagamento: number } | null
+  const lead = (leadResult as any).data as { id: string; telefone: string; nome: string; tentativas_pagamento: number } | null
   console.log('[pagar] Lead encontrado:', !!lead)
   if (!lead) {
     return NextResponse.json({ aprovado: false, mensagem: 'Link inválido ou expirado.' }, { status: 400 })
@@ -106,6 +106,11 @@ export async function POST(req: NextRequest) {
         status: 'ativo',
       }).then(() => {})
       await supabase.from('leads').update({ status_pagamento: 'pago', etapa_agente: 7 }).eq('id', lead.id)
+      fetch('https://n8n.hormoneecosystem.com/webhook/cartao-recorrente-assinatura', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telefone, nome: lead.nome }),
+      }).catch(() => {})
       return NextResponse.json({ aprovado: true })
     }
 
