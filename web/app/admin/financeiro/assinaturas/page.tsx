@@ -298,6 +298,7 @@ export default function AssinaturasPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-zinc-800">
+                    <th className="text-left px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide">Data</th>
                     <th className="text-left px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide">Lead</th>
                     <th className="text-left px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide">Status</th>
                     <th className="text-left px-4 py-3 text-zinc-500 font-medium text-xs uppercase tracking-wide w-40">Progresso</th>
@@ -334,6 +335,9 @@ export default function AssinaturasPage() {
                             si.alerta === 'vermelho' ? 'bg-red-500/3' : si.alerta === 'amarelo' ? 'bg-yellow-500/3' : ''
                           }`}
                         >
+                          <td className="px-4 py-4 text-zinc-400 text-xs whitespace-nowrap">
+                            {a.created_at ? fmtData(a.created_at) : '—'}
+                          </td>
                           <td className="px-4 py-4">
                             <div className="font-medium text-white text-sm">{a.nome || '—'}</div>
                             <div className="text-zinc-500 text-xs">{a.lead_telefone}</div>
