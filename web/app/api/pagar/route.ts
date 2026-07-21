@@ -110,11 +110,17 @@ export async function POST(req: NextRequest) {
       const nomeLead = leadNomeRow?.nome?.split(' ')[0] || 'você'
       await supabase.from('leads').update({ status_pagamento: 'pago', etapa_agente: 7 }).eq('id', lead.id)
       const mensagem = `✅ ${nomeLead}, seu pagamento foi confirmado! 🎉💜 Seja bem-vinda ao Hormone Ecosystem!\nNossa equipe vai entrar em contato em breve para agendar seu procedimento.\n\nEnquanto isso, posso te pedir um favor? 🌸\nVocê acabou de tomar uma das melhores decisões da sua saúde. Tenho certeza que você conhece outras mulheres passando pelo mesmo que você passou.\nVou te ensinar agora como me mandar os contatos direto pelo WhatsApp. É super fácil! 😊\n\n👉 Você tem iPhone ou Android?`
-      await fetch(ZAPI_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-        body: JSON.stringify({ phone: telefone, message: mensagem }),
-      })
+      try {
+        const zapiResp = await fetch(ZAPI_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+          body: JSON.stringify({ phone: telefone, message: mensagem }),
+        })
+        const zapiBody = await zapiResp.json().catch(() => null)
+        console.log('[pagar] ZAPI recorrente:', zapiResp.status, JSON.stringify(zapiBody))
+      } catch (zapiErr: any) {
+        console.log('[pagar] ZAPI recorrente erro:', zapiErr?.message)
+      }
       const historico = leadNomeRow?.historico || []
       historico.push({ role: 'assistant', content: mensagem, ts: new Date().toISOString() })
       supabase.from('leads').update({ historico }).eq('id', lead.id).then(() => {})
