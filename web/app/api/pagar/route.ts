@@ -136,6 +136,7 @@ export async function POST(req: NextRequest) {
     supabase.from('leads').update({ status_pagamento: 'pago', etapa_agente: 7 }).eq('id', lead.id).then(() => {})
     return NextResponse.json({ aprovado: true })
   }
+  registrarPagamentoRecusado(telefone, p.paymentId || '', 'cartao_avista', VALOR_AVISTA, p.detalhe || 'recusado')
   return NextResponse.json({ aprovado: false, proxima: 'recorrente', _detalhe: p.detalhe })
 }
 
@@ -241,6 +242,19 @@ function registrarPagamento(telefone: string, paymentId: string, metodo: string,
     status: 'approved',
     parcelas: metodo === 'cartao_avista' ? 1 : 6,
     recorrente: metodo === 'cartao_recorrente',
+  }).then(() => {})
+}
+
+function registrarPagamentoRecusado(telefone: string, paymentId: string, metodo: string, valor: number, motivo: string) {
+  supabase.from('pagamentos').insert({
+    lead_telefone: telefone,
+    payment_id: paymentId || `recusado-${Date.now()}`,
+    metodo,
+    valor,
+    status: 'rejected',
+    parcelas: 1,
+    recorrente: false,
+    status_detail: motivo,
   }).then(() => {})
 }
 
