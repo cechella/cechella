@@ -105,6 +105,21 @@ const todosColetados = listaGrupos.length === 0;
 const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text';
 const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS';
 
+if (todosColetados) {
+  // Todos os dados coletados — envia mensagem de encerramento diretamente via Z-API
+  // SEM passar pelo Claude para evitar que o histórico confunda a resposta
+  const mensagemFinal = `Você é demais! Fez tudo certinho! 🎉💜\nAgora é só aguardar o contato da nossa equipe para agendar seu procedimento. Será rápido, indolor e transformador! ✨\nEm breve você vai estar desfrutando de:\n✅ Sono profundo\n✅ Energia de verdade\n✅ Humor equilibrado\n✅ Libido restaurada\n✅ Aquele foco que você tinha antes\nObrigada por confiar no Hormone Ecosystem e em mim! Você vai se amar por essa decisão! 💜🌸`;
+  try {
+    await this.helpers.httpRequest({
+      method: 'POST',
+      url: ZAPI_URL,
+      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+      body: JSON.stringify({ phone: telefone, message: mensagemFinal })
+    });
+  } catch(e) {}
+  return [{ json: { ...data, _mensagensEnviadas: true, claudeBody: null, proximaEtapa: 9, resposta: mensagemFinal } }];
+}
+
 if (!todosColetados) {
   let introMsg;
   if (jaPreenchidos === 0) {
