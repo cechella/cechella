@@ -100,11 +100,13 @@ export async function POST(req: NextRequest) {
         payment_method_id: paymentMethodId,
         issuer_id: issuerId,
         valor: VALOR_RECORRENTE,
-        parcelas_pagas: 0,
+        parcelas_pagas: 1,
         parcelas_total: 6,
         proxima_cobranca: proximaData(),
         status: 'ativo',
       }).then(() => {})
+      // Registra primeira parcela na tabela pagamentos para somar na Receita Total
+      registrarPagamento(telefone, result.preapprovalId!, 'cartao_recorrente', VALOR_RECORRENTE)
       await supabase.from('leads').update({ status_pagamento: 'pago', etapa_agente: 7 }).eq('id', lead.id)
       await fetch('https://n8n.hormoneecosystem.com/webhook/cartao-recorrente-assinatura', {
         method: 'POST',
