@@ -106,7 +106,7 @@ export async function POST(req: NextRequest) {
         status: 'ativo',
       }).then(() => {})
       await supabase.from('leads').update({ status_pagamento: 'pago', etapa_agente: 7 }).eq('id', lead.id)
-      fetch('https://n8n.hormoneecosystem.com/webhook/cartao-recorrente-assinatura', {
+      await fetch('https://n8n.hormoneecosystem.com/webhook/cartao-recorrente-assinatura', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ telefone, nome: lead.nome }),
