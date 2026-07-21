@@ -3,7 +3,7 @@ const lead = $('Montar Prompt').item.json;
 let resposta = '', proximaEtapa = parseInt(lead.etapa_agente) || 1, dorPrincipal = lead.dor_principal, nomeLead = lead.nome;
 try {
   let content = claudeResponse.content?.[0]?.text || '';
-  content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').replace(/^json\s*/i, '').trim();
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('No JSON found');
   const parsed = JSON.parse(jsonMatch[0]);
