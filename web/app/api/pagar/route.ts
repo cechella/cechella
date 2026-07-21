@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 export const maxDuration = 20
+export const dynamic = 'force-dynamic'
 
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN || 'APP_USR-1603783113978504-062408-d67a1021538897e0341f70bb7645fdcf-2669863266'
 
