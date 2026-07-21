@@ -102,9 +102,11 @@ function fmt(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
-function fmtData(iso: string | null) {
+function fmtData(iso: string | null, hora = false) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('pt-BR')
+  const d = new Date(iso)
+  if (!hora) return d.toLocaleDateString('pt-BR')
+  return d.toLocaleDateString('pt-BR') + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
 function ProgressBar({ pagas, total }: { pagas: number; total: number }) {
@@ -336,7 +338,7 @@ export default function AssinaturasPage() {
                           }`}
                         >
                           <td className="px-4 py-4 text-zinc-400 text-xs whitespace-nowrap">
-                            {a.created_at ? fmtData(a.created_at) : '—'}
+                            {a.created_at ? fmtData(a.created_at, true) : '—'}
                           </td>
                           <td className="px-4 py-4">
                             <div className="font-medium text-white text-sm">{a.nome || '—'}</div>
