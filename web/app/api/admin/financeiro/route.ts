@@ -26,11 +26,12 @@ export async function GET(req: NextRequest) {
     diasAtras.setDate(diasAtras.getDate() - Number(periodo))
     const isoFrom = diasAtras.toISOString()
 
-    const [pagamentosRes, recorrentesRes, leadsRes, grafRes] = await Promise.all([
+    const [pagamentosRes, recorrentesRes, leadsRes, grafRes, recusadosRes] = await Promise.all([
       supabase.from('pagamentos').select('valor, status, metodo, created_at').eq('status', 'approved'),
       supabase.from('pagamentos_recorrentes').select('valor, status, parcelas_pagas, parcelas_total, proxima_cobranca'),
       supabase.from('leads').select('id, status_pagamento, tentativas_pagamento'),
       supabase.from('pagamentos').select('valor, created_at').eq('status', 'approved').gte('created_at', isoFrom).order('created_at'),
+      supabase.from('pagamentos').select('valor, status_detail, metodo').eq('status', 'rejected'),
     ])
 
     console.log('[financeiro] leads:', leadsRes.data?.length, 'error:', leadsRes.error?.message)
@@ -40,6 +41,7 @@ export async function GET(req: NextRequest) {
     const recorrentes = recorrentesRes.data || []
     const leads = leadsRes.data || []
     const grafData = grafRes.data || []
+    const recusados = recusadosRes.data || []
 
     const totalRecebido = pagamentos.reduce((s, p) => s + (p.valor || 0), 0)
     const assinaturasAtivas = recorrentes.filter(r => r.status === 'ativo').length
@@ -77,6 +79,8 @@ export async function GET(req: NextRequest) {
       recorrenteTotal: recorrenteTotais.reduce((s, p) => s + (p.valor || 0), 0),
       pixCount: pixTotais.length,
       pixTotal: pixTotais.reduce((s, p) => s + (p.valor || 0), 0),
+      recusadosCount: recusados.length,
+      recusadosTotal: recusados.reduce((s, p) => s + (p.valor || 0), 0),
       graficoReceita,
     })
   }
