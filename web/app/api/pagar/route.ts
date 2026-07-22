@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN || 'APP_USR-1603783113978504-062408-d67a1021538897e0341f70bb7645fdcf-2669863266'
 
 // Valores de teste — trocar para produção: VALOR_AVISTA=5000, VALOR_RECORRENTE=833
-const VALOR_AVISTA = 300.00
+const VALOR_AVISTA = 350.00
 const VALOR_RECORRENTE = 5.00
 
 const supabase = createClient(
