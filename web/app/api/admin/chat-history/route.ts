@@ -40,13 +40,15 @@ export async function GET(req: NextRequest) {
       else if (m.body && typeof m.body === 'string') content = m.body
       else if (m.caption && typeof m.caption === 'string') content = m.caption
       else if (m.type === 'contact' || m.type === 'contactArray') {
-        const contacts = (m.contacts as Record<string, unknown>[] | undefined) || (m.contact ? [m.contact] : [])
-        if (contacts.length > 0) {
-          content = contacts.map((c: Record<string, unknown>) => {
-            const name = (c.displayName || c.name || '') as string
-            const phones = Array.isArray(c.phones)
-              ? (c.phones as Record<string, unknown>[]).map((p: Record<string, unknown>) => p.phone || p.wa_id || '').join(', ')
-              : (c.phone || '') as string
+        const rawContacts = (m.contacts as unknown[] | undefined) || (m.contact ? [m.contact] : [])
+        if (rawContacts.length > 0) {
+          content = rawContacts.map((raw) => {
+            const c = raw as Record<string, unknown>
+            const name = String(c.displayName || c.name || '')
+            const rawPhones = c.phones
+            const phones = Array.isArray(rawPhones)
+              ? rawPhones.map((p) => { const ph = p as Record<string, unknown>; return String(ph.phone || ph.wa_id || '') }).join(', ')
+              : String(c.phone || '')
             return `📇 ${name}${phones ? ` — ${phones}` : ''}`
           }).join('\n')
         } else {
