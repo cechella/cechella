@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const resp = await fetch(
-      `${ZAPI_BASE}/chat-messages/${normalized}?count=${count}`,
+      `${ZAPI_BASE}/messages?phone=${normalized}&count=${count}`,
       { headers: { 'Client-Token': ZAPI_CLIENT_TOKEN } }
     )
 
