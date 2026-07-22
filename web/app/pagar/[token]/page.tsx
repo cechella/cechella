@@ -295,7 +295,7 @@ export default function PagarPage() {
                 >
                   {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
                     <option key={n} value={n}>
-                      {n}x de R$ {(25 / n).toFixed(2).replace('.', ',')} {n === 1 ? '(sem juros)' : ''}
+                      {n}x de R$ {(350 / n).toFixed(2).replace('.', ',')} {n === 1 ? '(sem juros)' : ''}
                     </option>
                   ))}
                 </select>
