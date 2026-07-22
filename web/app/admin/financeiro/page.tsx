@@ -266,6 +266,7 @@ export default function FinanceiroDashboard() {
                     value={String(resumo.leadsRecuperacao)}
                     sub="Leads sem pagamento"
                     color="yellow"
+                    href="/admin/financeiro/recuperacao"
                   />
                 </div>
               </div>

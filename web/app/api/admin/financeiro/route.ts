@@ -130,5 +130,35 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ pagamentos: enriched, total: count || 0, page, limit })
   }
 
+  if (tipo === 'recuperacao') {
+    const { data: leadsRec } = await supabase
+      .from('leads')
+      .select('id, nome, telefone, status_pagamento, tentativas_pagamento, created_at')
+      .in('status_pagamento', ['recuperacao_necessaria', 'inadimplente'])
+      .order('created_at', { ascending: false })
+
+    const leads = leadsRec || []
+    const telefones = leads.map((l: any) => l.telefone).filter(Boolean)
+
+    const pagamentosRes = telefones.length > 0
+      ? await supabase.from('pagamentos').select('lead_telefone, metodo, valor, status, created_at').in('lead_telefone', telefones).order('created_at', { ascending: false })
+      : { data: [] }
+
+    const pagMap: Record<string, any[]> = {}
+    ;(pagamentosRes.data || []).forEach((p: any) => {
+      if (!pagMap[p.lead_telefone]) pagMap[p.lead_telefone] = []
+      pagMap[p.lead_telefone].push(p)
+    })
+
+    const enriched = leads.map((l: any) => ({
+      ...l,
+      pagamentos: pagMap[l.telefone] || [],
+      ultimo_metodo: (pagMap[l.telefone] || [])[0]?.metodo || null,
+      ultimo_valor: (pagMap[l.telefone] || [])[0]?.valor || null,
+    }))
+
+    return NextResponse.json({ leads: enriched, total: enriched.length })
+  }
+
   return NextResponse.json({ erro: 'tipo inválido' }, { status: 400 })
 }
