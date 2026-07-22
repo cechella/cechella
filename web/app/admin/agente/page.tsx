@@ -711,7 +711,7 @@ export default function AgenteAdminPage() {
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
                           {isNew && <div className="animate-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: '#7B3FE4', flexShrink: 0 }} />}
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', truncate: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 130 }}>{nome}</span>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 130 }}>{nome}</span>
                         </div>
                         <span style={{ fontSize: 10, fontWeight: 700, color: scoreCol, background: scoreCol + '20', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>{score}</span>
                       </div>
