@@ -6,8 +6,8 @@ export const dynamic = 'force-dynamic'
 
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN || 'APP_USR-1603783113978504-062408-d67a1021538897e0341f70bb7645fdcf-2669863266'
 
-const VALOR_AVISTA = 5000.00
-const VALOR_RECORRENTE = 833.00
+const VALOR_AVISTA = 1.00
+const VALOR_RECORRENTE = 0.33
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
