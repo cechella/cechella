@@ -352,7 +352,7 @@ export default function AgenteAdminPage() {
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [financeiro, setFinanceiro] = useState<FinanceiroResumo>({})
   const [autoSelected, setAutoSelected] = useState(false)
-  const [chatSource, setChatSource] = useState<'whatsapp' | 'ana'>('whatsapp')
+  const [chatSource, setChatSource] = useState<'whatsapp' | 'ana'>('ana')
   const [zapiMsgs, setZapiMsgs] = useState<MsgHistorico[]>([])
   const [zapiLoading, setZapiLoading] = useState(false)
   const [zapiError, setZapiError] = useState<string | null>(null)
@@ -373,6 +373,7 @@ export default function AgenteAdminPage() {
       const data = await resp.json()
       if (data.ok && Array.isArray(data.messages)) {
         setZapiMsgs(data.messages)
+        if (data.messages.length > 0) setChatSource('whatsapp')
       } else {
         setZapiError(data.error || 'Erro ao carregar histórico')
         setZapiMsgs([])
