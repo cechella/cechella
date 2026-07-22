@@ -234,7 +234,7 @@ function ToastNotification({ toasts, onDismiss }: { toasts: ToastItem[]; onDismi
             fontSize: 13,
             cursor: 'pointer',
             boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
-            animation: 'slideIn 0.2s ease',
+            animation: 'none',
           }}
         >
           🔔 Nova mensagem — <strong>{t.nome}</strong>
@@ -561,16 +561,6 @@ export default function AgenteAdminPage() {
 
   return (
     <ErrorBoundary>
-      <style>{`
-        :root { --accent: #7B3FE4; --green: #00D084; --red: #FF3B5C; --amber: #F5A623; }
-        @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
-        @keyframes pulseGreen { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-        .pulse-green { animation: pulseGreen 1.5s ease-in-out infinite; }
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
-      `}</style>
-
       {cmdOpen && (
         <CommandPalette
           leads={leads}
@@ -720,7 +710,7 @@ export default function AgenteAdminPage() {
                       {/* Row 1: name + score badge */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
-                          {isNew && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#7B3FE4', flexShrink: 0, animation: 'pulseGreen 1.2s ease-in-out infinite' }} />}
+                          {isNew && <div className="animate-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: '#7B3FE4', flexShrink: 0 }} />}
                           <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', truncate: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 130 }}>{nome}</span>
                         </div>
                         <span style={{ fontSize: 10, fontWeight: 700, color: scoreCol, background: scoreCol + '20', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>{score}</span>
@@ -776,7 +766,7 @@ export default function AgenteAdminPage() {
                         ) : (
                           <>
                             🤖 Ana ativa
-                            <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#00D084', animation: 'pulseGreen 1.5s ease-in-out infinite' }} />
+                            <div className="animate-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: '#00D084' }} />
                           </>
                         )}
                       </div>
