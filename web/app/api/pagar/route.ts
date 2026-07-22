@@ -161,6 +161,7 @@ async function criarAssinatura({ cardToken, payerEmail, telefone, leadId }: {
       back_url: 'https://www.hormoneecosystem.com',
       status: 'authorized',
       external_reference: telefone,
+      notification_url: 'https://www.hormoneecosystem.com/api/webhooks/mp',
       auto_recurring: {
         frequency: 1,
         frequency_type: 'months',

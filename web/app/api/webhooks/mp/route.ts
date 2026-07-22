@@ -27,39 +27,61 @@ export async function POST(req: NextRequest) {
     const payment = await resp.json()
     console.log('[webhook/mp] Pagamento:', { status: payment.status, preapproval_id: payment.preapproval_id, amount: payment.transaction_amount })
 
-    if (payment.status === 'approved' && payment.preapproval_id) {
-      // Incrementar parcelas_pagas na tabela pagamentos_recorrentes
+    if (payment.preapproval_id) {
       const { data: recorrente } = await supabase
         .from('pagamentos_recorrentes')
-        .select('id, parcelas_pagas, parcelas_total, lead_telefone')
+        .select('id, parcelas_pagas, parcelas_total, lead_telefone, valor')
         .eq('preapproval_id', String(payment.preapproval_id))
         .single()
 
       if (recorrente) {
-        const novasParcelas = (recorrente.parcelas_pagas || 0) + 1
-        const novoStatus = novasParcelas >= recorrente.parcelas_total ? 'concluido' : 'ativo'
+        if (payment.status === 'approved') {
+          const novasParcelas = (recorrente.parcelas_pagas || 0) + 1
+          const novoStatus = novasParcelas >= recorrente.parcelas_total ? 'concluido' : 'ativo'
 
-        await supabase.from('pagamentos_recorrentes').update({
-          parcelas_pagas: novasParcelas,
-          proxima_cobranca: proximaData(),
-          status: novoStatus,
-        }).eq('id', recorrente.id)
+          await supabase.from('pagamentos_recorrentes').update({
+            parcelas_pagas: novasParcelas,
+            proxima_cobranca: proximaData(),
+            status: novoStatus,
+          }).eq('id', recorrente.id)
 
-        await supabase.from('pagamentos').insert({
-          lead_telefone: recorrente.lead_telefone,
-          payment_id: String(eventId),
-          metodo: 'cartao_recorrente',
-          valor: payment.transaction_amount,
-          status: 'approved',
-          parcelas: recorrente.parcelas_total,
-          recorrente: true,
-        })
+          await supabase.from('pagamentos').insert({
+            lead_telefone: recorrente.lead_telefone,
+            payment_id: String(eventId),
+            metodo: 'cartao_recorrente',
+            valor: payment.transaction_amount || recorrente.valor,
+            status: 'approved',
+            parcelas: recorrente.parcelas_total,
+            recorrente: true,
+          })
 
-        await supabase.from('leads')
-          .update({ status_pagamento: 'pago' })
-          .eq('telefone', recorrente.lead_telefone)
+          await supabase.from('leads')
+            .update({ status_pagamento: 'pago' })
+            .eq('telefone', recorrente.lead_telefone)
 
-        console.log('[webhook/mp] Parcela', novasParcelas, '/', recorrente.parcelas_total, 'registrada')
+          console.log('[webhook/mp] Parcela aprovada', novasParcelas, '/', recorrente.parcelas_total)
+        } else if (payment.status === 'rejected' || payment.status === 'cancelled') {
+          await supabase.from('pagamentos_recorrentes').update({
+            status: 'inadimplente',
+          }).eq('id', recorrente.id)
+
+          await supabase.from('pagamentos').insert({
+            lead_telefone: recorrente.lead_telefone,
+            payment_id: String(eventId),
+            metodo: 'cartao_recorrente',
+            valor: payment.transaction_amount || recorrente.valor,
+            status: 'rejected',
+            parcelas: recorrente.parcelas_total,
+            recorrente: true,
+            status_detail: payment.status_detail || payment.status || 'recusado_recorrente',
+          })
+
+          await supabase.from('leads')
+            .update({ status_pagamento: 'inadimplente' })
+            .eq('telefone', recorrente.lead_telefone)
+
+          console.log('[webhook/mp] Parcela recusada — lead marcado como inadimplente')
+        }
       }
     }
   }

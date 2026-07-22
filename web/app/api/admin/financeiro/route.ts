@@ -41,14 +41,16 @@ export async function GET(req: NextRequest) {
     const recorrentes = recorrentesRes.data || []
     const leads = leadsRes.data || []
     const grafData = grafRes.data || []
-    const recusados = recusadosRes.data || []
+    const recusados = (recusadosRes.data || [])
+    const recusadosAvista = recusados.filter((p: any) => p.metodo === 'cartao_avista')
+    const recusadosRecorrentes = recusados.filter((p: any) => p.metodo === 'cartao_recorrente')
 
     const totalRecebido = pagamentos.reduce((s, p) => s + (p.valor || 0), 0)
     const assinaturasAtivas = recorrentes.filter(r => r.status === 'ativo').length
     const mrrAtivo = recorrentes.filter(r => r.status === 'ativo').reduce((s, r) => s + (r.valor || 0), 0)
     const totalLeads = leads.length
     const leadsPagantes = leads.filter(l => l.status_pagamento === 'pago' || l.status_pagamento === 'aprovado').length
-    const leadsRecuperacao = leads.filter(l => l.status_pagamento === 'recuperacao_necessaria').length
+    const leadsRecuperacao = leads.filter(l => l.status_pagamento === 'recuperacao_necessaria' || l.status_pagamento === 'inadimplente').length
     const taxaConversao = totalLeads > 0 ? Math.round((leadsPagantes / totalLeads) * 100) : 0
 
     const aVistaTotais = pagamentos.filter(p => p.metodo === 'cartao_avista')
@@ -80,7 +82,9 @@ export async function GET(req: NextRequest) {
       pixCount: pixTotais.length,
       pixTotal: pixTotais.reduce((s, p) => s + (p.valor || 0), 0),
       recusadosCount: recusados.length,
-      recusadosTotal: recusados.reduce((s, p) => s + (p.valor || 0), 0),
+      recusadosTotal: recusados.reduce((s: number, p: any) => s + (p.valor || 0), 0),
+      inadimplentesCount: recusadosRecorrentes.length,
+      inadimplentesTotal: recusadosRecorrentes.reduce((s: number, p: any) => s + (p.valor || 0), 0),
       graficoReceita,
     })
   }
