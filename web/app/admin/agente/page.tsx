@@ -561,21 +561,10 @@ export default function AgenteAdminPage() {
 
   return (
     <ErrorBoundary>
-      <style jsx global>{`
-        :root {
-          --accent: #7B3FE4;
-          --green: #00D084;
-          --red: #FF3B5C;
-          --amber: #F5A623;
-        }
-        @keyframes slideIn {
-          from { transform: translateX(40px); opacity: 0; }
-          to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes pulseGreen {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
+      <style>{`
+        :root { --accent: #7B3FE4; --green: #00D084; --red: #FF3B5C; --amber: #F5A623; }
+        @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes pulseGreen { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
         .pulse-green { animation: pulseGreen 1.5s ease-in-out infinite; }
         ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
