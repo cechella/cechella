@@ -3,16 +3,25 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
+const N8N_URL = 'https://35.255.229.131/webhook/whatsapp-webhook'
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-// Z-API sends all WhatsApp events here — we persist every message to mensagens_whatsapp
+// Z-API sends all WhatsApp events here — we persist every message to mensagens_whatsapp AND forward to n8n
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+
+    // Forward to n8n in parallel (fire-and-forget, don't block)
+    fetch(N8N_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).catch(() => {})
 
     // Z-API multi-device payload structure
     const phone = body.phone || body.from || body.chatId?.replace('@s.whatsapp.net', '').replace('@c.us', '')
