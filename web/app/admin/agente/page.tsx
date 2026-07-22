@@ -47,6 +47,7 @@ interface MsgHistorico {
   role: 'user' | 'assistant'
   content: string
   ts?: string
+  type?: string
 }
 
 interface LeadAgente {
@@ -351,6 +352,10 @@ export default function AgenteAdminPage() {
   const [toasts, setToasts] = useState<ToastItem[]>([])
   const [financeiro, setFinanceiro] = useState<FinanceiroResumo>({})
   const [autoSelected, setAutoSelected] = useState(false)
+  const [chatSource, setChatSource] = useState<'whatsapp' | 'ana'>('whatsapp')
+  const [zapiMsgs, setZapiMsgs] = useState<MsgHistorico[]>([])
+  const [zapiLoading, setZapiLoading] = useState(false)
+  const [zapiError, setZapiError] = useState<string | null>(null)
 
   const selectedRef = useRef<LeadAgente | null>(null)
   selectedRef.current = selected
@@ -359,6 +364,26 @@ export default function AgenteAdminPage() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
   const toastId = useRef(0)
+
+  const fetchZapiHistory = useCallback(async (phone: string) => {
+    setZapiLoading(true)
+    setZapiError(null)
+    try {
+      const resp = await fetch(`/api/admin/chat-history?phone=${encodeURIComponent(phone)}&count=200`)
+      const data = await resp.json()
+      if (data.ok && Array.isArray(data.messages)) {
+        setZapiMsgs(data.messages)
+      } else {
+        setZapiError(data.error || 'Erro ao carregar histórico')
+        setZapiMsgs([])
+      }
+    } catch {
+      setZapiError('Falha de conexão')
+      setZapiMsgs([])
+    } finally {
+      setZapiLoading(false)
+    }
+  }, [])
 
   /* fetch financeiro */
   useEffect(() => {
@@ -444,10 +469,20 @@ export default function AgenteAdminPage() {
     }
   }, [leads, selected, autoSelected])
 
+  /* fetch Z-API full history when lead changes */
+  useEffect(() => {
+    if (selected?.telefone) {
+      fetchZapiHistory(selected.telefone)
+    } else {
+      setZapiMsgs([])
+      setZapiError(null)
+    }
+  }, [selected?.id, fetchZapiHistory])
+
   /* auto-scroll chat */
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [selected?.historico?.length])
+  }, [selected?.historico?.length, zapiMsgs.length])
 
   /* keyboard shortcuts */
   useEffect(() => {
@@ -817,43 +852,140 @@ export default function AgenteAdminPage() {
                   <p style={{ fontSize: 10, color: '#7B3FE4', fontWeight: 600, marginTop: 6, marginBottom: 0 }}>{ETAPA_TITLES[etapaAtual]}</p>
                 </div>
 
+                {/* Source tabs */}
+                <div style={{ display: 'flex', borderBottom: '1px solid #1C1C1E', background: '#0A0A0B', flexShrink: 0 }}>
+                  <button
+                    onClick={() => setChatSource('whatsapp')}
+                    style={{
+                      padding: '8px 16px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
+                      background: chatSource === 'whatsapp' ? '#1C1C1E' : 'transparent',
+                      color: chatSource === 'whatsapp' ? '#fff' : '#555',
+                      borderBottom: chatSource === 'whatsapp' ? '2px solid #25D366' : '2px solid transparent',
+                    }}
+                  >
+                    📱 WhatsApp completo {zapiMsgs.length > 0 ? `(${zapiMsgs.length})` : ''}
+                  </button>
+                  <button
+                    onClick={() => setChatSource('ana')}
+                    style={{
+                      padding: '8px 16px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
+                      background: chatSource === 'ana' ? '#1C1C1E' : 'transparent',
+                      color: chatSource === 'ana' ? '#fff' : '#555',
+                      borderBottom: chatSource === 'ana' ? '2px solid #7B3FE4' : '2px solid transparent',
+                    }}
+                  >
+                    🤖 Histórico Ana ({historico.length})
+                  </button>
+                  {chatSource === 'whatsapp' && (
+                    <button
+                      onClick={() => selected && fetchZapiHistory(selected.telefone)}
+                      style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: 10, color: '#555', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                    >
+                      ↺ atualizar
+                    </button>
+                  )}
+                </div>
+
                 {/* Messages */}
                 <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {historico.length === 0 ? (
-                    <div style={{ textAlign: 'center', paddingTop: 48, color: '#444' }}>
-                      <MessageSquare style={{ width: 28, height: 28, margin: '0 auto 8px', opacity: 0.3 }} />
-                      <p style={{ fontSize: 13 }}>Sem mensagens</p>
-                    </div>
-                  ) : historico.filter(msg => msg && msg.role && msg.content).map((msg, i) => {
-                    const isUser = msg.role === 'user'
-                    return (
-                      <div key={i} style={{ display: 'flex', gap: 8, justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
-                        {!isUser && (
-                          <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#7B3FE420', border: '1px solid #7B3FE430', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                            <Bot style={{ width: 13, height: 13, color: '#A78BFA' }} />
-                          </div>
-                        )}
-                        <div style={{ maxWidth: '68%', display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
-                          <div style={{
-                            padding: '8px 14px', borderRadius: 16, fontSize: 13, lineHeight: 1.5,
-                            background: isUser ? '#14532d40' : '#1C1C1E',
-                            color: isUser ? '#bbf7d0' : '#E4E4E7',
-                            border: `1px solid ${isUser ? '#166534' : '#2a2a2a'}`,
-                            borderBottomRightRadius: isUser ? 4 : 16,
-                            borderBottomLeftRadius: isUser ? 16 : 4,
-                          }}>
-                            {String(msg.content || '')}
-                          </div>
-                          {msg.ts && <span style={{ fontSize: 9, color: '#444', marginTop: 2, paddingLeft: 4 }}>{formatTime(msg.ts)}</span>}
-                        </div>
-                        {isUser && (
-                          <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#14532d30', border: '1px solid #16653440', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                            <User style={{ width: 13, height: 13, color: '#4ade80' }} />
-                          </div>
-                        )}
+                  {chatSource === 'whatsapp' ? (
+                    zapiLoading ? (
+                      <div style={{ textAlign: 'center', paddingTop: 48, color: '#555', fontSize: 12 }}>
+                        <div className="w-5 h-5 border-2 border-[#25D366] border-t-transparent rounded-full animate-spin" style={{ margin: '0 auto 8px' }} />
+                        Carregando histórico do WhatsApp...
                       </div>
-                    )
-                  })}
+                    ) : zapiError ? (
+                      <div style={{ textAlign: 'center', paddingTop: 48, color: '#555', fontSize: 12 }}>
+                        <p style={{ color: '#FF3B5C', marginBottom: 8 }}>⚠ {zapiError}</p>
+                        <p style={{ color: '#555', fontSize: 11 }}>Mostrando histórico da Ana abaixo</p>
+                        {historico.filter(msg => msg && msg.role && msg.content).map((msg, i) => {
+                          const isUser = msg.role === 'user'
+                          return (
+                            <div key={i} style={{ display: 'flex', gap: 8, justifyContent: isUser ? 'flex-end' : 'flex-start', textAlign: 'left', marginBottom: 12 }}>
+                              <div style={{ maxWidth: '68%', display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+                                <div style={{ padding: '8px 14px', borderRadius: 16, fontSize: 13, lineHeight: 1.5, background: isUser ? '#14532d40' : '#1C1C1E', color: isUser ? '#bbf7d0' : '#E4E4E7', border: `1px solid ${isUser ? '#166534' : '#2a2a2a'}`, whiteSpace: 'pre-wrap' }}>
+                                  {String(msg.content || '')}
+                                </div>
+                                {msg.ts && <span style={{ fontSize: 9, color: '#444', marginTop: 2 }}>{formatTime(msg.ts)}</span>}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : zapiMsgs.length === 0 ? (
+                      <div style={{ textAlign: 'center', paddingTop: 48, color: '#444' }}>
+                        <MessageSquare style={{ width: 28, height: 28, margin: '0 auto 8px', opacity: 0.3 }} />
+                        <p style={{ fontSize: 13 }}>Nenhuma mensagem encontrada no WhatsApp</p>
+                      </div>
+                    ) : zapiMsgs.map((msg, i) => {
+                      const isUser = msg.role === 'user'
+                      return (
+                        <div key={i} style={{ display: 'flex', gap: 8, justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
+                          {!isUser && (
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#7B3FE420', border: '1px solid #7B3FE430', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                              <Bot style={{ width: 13, height: 13, color: '#A78BFA' }} />
+                            </div>
+                          )}
+                          <div style={{ maxWidth: '72%', display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+                            <div style={{
+                              padding: '8px 14px', borderRadius: 16, fontSize: 13, lineHeight: 1.5,
+                              background: isUser ? '#14532d40' : '#1C1C1E',
+                              color: isUser ? '#bbf7d0' : '#E4E4E7',
+                              border: `1px solid ${isUser ? '#166534' : '#2a2a2a'}`,
+                              borderBottomRightRadius: isUser ? 4 : 16,
+                              borderBottomLeftRadius: isUser ? 16 : 4,
+                              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                            }}>
+                              {String(msg.content || '')}
+                            </div>
+                            {msg.ts && <span style={{ fontSize: 9, color: '#444', marginTop: 2, paddingLeft: 4 }}>{formatTime(msg.ts)}</span>}
+                          </div>
+                          {isUser && (
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#14532d30', border: '1px solid #16653440', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                              <User style={{ width: 13, height: 13, color: '#4ade80' }} />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  ) : (
+                    historico.length === 0 ? (
+                      <div style={{ textAlign: 'center', paddingTop: 48, color: '#444' }}>
+                        <MessageSquare style={{ width: 28, height: 28, margin: '0 auto 8px', opacity: 0.3 }} />
+                        <p style={{ fontSize: 13 }}>Sem mensagens</p>
+                      </div>
+                    ) : historico.filter(msg => msg && msg.role && msg.content).map((msg, i) => {
+                      const isUser = msg.role === 'user'
+                      return (
+                        <div key={i} style={{ display: 'flex', gap: 8, justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
+                          {!isUser && (
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#7B3FE420', border: '1px solid #7B3FE430', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                              <Bot style={{ width: 13, height: 13, color: '#A78BFA' }} />
+                            </div>
+                          )}
+                          <div style={{ maxWidth: '68%', display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+                            <div style={{
+                              padding: '8px 14px', borderRadius: 16, fontSize: 13, lineHeight: 1.5,
+                              background: isUser ? '#14532d40' : '#1C1C1E',
+                              color: isUser ? '#bbf7d0' : '#E4E4E7',
+                              border: `1px solid ${isUser ? '#166534' : '#2a2a2a'}`,
+                              borderBottomRightRadius: isUser ? 4 : 16,
+                              borderBottomLeftRadius: isUser ? 16 : 4,
+                              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                            }}>
+                              {String(msg.content || '')}
+                            </div>
+                            {msg.ts && <span style={{ fontSize: 9, color: '#444', marginTop: 2, paddingLeft: 4 }}>{formatTime(msg.ts)}</span>}
+                          </div>
+                          {isUser && (
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#14532d30', border: '1px solid #16653440', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                              <User style={{ width: 13, height: 13, color: '#4ade80' }} />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })
+                  )}
                   <div ref={chatEndRef} />
                 </div>
 
