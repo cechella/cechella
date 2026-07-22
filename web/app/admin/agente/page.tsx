@@ -412,17 +412,17 @@ export default function AgenteAdminPage() {
     const supabase = getSupabase()
     const channel = supabase
       .channel('agente-leads')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads' }, (payload) => {
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads' }, (payload: { new: Record<string, unknown> }) => {
         fetchLeads()
-        const updated = payload.new as LeadAgente
+        const updated = payload.new as unknown as LeadAgente
         if (updated && selectedRef.current?.id !== updated.id) {
           const nome = (updated.nome && !STATUS_WORDS.includes(updated.nome.trim().toLowerCase())) ? updated.nome : updated.telefone
           addToast(nome)
         }
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, (payload: { new: Record<string, unknown> }) => {
         fetchLeads()
-        const inserted = payload.new as LeadAgente
+        const inserted = payload.new as unknown as LeadAgente
         if (inserted) {
           const nome = (inserted.nome && !STATUS_WORDS.includes(inserted.nome.trim().toLowerCase())) ? inserted.nome : inserted.telefone
           addToast(nome)
