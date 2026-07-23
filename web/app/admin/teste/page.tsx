@@ -40,6 +40,14 @@ export default function TestePage() {
 
   const acoes = [
     {
+      action: 'ver_estado_banco',
+      label: 'Ver estado do banco',
+      desc: 'Conta registros em todas as tabelas antes de apagar',
+      icon: <Search className="w-4 h-4" />,
+      cor: 'from-green-500/20 to-green-600/10 border-green-500/30 text-green-400',
+      semTelefone: true,
+    },
+    {
       action: 'listar_leads',
       label: 'Ver últimos 10 leads',
       desc: 'Lista os leads mais recentes do banco',
@@ -186,9 +194,43 @@ export default function TestePage() {
                 {resultado.rows} {resultado.rows === 1 ? 'registro' : 'registros'} afetados
               </span>
             )}
+            {resultado.total !== undefined && (
+              <span className="text-xs bg-green-500/20 text-green-400 px-2 py-1 rounded-full">
+                {resultado.total} registros no banco
+              </span>
+            )}
           </div>
+
+          {/* Estado do banco — tabela de contagens */}
+          {resultado.contagens && (
+            <div className="space-y-1">
+              {Object.entries(resultado.contagens as Record<string, number>).map(([tabela, count]) => (
+                <div key={tabela} className="flex items-center justify-between bg-[#0A0A0B] rounded-xl px-4 py-2.5">
+                  <span className="text-[#A1A1AA] text-sm font-mono">{tabela}</span>
+                  <span className={`text-sm font-bold tabular-nums ${count > 0 ? 'text-yellow-400' : 'text-[#52525B]'}`}>
+                    {count} {count === 1 ? 'registro' : 'registros'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Detalhes do reset total */}
+          {resultado.detalhes && (
+            <div className="space-y-1">
+              {Object.entries(resultado.detalhes as Record<string, number>).map(([tabela, count]) => (
+                <div key={tabela} className="flex items-center justify-between bg-[#0A0A0B] rounded-xl px-4 py-2.5">
+                  <span className="text-[#A1A1AA] text-sm font-mono">{tabela}</span>
+                  <span className={`text-sm font-bold tabular-nums ${count > 0 ? 'text-red-400' : 'text-[#52525B]'}`}>
+                    {count} apagados
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {resultado.data && resultado.data.length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-2 mt-2">
               {resultado.data.map((lead: Lead, i: number) => (
                 <div key={i} className="bg-[#0A0A0B] rounded-xl p-3 font-mono text-xs">
                   <div className="flex items-center gap-4 flex-wrap">
@@ -205,7 +247,7 @@ export default function TestePage() {
                 </div>
               ))}
             </div>
-          ) : (
+          ) : !resultado.contagens && !resultado.detalhes && (
             <p className="text-[#52525B] text-sm">Nenhum registro encontrado / afetado.</p>
           )}
         </div>

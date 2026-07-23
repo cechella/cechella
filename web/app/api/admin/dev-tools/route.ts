@@ -91,6 +91,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data, rows: data?.length ?? 0 })
     }
 
+    if (action === 'ver_estado_banco') {
+      const tabelas = ['leads', 'contatos_referidos', 'ana_memoria', 'ana_padroes', 'pagamentos', 'pagamentos_recorrentes'] as const
+      const contagens: Record<string, number> = {}
+      for (const tabela of tabelas) {
+        const { count } = await supabase.from(tabela).select('*', { count: 'exact', head: true })
+        contagens[tabela] = count ?? 0
+      }
+      const total = Object.values(contagens).reduce((a, b) => a + b, 0)
+      return NextResponse.json({ contagens, total })
+    }
+
     if (action === 'limpar_memoria_ana') {
       const { data, error } = await supabase
         .from('ana_memoria')
