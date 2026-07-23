@@ -373,15 +373,13 @@ export default function AgenteAdminPage() {
       const resp = await fetch(`/api/admin/chat-history?phone=${encodeURIComponent(phone)}&count=200`, { cache: 'no-store' })
       const data = await resp.json()
       if (data.ok && Array.isArray(data.messages)) {
-        const prev = zapiMsgsRef.current
-        const hasNew = data.messages.length !== prev.length
-        if (hasNew || prev.length === 0) {
-          zapiMsgsRef.current = data.messages
-          setZapiMsgs(data.messages)
-          const umDiaAtras = Date.now() - 24 * 60 * 60 * 1000
-          const temMensagemRecente = data.messages.some((m: MsgHistorico) => m.ts && new Date(m.ts).getTime() > umDiaAtras)
-          if (temMensagemRecente) setChatSource('whatsapp')
-        }
+        setZapiMsgs(prev => {
+          if (prev.length === data.messages.length) return prev
+          return data.messages
+        })
+        const umDiaAtras = Date.now() - 24 * 60 * 60 * 1000
+        const temMensagemRecente = data.messages.some((m: MsgHistorico) => m.ts && new Date(m.ts).getTime() > umDiaAtras)
+        if (temMensagemRecente) setChatSource('whatsapp')
       } else if (!silent) {
         setZapiError(data.error || 'Erro ao carregar histórico')
         setZapiMsgs([])
