@@ -474,16 +474,28 @@ export default function AgenteAdminPage() {
     }
   }, [leads, selected, autoSelected])
 
-  /* fetch Z-API full history when lead changes + poll every 15s */
+  /* fetch Z-API full history when lead changes + realtime subscription */
   useEffect(() => {
-    if (selected?.telefone) {
-      fetchZapiHistory(selected.telefone)
-      const interval = setInterval(() => fetchZapiHistory(selected.telefone), 15000)
-      return () => clearInterval(interval)
-    } else {
+    if (!selected?.telefone) {
       setZapiMsgs([])
       setZapiError(null)
+      return
     }
+    const phone = selected.telefone
+    fetchZapiHistory(phone)
+    const supabase = getSupabase()
+    const normalized = phone.replace(/\D/g, '')
+    const alt = normalized.length === 13 && normalized.startsWith('55')
+      ? normalized.slice(0, 4) + normalized.slice(5)
+      : normalized.length === 12 && normalized.startsWith('55')
+        ? normalized.slice(0, 4) + '9' + normalized.slice(4)
+        : null
+    const channel = supabase
+      .channel(`msgs-${phone}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: `phone=eq.${normalized}` }, () => fetchZapiHistory(phone))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: alt ? `phone=eq.${alt}` : `phone=eq.${normalized}` }, () => fetchZapiHistory(phone))
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
   }, [selected?.id, fetchZapiHistory])
 
   /* fetch PIX info when lead changes */
