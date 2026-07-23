@@ -366,27 +366,32 @@ export default function AgenteAdminPage() {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const toastId = useRef(0)
 
-  const fetchZapiHistory = useCallback(async (phone: string) => {
-    setZapiLoading(true)
-    setZapiError(null)
+  const zapiMsgsRef = useRef<MsgHistorico[]>([])
+  const fetchZapiHistory = useCallback(async (phone: string, silent = false) => {
+    if (!silent) { setZapiLoading(true); setZapiError(null) }
     try {
       const resp = await fetch(`/api/admin/chat-history?phone=${encodeURIComponent(phone)}&count=200`)
       const data = await resp.json()
       if (data.ok && Array.isArray(data.messages)) {
-        setZapiMsgs(data.messages)
-        // só troca para WhatsApp se houver mensagem nas últimas 24h
-        const umDiaAtras = Date.now() - 24 * 60 * 60 * 1000
-        const temMensagemRecente = data.messages.some((m: MsgHistorico) => m.ts && new Date(m.ts).getTime() > umDiaAtras)
-        if (temMensagemRecente) setChatSource('whatsapp')
-      } else {
+        const prev = zapiMsgsRef.current
+        const hasNew = data.messages.length !== prev.length ||
+          (data.messages.length > 0 && prev.length > 0 &&
+            data.messages[data.messages.length - 1].ts !== prev[prev.length - 1].ts)
+        if (hasNew) {
+          zapiMsgsRef.current = data.messages
+          setZapiMsgs(data.messages)
+          const umDiaAtras = Date.now() - 24 * 60 * 60 * 1000
+          const temMensagemRecente = data.messages.some((m: MsgHistorico) => m.ts && new Date(m.ts).getTime() > umDiaAtras)
+          if (temMensagemRecente) setChatSource('whatsapp')
+        }
+      } else if (!silent) {
         setZapiError(data.error || 'Erro ao carregar histórico')
         setZapiMsgs([])
       }
     } catch {
-      setZapiError('Falha de conexão')
-      setZapiMsgs([])
+      if (!silent) setZapiError('Falha de conexão')
     } finally {
-      setZapiLoading(false)
+      if (!silent) setZapiLoading(false)
     }
   }, [])
 
@@ -482,7 +487,8 @@ export default function AgenteAdminPage() {
       return
     }
     const phone = selected.telefone
-    fetchZapiHistory(phone)
+    zapiMsgsRef.current = []
+    fetchZapiHistory(phone, false)
     const supabase = getSupabase()
     const normalized = phone.replace(/\D/g, '')
     const alt = normalized.length === 13 && normalized.startsWith('55')
@@ -495,7 +501,7 @@ export default function AgenteAdminPage() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: `phone=eq.${normalized}` }, () => fetchZapiHistory(phone))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: alt ? `phone=eq.${alt}` : `phone=eq.${normalized}` }, () => fetchZapiHistory(phone))
       .subscribe()
-    const poll = setInterval(() => fetchZapiHistory(phone), 10000)
+    const poll = setInterval(() => fetchZapiHistory(phone, true), 20000)
     return () => { supabase.removeChannel(channel); clearInterval(poll) }
   }, [selected?.id, fetchZapiHistory])
 
