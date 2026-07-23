@@ -370,14 +370,12 @@ export default function AgenteAdminPage() {
   const fetchZapiHistory = useCallback(async (phone: string, silent = false) => {
     if (!silent) { setZapiLoading(true); setZapiError(null) }
     try {
-      const resp = await fetch(`/api/admin/chat-history?phone=${encodeURIComponent(phone)}&count=200`)
+      const resp = await fetch(`/api/admin/chat-history?phone=${encodeURIComponent(phone)}&count=200`, { cache: 'no-store' })
       const data = await resp.json()
       if (data.ok && Array.isArray(data.messages)) {
         const prev = zapiMsgsRef.current
-        const hasNew = data.messages.length !== prev.length ||
-          (data.messages.length > 0 && prev.length > 0 &&
-            data.messages[data.messages.length - 1].ts !== prev[prev.length - 1].ts)
-        if (hasNew) {
+        const hasNew = data.messages.length !== prev.length
+        if (hasNew || prev.length === 0) {
           zapiMsgsRef.current = data.messages
           setZapiMsgs(data.messages)
           const umDiaAtras = Date.now() - 24 * 60 * 60 * 1000
