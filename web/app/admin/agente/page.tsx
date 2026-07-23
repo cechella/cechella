@@ -501,7 +501,9 @@ export default function AgenteAdminPage() {
       })
       .subscribe()
     const poll = setInterval(() => fetchZapiHistory(phone, true), 10000)
-    return () => { supabase.removeChannel(channel); clearInterval(poll) }
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchZapiHistory(phone, true) }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => { supabase.removeChannel(channel); clearInterval(poll); document.removeEventListener('visibilitychange', onVisible) }
   }, [selected?.id, fetchZapiHistory])
 
   /* fetch PIX info when lead changes */
