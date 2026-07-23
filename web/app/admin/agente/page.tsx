@@ -515,14 +515,14 @@ export default function AgenteAdminPage() {
       .catch(() => setPixInfo(null))
   }, [selected?.id])
 
-  /* auto-scroll chat — instant on load, smooth on new messages */
+  /* auto-scroll chat — instant on load/tab-switch, smooth on new messages */
   const prevMsgCount = useRef(0)
   useEffect(() => {
     const count = zapiMsgs.length || (selected?.historico?.length ?? 0)
     const isNew = count > prevMsgCount.current && prevMsgCount.current > 0
     prevMsgCount.current = count
     chatEndRef.current?.scrollIntoView({ behavior: isNew ? 'smooth' : 'instant' })
-  }, [selected?.historico?.length, zapiMsgs.length])
+  }, [selected?.historico?.length, zapiMsgs.length, chatSource])
 
   /* keyboard shortcuts */
   useEffect(() => {
