@@ -520,11 +520,11 @@ export default function AgenteAdminPage() {
   /* auto-scroll chat — instant on load/tab-switch, smooth on new messages */
   const prevMsgCount = useRef(0)
   useEffect(() => {
-    const count = zapiMsgs.length || (selected?.historico?.length ?? 0)
+    const count = zapiMsgsMerged.length || (selected?.historico?.length ?? 0)
     const isNew = count > prevMsgCount.current && prevMsgCount.current > 0
     prevMsgCount.current = count
     chatEndRef.current?.scrollIntoView({ behavior: isNew ? 'smooth' : 'instant' })
-  }, [selected?.historico?.length, zapiMsgs.length, chatSource])
+  }, [selected?.historico?.length, zapiMsgsMerged.length, chatSource])
 
   /* keyboard shortcuts */
   useEffect(() => {
@@ -606,6 +606,26 @@ export default function AgenteAdminPage() {
 
   const etapaAtual = selected?.etapa_agente || 1
   const historico = selected?.historico || []
+
+  // Merge zapiMsgs + historico for WhatsApp completo tab, dedup by content+role
+  const zapiMsgsMerged = (() => {
+    if (zapiMsgs.length === 0) return historico
+    const seen = new Set<string>()
+    const all = [...zapiMsgs, ...historico]
+    const deduped = all.filter(m => {
+      const key = `${m.role}::${(m.content || '').slice(0, 80)}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    deduped.sort((a, b) => {
+      if (!a.ts && !b.ts) return 0
+      if (!a.ts) return -1
+      if (!b.ts) return 1
+      return new Date(a.ts).getTime() - new Date(b.ts).getTime()
+    })
+    return deduped
+  })()
 
   /* ─── Intelligence panel computed values ─── */
   const convScore = selected ? conversionScore(selected) : 0
@@ -905,7 +925,7 @@ export default function AgenteAdminPage() {
                       borderBottom: chatSource === 'whatsapp' ? '2px solid #25D366' : '2px solid transparent',
                     }}
                   >
-                    📱 WhatsApp completo {zapiMsgs.length > 0 ? `(${zapiMsgs.length})` : ''}
+                    📱 WhatsApp completo {zapiMsgsMerged.length > 0 ? `(${zapiMsgsMerged.length})` : ''}
                   </button>
                   <button
                     onClick={() => setChatSource('ana')}
@@ -954,12 +974,12 @@ export default function AgenteAdminPage() {
                           )
                         })}
                       </div>
-                    ) : zapiMsgs.length === 0 ? (
+                    ) : zapiMsgsMerged.length === 0 ? (
                       <div style={{ textAlign: 'center', paddingTop: 48, color: '#444' }}>
                         <MessageSquare style={{ width: 28, height: 28, margin: '0 auto 8px', opacity: 0.3 }} />
                         <p style={{ fontSize: 13 }}>Nenhuma mensagem encontrada no WhatsApp</p>
                       </div>
-                    ) : zapiMsgs.map((msg, i) => {
+                    ) : zapiMsgsMerged.map((msg, i) => {
                       const isUser = msg.role === 'user'
                       return (
                         <div key={i} style={{ display: 'flex', gap: 8, justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
