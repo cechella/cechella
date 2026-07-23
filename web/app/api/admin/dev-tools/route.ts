@@ -91,6 +91,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data, rows: data?.length ?? 0 })
     }
 
+    if (action === 'limpar_memoria_ana') {
+      const { data, error } = await supabase
+        .from('ana_memoria')
+        .delete()
+        .gte('created_at', '2000-01-01')
+        .select('id')
+      if (error) throw error
+      const { error: e2 } = await supabase
+        .from('ana_padroes')
+        .delete()
+        .gte('created_at', '2000-01-01')
+      return NextResponse.json({ data, rows: data?.length ?? 0, tabelas: ['ana_memoria', 'ana_padroes'] })
+    }
+
+    if (action === 'limpar_pagamentos') {
+      const { data: p1 } = await supabase.from('pagamentos').delete().gte('created_at', '2000-01-01').select('id')
+      const { data: p2 } = await supabase.from('pagamentos_recorrentes').delete().gte('created_at', '2000-01-01').select('id')
+      const { data: p3 } = await supabase
+        .from('leads')
+        .update({ status_pagamento: null, tentativas_pagamento: 0, payment_token: null, metodo_pagamento: null })
+        .gte('created_at', '2000-01-01')
+        .select('id')
+      const rows = (p1?.length ?? 0) + (p2?.length ?? 0) + (p3?.length ?? 0)
+      return NextResponse.json({ rows, tabelas: ['pagamentos', 'pagamentos_recorrentes', 'leads (campos pagamento)'] })
+    }
+
+    if (action === 'reset_total') {
+      await supabase.from('leads').delete().gte('created_at', '2000-01-01')
+      await supabase.from('contatos_referidos').delete().gte('created_at', '2000-01-01')
+      await supabase.from('ana_memoria').delete().gte('created_at', '2000-01-01')
+      await supabase.from('ana_padroes').delete().gte('created_at', '2000-01-01')
+      await supabase.from('pagamentos').delete().gte('created_at', '2000-01-01')
+      await supabase.from('pagamentos_recorrentes').delete().gte('created_at', '2000-01-01')
+      return NextResponse.json({ rows: 1, msg: 'Banco zerado completamente' })
+    }
+
     return NextResponse.json({ error: 'Ação inválida' }, { status: 400 })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })

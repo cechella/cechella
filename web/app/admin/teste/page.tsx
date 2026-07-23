@@ -141,6 +141,32 @@ export default function TestePage() {
             <Trash2 className="w-4 h-4" />
             {loading === 'limpar_todos_referidos' ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : 'Apagar todos os referidos'}
           </button>
+          <button
+            onClick={() => executar('limpar_memoria_ana')}
+            disabled={!!loading}
+            className="flex items-center justify-center gap-2 p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:opacity-90 transition-all disabled:opacity-50 text-sm font-semibold"
+          >
+            <Trash2 className="w-4 h-4" />
+            {loading === 'limpar_memoria_ana' ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : 'Apagar memória da Ana'}
+          </button>
+          <button
+            onClick={() => executar('limpar_pagamentos')}
+            disabled={!!loading}
+            className="flex items-center justify-center gap-2 p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:opacity-90 transition-all disabled:opacity-50 text-sm font-semibold"
+          >
+            <Trash2 className="w-4 h-4" />
+            {loading === 'limpar_pagamentos' ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : 'Apagar pagamentos'}
+          </button>
+        </div>
+        <div className="mt-3">
+          <button
+            onClick={() => executar('reset_total')}
+            disabled={!!loading}
+            className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-red-600/50 bg-red-600/20 text-red-300 hover:opacity-90 transition-all disabled:opacity-50 text-sm font-bold"
+          >
+            <AlertTriangle className="w-4 h-4" />
+            {loading === 'reset_total' ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : '⚠️ RESET TOTAL — Zerar banco inteiro'}
+          </button>
         </div>
       </div>
 
