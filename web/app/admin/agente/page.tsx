@@ -520,29 +520,20 @@ export default function AgenteAdminPage() {
   const etapaAtualEarly = selected?.etapa_agente || 1
   const historicoEarly = selected?.historico || []
 
-  // Merge zapiMsgs + historico for WhatsApp completo tab, dedup by ts+role (fallback: content prefix)
+  // WhatsApp completo = Histórico Ana (sempre atualizado) + mensagens manuais do zapiMsgs que não estão no histórico
   const zapiMsgsMerged = (() => {
     if (zapiMsgs.length === 0) return historicoEarly
-    const seen = new Set<string>()
-    const all = [...zapiMsgs, ...historicoEarly]
-    const deduped = all.filter(m => {
-      const key = m.ts ? `${m.role}::${m.ts}` : `${m.role}::${(m.content || '').slice(0, 120)}`
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-    deduped.sort((a, b) => {
+    const contentSet = new Set(historicoEarly.map(m => `${m.role}::${(m.content || '').trim()}`))
+    const extras = zapiMsgs.filter(m => !contentSet.has(`${m.role}::${(m.content || '').trim()}`))
+    if (extras.length === 0) return historicoEarly
+    const merged = [...historicoEarly, ...extras]
+    merged.sort((a, b) => {
       if (!a.ts && !b.ts) return 0
       if (!a.ts) return -1
       if (!b.ts) return 1
       return new Date(a.ts).getTime() - new Date(b.ts).getTime()
     })
-    // Second pass: remove consecutive messages with same role+content (different ts from two sources)
-    return deduped.filter((m, i) => {
-      if (i === 0) return true
-      const prev = deduped[i - 1]
-      return !(prev.role === m.role && (prev.content || '').trim() === (m.content || '').trim())
-    })
+    return merged
   })()
 
   /* auto-scroll chat — instant on load/tab-switch, smooth on new messages */
