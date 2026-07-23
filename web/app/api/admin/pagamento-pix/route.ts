@@ -61,18 +61,19 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Prioriza pelo método atual do lead
-  if (leadMetodo === 'cartao' && checkoutUrl) {
-    return NextResponse.json({ ok: true, pagamento: { metodo: 'cartao', checkout_url: checkoutUrl, pix_code: null, status: 'pending', valor: null } })
+  // Retorna ambos se existirem
+  if (!pixData?.pix_code && !checkoutUrl) {
+    return NextResponse.json({ ok: true, pagamento: null })
   }
 
-  if (pixData?.pix_code) {
-    return NextResponse.json({ ok: true, pagamento: { ...pixData, checkout_url: null } })
-  }
-
-  if (checkoutUrl) {
-    return NextResponse.json({ ok: true, pagamento: { metodo: leadMetodo, checkout_url: checkoutUrl, pix_code: null, status: 'pending', valor: null } })
-  }
-
-  return NextResponse.json({ ok: true, pagamento: null })
+  return NextResponse.json({
+    ok: true,
+    pagamento: {
+      pix_code: pixData?.pix_code || null,
+      valor: pixData?.valor || null,
+      status: pixData?.status || 'pending',
+      metodo: pixData?.metodo || null,
+      checkout_url: checkoutUrl || null,
+    }
+  })
 }

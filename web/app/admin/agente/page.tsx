@@ -1173,12 +1173,12 @@ export default function AgenteAdminPage() {
                   </div>
 
                   {/* 6. Log de atividade */}
-                  {/* PIX / Cartão block */}
+                  {/* PIX + Cartão blocks */}
                   {pixInfo && (pixInfo.pix_code || pixInfo.checkout_url) && (
-                    <div style={{ padding: '12px 14px', borderBottom: '1px solid #1C1C1E' }}>
-                      {pixInfo.pix_code ? (
-                        <>
-                          <div style={{ fontSize: 10, color: '#71717A', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>💰 Chave PIX</div>
+                    <div style={{ padding: '12px 14px', borderBottom: '1px solid #1C1C1E', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {pixInfo.pix_code && (
+                        <div>
+                          <div style={{ fontSize: 10, color: '#71717A', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>💰 Chave PIX</div>
                           {pixInfo.valor != null && (
                             <div style={{ fontSize: 10, color: '#25D366', marginBottom: 4 }}>
                               R$ {Number(pixInfo.valor).toFixed(2)} · {pixInfo.status}
@@ -1187,7 +1187,7 @@ export default function AgenteAdminPage() {
                           <div style={{
                             background: '#0A0A0B', border: '1px solid #2C2C2E', borderRadius: 6,
                             padding: '6px 8px', fontSize: 9, color: '#aaa', wordBreak: 'break-all',
-                            maxHeight: 60, overflowY: 'auto', lineHeight: 1.4, marginBottom: 6,
+                            maxHeight: 56, overflowY: 'auto', lineHeight: 1.4, marginBottom: 5,
                           }}>
                             {pixInfo.pix_code}
                           </div>
@@ -1197,14 +1197,15 @@ export default function AgenteAdminPage() {
                           >
                             📋 Copiar código PIX
                           </button>
-                        </>
-                      ) : (
-                        <>
-                          <div style={{ fontSize: 10, color: '#71717A', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>💳 Link Cartão de Crédito</div>
+                        </div>
+                      )}
+                      {pixInfo.checkout_url && (
+                        <div>
+                          <div style={{ fontSize: 10, color: '#71717A', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>💳 Link Cartão</div>
                           <div style={{
                             background: '#0A0A0B', border: '1px solid #2C2C2E', borderRadius: 6,
                             padding: '6px 8px', fontSize: 9, color: '#aaa', wordBreak: 'break-all',
-                            lineHeight: 1.4, marginBottom: 6,
+                            lineHeight: 1.4, marginBottom: 5,
                           }}>
                             {pixInfo.checkout_url}
                           </div>
@@ -1222,7 +1223,7 @@ export default function AgenteAdminPage() {
                               🔗 Abrir
                             </button>
                           </div>
-                        </>
+                        </div>
                       )}
                     </div>
                   )}
