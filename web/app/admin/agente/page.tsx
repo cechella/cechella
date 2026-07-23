@@ -356,6 +356,7 @@ export default function AgenteAdminPage() {
   const [zapiMsgs, setZapiMsgs] = useState<MsgHistorico[]>([])
   const [zapiLoading, setZapiLoading] = useState(false)
   const [zapiError, setZapiError] = useState<string | null>(null)
+  const [pixInfo, setPixInfo] = useState<{ pix_code: string; valor: number; status: string; expira_em: string; metodo: string } | null>(null)
 
   const selectedRef = useRef<LeadAgente | null>(null)
   selectedRef.current = selected
@@ -482,6 +483,15 @@ export default function AgenteAdminPage() {
       setZapiError(null)
     }
   }, [selected?.id, fetchZapiHistory])
+
+  /* fetch PIX info when lead changes */
+  useEffect(() => {
+    if (!selected?.telefone) { setPixInfo(null); return }
+    fetch(`/api/admin/pagamento-pix?phone=${encodeURIComponent(selected.telefone)}`)
+      .then(r => r.json())
+      .then(d => setPixInfo(d.ok ? d.pagamento : null))
+      .catch(() => setPixInfo(null))
+  }, [selected?.id])
 
   /* auto-scroll chat */
   useEffect(() => {
@@ -1163,6 +1173,29 @@ export default function AgenteAdminPage() {
                   </div>
 
                   {/* 6. Log de atividade */}
+                  {/* PIX code block */}
+                  {pixInfo?.pix_code && (
+                    <div style={{ padding: '12px 14px', borderBottom: '1px solid #1C1C1E' }}>
+                      <div style={{ fontSize: 10, color: '#71717A', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>💰 Chave PIX</div>
+                      <div style={{ fontSize: 10, color: '#25D366', marginBottom: 4 }}>
+                        R$ {Number(pixInfo.valor).toFixed(2)} · {pixInfo.status}
+                      </div>
+                      <div style={{
+                        background: '#0A0A0B', border: '1px solid #2C2C2E', borderRadius: 6,
+                        padding: '6px 8px', fontSize: 9, color: '#aaa', wordBreak: 'break-all',
+                        maxHeight: 60, overflowY: 'auto', lineHeight: 1.4, marginBottom: 6,
+                      }}>
+                        {pixInfo.pix_code}
+                      </div>
+                      <button
+                        onClick={() => { navigator.clipboard.writeText(pixInfo.pix_code) }}
+                        style={{ width: '100%', padding: '5px 0', fontSize: 10, background: '#25D366', color: '#000', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}
+                      >
+                        📋 Copiar código PIX
+                      </button>
+                    </div>
+                  )}
+
                   <div style={{ padding: '12px 14px' }}>
                     <div style={{ fontSize: 10, color: '#71717A', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Log de atividade</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
