@@ -474,10 +474,12 @@ export default function AgenteAdminPage() {
     }
   }, [leads, selected, autoSelected])
 
-  /* fetch Z-API full history when lead changes */
+  /* fetch Z-API full history when lead changes + poll every 15s */
   useEffect(() => {
     if (selected?.telefone) {
       fetchZapiHistory(selected.telefone)
+      const interval = setInterval(() => fetchZapiHistory(selected.telefone), 15000)
+      return () => clearInterval(interval)
     } else {
       setZapiMsgs([])
       setZapiError(null)
