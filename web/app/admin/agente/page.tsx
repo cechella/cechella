@@ -496,12 +496,15 @@ export default function AgenteAdminPage() {
       : normalized.length === 12 && normalized.startsWith('55')
         ? normalized.slice(0, 4) + '9' + normalized.slice(4)
         : null
+    const suffix = normalized.slice(-8)
     const channel = supabase
       .channel(`msgs-${phone}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: `phone=eq.${normalized}` }, () => fetchZapiHistory(phone, true))
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: alt ? `phone=eq.${alt}` : `phone=eq.${normalized}` }, () => fetchZapiHistory(phone, true))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp' }, (payload: { new: Record<string, unknown> }) => {
+        const msgPhone = String(payload.new?.phone || '')
+        if (msgPhone.slice(-8) === suffix) fetchZapiHistory(phone, true)
+      })
       .subscribe()
-    const poll = setInterval(() => fetchZapiHistory(phone, true), 20000)
+    const poll = setInterval(() => fetchZapiHistory(phone, true), 10000)
     return () => { supabase.removeChannel(channel); clearInterval(poll) }
   }, [selected?.id, fetchZapiHistory])
 
@@ -917,7 +920,7 @@ export default function AgenteAdminPage() {
                   </button>
                   {chatSource === 'whatsapp' && (
                     <button
-                      onClick={() => selected && fetchZapiHistory(selected.telefone)}
+                      onClick={() => selected && fetchZapiHistory(selected.telefone, true)}
                       style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: 10, color: '#555', background: 'transparent', border: 'none', cursor: 'pointer' }}
                     >
                       ↺ atualizar
