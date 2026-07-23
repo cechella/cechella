@@ -537,7 +537,12 @@ export default function AgenteAdminPage() {
       if (!b.ts) return 1
       return new Date(a.ts).getTime() - new Date(b.ts).getTime()
     })
-    return deduped
+    // Second pass: remove consecutive messages with same role+content (different ts from two sources)
+    return deduped.filter((m, i) => {
+      if (i === 0) return true
+      const prev = deduped[i - 1]
+      return !(prev.role === m.role && (prev.content || '').trim() === (m.content || '').trim())
+    })
   })()
 
   /* auto-scroll chat — instant on load/tab-switch, smooth on new messages */
