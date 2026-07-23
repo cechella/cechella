@@ -373,7 +373,10 @@ export default function AgenteAdminPage() {
       const data = await resp.json()
       if (data.ok && Array.isArray(data.messages)) {
         setZapiMsgs(data.messages)
-        if (data.messages.length > 0) setChatSource('whatsapp')
+        // só troca para WhatsApp se houver mensagem nas últimas 24h
+        const umDiaAtras = Date.now() - 24 * 60 * 60 * 1000
+        const temMensagemRecente = data.messages.some((m: MsgHistorico) => m.ts && new Date(m.ts).getTime() > umDiaAtras)
+        if (temMensagemRecente) setChatSource('whatsapp')
       } else {
         setZapiError(data.error || 'Erro ao carregar histórico')
         setZapiMsgs([])
