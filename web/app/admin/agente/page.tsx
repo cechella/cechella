@@ -495,7 +495,8 @@ export default function AgenteAdminPage() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: `phone=eq.${normalized}` }, () => fetchZapiHistory(phone))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: alt ? `phone=eq.${alt}` : `phone=eq.${normalized}` }, () => fetchZapiHistory(phone))
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
+    const poll = setInterval(() => fetchZapiHistory(phone), 10000)
+    return () => { supabase.removeChannel(channel); clearInterval(poll) }
   }, [selected?.id, fetchZapiHistory])
 
   /* fetch PIX info when lead changes */
