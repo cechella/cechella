@@ -61,7 +61,11 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Retorna PIX se existir, senão cartão, senão null
+  // Prioriza pelo método atual do lead
+  if (leadMetodo === 'cartao' && checkoutUrl) {
+    return NextResponse.json({ ok: true, pagamento: { metodo: 'cartao', checkout_url: checkoutUrl, pix_code: null, status: 'pending', valor: null } })
+  }
+
   if (pixData?.pix_code) {
     return NextResponse.json({ ok: true, pagamento: { ...pixData, checkout_url: null } })
   }
