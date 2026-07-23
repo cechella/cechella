@@ -356,7 +356,7 @@ export default function AgenteAdminPage() {
   const [zapiMsgs, setZapiMsgs] = useState<MsgHistorico[]>([])
   const [zapiLoading, setZapiLoading] = useState(false)
   const [zapiError, setZapiError] = useState<string | null>(null)
-  const [pixInfo, setPixInfo] = useState<{ pix_code: string; valor: number; status: string; expira_em: string; metodo: string } | null>(null)
+  const [pixInfo, setPixInfo] = useState<{ pix_code?: string; checkout_url?: string; valor?: number; status: string; metodo: string } | null>(null)
 
   const selectedRef = useRef<LeadAgente | null>(null)
   selectedRef.current = selected
@@ -1173,26 +1173,57 @@ export default function AgenteAdminPage() {
                   </div>
 
                   {/* 6. Log de atividade */}
-                  {/* PIX code block */}
-                  {pixInfo?.pix_code && (
+                  {/* PIX / Cartão block */}
+                  {pixInfo && (pixInfo.pix_code || pixInfo.checkout_url) && (
                     <div style={{ padding: '12px 14px', borderBottom: '1px solid #1C1C1E' }}>
-                      <div style={{ fontSize: 10, color: '#71717A', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>💰 Chave PIX</div>
-                      <div style={{ fontSize: 10, color: '#25D366', marginBottom: 4 }}>
-                        R$ {Number(pixInfo.valor).toFixed(2)} · {pixInfo.status}
-                      </div>
-                      <div style={{
-                        background: '#0A0A0B', border: '1px solid #2C2C2E', borderRadius: 6,
-                        padding: '6px 8px', fontSize: 9, color: '#aaa', wordBreak: 'break-all',
-                        maxHeight: 60, overflowY: 'auto', lineHeight: 1.4, marginBottom: 6,
-                      }}>
-                        {pixInfo.pix_code}
-                      </div>
-                      <button
-                        onClick={() => { navigator.clipboard.writeText(pixInfo.pix_code) }}
-                        style={{ width: '100%', padding: '5px 0', fontSize: 10, background: '#25D366', color: '#000', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}
-                      >
-                        📋 Copiar código PIX
-                      </button>
+                      {pixInfo.pix_code ? (
+                        <>
+                          <div style={{ fontSize: 10, color: '#71717A', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>💰 Chave PIX</div>
+                          {pixInfo.valor != null && (
+                            <div style={{ fontSize: 10, color: '#25D366', marginBottom: 4 }}>
+                              R$ {Number(pixInfo.valor).toFixed(2)} · {pixInfo.status}
+                            </div>
+                          )}
+                          <div style={{
+                            background: '#0A0A0B', border: '1px solid #2C2C2E', borderRadius: 6,
+                            padding: '6px 8px', fontSize: 9, color: '#aaa', wordBreak: 'break-all',
+                            maxHeight: 60, overflowY: 'auto', lineHeight: 1.4, marginBottom: 6,
+                          }}>
+                            {pixInfo.pix_code}
+                          </div>
+                          <button
+                            onClick={() => { navigator.clipboard.writeText(pixInfo!.pix_code!) }}
+                            style={{ width: '100%', padding: '5px 0', fontSize: 10, background: '#25D366', color: '#000', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}
+                          >
+                            📋 Copiar código PIX
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: 10, color: '#71717A', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>💳 Link Cartão de Crédito</div>
+                          <div style={{
+                            background: '#0A0A0B', border: '1px solid #2C2C2E', borderRadius: 6,
+                            padding: '6px 8px', fontSize: 9, color: '#aaa', wordBreak: 'break-all',
+                            lineHeight: 1.4, marginBottom: 6,
+                          }}>
+                            {pixInfo.checkout_url}
+                          </div>
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(pixInfo!.checkout_url!) }}
+                              style={{ flex: 1, padding: '5px 0', fontSize: 10, background: '#7B3FE4', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}
+                            >
+                              📋 Copiar link
+                            </button>
+                            <button
+                              onClick={() => window.open(pixInfo!.checkout_url!, '_blank')}
+                              style={{ flex: 1, padding: '5px 0', fontSize: 10, background: '#2C2C2E', color: '#aaa', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}
+                            >
+                              🔗 Abrir
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 
