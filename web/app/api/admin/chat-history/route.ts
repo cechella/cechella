@@ -18,23 +18,14 @@ export async function GET(req: NextRequest) {
   // Normalize: strip non-digits
   const normalized = phone.replace(/\D/g, '')
 
-  // Handle Brazilian 9-digit mobile prefix: try both formats
-  // 55 + 48 + 9 + 8 digits (13) ↔ 55 + 48 + 8 digits (12)
-  let alt: string | null = null
-  if (normalized.length === 13 && normalized.startsWith('55')) {
-    alt = normalized.slice(0, 4) + normalized.slice(5) // remove the 9
-  } else if (normalized.length === 12 && normalized.startsWith('55')) {
-    alt = normalized.slice(0, 4) + '9' + normalized.slice(4) // add the 9
-  }
-
-  const filter = alt
-    ? `phone.eq.${normalized},phone.eq.${alt}`
-    : `phone.eq.${normalized}`
+  // Use last 8 digits as suffix to match any Brazilian phone format variation
+  // (with/without 9-digit prefix, stored as 12 or 13 digits)
+  const suffix = normalized.slice(-8)
 
   const { data, error } = await supabase
     .from('mensagens_whatsapp')
     .select('role, content, type, ts')
-    .or(filter)
+    .like('phone', `%${suffix}`)
     .order('ts', { ascending: true })
     .limit(count)
 

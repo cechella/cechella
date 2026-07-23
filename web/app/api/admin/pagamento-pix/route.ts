@@ -13,39 +13,30 @@ const supabase = createClient(
 
 function buildFilter(phone: string) {
   const normalized = phone.replace(/\D/g, '')
-  let alt: string | null = null
-  if (normalized.length === 13 && normalized.startsWith('55')) {
-    alt = normalized.slice(0, 4) + normalized.slice(5)
-  } else if (normalized.length === 12 && normalized.startsWith('55')) {
-    alt = normalized.slice(0, 4) + '9' + normalized.slice(4)
-  }
-  return { normalized, alt }
+  const suffix = normalized.slice(-8)
+  return { normalized, suffix }
 }
 
 export async function GET(req: NextRequest) {
   const phone = req.nextUrl.searchParams.get('phone')
   if (!phone) return NextResponse.json({ ok: false, error: 'phone required' }, { status: 400 })
 
-  const { normalized, alt } = buildFilter(phone)
+  const { normalized, suffix } = buildFilter(phone)
 
   // 1. Busca PIX na tabela pagamentos
-  const pixFilter = alt
-    ? `lead_telefone.eq.${normalized},lead_telefone.eq.${alt}`
-    : `lead_telefone.eq.${normalized}`
-
   const { data: pixData } = await supabase
     .from('pagamentos')
     .select('pix_code, valor, status, expira_em, metodo, parcelas, created_at')
-    .or(pixFilter)
+    .like('lead_telefone', `%${suffix}`)
     .order('created_at', { ascending: false })
     .limit(1)
     .single()
 
   // 2. Busca cartão via payment_token na tabela leads
-  const telefonesParaBuscar = alt ? [normalized, alt] : [normalized]
   let checkoutUrl: string | null = null
   let leadMetodo: string | null = null
 
+  const telefonesParaBuscar = [normalized, normalized.slice(0, 4) + normalized.slice(5), normalized.slice(0, 4) + '9' + normalized.slice(4)].filter(Boolean)
   for (const tel of telefonesParaBuscar) {
     const { data: leadData } = await supabase
       .from('leads')
