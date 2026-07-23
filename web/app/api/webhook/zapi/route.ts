@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
-const N8N_URL = 'https://35.255.229.131/webhook/whatsapp-webhook'
+const N8N_URL = 'https://n8n.hormoneecosystem.com/webhook/whatsapp-webhook'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
