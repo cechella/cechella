@@ -607,13 +607,13 @@ export default function AgenteAdminPage() {
   const etapaAtual = selected?.etapa_agente || 1
   const historico = selected?.historico || []
 
-  // Merge zapiMsgs + historico for WhatsApp completo tab, dedup by content+role
+  // Merge zapiMsgs + historico for WhatsApp completo tab, dedup by ts+role (fallback: content prefix)
   const zapiMsgsMerged = (() => {
     if (zapiMsgs.length === 0) return historico
     const seen = new Set<string>()
     const all = [...zapiMsgs, ...historico]
     const deduped = all.filter(m => {
-      const key = `${m.role}::${(m.content || '').slice(0, 80)}`
+      const key = m.ts ? `${m.role}::${m.ts}` : `${m.role}::${(m.content || '').slice(0, 120)}`
       if (seen.has(key)) return false
       seen.add(key)
       return true
