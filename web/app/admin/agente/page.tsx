@@ -498,8 +498,8 @@ export default function AgenteAdminPage() {
         : null
     const channel = supabase
       .channel(`msgs-${phone}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: `phone=eq.${normalized}` }, () => fetchZapiHistory(phone))
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: alt ? `phone=eq.${alt}` : `phone=eq.${normalized}` }, () => fetchZapiHistory(phone))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: `phone=eq.${normalized}` }, () => fetchZapiHistory(phone, true))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp', filter: alt ? `phone=eq.${alt}` : `phone=eq.${normalized}` }, () => fetchZapiHistory(phone, true))
       .subscribe()
     const poll = setInterval(() => fetchZapiHistory(phone, true), 20000)
     return () => { supabase.removeChannel(channel); clearInterval(poll) }
@@ -514,9 +514,13 @@ export default function AgenteAdminPage() {
       .catch(() => setPixInfo(null))
   }, [selected?.id])
 
-  /* auto-scroll chat */
+  /* auto-scroll chat — instant on load, smooth on new messages */
+  const prevMsgCount = useRef(0)
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const count = zapiMsgs.length || (selected?.historico?.length ?? 0)
+    const isNew = count > prevMsgCount.current && prevMsgCount.current > 0
+    prevMsgCount.current = count
+    chatEndRef.current?.scrollIntoView({ behavior: isNew ? 'smooth' : 'instant' })
   }, [selected?.historico?.length, zapiMsgs.length])
 
   /* keyboard shortcuts */
