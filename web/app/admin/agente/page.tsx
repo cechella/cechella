@@ -517,6 +517,29 @@ export default function AgenteAdminPage() {
       .catch(() => setPixInfo(null))
   }, [selected?.id])
 
+  const etapaAtualEarly = selected?.etapa_agente || 1
+  const historicoEarly = selected?.historico || []
+
+  // Merge zapiMsgs + historico for WhatsApp completo tab, dedup by ts+role (fallback: content prefix)
+  const zapiMsgsMerged = (() => {
+    if (zapiMsgs.length === 0) return historicoEarly
+    const seen = new Set<string>()
+    const all = [...zapiMsgs, ...historicoEarly]
+    const deduped = all.filter(m => {
+      const key = m.ts ? `${m.role}::${m.ts}` : `${m.role}::${(m.content || '').slice(0, 120)}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    deduped.sort((a, b) => {
+      if (!a.ts && !b.ts) return 0
+      if (!a.ts) return -1
+      if (!b.ts) return 1
+      return new Date(a.ts).getTime() - new Date(b.ts).getTime()
+    })
+    return deduped
+  })()
+
   /* auto-scroll chat — instant on load/tab-switch, smooth on new messages */
   const prevMsgCount = useRef(0)
   useEffect(() => {
@@ -604,28 +627,8 @@ export default function AgenteAdminPage() {
     return arr
   })()
 
-  const etapaAtual = selected?.etapa_agente || 1
-  const historico = selected?.historico || []
-
-  // Merge zapiMsgs + historico for WhatsApp completo tab, dedup by ts+role (fallback: content prefix)
-  const zapiMsgsMerged = (() => {
-    if (zapiMsgs.length === 0) return historico
-    const seen = new Set<string>()
-    const all = [...zapiMsgs, ...historico]
-    const deduped = all.filter(m => {
-      const key = m.ts ? `${m.role}::${m.ts}` : `${m.role}::${(m.content || '').slice(0, 120)}`
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
-    deduped.sort((a, b) => {
-      if (!a.ts && !b.ts) return 0
-      if (!a.ts) return -1
-      if (!b.ts) return 1
-      return new Date(a.ts).getTime() - new Date(b.ts).getTime()
-    })
-    return deduped
-  })()
+  const etapaAtual = etapaAtualEarly
+  const historico = historicoEarly
 
   /* ─── Intelligence panel computed values ─── */
   const convScore = selected ? conversionScore(selected) : 0
