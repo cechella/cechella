@@ -374,7 +374,9 @@ export default function AgenteAdminPage() {
       const data = await resp.json()
       if (data.ok && Array.isArray(data.messages)) {
         setZapiMsgs(prev => {
-          if (prev.length === data.messages.length) return prev
+          const lastPrev = prev[prev.length - 1]?.ts
+          const lastNew = data.messages[data.messages.length - 1]?.ts
+          if (prev.length === data.messages.length && lastPrev === lastNew) return prev
           return data.messages
         })
         const umDiaAtras = Date.now() - 24 * 60 * 60 * 1000
