@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
 
     if (action === 'resetar_lead') {
       if (!telefone) return NextResponse.json({ error: 'Telefone obrigatório' }, { status: 400 })
+      const suffix = telefone.replace(/\D/g, '').slice(-8)
       const { data, error } = await supabase
         .from('leads')
         .update({
@@ -43,10 +44,13 @@ export async function POST(req: NextRequest) {
           tentativas_pagamento: 0,
           atendimento_humano: false,
         })
-        .like('telefone', `%${telefone.replace(/\D/g, '').slice(-8)}%`)
+        .like('telefone', `%${suffix}%`)
         .select('id, nome, telefone, etapa_agente, status_pagamento, metodo_pagamento')
       if (error) throw error
-      return NextResponse.json({ data, rows: data?.length ?? 0 })
+      // limpa M4: flag + contatos referidos pós-NÃO
+      await supabase.from('leads_m4_flag').delete().like('telefone', `%${suffix}%`)
+      await supabase.from('contatos_referidos').delete().like('indicado_por_telefone', `%${suffix}%`)
+      return NextResponse.json({ data, rows: data?.length ?? 0, m4_limpo: true })
     }
 
     if (action === 'deletar_lead') {
@@ -58,9 +62,10 @@ export async function POST(req: NextRequest) {
         .like('telefone', `%${suffix}%`)
         .select('id, nome, telefone')
       if (error) throw error
-      // apaga mensagens_whatsapp do mesmo número (ambos formatos)
       await supabase.from('mensagens_whatsapp').delete().like('phone', `%${suffix}%`)
-      return NextResponse.json({ data, rows: data?.length ?? 0 })
+      await supabase.from('leads_m4_flag').delete().like('telefone', `%${suffix}%`)
+      await supabase.from('contatos_referidos').delete().like('indicado_por_telefone', `%${suffix}%`)
+      return NextResponse.json({ data, rows: data?.length ?? 0, m4_limpo: true })
     }
 
     if (action === 'resetar_referidos') {
@@ -96,7 +101,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'ver_estado_banco') {
-      const tabelas = ['leads', 'contatos_referidos', 'ana_memoria', 'ana_padroes', 'pagamentos', 'pagamentos_recorrentes', 'mensagens_whatsapp'] as const
+      const tabelas = ['leads', 'contatos_referidos', 'leads_m4_flag', 'ana_memoria', 'ana_padroes', 'pagamentos', 'pagamentos_recorrentes', 'mensagens_whatsapp'] as const
       const contagens: Record<string, number> = {}
       for (const tabela of tabelas) {
         const { count } = await supabase.from(tabela).select('*', { count: 'exact', head: true })
@@ -133,17 +138,18 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'reset_total') {
-      const [r1, r2, r3, r4, r5, r6, r7] = await Promise.all([
+      const [r1, r2, r3, r4, r5, r6, r7, r8] = await Promise.all([
         supabase.from('leads').delete().gte('created_at', '2000-01-01').select('id'),
         supabase.from('contatos_referidos').delete().gte('created_at', '2000-01-01').select('id'),
+        supabase.from('leads_m4_flag').delete().gte('created_at', '2000-01-01').select('telefone'),
         supabase.from('ana_memoria').delete().gte('created_at', '2000-01-01').select('id'),
         supabase.from('ana_padroes').delete().gte('created_at', '2000-01-01').select('id'),
         supabase.from('pagamentos').delete().gte('created_at', '2000-01-01').select('id'),
         supabase.from('pagamentos_recorrentes').delete().gte('created_at', '2000-01-01').select('id'),
         supabase.from('mensagens_whatsapp').delete().gte('ts', '2000-01-01').select('id'),
       ])
-      const rows = (r1.data?.length ?? 0) + (r2.data?.length ?? 0) + (r3.data?.length ?? 0) + (r4.data?.length ?? 0) + (r5.data?.length ?? 0) + (r6.data?.length ?? 0) + (r7.data?.length ?? 0)
-      return NextResponse.json({ rows, detalhes: { leads: r1.data?.length ?? 0, referidos: r2.data?.length ?? 0, memoria: r3.data?.length ?? 0, padroes: r4.data?.length ?? 0, pagamentos: r5.data?.length ?? 0, recorrentes: r6.data?.length ?? 0, mensagens: r7.data?.length ?? 0 } })
+      const rows = (r1.data?.length ?? 0) + (r2.data?.length ?? 0) + (r3.data?.length ?? 0) + (r4.data?.length ?? 0) + (r5.data?.length ?? 0) + (r6.data?.length ?? 0) + (r7.data?.length ?? 0) + (r8.data?.length ?? 0)
+      return NextResponse.json({ rows, detalhes: { leads: r1.data?.length ?? 0, referidos: r2.data?.length ?? 0, m4_flag: r3.data?.length ?? 0, memoria: r4.data?.length ?? 0, padroes: r5.data?.length ?? 0, pagamentos: r6.data?.length ?? 0, recorrentes: r7.data?.length ?? 0, mensagens: r8.data?.length ?? 0 } })
     }
 
     return NextResponse.json({ error: 'Ação inválida' }, { status: 400 })
