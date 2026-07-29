@@ -26,6 +26,7 @@ interface Lead {
   historico: Array<{role: string; content: string; ts?: string}> | null
   origem: string | null
   status: StatusLead | null
+  atendimento_humano: boolean | null
 }
 
 interface ContatoReferido {
@@ -159,7 +160,7 @@ export default function CRMPage() {
   const carregarLeads = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase.from('leads')
-      .select('id,nome,telefone,etapa_agente,temperatura,total_referidos,updated_at,dor_principal,historico,origem,status')
+      .select('id,nome,telefone,etapa_agente,temperatura,total_referidos,updated_at,dor_principal,historico,origem,status,atendimento_humano')
       .order('updated_at', { ascending: false })
     if (data) setLeads(data as Lead[])
     setLoading(false)
@@ -425,6 +426,11 @@ export default function CRMPage() {
                             <td className="px-4 py-4">
                               <div className="flex flex-col gap-1.5">
                                 <StatusBadge status={lead.status} />
+                                {lead.atendimento_humano && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium bg-blue-500/15 text-blue-400 border-blue-500/30">
+                                    👤 Humano ativo
+                                  </span>
+                                )}
                                 {(lead.status === 'opt_out' || lead.status === 'pausado' || lead.status === 'ameaca') && (
                                   <button
                                     onClick={() => atualizarStatus(lead.id, 'ativo')}

@@ -16,18 +16,48 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
 
-    // Forward to n8n in parallel (fire-and-forget, don't block)
+    // Z-API multi-device payload structure
+    const phone = body.phone || body.from || body.chatId?.replace('@s.whatsapp.net', '').replace('@c.us', '')
+    if (!phone) return NextResponse.json({ ok: true })
+
+    // Block ANA from responding when human attendance is active
+    const fromMe = body.fromMe === true
+    if (!fromMe) {
+      const { data: lead } = await supabase
+        .from('leads')
+        .select('atendimento_humano')
+        .eq('telefone', phone)
+        .maybeSingle()
+
+      if (lead?.atendimento_humano === true) {
+        // Persist the message but do NOT forward to n8n — human is in control
+        const ts = body.momentoMensagem
+          ? new Date(body.momentoMensagem * 1000).toISOString()
+          : new Date().toISOString()
+        const type = body.type || 'text'
+        let content = ''
+        if (body.text?.message) content = body.text.message
+        else if (body.image?.caption) content = `🖼️ ${body.image.caption}`
+        else if (body.image) content = '🖼️ Imagem'
+        else if (body.audio || body.ptt) content = '🎵 Áudio'
+        else if (body.video?.caption) content = `📹 ${body.video.caption}`
+        else if (body.video) content = '📹 Vídeo'
+        else if (body.document) content = `📄 ${body.document.fileName || 'Documento'}`
+        else if (typeof body.message === 'string') content = body.message
+        if (content) {
+          await supabase.from('mensagens_whatsapp').insert({ phone, role: 'user', content, type, ts, raw: body })
+        }
+        return NextResponse.json({ ok: true, blocked: 'human_attendance' })
+      }
+    }
+
+    // Forward to n8n only when ANA is in control
     fetch(N8N_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).catch(() => {})
 
-    // Z-API multi-device payload structure
-    const phone = body.phone || body.from || body.chatId?.replace('@s.whatsapp.net', '').replace('@c.us', '')
-    if (!phone) return NextResponse.json({ ok: true })
-
-    const fromMe = body.fromMe === true
     const role = fromMe ? 'assistant' : 'user'
     const ts = body.momentoMensagem
       ? new Date(body.momentoMensagem * 1000).toISOString()
