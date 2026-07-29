@@ -16,6 +16,8 @@ import {
   Bot,
   AlertCircle,
   CheckCircle2,
+  MessageSquare,
+  Radio,
 } from 'lucide-react'
 
 interface Produto {
@@ -66,6 +68,11 @@ export default function ProdutosPage() {
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
+  // Configuração do modo de atendimento da ANA
+  const [modoAna, setModoAna] = useState<'perguntar' | 'fixo'>('perguntar')
+  const [produtoFixo, setProdutoFixo] = useState<string>('implante')
+  const [savingModo, setSavingModo] = useState(false)
+
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok })
     setTimeout(() => setToast(null), 3000)
@@ -73,13 +80,40 @@ export default function ProdutosPage() {
 
   const fetchProdutos = useCallback(async () => {
     setLoading(true)
-    const res = await fetch('/api/admin/produtos')
-    const json = await res.json()
-    setProdutos(json.produtos ?? [])
+    const [resProdutos, resCfg] = await Promise.all([
+      fetch('/api/admin/produtos'),
+      fetch('/api/admin/configuracoes'),
+    ])
+    const jsonP = await resProdutos.json()
+    const jsonC = await resCfg.json()
+    setProdutos(jsonP.produtos ?? [])
+    const ana = jsonC.config?.atendimento_ana
+    if (ana) {
+      setModoAna(ana.modo ?? 'perguntar')
+      setProdutoFixo(ana.produto_fixo ?? 'implante')
+    }
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchProdutos() }, [fetchProdutos])
+
+  const salvarModoAna = async (novoModo: 'perguntar' | 'fixo', novoFixo?: string) => {
+    setSavingModo(true)
+    const modo = novoModo
+    const fixo = novoFixo ?? produtoFixo
+    await fetch('/api/admin/configuracoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chave: 'atendimento_ana',
+        valor: { modo, produto_fixo: fixo },
+      }),
+    })
+    setModoAna(modo)
+    if (novoFixo) setProdutoFixo(novoFixo)
+    setSavingModo(false)
+    showToast('Modo de atendimento salvo!')
+  }
 
   const abrirNovo = (sugestao?: { slug: string; nome: string }) => {
     setModal({
@@ -177,6 +211,104 @@ export default function ProdutosPage() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-8">
+
+        {/* Modo de atendimento da ANA */}
+        <div className="mb-8 bg-[#0E0E10] border border-[#222228] rounded-2xl overflow-hidden">
+          <div className="flex items-center gap-3 px-5 py-4 border-b border-[#1C1C1E]">
+            <div className="w-8 h-8 rounded-lg bg-[#7B3FE4]/15 flex items-center justify-center">
+              <MessageSquare className="w-4 h-4 text-[#7B3FE4]" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-white">Modo de atendimento da ANA</p>
+              <p className="text-xs text-[#52525B]">Como ANA identifica qual produto atender quando um lead entra</p>
+            </div>
+          </div>
+
+          <div className="p-5 flex flex-col gap-3">
+            {/* Opção: Perguntar */}
+            <button
+              onClick={() => salvarModoAna('perguntar')}
+              disabled={savingModo}
+              className={`flex items-start gap-4 p-4 rounded-xl border text-left transition-all ${
+                modoAna === 'perguntar'
+                  ? 'border-[#7B3FE4]/50 bg-[#7B3FE4]/8'
+                  : 'border-[#222228] hover:border-[#333338]'
+              }`}
+            >
+              <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5 flex items-center justify-center ${
+                modoAna === 'perguntar' ? 'border-[#7B3FE4]' : 'border-[#3F3F46]'
+              }`}>
+                {modoAna === 'perguntar' && <div className="w-1.5 h-1.5 rounded-full bg-[#7B3FE4]" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white mb-1">ANA pergunta ao lead</p>
+                <p className="text-xs text-[#71717A] leading-relaxed">
+                  ANA apresenta os produtos ativos e deixa o lead escolher.
+                </p>
+                {modoAna === 'perguntar' && (
+                  <div className="mt-3 bg-[#18181A] rounded-lg px-3 py-2 border border-[#2A2A2E]">
+                    <p className="text-[11px] text-[#A1A1AA] italic leading-relaxed">
+                      💜 Para te ajudar melhor, você tem interesse em qual programa?
+                      {produtos.filter(p => p.ativo).length > 0 && (
+                        <>
+                          {'\n'}
+                          {produtos.filter(p => p.ativo).map((p, i) => `${i + 1}. ${p.nome}`).join('\n')}
+                        </>
+                      )}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </button>
+
+            {/* Opção: Produto fixo */}
+            <button
+              onClick={() => salvarModoAna('fixo')}
+              disabled={savingModo}
+              className={`flex items-start gap-4 p-4 rounded-xl border text-left transition-all ${
+                modoAna === 'fixo'
+                  ? 'border-[#7B3FE4]/50 bg-[#7B3FE4]/8'
+                  : 'border-[#222228] hover:border-[#333338]'
+              }`}
+            >
+              <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5 flex items-center justify-center ${
+                modoAna === 'fixo' ? 'border-[#7B3FE4]' : 'border-[#3F3F46]'
+              }`}>
+                {modoAna === 'fixo' && <div className="w-1.5 h-1.5 rounded-full bg-[#7B3FE4]" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white mb-1">Atender produto fixo</p>
+                <p className="text-xs text-[#71717A] leading-relaxed">
+                  ANA vai direto ao funil do produto selecionado, sem perguntar.
+                </p>
+                {modoAna === 'fixo' && (
+                  <div className="mt-3">
+                    <p className="text-[10px] font-semibold text-[#52525B] uppercase tracking-widest mb-2">Produto que ANA atende</p>
+                    <div className="flex flex-wrap gap-2">
+                      {produtos.filter(p => p.ativo).map(prod => (
+                        <button
+                          key={prod.slug}
+                          onClick={e => { e.stopPropagation(); salvarModoAna('fixo', prod.slug) }}
+                          disabled={savingModo}
+                          className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-all ${
+                            produtoFixo === prod.slug
+                              ? 'bg-[#7B3FE4] border-[#7B3FE4] text-white'
+                              : 'border-[#2A2A2E] text-[#71717A] hover:text-white hover:border-[#7B3FE4]/40'
+                          }`}
+                        >
+                          {prod.nome}
+                        </button>
+                      ))}
+                      {produtos.filter(p => p.ativo).length === 0 && (
+                        <p className="text-xs text-[#52525B] italic">Nenhum produto ativo. Ative um produto acima.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </button>
+          </div>
+        </div>
 
         {/* Sugestões rápidas */}
         {SUGESTOES.some(s => !jaExiste(s.slug)) && (
