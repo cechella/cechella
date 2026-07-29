@@ -29,6 +29,9 @@ import {
   TestTube2,
   DollarSign,
   Package,
+  Star,
+  Stethoscope,
+  Building2,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -45,6 +48,9 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Rea
   ],
   medical: [
     { label: 'Dashboard', href: '/medical/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
+    { label: 'Minha Mentoria', href: '/medical/mentoria', icon: <Star className="w-5 h-5" /> },
+    { label: 'ANA no Consultório', href: '/medical/ana-consultorio', icon: <Bot className="w-5 h-5" /> },
+    { label: 'Meu Consultório', href: '/medical/consultorio', icon: <Building2 className="w-5 h-5" /> },
     { label: 'Trilhas', href: '/medical/courses', icon: <GraduationCap className="w-5 h-5" /> },
     { label: 'Biblioteca', href: '/medical/library', icon: <Library className="w-5 h-5" /> },
     { label: 'Comunidade', href: '/medical/community', icon: <MessageSquare className="w-5 h-5" /> },
