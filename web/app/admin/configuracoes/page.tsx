@@ -174,6 +174,11 @@ export default function ConfiguracoesPage() {
 
   return (
     <div className="flex h-screen bg-[#080809] overflow-hidden">
+      <style>{`
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+        input[type=number] { -moz-appearance: textfield; }
+      `}</style>
       <Sidebar role="admin" />
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopBar title="Configurações" />
