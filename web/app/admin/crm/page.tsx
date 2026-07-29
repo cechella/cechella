@@ -7,7 +7,8 @@ import { createBrowserClient } from '@supabase/ssr'
 import {
   MessageSquare, Phone, Search, RefreshCw,
   Flame, Minus, Snowflake, X, Plus, Eye,
-  Users, CheckCircle, Share2, ShieldAlert, Ban, PauseCircle, RotateCcw
+  Users, CheckCircle, Share2, ShieldAlert, Ban, PauseCircle, RotateCcw,
+  MoreVertical, Trash2, Scale
 } from 'lucide-react'
 
 type Temperatura = 'quente' | 'morno' | 'frio'
@@ -147,6 +148,7 @@ export default function CRMPage() {
   const [salvando, setSalvando] = useState(false)
   const [filtroOrigem, setFiltroOrigem] = useState<string>('todas')
   const [filtroStatus, setFiltroStatus] = useState<StatusLead | 'todos'>('todos')
+  const [menuAberto, setMenuAberto] = useState<string | null>(null)
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -189,6 +191,12 @@ export default function CRMPage() {
   const atualizarStatus = async (id: string, status: StatusLead) => {
     await supabase.from('leads').update({ status }).eq('id', id)
     setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l))
+  }
+
+  const excluirLead = async (id: string) => {
+    if (!confirm('Excluir este lead permanentemente?')) return
+    await supabase.from('leads').delete().eq('id', id)
+    setLeads(prev => prev.filter(l => l.id !== id))
   }
 
   const leadsAmeaca = leads.filter(l => l.status === 'ameaca').length
@@ -469,7 +477,7 @@ export default function CRMPage() {
                               {tempoRelativo(lead.updated_at)}
                             </td>
                             <td className="px-4 py-4">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 relative">
                                 <button
                                   onClick={() => { setLeadSelecionado(lead); setShowModal(true) }}
                                   className="p-1.5 text-[#71717A] hover:text-white hover:bg-[#1C1C1E] rounded-lg transition-colors"
@@ -487,6 +495,52 @@ export default function CRMPage() {
                                   >
                                     <Phone className="w-4 h-4" />
                                   </a>
+                                )}
+                                <button
+                                  onClick={() => setMenuAberto(menuAberto === lead.id ? null : lead.id)}
+                                  className="p-1.5 text-[#71717A] hover:text-white hover:bg-[#1C1C1E] rounded-lg transition-colors"
+                                  title="Mais ações"
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+                                {menuAberto === lead.id && (
+                                  <div className="absolute right-0 top-8 z-50 bg-[#1C1C1E] border border-[#2C2C2E] rounded-xl shadow-xl w-48 py-1 overflow-hidden">
+                                    {lead.status !== 'pausado' && (
+                                      <button onClick={() => { atualizarStatus(lead.id, 'pausado'); setMenuAberto(null) }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-yellow-400 hover:bg-[#2C2C2E] transition-colors">
+                                        <PauseCircle className="w-3.5 h-3.5" /> Pausar lead
+                                      </button>
+                                    )}
+                                    {lead.status !== 'opt_out' && (
+                                      <button onClick={() => { atualizarStatus(lead.id, 'opt_out'); setMenuAberto(null) }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-[#2C2C2E] transition-colors">
+                                        <Ban className="w-3.5 h-3.5" /> Bloquear lead
+                                      </button>
+                                    )}
+                                    {lead.status !== 'ameaca' && (
+                                      <button onClick={() => { atualizarStatus(lead.id, 'ameaca'); setMenuAberto(null) }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-orange-400 hover:bg-[#2C2C2E] transition-colors">
+                                        <ShieldAlert className="w-3.5 h-3.5" /> Marcar ameaça
+                                      </button>
+                                    )}
+                                    {lead.status !== 'ativo' && (
+                                      <button onClick={() => { atualizarStatus(lead.id, 'ativo'); setMenuAberto(null) }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-emerald-400 hover:bg-[#2C2C2E] transition-colors">
+                                        <RotateCcw className="w-3.5 h-3.5" /> Reativar lead
+                                      </button>
+                                    )}
+                                    <div className="border-t border-[#2C2C2E] my-1" />
+                                    <button disabled title="Em breve — Agente Jurídico"
+                                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#52525B] cursor-not-allowed">
+                                      <Scale className="w-3.5 h-3.5" /> Enviar ao Jurídico
+                                      <span className="ml-auto text-[9px] bg-[#2C2C2E] px-1.5 py-0.5 rounded">Em breve</span>
+                                    </button>
+                                    <div className="border-t border-[#2C2C2E] my-1" />
+                                    <button onClick={() => { excluirLead(lead.id); setMenuAberto(null) }}
+                                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-500 hover:bg-[#2C2C2E] transition-colors">
+                                      <Trash2 className="w-3.5 h-3.5" /> Excluir lead
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             </td>
