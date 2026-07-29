@@ -149,6 +149,7 @@ export default function CRMPage() {
   const [filtroOrigem, setFiltroOrigem] = useState<string>('todas')
   const [filtroStatus, setFiltroStatus] = useState<StatusLead | 'todos'>('todos')
   const [menuAberto, setMenuAberto] = useState<string | null>(null)
+  const [menuPos, setMenuPos] = useState<{x: number; y: number}>({x: 0, y: 0})
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -477,7 +478,7 @@ export default function CRMPage() {
                               {tempoRelativo(lead.updated_at)}
                             </td>
                             <td className="px-4 py-4">
-                              <div className="flex items-center gap-1 relative">
+                              <div className="flex items-center gap-1">
                                 <button
                                   onClick={() => { setLeadSelecionado(lead); setShowModal(true) }}
                                   className="p-1.5 text-[#71717A] hover:text-white hover:bg-[#1C1C1E] rounded-lg transition-colors"
@@ -497,51 +498,16 @@ export default function CRMPage() {
                                   </a>
                                 )}
                                 <button
-                                  onClick={() => setMenuAberto(menuAberto === lead.id ? null : lead.id)}
+                                  onClick={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect()
+                                    setMenuPos({ x: rect.right, y: rect.bottom + 4 })
+                                    setMenuAberto(menuAberto === lead.id ? null : lead.id)
+                                  }}
                                   className="p-1.5 text-[#71717A] hover:text-white hover:bg-[#1C1C1E] rounded-lg transition-colors"
                                   title="Mais ações"
                                 >
                                   <MoreVertical className="w-4 h-4" />
                                 </button>
-                                {menuAberto === lead.id && (
-                                  <div className="absolute right-0 top-8 z-50 bg-[#1C1C1E] border border-[#2C2C2E] rounded-xl shadow-xl w-48 py-1 overflow-hidden">
-                                    {lead.status !== 'pausado' && (
-                                      <button onClick={() => { atualizarStatus(lead.id, 'pausado'); setMenuAberto(null) }}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-yellow-400 hover:bg-[#2C2C2E] transition-colors">
-                                        <PauseCircle className="w-3.5 h-3.5" /> Pausar lead
-                                      </button>
-                                    )}
-                                    {lead.status !== 'opt_out' && (
-                                      <button onClick={() => { atualizarStatus(lead.id, 'opt_out'); setMenuAberto(null) }}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-400 hover:bg-[#2C2C2E] transition-colors">
-                                        <Ban className="w-3.5 h-3.5" /> Bloquear lead
-                                      </button>
-                                    )}
-                                    {lead.status !== 'ameaca' && (
-                                      <button onClick={() => { atualizarStatus(lead.id, 'ameaca'); setMenuAberto(null) }}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-orange-400 hover:bg-[#2C2C2E] transition-colors">
-                                        <ShieldAlert className="w-3.5 h-3.5" /> Marcar ameaça
-                                      </button>
-                                    )}
-                                    {lead.status !== 'ativo' && (
-                                      <button onClick={() => { atualizarStatus(lead.id, 'ativo'); setMenuAberto(null) }}
-                                        className="w-full flex items-center gap-2 px-3 py-2 text-xs text-emerald-400 hover:bg-[#2C2C2E] transition-colors">
-                                        <RotateCcw className="w-3.5 h-3.5" /> Reativar lead
-                                      </button>
-                                    )}
-                                    <div className="border-t border-[#2C2C2E] my-1" />
-                                    <button disabled title="Em breve — Agente Jurídico"
-                                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-[#52525B] cursor-not-allowed">
-                                      <Scale className="w-3.5 h-3.5" /> Enviar ao Jurídico
-                                      <span className="ml-auto text-[9px] bg-[#2C2C2E] px-1.5 py-0.5 rounded">Em breve</span>
-                                    </button>
-                                    <div className="border-t border-[#2C2C2E] my-1" />
-                                    <button onClick={() => { excluirLead(lead.id); setMenuAberto(null) }}
-                                      className="w-full flex items-center gap-2 px-3 py-2 text-xs text-red-500 hover:bg-[#2C2C2E] transition-colors">
-                                      <Trash2 className="w-3.5 h-3.5" /> Excluir lead
-                                    </button>
-                                  </div>
-                                )}
                               </div>
                             </td>
                           </tr>
@@ -670,6 +636,74 @@ export default function CRMPage() {
           )}
         </main>
       </div>
+
+      {/* Overlay para fechar menu */}
+      {menuAberto && (
+        <div className="fixed inset-0 z-40" onClick={() => setMenuAberto(null)} />
+      )}
+
+      {/* Menu flutuante global */}
+      {menuAberto && (() => {
+        const lead = leads.find(l => l.id === menuAberto)
+        if (!lead) return null
+        return (
+          <div
+            className="fixed z-50 w-52 bg-[#111113] border border-[#2C2C2E] rounded-2xl shadow-2xl shadow-black/60 overflow-hidden"
+            style={{ left: Math.min(menuPos.x - 208, window.innerWidth - 220), top: menuPos.y }}
+          >
+            {/* Header do menu */}
+            <div className="px-4 py-3 border-b border-[#1C1C1E]">
+              <p className="text-xs font-semibold text-white truncate">{lead.nome || 'Lead'}</p>
+              <p className="text-[10px] text-[#52525B] truncate">{lead.telefone}</p>
+            </div>
+
+            {/* Ações de status */}
+            <div className="py-1.5">
+              {lead.status !== 'pausado' && (
+                <button onClick={() => { atualizarStatus(lead.id, 'pausado'); setMenuAberto(null) }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-[#D4B896] hover:bg-[#1C1C1E] transition-colors">
+                  <PauseCircle className="w-4 h-4 opacity-70" /> Pausar lead
+                </button>
+              )}
+              {lead.status !== 'opt_out' && (
+                <button onClick={() => { atualizarStatus(lead.id, 'opt_out'); setMenuAberto(null) }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-[#F87171] hover:bg-[#1C1C1E] transition-colors">
+                  <Ban className="w-4 h-4 opacity-70" /> Bloquear
+                </button>
+              )}
+              {lead.status !== 'ameaca' && (
+                <button onClick={() => { atualizarStatus(lead.id, 'ameaca'); setMenuAberto(null) }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-[#FB923C] hover:bg-[#1C1C1E] transition-colors">
+                  <ShieldAlert className="w-4 h-4 opacity-70" /> Marcar ameaça
+                </button>
+              )}
+              {lead.status !== 'ativo' && (
+                <button onClick={() => { atualizarStatus(lead.id, 'ativo'); setMenuAberto(null) }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-[#34D399] hover:bg-[#1C1C1E] transition-colors">
+                  <RotateCcw className="w-4 h-4 opacity-70" /> Reativar
+                </button>
+              )}
+            </div>
+
+            {/* Jurídico */}
+            <div className="border-t border-[#1C1C1E] py-1.5">
+              <div className="flex items-center gap-3 px-4 py-2.5 text-sm text-[#3F3F46] cursor-not-allowed">
+                <Scale className="w-4 h-4 opacity-50" />
+                <span>Jurídico</span>
+                <span className="ml-auto text-[10px] bg-[#1C1C1E] text-[#52525B] px-2 py-0.5 rounded-full font-medium">Em breve</span>
+              </div>
+            </div>
+
+            {/* Excluir */}
+            <div className="border-t border-[#1C1C1E] py-1.5">
+              <button onClick={() => { excluirLead(lead.id); setMenuAberto(null) }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-[#EF4444] hover:bg-[#1C1C1E] transition-colors">
+                <Trash2 className="w-4 h-4 opacity-70" /> Excluir lead
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Modal detalhe lead */}
       {showModal && leadSelecionado && (
