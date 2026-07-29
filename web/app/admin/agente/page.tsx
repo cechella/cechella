@@ -675,46 +675,35 @@ export default function AgenteAdminPage() {
           <TopBar title="Agente WhatsApp — Monitor em Tempo Real" />
 
           {/* ─── Metrics bar ─── */}
-          <div style={{ background: '#0D0D0F', borderBottom: '1px solid #1C1C1E', padding: '8px 20px', display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, overflowX: 'auto' }}>
+          <div style={{ background: '#0B0B0D', borderBottom: '1px solid #222228', padding: '0 20px', display: 'flex', alignItems: 'stretch', gap: 0, flexShrink: 0, overflowX: 'auto', height: 52 }}>
             {[
-              {
-                icon: '🟢', label: 'Conversas ativas', value: leads.length, color: '#00D084'
-              },
-              {
-                icon: '⚠️', label: 'SLA estourado', value: slaEstouradoCount, color: slaEstouradoCount > 0 ? '#FF3B5C' : '#71717A'
-              },
-              {
-                icon: '💰', label: 'Receita hoje', value: financeiro.totalRecebido != null ? `R$ ${financeiro.totalRecebido.toLocaleString('pt-BR')}` : '—', color: '#00D084'
-              },
-              {
-                icon: '📈', label: 'Taxa conversão', value: financeiro.taxaConversao != null ? `${financeiro.taxaConversao}%` : '—', color: '#7B3FE4'
-              },
-              {
-                icon: '⏱', label: 'Sem resp. >1h', value: semRespostaCount, color: semRespostaCount > 0 ? '#F5A623' : '#71717A'
-              },
+              { label: 'Conversas ativas', value: leads.length, color: '#00D084', dot: true },
+              { label: 'SLA estourado', value: slaEstouradoCount, color: slaEstouradoCount > 0 ? '#FF3B5C' : '#3A3A48' },
+              { label: 'Receita hoje', value: financeiro.totalRecebido != null ? `R$ ${financeiro.totalRecebido.toLocaleString('pt-BR')}` : '—', color: '#00D084' },
+              { label: 'Taxa conversão', value: financeiro.taxaConversao != null ? `${financeiro.taxaConversao}%` : '—', color: '#7B3FE4' },
+              { label: 'Sem resp. >1h', value: semRespostaCount, color: semRespostaCount > 0 ? '#F5A623' : '#3A3A48' },
             ].map((m, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 16px', background: '#111113', borderRadius: 8, border: '1px solid #1C1C1E', whiteSpace: 'nowrap', flexShrink: 0 }}>
-                <span style={{ fontSize: 13 }}>{m.icon}</span>
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 20px', borderRight: '1px solid #1E1E26', whiteSpace: 'nowrap', flexShrink: 0 }}>
+                {m.dot && <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#00D084', boxShadow: '0 0 8px #00D084', flexShrink: 0 }} className="animate-pulse" />}
                 <div>
-                  <div style={{ fontSize: 10, color: '#71717A', lineHeight: 1.2 }}>{m.label}</div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: m.color, lineHeight: 1.2 }}>{m.value}</div>
+                  <div style={{ fontSize: 10, color: '#4A4A58', lineHeight: 1.3, fontWeight: 500 }}>{m.label}</div>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: m.color, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{m.value}</div>
                 </div>
               </div>
             ))}
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span style={{ fontSize: 10, color: '#444' }}>{lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, paddingLeft: 16 }}>
+              <span style={{ fontSize: 10, color: '#3A3A48', fontVariantNumeric: 'tabular-nums' }}>{lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
               <button
                 onClick={() => fetchLeads()}
                 title="Atualizar (⌘R)"
-                style={{ padding: '4px 8px', background: '#1C1C1E', border: '1px solid #2a2a2a', borderRadius: 6, cursor: 'pointer', color: '#71717A', fontSize: 11 }}
+                style={{ padding: '5px 10px', background: '#16161B', border: '1px solid #2C2C36', borderRadius: 7, cursor: 'pointer', color: '#555', fontSize: 11, transition: 'border-color 0.1s' }}
               >
                 ↺
               </button>
               <button
                 onClick={() => setCmdOpen(true)}
                 title="Comando (⌘K)"
-                style={{ padding: '4px 10px', background: '#1C1C1E', border: '1px solid #2a2a2a', borderRadius: 6, cursor: 'pointer', color: '#71717A', fontSize: 11 }}
+                style={{ padding: '5px 10px', background: '#7B3FE420', border: '1px solid #7B3FE430', borderRadius: 7, cursor: 'pointer', color: '#A78BFA', fontSize: 11, fontWeight: 600 }}
               >
                 ⌘K
               </button>
@@ -724,49 +713,48 @@ export default function AgenteAdminPage() {
           {/* ─── 3-col layout ─── */}
           <div className="flex flex-1 overflow-hidden">
 
-            {/* ══ LEFT: Lead priority queue (260px) ══ */}
-            <div style={{ width: 260, borderRight: '1px solid #1C1C1E', display: 'flex', flexDirection: 'column', background: '#0D0D0F', flexShrink: 0 }}>
-              {/* Sort tabs */}
-              <div style={{ display: 'flex', borderBottom: '1px solid #1C1C1E' }}>
-                {(['urgencia', 'etapa', 'recente'] as const).map(tab => (
-                  <button
-                    key={tab}
-                    onClick={() => setSortTab(tab)}
-                    style={{
-                      flex: 1, padding: '8px 4px', fontSize: 10, fontWeight: 600,
-                      textTransform: 'capitalize', border: 'none', cursor: 'pointer',
-                      background: sortTab === tab ? '#1C1C1E' : 'transparent',
-                      color: sortTab === tab ? '#fff' : '#555',
-                      borderBottom: sortTab === tab ? '2px solid #7B3FE4' : '2px solid transparent',
-                      transition: 'all 0.15s',
-                    }}
-                  >
-                    {tab === 'urgencia' ? 'Urgência' : tab === 'etapa' ? 'Etapa' : 'Recente'}
-                  </button>
-                ))}
-              </div>
-
-              {/* Search */}
-              <div style={{ padding: '8px 10px', borderBottom: '1px solid #1C1C1E' }}>
-                <div style={{ position: 'relative' }}>
+            {/* ══ LEFT: Lead priority queue (272px) ══ */}
+            <div style={{ width: 272, borderRight: '1px solid #222228', display: 'flex', flexDirection: 'column', background: '#0B0B0D', flexShrink: 0 }}>
+              {/* Header */}
+              <div style={{ padding: '10px 14px 0', borderBottom: '1px solid #222228' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Fila de prioridade</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: '#7B3FE4', background: '#7B3FE420', borderRadius: 20, padding: '2px 7px' }}>{leadsFiltrados.length}/{leads.length}</span>
+                </div>
+                {/* Sort tabs */}
+                <div style={{ display: 'flex', gap: 2, marginBottom: 10 }}>
+                  {(['urgencia', 'etapa', 'recente'] as const).map(tab => (
+                    <button
+                      key={tab}
+                      onClick={() => setSortTab(tab)}
+                      style={{
+                        flex: 1, padding: '5px 4px', fontSize: 10, fontWeight: 600,
+                        border: 'none', cursor: 'pointer', borderRadius: 6,
+                        background: sortTab === tab ? '#7B3FE4' : '#1A1A20',
+                        color: sortTab === tab ? '#fff' : '#555',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {tab === 'urgencia' ? 'Urgência' : tab === 'etapa' ? 'Etapa' : 'Recente'}
+                    </button>
+                  ))}
+                </div>
+                {/* Search */}
+                <div style={{ position: 'relative', marginBottom: 10 }}>
                   <input
                     ref={searchInputRef}
                     type="text"
                     value={busca}
                     onChange={e => setBusca(e.target.value)}
-                    placeholder="Buscar... (/)"
+                    placeholder="Buscar lead... (/)"
                     style={{
-                      width: '100%', background: '#1C1C1E', border: '1px solid #2a2a2a', borderRadius: 7,
-                      padding: '6px 10px 6px 10px', fontSize: 11, color: '#fff', outline: 'none',
+                      width: '100%', background: '#16161B', border: '1px solid #2C2C36', borderRadius: 8,
+                      padding: '7px 28px 7px 10px', fontSize: 11, color: '#E0E0E8', outline: 'none',
                       boxSizing: 'border-box',
                     }}
                   />
-                  <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 9, color: '#444', pointerEvents: 'none' }}>/</span>
+                  <span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: '#444', pointerEvents: 'none', fontFamily: 'monospace' }}>/</span>
                 </div>
-              </div>
-
-              <div style={{ fontSize: 9, color: '#444', padding: '4px 12px', borderBottom: '1px solid #1C1C1E' }}>
-                {leadsFiltrados.length}/{leads.length} leads
               </div>
 
               {/* Lead list */}
@@ -790,46 +778,48 @@ export default function AgenteAdminPage() {
                   const score = urgencyScore(lead)
                   const scoreCol = urgencyColor(score)
                   const isNew = (Date.now() - new Date(lead.updated_at).getTime()) < 120000
+                  const sentRisk = scoreRisco(historicoValido)
 
                   return (
                     <button
                       key={lead.id}
                       onClick={() => setSelected(lead)}
                       style={{
-                        width: '100%', textAlign: 'left', padding: '10px 12px',
-                        borderBottom: '1px solid #1A1A1C',
-                        borderLeft: isActive ? '2px solid #7B3FE4' : '2px solid transparent',
-                        background: isActive ? '#1A1A2E' : 'transparent',
-                        cursor: 'pointer', transition: 'background 0.1s',
+                        width: '100%', textAlign: 'left', padding: '12px 14px',
+                        borderBottom: '1px solid #18181E',
+                        borderLeft: isActive ? '3px solid #7B3FE4' : '3px solid transparent',
+                        background: isActive ? 'linear-gradient(90deg, #7B3FE412 0%, transparent 100%)' : 'transparent',
+                        cursor: 'pointer', transition: 'background 0.12s',
                       }}
+                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#14141A' }}
+                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
                     >
                       {/* Row 1: name + score badge */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
-                          {isNew && <div className="animate-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: '#7B3FE4', flexShrink: 0 }} />}
-                          <span style={{ fontSize: 12, fontWeight: 600, color: '#fff', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 130 }}>{nome}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                          {isNew && <div className="animate-pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: '#7B3FE4', boxShadow: '0 0 6px #7B3FE4', flexShrink: 0 }} />}
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#F0F0F5', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', maxWidth: 140 }}>{nome}</span>
                         </div>
-                        <span style={{ fontSize: 10, fontWeight: 700, color: scoreCol, background: scoreCol + '20', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>{score}</span>
+                        <span style={{ fontSize: 11, fontWeight: 800, color: scoreCol, background: scoreCol + '22', border: `1px solid ${scoreCol}40`, borderRadius: 6, padding: '2px 7px', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{score}</span>
                       </div>
 
-                      {/* Row 2: etapa badge + time */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <span style={{ fontSize: 9, background: '#1C1C1E', color: '#7B3FE4', borderRadius: 4, padding: '1px 5px', border: '1px solid #2a2a2a' }}>E{etapa}</span>
-                        <span style={{ fontSize: 9, color: sla.estourado ? '#FF3B5C' : '#555' }}>{timeAgo(lead.updated_at)}</span>
-                        {sla.estourado && <span style={{ fontSize: 9, color: '#FF3B5C' }}>⚠</span>}
+                      {/* Row 2: etapa + sentiment + time */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, background: '#7B3FE420', color: '#A78BFA', borderRadius: 5, padding: '2px 6px', border: '1px solid #7B3FE430', flexShrink: 0 }}>E{etapa} {ETAPAS.find(e => e.n === etapa)?.label}</span>
+                        <span style={{ fontSize: 9, color: sla.estourado ? '#FF3B5C' : '#4A4A58', marginLeft: 'auto', flexShrink: 0 }}>{sla.estourado ? '⚠ ' : ''}{timeAgo(lead.updated_at)}</span>
                       </div>
 
-                      {/* Last message */}
-                      <p style={{ fontSize: 10, color: '#71717A', marginBottom: 5, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                        {lastMsg?.content?.substring(0, 45) || 'Sem mensagens'}
-                        {(lastMsg?.content?.length || 0) > 45 ? '…' : ''}
-                      </p>
+                      {/* Sentiment + last message */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: sentRisk.nivel === 'risco' ? '#FF3B5C18' : sentRisk.nivel === 'hesitante' ? '#F5A62318' : '#00D08418', color: sentRisk.nivel === 'risco' ? '#FF3B5C' : sentRisk.nivel === 'hesitante' ? '#F5A623' : '#00D084', flexShrink: 0 }}>{sentRisk.label}</span>
+                        <p style={{ fontSize: 10, color: '#4A4A58', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', flex: 1, margin: 0 }}>
+                          {lastMsg?.content?.substring(0, 35) || 'Sem mensagens'}{(lastMsg?.content?.length || 0) > 35 ? '…' : ''}
+                        </p>
+                      </div>
 
                       {/* Urgency bar */}
-                      <div style={{ marginBottom: 4 }}>
-                        <div style={{ height: 3, background: '#1C1C1E', borderRadius: 2, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${score}%`, background: scoreCol, borderRadius: 2, transition: 'width 0.3s' }} />
-                        </div>
+                      <div style={{ height: 3, background: '#1E1E26', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${score}%`, background: `linear-gradient(90deg, ${scoreCol}99, ${scoreCol})`, borderRadius: 2, transition: 'width 0.4s' }} />
                       </div>
                     </button>
                   )
@@ -842,11 +832,11 @@ export default function AgenteAdminPage() {
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
                 {/* Chat header */}
-                <div style={{ padding: '12px 20px', borderBottom: '1px solid #1C1C1E', background: '#0D0D0F', flexShrink: 0 }}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid #222228', background: '#0B0B0D', flexShrink: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                        <h2 style={{ fontSize: 15, fontWeight: 600, color: '#fff', margin: 0 }}>{displayName(selected)}</h2>
+                        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#F0F0F5', margin: 0, letterSpacing: '-0.01em' }}>{displayName(selected)}</h2>
                         {(() => { const r = scoreRisco(historico.filter(m => m && m.content)); return <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 20, background: '#1C1C1E', color: r.nivel === 'risco' ? '#FF3B5C' : r.nivel === 'hesitante' ? '#F5A623' : '#00D084', border: '1px solid currentColor' }}>{r.label}</span> })()}
                         {slaInfo(selected.updated_at, etapaAtual).estourado && (
                           <span style={{ fontSize: 9, color: '#FF3B5C', background: '#FF3B5C20', padding: '2px 6px', borderRadius: 20 }}>⚠ SLA estourado</span>
@@ -1100,13 +1090,13 @@ export default function AgenteAdminPage() {
               </div>
             )}
 
-            {/* ══ RIGHT: Intelligence panel (240px) ══ */}
-            <div style={{ width: 240, borderLeft: '1px solid #1C1C1E', display: 'flex', flexDirection: 'column', background: '#0D0D0F', overflowY: 'auto', flexShrink: 0 }}>
+            {/* ══ RIGHT: Intelligence panel (256px) ══ */}
+            <div style={{ width: 256, borderLeft: '1px solid #222228', display: 'flex', flexDirection: 'column', background: '#0B0B0D', overflowY: 'auto', flexShrink: 0 }}>
               {selected ? (
                 <>
                   {/* 1. Score de conversão */}
-                  <div style={{ padding: '12px 14px', borderBottom: '1px solid #1C1C1E' }}>
-                    <div style={{ fontSize: 10, color: '#71717A', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Score de conversão IA</div>
+                  <div style={{ padding: '16px 16px', borderBottom: '1px solid #1E1E26' }}>
+                    <div style={{ fontSize: 10, color: '#5A5A70', marginBottom: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Score de conversão IA</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <svg width={ringSize} height={ringSize} style={{ flexShrink: 0 }}>
                         <circle cx={ringSize / 2} cy={ringSize / 2} r={r} fill="none" stroke="#1C1C1E" strokeWidth={strokeW} />
@@ -1132,8 +1122,8 @@ export default function AgenteAdminPage() {
                   </div>
 
                   {/* 2. Sentimento */}
-                  <div style={{ padding: '12px 14px', borderBottom: '1px solid #1C1C1E' }}>
-                    <div style={{ fontSize: 10, color: '#71717A', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sentimento da conversa</div>
+                  <div style={{ padding: '16px 16px', borderBottom: '1px solid #1E1E26' }}>
+                    <div style={{ fontSize: 10, color: '#5A5A70', marginBottom: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sentimento da conversa</div>
                     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 48 }}>
                       {sentBars.length === 0 ? (
                         <div style={{ fontSize: 10, color: '#444' }}>Sem dados</div>
@@ -1159,8 +1149,8 @@ export default function AgenteAdminPage() {
                   </div>
 
                   {/* 3. Dados da sessão */}
-                  <div style={{ padding: '12px 14px', borderBottom: '1px solid #1C1C1E' }}>
-                    <div style={{ fontSize: 10, color: '#71717A', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dados da sessão</div>
+                  <div style={{ padding: '16px 16px', borderBottom: '1px solid #1E1E26' }}>
+                    <div style={{ fontSize: 10, color: '#5A5A70', marginBottom: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Dados da sessão</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                       {[
                         { label: 'Mensagens', value: sessaoMensagens },
@@ -1177,8 +1167,8 @@ export default function AgenteAdminPage() {
                   </div>
 
                   {/* 4. Sinais detectados */}
-                  <div style={{ padding: '12px 14px', borderBottom: '1px solid #1C1C1E' }}>
-                    <div style={{ fontSize: 10, color: '#71717A', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Sinais detectados</div>
+                  <div style={{ padding: '16px 16px', borderBottom: '1px solid #1E1E26' }}>
+                    <div style={{ fontSize: 10, color: '#5A5A70', marginBottom: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sinais detectados</div>
                     {signals.length === 0 ? (
                       <div style={{ fontSize: 10, color: '#444' }}>Nenhum sinal detectado</div>
                     ) : (
@@ -1191,8 +1181,8 @@ export default function AgenteAdminPage() {
                   </div>
 
                   {/* 5. Ações rápidas */}
-                  <div style={{ padding: '12px 14px', borderBottom: '1px solid #1C1C1E' }}>
-                    <div style={{ fontSize: 10, color: '#71717A', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Ações rápidas</div>
+                  <div style={{ padding: '16px 16px', borderBottom: '1px solid #1E1E26' }}>
+                    <div style={{ fontSize: 10, color: '#5A5A70', marginBottom: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Ações rápidas</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                       {[
                         { icon: '📩', label: 'Enviar link pagamento', hint: '⌘P', action: toggleHumano },
@@ -1222,7 +1212,7 @@ export default function AgenteAdminPage() {
                   {/* 6. Log de atividade */}
                   {/* PIX + Cartão blocks */}
                   {pixInfo && (pixInfo.pix_code || pixInfo.checkout_url) && (
-                    <div style={{ padding: '12px 14px', borderBottom: '1px solid #1C1C1E', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <div style={{ padding: '16px 16px', borderBottom: '1px solid #1E1E26', display: 'flex', flexDirection: 'column', gap: 10 }}>
                       {pixInfo.pix_code && (
                         <div>
                           <div style={{ fontSize: 10, color: '#71717A', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>💰 Chave PIX</div>
@@ -1275,8 +1265,8 @@ export default function AgenteAdminPage() {
                     </div>
                   )}
 
-                  <div style={{ padding: '12px 14px' }}>
-                    <div style={{ fontSize: 10, color: '#71717A', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Log de atividade</div>
+                  <div style={{ padding: '16px 16px' }}>
+                    <div style={{ fontSize: 10, color: '#5A5A70', marginBottom: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Log de atividade</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {activityLog.map((log, i) => (
                         <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
