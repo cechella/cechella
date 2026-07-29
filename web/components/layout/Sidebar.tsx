@@ -68,6 +68,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Rea
     { label: 'Rede', href: '/admin/rede', icon: <Network className="w-5 h-5" /> },
     { label: 'Resultados', href: '/admin/resultados', icon: <TrendingUp className="w-5 h-5" /> },
     { label: 'Teste', href: '/admin/teste', icon: <TestTube2 className="w-5 h-5" /> },
+    { label: 'Configurações', href: '/admin/configuracoes', icon: <Settings className="w-5 h-5" /> },
   ],
 }
 
