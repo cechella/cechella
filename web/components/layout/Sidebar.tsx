@@ -28,6 +28,7 @@ import {
   TrendingUp,
   TestTube2,
   DollarSign,
+  Package,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -62,6 +63,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Rea
     { label: 'Vídeos', href: '/admin/videos', icon: <Play className="w-5 h-5" /> },
     { label: 'Usuários', href: '/admin/users', icon: <Users className="w-5 h-5" /> },
     { label: 'Área do Paciente', href: '/admin/patient-settings', icon: <Settings className="w-5 h-5" /> },
+    { label: 'Produtos', href: '/admin/produtos', icon: <Package className="w-5 h-5" /> },
     { label: 'Agente IA', href: '/admin/agente', icon: <Bot className="w-5 h-5" /> },
     { label: 'Referidos IA', href: '/admin/referidos', icon: <Share2 className="w-5 h-5" /> },
     { label: 'Analytics', href: '/admin/analytics', icon: <BarChart3 className="w-5 h-5" /> },
