@@ -7,10 +7,11 @@ import { createBrowserClient } from '@supabase/ssr'
 import {
   MessageSquare, Phone, Search, RefreshCw,
   Flame, Minus, Snowflake, X, Plus, Eye,
-  Users, CheckCircle, Share2
+  Users, CheckCircle, Share2, ShieldAlert, Ban, PauseCircle, RotateCcw
 } from 'lucide-react'
 
 type Temperatura = 'quente' | 'morno' | 'frio'
+type StatusLead = 'ativo' | 'opt_out' | 'pausado' | 'ameaca'
 
 interface Lead {
   id: string
@@ -23,6 +24,7 @@ interface Lead {
   dor_principal: string | null
   historico: Array<{role: string; content: string; ts?: string}> | null
   origem: string | null
+  status: StatusLead | null
 }
 
 interface ContatoReferido {
@@ -86,6 +88,22 @@ const ORIGEM_CONFIG: Record<string, { label: string; color: string; emoji: strin
   organico:     { label: 'Orgânico',  color: 'bg-teal-500/20 text-teal-400 border-teal-500/30', emoji: '🌿' },
 }
 
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
+  ativo:    { label: 'Ativo',     color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: <CheckCircle className="w-3 h-3" /> },
+  opt_out:  { label: 'Bloqueado', color: 'bg-red-500/20 text-red-400 border-red-500/30',             icon: <Ban className="w-3 h-3" /> },
+  pausado:  { label: 'Pausado',   color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',   icon: <PauseCircle className="w-3 h-3" /> },
+  ameaca:   { label: '⚠️ Ameaça', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30',   icon: <ShieldAlert className="w-3 h-3" /> },
+}
+
+function StatusBadge({ status }: { status: StatusLead | null }) {
+  const cfg = STATUS_CONFIG[status || 'ativo']
+  return (
+    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border font-medium ${cfg.color}`}>
+      {cfg.icon} {cfg.label}
+    </span>
+  )
+}
+
 function OrigemBadge({ origem }: { origem: string | null }) {
   const cfg = ORIGEM_CONFIG[origem || ''] || { label: origem || '—', color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', emoji: '📌' }
   return (
@@ -128,6 +146,7 @@ export default function CRMPage() {
   const [novoLead, setNovoLead] = useState({ nome: '', telefone: '', etapa_agente: 1, temperatura: 'frio' as Temperatura })
   const [salvando, setSalvando] = useState(false)
   const [filtroOrigem, setFiltroOrigem] = useState<string>('todas')
+  const [filtroStatus, setFiltroStatus] = useState<StatusLead | 'todos'>('todos')
 
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -137,7 +156,7 @@ export default function CRMPage() {
   const carregarLeads = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase.from('leads')
-      .select('id,nome,telefone,etapa_agente,temperatura,total_referidos,updated_at,dor_principal,historico,origem')
+      .select('id,nome,telefone,etapa_agente,temperatura,total_referidos,updated_at,dor_principal,historico,origem,status')
       .order('updated_at', { ascending: false })
     if (data) setLeads(data as Lead[])
     setLoading(false)
@@ -163,8 +182,18 @@ export default function CRMPage() {
     const matchEtapa = filtroEtapa === 0 || l.etapa_agente === filtroEtapa
     const matchTemp = filtroTemp === 'todas' || l.temperatura === filtroTemp
     const matchOrigem = filtroOrigem === 'todas' || l.origem === filtroOrigem
-    return matchSearch && matchEtapa && matchTemp && matchOrigem
+    const matchStatus = filtroStatus === 'todos' || (l.status || 'ativo') === filtroStatus
+    return matchSearch && matchEtapa && matchTemp && matchOrigem && matchStatus
   })
+
+  const atualizarStatus = async (id: string, status: StatusLead) => {
+    await supabase.from('leads').update({ status }).eq('id', id)
+    setLeads(prev => prev.map(l => l.id === id ? { ...l, status } : l))
+  }
+
+  const leadsAmeaca = leads.filter(l => l.status === 'ameaca').length
+  const leadsBloqueados = leads.filter(l => l.status === 'opt_out').length
+  const leadsPausados = leads.filter(l => l.status === 'pausado').length
 
   const referidosFiltrados = contatos.filter(r =>
     (r.nome || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -266,6 +295,41 @@ export default function CRMPage() {
                 ))}
               </div>
 
+              {/* Alertas de ameaça */}
+              {leadsAmeaca > 0 && (
+                <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/30 rounded-xl px-4 py-3">
+                  <ShieldAlert className="w-5 h-5 text-orange-400 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-semibold text-orange-400">{leadsAmeaca} lead{leadsAmeaca > 1 ? 's' : ''} com ameaça detectada</p>
+                    <p className="text-xs text-orange-400/70">Revise imediatamente — possível risco jurídico</p>
+                  </div>
+                  <button onClick={() => setFiltroStatus('ameaca')} className="ml-auto text-xs bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 px-3 py-1.5 rounded-lg transition-colors">
+                    Ver leads
+                  </button>
+                </div>
+              )}
+
+              {/* Filtro de status */}
+              <div className="flex gap-2 flex-wrap">
+                {([
+                  ['todos',   'Todos',      leads.length,         'border-[#1C1C1E] text-[#71717A]'],
+                  ['ativo',   '🟢 Ativos',   leads.filter(l => !l.status || l.status === 'ativo').length, 'border-emerald-500/30 text-emerald-400'],
+                  ['pausado', '⏸ Pausados',  leadsPausados,        'border-yellow-500/30 text-yellow-400'],
+                  ['opt_out', '🚫 Bloqueados', leadsBloqueados,    'border-red-500/30 text-red-400'],
+                  ['ameaca',  '⚠️ Ameaça',   leadsAmeaca,          'border-orange-500/30 text-orange-400'],
+                ] as const).map(([val, label, count, color]) => (
+                  <button
+                    key={val}
+                    onClick={() => setFiltroStatus(val as StatusLead | 'todos')}
+                    className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
+                      filtroStatus === val ? `${color} bg-[#18181A]` : 'border-[#1C1C1E] text-[#71717A] hover:border-[#3F3F46]'
+                    }`}
+                  >
+                    {label} <span className="ml-1 opacity-60">{count}</span>
+                  </button>
+                ))}
+              </div>
+
               {/* Filtros */}
               <div className="flex items-center gap-3 flex-wrap">
                 <div className="relative flex-1 min-w-[200px]">
@@ -330,6 +394,7 @@ export default function CRMPage() {
                       <thead>
                         <tr className="border-b border-[#1C1C1E]">
                           <th className="text-left text-xs text-[#71717A] font-medium px-6 py-3">Lead</th>
+                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Status</th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Etapa</th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Temp.</th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Origem</th>
@@ -347,6 +412,20 @@ export default function CRMPage() {
                               {lead.telefone && (
                                 <p className="text-xs text-[#71717A]">{lead.telefone}</p>
                               )}
+                            </td>
+                            <td className="px-4 py-4">
+                              <div className="flex flex-col gap-1.5">
+                                <StatusBadge status={lead.status} />
+                                {(lead.status === 'opt_out' || lead.status === 'pausado' || lead.status === 'ameaca') && (
+                                  <button
+                                    onClick={() => atualizarStatus(lead.id, 'ativo')}
+                                    className="inline-flex items-center gap-1 text-[10px] text-[#71717A] hover:text-emerald-400 transition-colors"
+                                    title="Reativar lead"
+                                  >
+                                    <RotateCcw className="w-3 h-3" /> Reativar
+                                  </button>
+                                )}
+                              </div>
                             </td>
                             <td className="px-4 py-4">
                               <select
