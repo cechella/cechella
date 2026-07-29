@@ -32,6 +32,7 @@ import {
   Star,
   Stethoscope,
   Building2,
+  CreditCard,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -50,11 +51,9 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Rea
     { label: 'Dashboard', href: '/medical/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
     { label: 'Escola de Negócios', href: '/medical/escola', icon: <GraduationCap className="w-5 h-5" /> },
     { label: 'Minha Mentoria', href: '/medical/mentoria', icon: <Star className="w-5 h-5" /> },
-    { label: 'ANA no Consultório', href: '/medical/ana-consultorio', icon: <Bot className="w-5 h-5" /> },
-    { label: 'Meu Consultório', href: '/medical/consultorio', icon: <Building2 className="w-5 h-5" /> },
-    { label: 'Biblioteca', href: '/medical/library', icon: <Library className="w-5 h-5" /> },
-    { label: 'Comunidade', href: '/medical/community', icon: <MessageSquare className="w-5 h-5" /> },
-    { label: 'Certificados', href: '/medical/certificates', icon: <Award className="w-5 h-5" /> },
+    { label: 'Meu Negócio', href: '/medical/negocio', icon: <Building2 className="w-5 h-5" /> },
+    { label: 'Pacientes', href: '/medical/pacientes', icon: <Users className="w-5 h-5" /> },
+    { label: 'Assinatura', href: '/medical/assinatura', icon: <CreditCard className="w-5 h-5" /> },
   ],
   sales: [
     { label: 'Dashboard', href: '/sales/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
