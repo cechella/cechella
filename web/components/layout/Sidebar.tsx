@@ -49,8 +49,10 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Rea
   ],
   medical: [
     { label: 'Dashboard', href: '/medical/dashboard', icon: <LayoutDashboard className="w-5 h-5" /> },
-    { label: 'Escola de Negócios', href: '/medical/escola', icon: <GraduationCap className="w-5 h-5" /> },
-    { label: 'Minha Mentoria', href: '/medical/mentoria', icon: <Star className="w-5 h-5" /> },
+    { label: 'Treinamento', href: '/medical/escola', icon: <GraduationCap className="w-5 h-5" /> },
+    { label: 'CRM', href: '/medical/crm', icon: <Kanban className="w-5 h-5" /> },
+    { label: 'Financeiro', href: '/medical/financeiro', icon: <DollarSign className="w-5 h-5" /> },
+    { label: 'Referidos', href: '/medical/referidos', icon: <Share2 className="w-5 h-5" /> },
     { label: 'Meu Negócio', href: '/medical/negocio', icon: <Building2 className="w-5 h-5" /> },
     { label: 'Pacientes', href: '/medical/pacientes', icon: <Users className="w-5 h-5" /> },
     { label: 'Assinatura', href: '/medical/assinatura', icon: <CreditCard className="w-5 h-5" /> },

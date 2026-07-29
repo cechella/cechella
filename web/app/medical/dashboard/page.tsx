@@ -4,7 +4,7 @@ import {
   DollarSign, MessageSquare, Users, Star, Calendar,
   TrendingUp, BarChart3, Bot, GraduationCap,
   ArrowUpRight, ArrowDownRight, RefreshCw, Kanban, Play,
-  CheckCircle2, Clock, ChevronRight, Activity,
+  CheckCircle2, Clock, ChevronRight, Activity, Share2,
 } from 'lucide-react'
 
 const kpi1 = [
@@ -96,6 +96,22 @@ const recentActivity = [
   { text: 'Rafael: nova resolução CFM — checklist atualizado', time: '3 dias atrás', type: 'legal' },
 ]
 
+const financeMonths = [
+  { month: 'Fev', value: 52000 },
+  { month: 'Mar', value: 61000 },
+  { month: 'Abr', value: 58000 },
+  { month: 'Mai', value: 67000 },
+  { month: 'Jun', value: 71000 },
+  { month: 'Jul', value: 74000 },
+]
+const maxVal = Math.max(...financeMonths.map(m => m.value))
+
+const referidos = [
+  { name: 'Dr. Carlos Mendes', status: 'Ativo', value: 'R$ 48k', commission: 'R$ 4.8k' },
+  { name: 'Dra. Fernanda Alves', status: 'Trial', value: '—', commission: '—' },
+  { name: 'Dr. Paulo Saito', status: 'Lead', value: '—', commission: '—' },
+]
+
 export default function MedicalDashboard() {
   return (
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
@@ -114,11 +130,14 @@ export default function MedicalDashboard() {
               <button className="flex items-center gap-1.5 bg-[#111113] border border-[#1C1C1E] text-[#A1A1AA] hover:text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors">
                 <RefreshCw className="w-3.5 h-3.5" /> Atualizar
               </button>
-              <a href="/medical/negocio?tab=crm" className="flex items-center gap-1.5 bg-[#111113] border border-[#1C1C1E] text-[#A1A1AA] hover:text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors">
+              <a href="/medical/crm" className="flex items-center gap-1.5 bg-[#111113] border border-[#1C1C1E] text-[#A1A1AA] hover:text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors">
                 <Kanban className="w-3.5 h-3.5" /> CRM
               </a>
+              <a href="/medical/financeiro" className="flex items-center gap-1.5 bg-[#111113] border border-[#1C1C1E] text-[#A1A1AA] hover:text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors">
+                <DollarSign className="w-3.5 h-3.5" /> Financeiro
+              </a>
               <a href="/medical/escola" className="flex items-center gap-1.5 bg-gradient-to-r from-[#7B3FE4] to-[#3B82F6] text-white text-xs font-semibold px-3 py-2 rounded-lg hover:opacity-90 transition-opacity">
-                <GraduationCap className="w-3.5 h-3.5" /> Escola
+                <GraduationCap className="w-3.5 h-3.5" /> Treinamento
               </a>
             </div>
           </div>
@@ -221,13 +240,46 @@ export default function MedicalDashboard() {
                 </div>
               </div>
 
+              {/* Financeiro */}
+              <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <DollarSign className="w-4 h-4 text-emerald-400" /> Financeiro — Faturamento 2026
+                  </h3>
+                  <a href="/medical/financeiro" className="text-xs text-[#52525B] hover:text-emerald-400 transition-colors">Ver DRE →</a>
+                </div>
+                <div className="flex items-end gap-2 h-20 mb-3">
+                  {financeMonths.map((m, i) => (
+                    <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                      <div
+                        className={`w-full rounded-t-md ${i === financeMonths.length - 1 ? 'bg-gradient-to-t from-emerald-600 to-emerald-400' : 'bg-[#27272A]'}`}
+                        style={{ height: `${Math.round((m.value / maxVal) * 72)}px` }}
+                      />
+                      <span className="text-[9px] text-[#52525B]">{m.month}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Receita Bruta', value: 'R$ 74k', color: 'text-emerald-400' },
+                    { label: 'Despesas', value: 'R$ 28k', color: 'text-red-400' },
+                    { label: 'Lucro Líquido', value: 'R$ 46k', color: 'text-white' },
+                  ].map((s, i) => (
+                    <div key={i} className="bg-[#18181A] border border-[#1C1C1E] rounded-xl p-2.5 text-center">
+                      <p className={`text-sm font-bold ${s.color}`}>{s.value}</p>
+                      <p className="text-[9px] text-[#52525B] mt-0.5">{s.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
               {/* Pipeline ao Vivo */}
               <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                     <TrendingUp className="w-4 h-4 text-[#3B82F6]" /> Pipeline ao Vivo
                   </h3>
-                  <a href="/medical/negocio?tab=crm" className="text-xs text-[#52525B] hover:text-[#7B3FE4] transition-colors">Gerenciar →</a>
+                  <a href="/medical/crm" className="text-xs text-[#52525B] hover:text-[#7B3FE4] transition-colors">Gerenciar →</a>
                 </div>
                 <div className="flex items-stretch gap-2">
                   {pipeline.map((p, i) => (
@@ -252,11 +304,11 @@ export default function MedicalDashboard() {
             {/* Right column */}
             <div className="space-y-4">
 
-              {/* Escola progress */}
+              {/* Treinamento progress */}
               <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                    <GraduationCap className="w-4 h-4 text-amber-400" /> Escola
+                    <GraduationCap className="w-4 h-4 text-amber-400" /> Treinamento
                   </h3>
                   <a href="/medical/escola" className="text-xs text-[#7B3FE4] hover:text-[#9558EE] flex items-center gap-1">
                     Ver <ChevronRight className="w-3 h-3" />
@@ -304,6 +356,39 @@ export default function MedicalDashboard() {
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              {/* Referidos */}
+              <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <Share2 className="w-4 h-4 text-[#3B82F6]" /> Referidos
+                  </h3>
+                  <a href="/medical/referidos" className="text-xs text-[#52525B] hover:text-[#7B3FE4] flex items-center gap-1 transition-colors">
+                    Ver todos <ChevronRight className="w-3 h-3" />
+                  </a>
+                </div>
+                <div className="space-y-2">
+                  {referidos.map((r, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-6 h-6 rounded-full bg-gradient-to-br from-[#7B3FE4] to-[#3B82F6] flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0">
+                          {r.name.split(' ').map(w => w[0]).slice(1, 3).join('')}
+                        </div>
+                        <p className="text-[11px] text-[#A1A1AA] truncate">{r.name}</p>
+                      </div>
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-full flex-shrink-0 ${
+                        r.status === 'Ativo' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                        r.status === 'Trial' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                        'bg-[#1C1C1E] text-[#52525B] border border-[#27272A]'
+                      }`}>{r.status}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 pt-3 border-t border-[#1C1C1E] flex justify-between text-[10px]">
+                  <span className="text-[#52525B]">Comissão acumulada</span>
+                  <span className="text-emerald-400 font-semibold">R$ 4.8k</span>
                 </div>
               </div>
 
