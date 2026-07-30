@@ -23,6 +23,69 @@ const PAGE_MAP: Record<string, { adminPath: string; medicalPath: string; label: 
   resultados: { adminPath: 'admin/resultados', medicalPath: 'medical/resultados', label: 'Resultados' },
 }
 
+// ─── GitHub API: fetch file contents ─────────────────────────────────────────
+async function fetchFileFromGitHub(filePath: string, token: string): Promise<string> {
+  const url = `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}?ref=${PRODUCTION_BRANCH}`
+  const resp = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github.v3.raw',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  })
+  if (!resp.ok) {
+    throw new Error(`GitHub API error ${resp.status} for ${filePath}: ${await resp.text()}`)
+  }
+  return resp.text()
+}
+
+// ─── GitHub API: write file (create or update) ────────────────────────────────
+async function writeFileToGitHub(
+  filePath: string,
+  content: string,
+  token: string,
+  commitMessage: string
+): Promise<void> {
+  // Get current SHA if file exists
+  const getUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}?ref=${PRODUCTION_BRANCH}`
+  const getResp = await fetch(getUrl, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  })
+
+  let sha: string | undefined
+  if (getResp.ok) {
+    const data = await getResp.json() as { sha?: string }
+    sha = data.sha
+  }
+
+  const body: Record<string, unknown> = {
+    message: commitMessage,
+    content: Buffer.from(content).toString('base64'),
+    branch: PRODUCTION_BRANCH,
+  }
+  if (sha) body.sha = sha
+
+  const putResp = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!putResp.ok) {
+    const err = await putResp.json() as { message?: string }
+    throw new Error(`GitHub write error ${putResp.status}: ${err.message ?? JSON.stringify(err)}`)
+  }
+}
+
 // ─── Transformation: admin → medical ─────────────────────────────────────────
 function transformAdminToMedical(source: string, pageName: string): string {
   let out = source
@@ -56,37 +119,22 @@ function transformAdminToMedical(source: string, pageName: string): string {
   return out
 }
 
-// ─── Git: commit + push ───────────────────────────────────────────────────────
-async function gitCommitAndPush(pages: string[], repoRoot: string): Promise<{ success: boolean; output: string; branch: string }> {
-  const branch = (await execAsync(`git -C "${repoRoot}" rev-parse --abbrev-ref HEAD`)).stdout.trim()
-  const filePaths = pages.map(p => `web/app/${PAGE_MAP[p].medicalPath}/page.tsx`).join(' ')
-  const msg = `sync: auto-sync medical pages from admin [${pages.map(p => PAGE_MAP[p].label).join(', ')}]`
-  await execAsync(`git -C "${repoRoot}" add ${filePaths}`)
-  await execAsync(`git -C "${repoRoot}" commit -m "${msg}" || true`)
-  const { stdout } = await execAsync(`git -C "${repoRoot}" push origin ${branch}`)
-  return { success: true, output: `Pushed to ${branch}\n${stdout}`, branch }
-}
-
 // ─── Vercel API: trigger webhook + wait + promote to production ───────────────
 async function vercelDeployAndPromote(
   webhookUrl: string,
   vercelToken: string
 ): Promise<{ triggered: boolean; message: string }> {
-  // 1. Trigger deploy via webhook
   const hookResp = await fetch(webhookUrl, { method: 'POST' })
   if (!hookResp.ok) {
     return { triggered: false, message: `Webhook falhou: ${hookResp.status}` }
   }
 
-  // 2. Extract project ID from webhook URL
-  // URL format: https://api.vercel.com/v1/integrations/deploy/prj_XXXXX/YYYYY
   const match = webhookUrl.match(/\/deploy\/(prj_[^/]+)/)
   const projectId = match?.[1]
   if (!projectId) {
     return { triggered: true, message: 'Deploy iniciado via webhook (não foi possível extrair project ID para promover)' }
   }
 
-  // 3. Wait for the new deployment to appear (poll up to 3 min)
   const headers = {
     'Authorization': `Bearer ${vercelToken}`,
     'Content-Type': 'application/json',
@@ -94,7 +142,7 @@ async function vercelDeployAndPromote(
 
   let deploymentId: string | null = null
   for (let i = 0; i < 18; i++) {
-    await new Promise(r => setTimeout(r, 10000)) // wait 10s between polls
+    await new Promise(r => setTimeout(r, 10000))
     const listResp = await fetch(
       `https://api.vercel.com/v6/deployments?projectId=${projectId}&limit=5&target=preview`,
       { headers }
@@ -102,7 +150,7 @@ async function vercelDeployAndPromote(
     const listData = await listResp.json() as { deployments?: Array<{ uid: string; state: string; createdAt: number }> }
     const recent = listData.deployments?.find(d =>
       (d.state === 'READY' || d.state === 'BUILDING' || d.state === 'INITIALIZING') &&
-      Date.now() - d.createdAt < 300000 // created in last 5 min
+      Date.now() - d.createdAt < 300000
     )
     if (recent?.state === 'READY') {
       deploymentId = recent.uid
@@ -114,7 +162,6 @@ async function vercelDeployAndPromote(
     return { triggered: true, message: 'Deploy iniciado — não foi possível aguardar conclusão para promover. Verifique o Vercel.' }
   }
 
-  // 4. Promote deployment to production
   const promoteResp = await fetch(
     `https://api.vercel.com/v10/projects/${projectId}/promote/${deploymentId}`,
     { method: 'POST', headers }
@@ -126,70 +173,6 @@ async function vercelDeployAndPromote(
   } else {
     return { triggered: true, message: `Deploy criado mas promoção falhou: ${promoteData.message ?? promoteResp.status}. Promova manualmente no Vercel.` }
   }
-}
-
-// ─── GitHub API: create PR + merge ───────────────────────────────────────────
-async function githubMergeToProduction(
-  headBranch: string,
-  pages: string[],
-  token: string
-): Promise<{ success: boolean; message: string; prUrl?: string }> {
-  const headers = {
-    'Authorization': `Bearer ${token}`,
-    'Accept': 'application/vnd.github+json',
-    'X-GitHub-Api-Version': '2022-11-28',
-    'Content-Type': 'application/json',
-  }
-  const base = PRODUCTION_BRANCH
-  const pageLabels = pages.map(p => PAGE_MAP[p].label).join(', ')
-  const timestamp = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
-
-  const searchResp = await fetch(
-    `https://api.github.com/repos/${GITHUB_REPO}/pulls?head=${GITHUB_REPO.split('/')[0]}:${headBranch}&base=${encodeURIComponent(base)}&state=open`,
-    { headers }
-  )
-  const existingPRs = await searchResp.json() as Array<{ number: number; html_url: string }>
-  let prNumber: number
-  let prUrl: string
-
-  if (Array.isArray(existingPRs) && existingPRs.length > 0) {
-    prNumber = existingPRs[0].number
-    prUrl = existingPRs[0].html_url
-  } else {
-    const createResp = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/pulls`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        title: `sync: auto-sync medical pages [${pageLabels}]`,
-        body: `## Sincronização Automática\n\nPáginas sincronizadas em ${timestamp}:\n${pages.map(p => `- ${PAGE_MAP[p].label}`).join('\n')}\n\n> Gerado pelo Admin → Sistema → Sincronizar + Deploy`,
-        head: headBranch,
-        base,
-      }),
-    })
-    const pr = await createResp.json() as { number?: number; html_url?: string; message?: string }
-    if (!pr.number) {
-      return { success: false, message: `Erro ao criar PR: ${pr.message ?? JSON.stringify(pr)}` }
-    }
-    prNumber = pr.number
-    prUrl = pr.html_url ?? ''
-  }
-
-  const mergeResp = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/pulls/${prNumber}/merge`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify({
-      merge_method: 'squash',
-      commit_title: `sync: auto-sync medical pages [${pageLabels}]`,
-      commit_message: `Sincronizado em ${timestamp} via Admin → Sistema`,
-    }),
-  })
-  const mergeData = await mergeResp.json() as { merged?: boolean; message?: string }
-
-  if (!mergeData.merged) {
-    return { success: false, message: `Erro no merge: ${mergeData.message ?? JSON.stringify(mergeData)}`, prUrl }
-  }
-
-  return { success: true, message: `PR #${prNumber} merged → produção sendo atualizada`, prUrl }
 }
 
 // ─── POST /api/admin/sync-pages ───────────────────────────────────────────────
@@ -207,21 +190,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Páginas inválidas: ${invalid.join(', ')}` }, { status: 400 })
     }
 
-    // __dirname = /var/task/web/app/api/admin/sync-pages (Vercel) or similar locally
-    // Go up 5 levels to reach the web root: sync-pages → admin → api → app → web
-    const webRoot = path.resolve(__dirname, '../../../../..')
-    const repoRoot = path.resolve(webRoot, '..')
+    const githubToken = process.env.GITHUB_TOKEN
+    if (!githubToken) {
+      return NextResponse.json({ error: 'GITHUB_TOKEN não configurado' }, { status: 500 })
+    }
 
-    // 1. Transform and write files
+    // 1. Fetch, transform and write files via GitHub API
     const results: Record<string, { success: boolean; message: string }> = {}
+    const timestamp = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+
     for (const pageName of pages) {
       const { adminPath, medicalPath, label } = PAGE_MAP[pageName]
       try {
-        const adminFile = path.join(webRoot, 'app', adminPath, 'page.tsx')
-        const medicalFile = path.join(webRoot, 'app', medicalPath, 'page.tsx')
-        await fs.mkdir(path.dirname(medicalFile), { recursive: true })
-        const source = await fs.readFile(adminFile, 'utf-8')
-        await fs.writeFile(medicalFile, transformAdminToMedical(source, pageName), 'utf-8')
+        const adminGitPath = `web/app/${adminPath}/page.tsx`
+        const medicalGitPath = `web/app/${medicalPath}/page.tsx`
+
+        const source = await fetchFileFromGitHub(adminGitPath, githubToken)
+        const transformed = transformAdminToMedical(source, pageName)
+        const commitMsg = `sync: auto-sync ${label} medical page from admin [${timestamp}]`
+
+        await writeFileToGitHub(medicalGitPath, transformed, githubToken, commitMsg)
         results[pageName] = { success: true, message: `${label} sincronizado com sucesso` }
       } catch (err: unknown) {
         results[pageName] = { success: false, message: `Erro: ${err instanceof Error ? err.message : String(err)}` }
@@ -233,37 +221,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ results, gitResult: null, deployResult: null })
     }
 
-    // 2. Git commit + push
-    let gitResult: { success: boolean; output: string; branch?: string } | null = null
-    let deployResult: { triggered: boolean; message: string; prUrl?: string } | null = null
+    const gitResult = {
+      success: true,
+      output: `${successPages.length} página(s) commitadas via GitHub API → branch ${PRODUCTION_BRANCH}`,
+      branch: PRODUCTION_BRANCH,
+    }
 
-    try {
-      const git = await gitCommitAndPush(successPages, repoRoot)
-      gitResult = git
+    // 2. Trigger deploy if requested
+    let deployResult: { triggered: boolean; message: string } | null = null
 
-      if (deploy) {
-        const vercelToken = process.env.VERCEL_TOKEN
-        const githubToken = process.env.GITHUB_TOKEN
-        const webhookUrl = process.env.VERCEL_DEPLOY_WEBHOOK_URL
+    if (deploy) {
+      const vercelToken = process.env.VERCEL_TOKEN
+      const webhookUrl = process.env.VERCEL_DEPLOY_WEBHOOK_URL
 
-        if (vercelToken && webhookUrl) {
-          // Vercel token: trigger webhook + promote via Vercel API
-          deployResult = await vercelDeployAndPromote(webhookUrl, vercelToken)
-        } else if (webhookUrl) {
-          // Webhook only (Preview)
-          const resp = await fetch(webhookUrl, { method: 'POST' })
-          deployResult = {
-            triggered: resp.ok,
-            message: resp.ok
-              ? 'Deploy Preview iniciado (adicione VERCEL_TOKEN para produção automática)'
-              : `Webhook falhou: ${resp.status}`,
-          }
-        } else {
-          deployResult = { triggered: false, message: 'Configure VERCEL_DEPLOY_WEBHOOK_URL' }
+      if (vercelToken && webhookUrl) {
+        deployResult = await vercelDeployAndPromote(webhookUrl, vercelToken)
+      } else if (webhookUrl) {
+        const resp = await fetch(webhookUrl, { method: 'POST' })
+        deployResult = {
+          triggered: resp.ok,
+          message: resp.ok
+            ? 'Deploy Preview iniciado (adicione VERCEL_TOKEN para produção automática)'
+            : `Webhook falhou: ${resp.status}`,
         }
+      } else {
+        deployResult = { triggered: false, message: 'Configure VERCEL_DEPLOY_WEBHOOK_URL' }
       }
-    } catch (err: unknown) {
-      gitResult = { success: false, output: err instanceof Error ? err.message : String(err) }
     }
 
     return NextResponse.json({ results, gitResult, deployResult })
