@@ -117,6 +117,9 @@ export default function AdminAulaPage() {
   const [loading, setLoading] = useState(true)
   const [showPlayer, setShowPlayer] = useState(false)
   const [userEmail, setUserEmail] = useState('admin@hormoneecosystem.com')
+  const [completed, setCompleted] = useState(false)
+  const [completedIds, setCompletedIds] = useState<Set<string>>(new Set())
+  const [userId, setUserId] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -129,7 +132,9 @@ export default function AdminAulaPage() {
           fetch(`/api/training/module?num=${modNum}`),
           supabase.auth.getUser(),
         ])
+        const uid = userRes.data?.user?.id ?? null
         if (userRes.data?.user?.email) setUserEmail(userRes.data.user.email)
+        if (uid) setUserId(uid)
         if (apiRes.ok) {
           const { mod: modData, lessons: dbLessons } = await apiRes.json()
           if (modData) {
@@ -139,12 +144,41 @@ export default function AdminAulaPage() {
               return found ?? { id: '', module_id: modData.id, num: fl.num, title: fl.title, duration: fl.duration, video_url: null, is_free: false }
             })
             setMod({ ...modData, lessons: merged })
+            if (uid && merged.length > 0) {
+              const lessonIds = merged.map((l: LessonData) => l.id).filter(Boolean)
+              if (lessonIds.length > 0) {
+                const { data: prog } = await supabase
+                  .from('training_progress').select('lesson_id').eq('user_id', uid).in('lesson_id', lessonIds)
+                const done = new Set<string>((prog ?? []).map((p: { lesson_id: string }) => p.lesson_id))
+                setCompletedIds(done)
+                const curLesson = merged.find((l: LessonData) => l.num === aulaNum)
+                if (curLesson?.id) setCompleted(done.has(curLesson.id))
+              }
+            }
           }
         }
       } catch { /* use fallback */ } finally { setLoading(false) }
     }
     load()
-  }, [modNum])
+  }, [modNum, aulaNum])
+
+  async function toggleCompleted() {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    const lesson = mod?.lessons?.find(l => l.num === aulaNum)
+    if (!lesson?.id || !userId) return
+    if (completed) {
+      await supabase.from('training_progress').delete().eq('user_id', userId).eq('lesson_id', lesson.id)
+      setCompleted(false)
+      setCompletedIds(prev => { const s = new Set(prev); s.delete(lesson.id); return s })
+    } else {
+      await supabase.from('training_progress').upsert({ user_id: userId, lesson_id: lesson.id, completed: true, completed_at: new Date().toISOString() })
+      setCompleted(true)
+      setCompletedIds(prev => new Set([...prev, lesson.id]))
+    }
+  }
 
   const close = useCallback(() => setShowPlayer(false), [])
 
@@ -286,13 +320,13 @@ export default function AdminAulaPage() {
                     <a key={l.num} href={`/admin/escola/${modNum}/${l.num}`}
                       className={`flex items-center gap-3 px-4 py-3.5 border-b border-[#1C1C1E] transition-all hover:bg-[#18181A]/60 ${l.num === aulaNum ? 'bg-[#7B3FE4]/10 border-l-2 border-l-[#7B3FE4]' : ''}`}
                     >
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${l.num < aulaNum ? 'bg-emerald-500/15' : l.num === aulaNum ? 'bg-[#7B3FE4]/20' : 'bg-[#18181A] border border-[#27272A]'}`}>
-                        {l.num < aulaNum ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${(l.id && completedIds.has(l.id)) ? 'bg-emerald-500/15' : l.num === aulaNum ? 'bg-[#7B3FE4]/20' : 'bg-[#18181A] border border-[#27272A]'}`}>
+                        {(l.id && completedIds.has(l.id)) ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                           : l.num === aulaNum ? <Play className="w-3 h-3 text-[#7B3FE4]" />
                           : <span className="text-[10px] text-[#52525B] font-medium">{l.num}</span>}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-xs leading-snug truncate ${l.num === aulaNum ? 'text-white font-medium' : l.num < aulaNum ? 'text-[#52525B]' : 'text-[#71717A]'}`}>{l.title}</p>
+                        <p className={`text-xs leading-snug truncate ${l.num === aulaNum ? 'text-white font-medium' : (l.id && completedIds.has(l.id)) ? 'text-[#52525B]' : 'text-[#71717A]'}`}>{l.title}</p>
                         <p className="text-[10px] text-[#3F3F46] mt-0.5 flex items-center gap-1">
                           <Clock className="w-2.5 h-2.5" />{l.duration}
                           {l.video_url && <span className="ml-1 text-[#7B3FE4]">●</span>}
