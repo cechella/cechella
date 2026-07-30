@@ -216,6 +216,14 @@ export default function AulaPage() {
 
   const close = useCallback(() => setShowPlayer(false), [])
 
+  const handleComplete = useCallback(async () => {
+    const lesson = mod?.lessons?.find(l => l.num === aulaNum)
+    if (!lesson?.id || !userId) return
+    await supabase.from('training_progress').upsert({ user_id: userId, lesson_id: lesson.id, completed: true, completed_at: new Date().toISOString() })
+    setCompleted(true)
+    setCompletedIds(prev => new Set(Array.from(prev).concat(lesson.id)))
+  }, [mod, aulaNum, userId])
+
   const fb = FALLBACK[modNum] ?? FALLBACK[1]
   const title = mod?.title ?? fb.title
   const color = mod?.color ?? fb.color
@@ -423,7 +431,7 @@ export default function AulaPage() {
 
       {/* Fullscreen player: SecureVideoPlayer for uploaded videos, iframe modal for external URLs */}
       {showPlayer && isUploadedVideo && videoUrl && (
-        <SecureVideoPlayer videoId={videoUrl} title={lesson?.title ?? ''} userEmail={userEmail} onClose={close} />
+        <SecureVideoPlayer videoId={videoUrl} title={lesson?.title ?? ''} userEmail={userEmail} onClose={close} onComplete={handleComplete} />
       )}
       {showPlayer && !isUploadedVideo && embedUrl && (
         <VideoModal embedUrl={embedUrl} title={lesson?.title ?? ''} onClose={close} />

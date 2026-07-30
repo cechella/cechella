@@ -182,6 +182,18 @@ export default function AdminAulaPage() {
 
   const close = useCallback(() => setShowPlayer(false), [])
 
+  const handleComplete = useCallback(async () => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    const lesson = mod?.lessons?.find(l => l.num === aulaNum)
+    if (!lesson?.id || !userId) return
+    await supabase.from('training_progress').upsert({ user_id: userId, lesson_id: lesson.id, completed: true, completed_at: new Date().toISOString() })
+    setCompleted(true)
+    setCompletedIds(prev => new Set(Array.from(prev).concat(lesson.id)))
+  }, [mod, aulaNum, userId])
+
   const fb = FALLBACK[modNum] ?? FALLBACK[1]
   const title = mod?.title ?? fb.title
   const color = mod?.color ?? fb.color
@@ -342,7 +354,7 @@ export default function AdminAulaPage() {
       </div>
 
       {showPlayer && isUploadedVideo && videoUrl && (
-        <SecureVideoPlayer videoId={videoUrl} title={lesson?.title ?? ''} userEmail={userEmail} onClose={close} />
+        <SecureVideoPlayer videoId={videoUrl} title={lesson?.title ?? ''} userEmail={userEmail} onClose={close} onComplete={handleComplete} />
       )}
       {showPlayer && !isUploadedVideo && embedUrl && (
         <VideoModal embedUrl={embedUrl} title={lesson?.title ?? ''} onClose={close} />

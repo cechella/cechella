@@ -12,6 +12,7 @@ interface SecureVideoPlayerProps {
   title: string
   userEmail: string
   onClose?: () => void
+  onComplete?: () => void
 }
 
 const WATERMARK_POSITIONS = [
@@ -34,7 +35,7 @@ function formatTime(s: number) {
   return `${m}:${sec.toString().padStart(2, '0')}`
 }
 
-export function SecureVideoPlayer({ videoId, title, userEmail, onClose }: SecureVideoPlayerProps) {
+export function SecureVideoPlayer({ videoId, title, userEmail, onClose, onComplete }: SecureVideoPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const hlsRef = useRef<Hls | null>(null)
@@ -58,6 +59,7 @@ export function SecureVideoPlayer({ videoId, title, userEmail, onClose }: Secure
   const [showQualityMenu, setShowQualityMenu] = useState(false)
   const [buffered, setBuffered] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
+  const completedRef = useRef(false)
 
   // Load video
   useEffect(() => {
@@ -124,24 +126,39 @@ export function SecureVideoPlayer({ videoId, title, userEmail, onClose }: Secure
   useEffect(() => {
     const v = videoRef.current
     if (!v) return
-    const onTime = () => { setCurrentTime(v.currentTime); updateBuffered() }
+    const updateBuffered = () => {
+      if (v.buffered.length > 0) setBuffered(v.buffered.end(v.buffered.length - 1))
+    }
+    const onTime = () => {
+      setCurrentTime(v.currentTime)
+      updateBuffered()
+      if (!completedRef.current && v.duration > 0 && v.currentTime / v.duration >= 0.9) {
+        completedRef.current = true
+        onComplete?.()
+      }
+    }
     const onDuration = () => setDuration(v.duration)
     const onPlay = () => setIsPlaying(true)
     const onPause = () => setIsPlaying(false)
-    const updateBuffered = () => {
-      if (v.buffered.length > 0) setBuffered(v.buffered.end(v.buffered.length - 1))
+    const onEnded = () => {
+      if (!completedRef.current) {
+        completedRef.current = true
+        onComplete?.()
+      }
     }
     v.addEventListener('timeupdate', onTime)
     v.addEventListener('durationchange', onDuration)
     v.addEventListener('play', onPlay)
     v.addEventListener('pause', onPause)
     v.addEventListener('progress', updateBuffered)
+    v.addEventListener('ended', onEnded)
     return () => {
       v.removeEventListener('timeupdate', onTime)
       v.removeEventListener('durationchange', onDuration)
       v.removeEventListener('play', onPlay)
       v.removeEventListener('pause', onPause)
       v.removeEventListener('progress', updateBuffered)
+      v.removeEventListener('ended', onEnded)
     }
   }, [])
 
