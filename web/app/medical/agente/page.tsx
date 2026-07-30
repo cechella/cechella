@@ -1,3 +1,5 @@
+// [SYNC] Gerado automaticamente de admin/agente — NÃO editar manualmente
+// Para atualizar: Admin → Sistema → Sincronizar
 'use client'
 
 import { useState, useEffect, useCallback, useRef, Component, ReactNode } from 'react'
@@ -80,25 +82,42 @@ const ETAPAS = [
 ]
 
 const SLA_ETAPA: Record<number, number> = {
-  1: 30, 2: 60, 3: 60, 4: 30, 5: 20, 6: 120, 7: 240,
+  1: 30,
+  2: 60,
+  3: 60,
+  4: 30,
+  5: 20,
+  6: 120,
+  7: 240,
 }
 
 const RISCO_KEYWORDS = ['não quero', 'nao quero', 'me tira', 'cancela', 'cancelar', 'desistir', 'desisti', 'golpe', 'fraude', 'enganando', 'mentira', 'reclamar', 'procon', 'reclame aqui', 'processo', 'advogado', 'caro demais', 'muito caro', 'não tenho dinheiro', 'sem dinheiro', 'não posso', 'nao posso', 'para de me', 'me deixa', 'não me mande', 'nao me mande', 'bloquear', 'bloqueia']
 const HESITANTE_KEYWORDS = ['não sei', 'nao sei', 'talvez', 'vou pensar', 'deixa eu pensar', 'depois', 'semana que vem', 'mês que vem', 'não tenho certeza', 'nao tenho certeza', 'meu marido', 'minha família', 'preciso falar', 'muito caro', 'caro', 'parcelado', 'desconto', 'funciona mesmo', 'tem resultado', 'é seguro', 'e seguro']
 
 const ETAPA_TITLES: Record<number, string> = {
-  1: 'ETAPA 1 — Apresentação', 2: 'ETAPA 2 — Conexão', 3: 'ETAPA 3 — D.I. (Combinado)',
-  4: 'ETAPA 4 — Speech do Produto', 5: 'ETAPA 5 — Fechamento',
-  6: 'ETAPA 6 — Referidos', 7: 'ETAPA 7 — Validação',
+  1: 'ETAPA 1 — Apresentação',
+  2: 'ETAPA 2 — Conexão',
+  3: 'ETAPA 3 — D.I. (Combinado)',
+  4: 'ETAPA 4 — Speech do Produto',
+  5: 'ETAPA 5 — Fechamento',
+  6: 'ETAPA 6 — Referidos',
+  7: 'ETAPA 7 — Validação',
 }
 
 const STATUS_WORDS = ['pendente', 'aguardando', 'novo', 'lead', 'unknown', 'undefined', 'null']
 
 /* ─── Utility functions ──────────────────────────────────────────────────── */
 function scoreRisco(historico: MsgHistorico[]): { nivel: 'risco' | 'hesitante' | 'interessado', label: string, cor: string } {
-  const textoUser = historico.filter(m => m.role === 'user').map(m => m.content?.toLowerCase() || '').join(' ')
-  if (RISCO_KEYWORDS.some(k => textoUser.includes(k))) return { nivel: 'risco', label: '🔴 Risco', cor: 'bg-red-500/20 text-red-400 border-red-500/30' }
-  if (HESITANTE_KEYWORDS.some(k => textoUser.includes(k))) return { nivel: 'hesitante', label: '🟡 Hesitante', cor: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' }
+  const textoUser = historico
+    .filter(m => m.role === 'user')
+    .map(m => m.content?.toLowerCase() || '')
+    .join(' ')
+  if (RISCO_KEYWORDS.some(k => textoUser.includes(k))) {
+    return { nivel: 'risco', label: '🔴 Risco', cor: 'bg-red-500/20 text-red-400 border-red-500/30' }
+  }
+  if (HESITANTE_KEYWORDS.some(k => textoUser.includes(k))) {
+    return { nivel: 'hesitante', label: '🟡 Hesitante', cor: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' }
+  }
   return { nivel: 'interessado', label: '🟢 Interessado', cor: 'bg-green-500/20 text-green-400 border-green-500/30' }
 }
 
@@ -130,6 +149,20 @@ function formatTime(ts?: string) {
   return new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
 
+function TempBadge({ t }: { t: string }) {
+  const styles: Record<string, string> = {
+    quente: 'bg-red-500/20 text-red-400',
+    morno: 'bg-yellow-500/20 text-yellow-400',
+    frio: 'bg-blue-500/20 text-blue-400',
+  }
+  const icons: Record<string, string> = { quente: '🔥', morno: '🟡', frio: '❄️' }
+  return (
+    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${styles[t] || 'bg-zinc-500/20 text-zinc-400'}`}>
+      {icons[t] || ''} {t}
+    </span>
+  )
+}
+
 function displayName(lead: LeadAgente) {
   const raw = lead.nome?.trim().toLowerCase() || ''
   return (lead.nome && !STATUS_WORDS.includes(raw)) ? lead.nome : lead.telefone
@@ -150,7 +183,10 @@ function urgencyColor(score: number) {
 }
 
 function conversionScore(lead: LeadAgente): number {
-  const textoUser = lead.historico.filter(m => m.role === 'user').map(m => m.content?.toLowerCase() || '').join(' ')
+  const textoUser = lead.historico
+    .filter(m => m.role === 'user')
+    .map(m => m.content?.toLowerCase() || '')
+    .join(' ')
   const base = (lead.etapa_agente || 1) * 12
   const bonus = RISCO_KEYWORDS.some(k => textoUser.includes(k)) ? 0 : 8
   const hesitantePenalty = HESITANTE_KEYWORDS.some(k => textoUser.includes(k)) ? -15 : 0
@@ -188,7 +224,22 @@ function ToastNotification({ toasts, onDismiss }: { toasts: ToastItem[]; onDismi
   return (
     <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 9999, display: 'flex', flexDirection: 'column', gap: 8 }}>
       {toasts.map(t => (
-        <div key={t.id} onClick={() => onDismiss(t.id)} style={{ background: '#1C1C1E', border: '1px solid #2a2a2a', borderLeft: '3px solid #7B3FE4', borderRadius: 10, padding: '10px 16px', color: '#fff', fontSize: 13, cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }}>
+        <div
+          key={t.id}
+          onClick={() => onDismiss(t.id)}
+          style={{
+            background: '#1C1C1E',
+            border: '1px solid #2a2a2a',
+            borderLeft: '3px solid #7B3FE4',
+            borderRadius: 10,
+            padding: '10px 16px',
+            color: '#fff',
+            fontSize: 13,
+            cursor: 'pointer',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.5)',
+            animation: 'none',
+          }}
+        >
           🔔 Nova mensagem — <strong>{t.nome}</strong>
         </div>
       ))}
@@ -225,7 +276,11 @@ function CommandPalette({ leads, onClose, onSelectLead, onToggleHumano, selected
   }).slice(0, 5)
 
   const allItems: { label: string; hint?: string; action: () => void }[] = [
-    ...matchedLeads.map(l => ({ label: `💬 ${displayName(l)}`, hint: l.telefone, action: () => { onSelectLead(l); onClose() } })),
+    ...matchedLeads.map(l => ({
+      label: `💬 ${displayName(l)}`,
+      hint: l.telefone,
+      action: () => { onSelectLead(l); onClose() }
+    })),
     ...actions.filter(a => !query || a.label.toLowerCase().includes(query.toLowerCase())),
   ]
 
@@ -237,24 +292,47 @@ function CommandPalette({ leads, onClose, onSelectLead, onToggleHumano, selected
   }
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 120 }} onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 10000, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 120 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
       <div style={{ background: '#111113', border: '1px solid #2a2a2a', borderRadius: 14, width: 520, maxHeight: 400, overflow: 'hidden', boxShadow: '0 24px 80px rgba(0,0,0,0.8)' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid #1C1C1E', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ color: '#555', fontSize: 14 }}>🔍</span>
-          <input ref={inputRef} value={query} onChange={e => { setQuery(e.target.value); setCursor(0) }} onKeyDown={handleKey} placeholder="Buscar lead ou ação..." style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontSize: 14 }} />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={e => { setQuery(e.target.value); setCursor(0) }}
+            onKeyDown={handleKey}
+            placeholder="Buscar lead ou ação..."
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: '#fff', fontSize: 14 }}
+          />
           <span style={{ color: '#444', fontSize: 11 }}>ESC</span>
         </div>
         <div style={{ maxHeight: 300, overflowY: 'auto' }}>
           {allItems.map((item, i) => (
-            <button key={i} onClick={item.action} style={{ width: '100%', textAlign: 'left', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: i === cursor ? '#1C1C1E' : 'transparent', border: 'none', cursor: 'pointer', color: i === cursor ? '#fff' : '#A1A1AA', fontSize: 13, transition: 'background 0.1s' }} onMouseEnter={() => setCursor(i)}>
+            <button
+              key={i}
+              onClick={item.action}
+              style={{
+                width: '100%', textAlign: 'left', padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                background: i === cursor ? '#1C1C1E' : 'transparent', border: 'none', cursor: 'pointer', color: i === cursor ? '#fff' : '#A1A1AA',
+                fontSize: 13, transition: 'background 0.1s',
+              }}
+              onMouseEnter={() => setCursor(i)}
+            >
               <span>{item.label}</span>
               {item.hint && <span style={{ fontSize: 11, color: '#555', fontFamily: 'monospace' }}>{item.hint}</span>}
             </button>
           ))}
-          {allItems.length === 0 && <div style={{ padding: 20, textAlign: 'center', color: '#444', fontSize: 13 }}>Nenhum resultado</div>}
+          {allItems.length === 0 && (
+            <div style={{ padding: 20, textAlign: 'center', color: '#444', fontSize: 13 }}>Nenhum resultado</div>
+          )}
         </div>
         <div style={{ padding: '8px 16px', borderTop: '1px solid #1C1C1E', display: 'flex', gap: 16, fontSize: 11, color: '#444' }}>
-          <span>↑↓ navegar</span><span>↵ executar</span><span>ESC fechar</span>
+          <span>↑↓ navegar</span>
+          <span>↵ executar</span>
+          <span>ESC fechar</span>
         </div>
       </div>
     </div>
@@ -262,7 +340,7 @@ function CommandPalette({ leads, onClose, onSelectLead, onToggleHumano, selected
 }
 
 /* ─── Main component ─────────────────────────────────────────────────────── */
-export default function MedicalAgentePage() {
+export default function AgenteAdminPage() {
   const [leads, setLeads] = useState<LeadAgente[]>([])
   const [selected, setSelected] = useState<LeadAgente | null>(null)
   const [loading, setLoading] = useState(true)
@@ -290,6 +368,7 @@ export default function MedicalAgentePage() {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const toastId = useRef(0)
 
+  const zapiMsgsRef = useRef<MsgHistorico[]>([])
   const fetchZapiHistory = useCallback(async (phone: string, silent = false) => {
     if (!silent) { setZapiLoading(true); setZapiError(null) }
     try {
@@ -316,8 +395,12 @@ export default function MedicalAgentePage() {
     }
   }, [])
 
+  /* fetch financeiro */
   useEffect(() => {
-    fetch('/api/admin/financeiro?tipo=resumo').then(r => r.ok ? r.json() : {}).then(d => setFinanceiro(d)).catch(() => {})
+    fetch('/api/admin/financeiro?tipo=resumo')
+      .then(r => r.ok ? r.json() : {})
+      .then(d => setFinanceiro(d))
+      .catch(() => {})
   }, [])
 
   const addToast = useCallback((nome: string) => {
@@ -328,7 +411,8 @@ export default function MedicalAgentePage() {
 
   const fetchLeads = useCallback(async () => {
     const supabase = getSupabase()
-    const { data } = await supabase.from('leads')
+    const { data } = await supabase
+      .from('leads')
       .select('id, telefone, nome, etapa, etapa_agente, temperatura, dor_principal, historico, updated_at, atendimento_humano')
       .not('historico', 'eq', '[]')
       .not('historico', 'is', null)
@@ -356,10 +440,13 @@ export default function MedicalAgentePage() {
   }, [])
 
   useEffect(() => {
-    fetchLeads().then(() => setLoading(false))
+    fetchLeads().then(unicos => {
+      setLoading(false)
+    })
     const interval = setInterval(fetchLeads, 30000)
     const supabase = getSupabase()
-    const channel = supabase.channel('agente-leads-medical')
+    const channel = supabase
+      .channel('agente-leads-medical')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads' }, (payload: { new: Record<string, unknown> }) => {
         fetchLeads()
         const updated = payload.new as unknown as LeadAgente
@@ -377,9 +464,13 @@ export default function MedicalAgentePage() {
         }
       })
       .subscribe()
-    return () => { clearInterval(interval); supabase.removeChannel(channel) }
+    return () => {
+      clearInterval(interval)
+      supabase.removeChannel(channel)
+    }
   }, [fetchLeads, addToast])
 
+  /* auto-select highest urgency on first load */
   useEffect(() => {
     if (!autoSelected && leads.length > 0 && !selected) {
       const top = [...leads].sort((a, b) => urgencyScore(b) - urgencyScore(a))[0]
@@ -388,14 +479,26 @@ export default function MedicalAgentePage() {
     }
   }, [leads, selected, autoSelected])
 
+  /* fetch Z-API full history when lead changes + realtime subscription */
   useEffect(() => {
-    if (!selected?.telefone) { setZapiMsgs([]); setZapiError(null); return }
+    if (!selected?.telefone) {
+      setZapiMsgs([])
+      setZapiError(null)
+      return
+    }
     const phone = selected.telefone
+    zapiMsgsRef.current = []
     fetchZapiHistory(phone, false)
     const supabase = getSupabase()
     const normalized = phone.replace(/\D/g, '')
+    const alt = normalized.length === 13 && normalized.startsWith('55')
+      ? normalized.slice(0, 4) + normalized.slice(5)
+      : normalized.length === 12 && normalized.startsWith('55')
+        ? normalized.slice(0, 4) + '9' + normalized.slice(4)
+        : null
     const suffix = normalized.slice(-8)
-    const channel = supabase.channel(`msgs-medical-${phone}`)
+    const channel = supabase
+      .channel(`msgs-${phone}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensagens_whatsapp' }, (payload: { new: Record<string, unknown> }) => {
         const msgPhone = String(payload.new?.phone || '')
         if (msgPhone.slice(-8) === suffix) fetchZapiHistory(phone, true)
@@ -407,21 +510,25 @@ export default function MedicalAgentePage() {
     return () => { supabase.removeChannel(channel); clearInterval(poll); document.removeEventListener('visibilitychange', onVisible) }
   }, [selected?.id, fetchZapiHistory])
 
+  /* fetch PIX info when lead changes */
   useEffect(() => {
     if (!selected?.telefone) { setPixInfo(null); return }
     fetch(`/api/admin/pagamento-pix?phone=${encodeURIComponent(selected.telefone)}`)
-      .then(r => r.json()).then(d => setPixInfo(d.ok ? d.pagamento : null)).catch(() => setPixInfo(null))
+      .then(r => r.json())
+      .then(d => setPixInfo(d.ok ? d.pagamento : null))
+      .catch(() => setPixInfo(null))
   }, [selected?.id])
 
-  const etapaAtual = selected?.etapa_agente || 1
-  const historico = selected?.historico || []
+  const etapaAtualEarly = selected?.etapa_agente || 1
+  const historicoEarly = selected?.historico || []
 
+  // WhatsApp completo = Histórico Ana (sempre atualizado) + mensagens manuais do zapiMsgs que não estão no histórico
   const zapiMsgsMerged = (() => {
-    if (zapiMsgs.length === 0) return historico
-    const contentSet = new Set(historico.map(m => `${m.role}::${(m.content || '').trim()}`))
+    if (zapiMsgs.length === 0) return historicoEarly
+    const contentSet = new Set(historicoEarly.map(m => `${m.role}::${(m.content || '').trim()}`))
     const extras = zapiMsgs.filter(m => !contentSet.has(`${m.role}::${(m.content || '').trim()}`))
-    if (extras.length === 0) return historico
-    const merged = [...historico, ...extras]
+    if (extras.length === 0) return historicoEarly
+    const merged = [...historicoEarly, ...extras]
     merged.sort((a, b) => {
       if (!a.ts && !b.ts) return 0
       if (!a.ts) return -1
@@ -431,6 +538,7 @@ export default function MedicalAgentePage() {
     return merged
   })()
 
+  /* auto-scroll chat — instant on load/tab-switch, smooth on new messages */
   const prevMsgCount = useRef(0)
   useEffect(() => {
     const count = zapiMsgsMerged.length || (selected?.historico?.length ?? 0)
@@ -439,6 +547,7 @@ export default function MedicalAgentePage() {
     chatEndRef.current?.scrollIntoView({ behavior: isNew ? 'smooth' : 'instant' })
   }, [selected?.historico?.length, zapiMsgsMerged.length, chatSource])
 
+  /* keyboard shortcuts */
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setCmdOpen(v => !v) }
@@ -446,8 +555,12 @@ export default function MedicalAgentePage() {
       if ((e.metaKey || e.ctrlKey) && e.key === 'r') { e.preventDefault(); fetchLeads() }
       if ((e.metaKey || e.ctrlKey) && e.key === 'b') { e.preventDefault(); if (selectedRef.current?.atendimento_humano) toggleHumano() }
       if ((e.metaKey || e.ctrlKey) && e.key === 'i') { e.preventDefault(); window.open('/medical/crm', '_blank') }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'p') { e.preventDefault(); toggleHumano() }
       if (e.key === 'Escape') setCmdOpen(false)
-      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') { e.preventDefault(); searchInputRef.current?.focus() }
+      if (e.key === '/' && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault()
+        searchInputRef.current?.focus()
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -492,9 +605,14 @@ export default function MedicalAgentePage() {
     setToggling(false)
   }
 
+  /* ─── Derived metrics ─── */
   const slaEstouradoCount = leads.filter(l => slaInfo(l.updated_at, l.etapa_agente || 1).estourado).length
-  const semRespostaCount = leads.filter(l => (Date.now() - new Date(l.updated_at).getTime()) / 60000 > 60).length
+  const semRespostaCount = leads.filter(l => {
+    const diff = (Date.now() - new Date(l.updated_at).getTime()) / 60000
+    return diff > 60
+  }).length
 
+  /* ─── Lead list with sort ─── */
   const leadsFiltrados = (() => {
     let arr = leads.filter(l => {
       if (!busca) return true
@@ -503,16 +621,23 @@ export default function MedicalAgentePage() {
     })
     if (sortTab === 'urgencia') arr = [...arr].sort((a, b) => urgencyScore(b) - urgencyScore(a))
     else if (sortTab === 'etapa') arr = [...arr].sort((a, b) => (b.etapa_agente || 1) - (a.etapa_agente || 1))
+    // recente: already sorted by updated_at from DB
     return arr
   })()
 
+  const etapaAtual = etapaAtualEarly
+  const historico = historicoEarly
+
+  /* ─── Intelligence panel computed values ─── */
   const convScore = selected ? conversionScore(selected) : 0
   const sentBars = selected ? sentimentBars(historico) : []
   const signals = selected ? detectSignals(historico) : []
 
   const sessaoMensagens = historico.length
   const sessaoFirstTs = historico[0]?.ts
-  const sessaoDuracao = sessaoFirstTs ? Math.floor((Date.now() - new Date(sessaoFirstTs).getTime()) / 60000) : selected ? Math.floor((Date.now() - new Date(selected.updated_at).getTime()) / 60000) : 0
+  const sessaoDuracao = sessaoFirstTs
+    ? Math.floor((Date.now() - new Date(sessaoFirstTs).getTime()) / 60000)
+    : selected ? Math.floor((Date.now() - new Date(selected.updated_at).getTime()) / 60000) : 0
   const sessaoSemResp = selected ? Math.floor((Date.now() - new Date(selected.updated_at).getTime()) / 60000) : 0
 
   const activityLog = selected ? (() => {
@@ -525,6 +650,7 @@ export default function MedicalAgentePage() {
     return logs.slice(0, 4)
   })() : []
 
+  /* ─── Ring chart SVG ─── */
   const ringSize = 72
   const strokeW = 7
   const r = (ringSize - strokeW) / 2
@@ -534,21 +660,28 @@ export default function MedicalAgentePage() {
   return (
     <ErrorBoundary>
       {cmdOpen && (
-        <CommandPalette leads={leads} onClose={() => setCmdOpen(false)} onSelectLead={setSelected} onToggleHumano={toggleHumano} selectedLead={selected} />
+        <CommandPalette
+          leads={leads}
+          onClose={() => setCmdOpen(false)}
+          onSelectLead={setSelected}
+          onToggleHumano={toggleHumano}
+          selectedLead={selected}
+        />
       )}
+
       <ToastNotification toasts={toasts} onDismiss={id => setToasts(prev => prev.filter(t => t.id !== id))} />
 
       <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
         <Sidebar role="medical" />
         <div className="flex-1 flex flex-col overflow-hidden">
-          <TopBar user={{ name: 'Dr. Ricardo Lima', role: 'doctor' }} title="Agente WhatsApp — Monitor em Tempo Real" />
+          <TopBar title="Agente WhatsApp — Monitor em Tempo Real" />
 
-          {/* Metrics bar */}
+          {/* ─── Metrics bar ─── */}
           <div style={{ background: '#0B0B0D', borderBottom: '1px solid #222228', padding: '0 20px', display: 'flex', alignItems: 'stretch', gap: 0, flexShrink: 0, overflowX: 'auto', height: 52 }}>
             {[
               { label: 'Conversas ativas', value: leads.length, color: '#00D084', dot: true },
               { label: 'SLA estourado', value: slaEstouradoCount, color: slaEstouradoCount > 0 ? '#FF3B5C' : '#3A3A48' },
-              { label: 'Receita hoje', value: financeiro.totalRecebido != null ? `R$ ${financeiro.totalRecebido.toLocaleString('pt-BR')}` : '—', color: '#00D084' },
+              { label: 'Receita hoje', value: financeiro.totalRecebido != null ? `R$ ${financeiro.totalRecebido.toLocaleString('pt-BR')}` : '—', color: '#00D084' },
               { label: 'Taxa conversão', value: financeiro.taxaConversao != null ? `${financeiro.taxaConversao}%` : '—', color: '#7B3FE4' },
               { label: 'Sem resp. >1h', value: semRespostaCount, color: semRespostaCount > 0 ? '#F5A623' : '#3A3A48' },
             ].map((m, i) => (
@@ -562,34 +695,71 @@ export default function MedicalAgentePage() {
             ))}
             <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, paddingLeft: 16 }}>
               <span style={{ fontSize: 10, color: '#3A3A48', fontVariantNumeric: 'tabular-nums' }}>{lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-              <button onClick={() => fetchLeads()} style={{ padding: '5px 10px', background: '#16161B', border: '1px solid #2C2C36', borderRadius: 7, cursor: 'pointer', color: '#555', fontSize: 11 }}>↺</button>
-              <button onClick={() => setCmdOpen(true)} style={{ padding: '5px 10px', background: '#7B3FE420', border: '1px solid #7B3FE430', borderRadius: 7, cursor: 'pointer', color: '#A78BFA', fontSize: 11, fontWeight: 600 }}>⌘K</button>
+              <button
+                onClick={() => fetchLeads()}
+                title="Atualizar (⌘R)"
+                style={{ padding: '5px 10px', background: '#16161B', border: '1px solid #2C2C36', borderRadius: 7, cursor: 'pointer', color: '#555', fontSize: 11, transition: 'border-color 0.1s' }}
+              >
+                ↺
+              </button>
+              <button
+                onClick={() => setCmdOpen(true)}
+                title="Comando (⌘K)"
+                style={{ padding: '5px 10px', background: '#7B3FE420', border: '1px solid #7B3FE430', borderRadius: 7, cursor: 'pointer', color: '#A78BFA', fontSize: 11, fontWeight: 600 }}
+              >
+                ⌘K
+              </button>
             </div>
           </div>
 
-          {/* 3-col layout */}
+          {/* ─── 3-col layout ─── */}
           <div className="flex flex-1 overflow-hidden">
 
-            {/* LEFT: Lead priority queue */}
+            {/* ══ LEFT: Lead priority queue (272px) ══ */}
             <div style={{ width: 272, borderRight: '1px solid #222228', display: 'flex', flexDirection: 'column', background: '#0B0B0D', flexShrink: 0 }}>
+              {/* Header */}
               <div style={{ padding: '10px 14px 0', borderBottom: '1px solid #222228' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <span style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Fila de prioridade</span>
                   <span style={{ fontSize: 10, fontWeight: 700, color: '#7B3FE4', background: '#7B3FE420', borderRadius: 20, padding: '2px 7px' }}>{leadsFiltrados.length}/{leads.length}</span>
                 </div>
+                {/* Sort tabs */}
                 <div style={{ display: 'flex', gap: 2, marginBottom: 10 }}>
                   {(['urgencia', 'etapa', 'recente'] as const).map(tab => (
-                    <button key={tab} onClick={() => setSortTab(tab)} style={{ flex: 1, padding: '5px 4px', fontSize: 10, fontWeight: 600, border: 'none', cursor: 'pointer', borderRadius: 6, background: sortTab === tab ? '#7B3FE4' : '#1A1A20', color: sortTab === tab ? '#fff' : '#555', transition: 'all 0.15s' }}>
+                    <button
+                      key={tab}
+                      onClick={() => setSortTab(tab)}
+                      style={{
+                        flex: 1, padding: '5px 4px', fontSize: 10, fontWeight: 600,
+                        border: 'none', cursor: 'pointer', borderRadius: 6,
+                        background: sortTab === tab ? '#7B3FE4' : '#1A1A20',
+                        color: sortTab === tab ? '#fff' : '#555',
+                        transition: 'all 0.15s',
+                      }}
+                    >
                       {tab === 'urgencia' ? 'Urgência' : tab === 'etapa' ? 'Etapa' : 'Recente'}
                     </button>
                   ))}
                 </div>
+                {/* Search */}
                 <div style={{ position: 'relative', marginBottom: 10 }}>
-                  <input ref={searchInputRef} type="text" value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar lead... (/)" style={{ width: '100%', background: '#16161B', border: '1px solid #2C2C36', borderRadius: 8, padding: '7px 28px 7px 10px', fontSize: 11, color: '#E0E0E8', outline: 'none', boxSizing: 'border-box' }} />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={busca}
+                    onChange={e => setBusca(e.target.value)}
+                    placeholder="Buscar lead... (/)"
+                    style={{
+                      width: '100%', background: '#16161B', border: '1px solid #2C2C36', borderRadius: 8,
+                      padding: '7px 28px 7px 10px', fontSize: 11, color: '#E0E0E8', outline: 'none',
+                      boxSizing: 'border-box',
+                    }}
+                  />
                   <span style={{ position: 'absolute', right: 9, top: '50%', transform: 'translateY(-50%)', fontSize: 10, color: '#444', pointerEvents: 'none', fontFamily: 'monospace' }}>/</span>
                 </div>
               </div>
 
+              {/* Lead list */}
               <div style={{ flex: 1, overflowY: 'auto' }}>
                 {loading ? (
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 48 }}>
@@ -613,7 +783,20 @@ export default function MedicalAgentePage() {
                   const sentRisk = scoreRisco(historicoValido)
 
                   return (
-                    <button key={lead.id} onClick={() => setSelected(lead)} style={{ width: '100%', textAlign: 'left', padding: '12px 14px', borderBottom: '1px solid #18181E', borderLeft: isActive ? '3px solid #7B3FE4' : '3px solid transparent', background: isActive ? 'linear-gradient(90deg, #7B3FE412 0%, transparent 100%)' : 'transparent', cursor: 'pointer', transition: 'background 0.12s' }} onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#14141A' }} onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}>
+                    <button
+                      key={lead.id}
+                      onClick={() => setSelected(lead)}
+                      style={{
+                        width: '100%', textAlign: 'left', padding: '12px 14px',
+                        borderBottom: '1px solid #18181E',
+                        borderLeft: isActive ? '3px solid #7B3FE4' : '3px solid transparent',
+                        background: isActive ? 'linear-gradient(90deg, #7B3FE412 0%, transparent 100%)' : 'transparent',
+                        cursor: 'pointer', transition: 'background 0.12s',
+                      }}
+                      onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#14141A' }}
+                      onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+                    >
+                      {/* Row 1: name + score badge */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
                           {isNew && <div className="animate-pulse" style={{ width: 7, height: 7, borderRadius: '50%', background: '#7B3FE4', boxShadow: '0 0 6px #7B3FE4', flexShrink: 0 }} />}
@@ -621,14 +804,22 @@ export default function MedicalAgentePage() {
                         </div>
                         <span style={{ fontSize: 11, fontWeight: 800, color: scoreCol, background: scoreCol + '22', border: `1px solid ${scoreCol}40`, borderRadius: 6, padding: '2px 7px', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{score}</span>
                       </div>
+
+                      {/* Row 2: etapa + sentiment + time */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 6 }}>
                         <span style={{ fontSize: 9, fontWeight: 700, background: '#7B3FE420', color: '#A78BFA', borderRadius: 5, padding: '2px 6px', border: '1px solid #7B3FE430', flexShrink: 0 }}>E{etapa} {ETAPAS.find(e => e.n === etapa)?.label}</span>
                         <span style={{ fontSize: 9, color: sla.estourado ? '#FF3B5C' : '#4A4A58', marginLeft: 'auto', flexShrink: 0 }}>{sla.estourado ? '⚠ ' : ''}{timeAgo(lead.updated_at)}</span>
                       </div>
+
+                      {/* Sentiment + last message */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                         <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 4, background: sentRisk.nivel === 'risco' ? '#FF3B5C18' : sentRisk.nivel === 'hesitante' ? '#F5A62318' : '#00D08418', color: sentRisk.nivel === 'risco' ? '#FF3B5C' : sentRisk.nivel === 'hesitante' ? '#F5A623' : '#00D084', flexShrink: 0 }}>{sentRisk.label}</span>
-                        <p style={{ fontSize: 10, color: '#4A4A58', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', flex: 1, margin: 0 }}>{lastMsg?.content?.substring(0, 35) || 'Sem mensagens'}{(lastMsg?.content?.length || 0) > 35 ? '…' : ''}</p>
+                        <p style={{ fontSize: 10, color: '#4A4A58', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', flex: 1, margin: 0 }}>
+                          {lastMsg?.content?.substring(0, 35) || 'Sem mensagens'}{(lastMsg?.content?.length || 0) > 35 ? '…' : ''}
+                        </p>
                       </div>
+
+                      {/* Urgency bar */}
                       <div style={{ height: 3, background: '#1E1E26', borderRadius: 2, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${score}%`, background: `linear-gradient(90deg, ${scoreCol}99, ${scoreCol})`, borderRadius: 2, transition: 'width 0.4s' }} />
                       </div>
@@ -638,24 +829,47 @@ export default function MedicalAgentePage() {
               </div>
             </div>
 
-            {/* CENTER: Chat panel */}
+            {/* ══ CENTER: Chat panel ══ */}
             {selected ? (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+                {/* Chat header */}
                 <div style={{ padding: '14px 20px', borderBottom: '1px solid #222228', background: '#0B0B0D', flexShrink: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 }}>
-                        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#F0F0F5', margin: 0 }}>{displayName(selected)}</h2>
+                        <h2 style={{ fontSize: 16, fontWeight: 700, color: '#F0F0F5', margin: 0, letterSpacing: '-0.01em' }}>{displayName(selected)}</h2>
                         {(() => { const r = scoreRisco(historico.filter(m => m && m.content)); return <span style={{ fontSize: 9, padding: '2px 6px', borderRadius: 20, background: '#1C1C1E', color: r.nivel === 'risco' ? '#FF3B5C' : r.nivel === 'hesitante' ? '#F5A623' : '#00D084', border: '1px solid currentColor' }}>{r.label}</span> })()}
-                        {slaInfo(selected.updated_at, etapaAtual).estourado && <span style={{ fontSize: 9, color: '#FF3B5C', background: '#FF3B5C20', padding: '2px 6px', borderRadius: 20 }}>⚠ SLA estourado</span>}
+                        {slaInfo(selected.updated_at, etapaAtual).estourado && (
+                          <span style={{ fontSize: 9, color: '#FF3B5C', background: '#FF3B5C20', padding: '2px 6px', borderRadius: 20 }}>⚠ SLA estourado</span>
+                        )}
                       </div>
                       <div style={{ fontSize: 11, color: '#71717A', fontFamily: 'monospace' }}>{selected.telefone}</div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {/* Ana status */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: selected.atendimento_humano ? '#F5A623' : '#00D084', background: '#1C1C1E', borderRadius: 8, padding: '4px 10px', border: '1px solid #2a2a2a' }}>
-                        {selected.atendimento_humano ? <>👨‍⚕️ Atendimento humano</> : <><span>🤖 Ana ativa</span><div className="animate-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: '#00D084' }} /></>}
+                        {selected.atendimento_humano ? (
+                          <>👨‍⚕️ Atendimento humano</>
+                        ) : (
+                          <>
+                            🤖 Ana ativa
+                            <div className="animate-pulse" style={{ width: 6, height: 6, borderRadius: '50%', background: '#00D084' }} />
+                          </>
+                        )}
                       </div>
-                      <button onClick={toggleHumano} disabled={toggling} style={{ padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: selected.atendimento_humano ? '#00D08415' : '#7B3FE420', color: selected.atendimento_humano ? '#00D084' : '#A78BFA', border: `1px solid ${selected.atendimento_humano ? '#00D08430' : '#7B3FE430'}`, opacity: toggling ? 0.5 : 1 }}>
+                      <button
+                        onClick={toggleHumano}
+                        disabled={toggling}
+                        title={selected.atendimento_humano ? 'Devolver à Ana (⌘B)' : 'Assumir conversa (⌘H)'}
+                        style={{
+                          padding: '6px 12px', borderRadius: 8, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          background: selected.atendimento_humano ? '#00D08415' : '#7B3FE420',
+                          color: selected.atendimento_humano ? '#00D084' : '#A78BFA',
+                          border: `1px solid ${selected.atendimento_humano ? '#00D08430' : '#7B3FE430'}`,
+                          opacity: toggling ? 0.5 : 1,
+                        }}
+                      >
                         {toggling ? '...' : selected.atendimento_humano ? '🔁 Devolver à Ana ⌘B' : '👤 Assumir ⌘H'}
                       </button>
                     </div>
@@ -671,7 +885,14 @@ export default function MedicalAgentePage() {
                       return (
                         <div key={e.n} style={{ display: 'flex', alignItems: 'flex-start' }}>
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <div style={{ width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, border: '2px solid', background: isDone ? '#14532d50' : isAct ? '#7B3FE430' : '#1C1C1E', borderColor: isDone ? '#22c55e' : isAct ? '#7B3FE4' : '#333', color: isDone ? '#22c55e' : isAct ? '#fff' : '#555', boxShadow: isAct ? '0 0 12px rgba(123,63,228,0.4)' : 'none' }}>
+                            <div style={{
+                              width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: 11, fontWeight: 700, border: '2px solid',
+                              background: isDone ? '#14532d50' : isAct ? '#7B3FE430' : '#1C1C1E',
+                              borderColor: isDone ? '#22c55e' : isAct ? '#7B3FE4' : '#333',
+                              color: isDone ? '#22c55e' : isAct ? '#fff' : '#555',
+                              boxShadow: isAct ? '0 0 12px rgba(123,63,228,0.4)' : 'none',
+                            }}>
                               {isDone ? '✓' : e.n}
                             </div>
                             <span style={{ fontSize: 8, marginTop: 4, textAlign: 'center', width: 44, color: isAct ? '#A78BFA' : isDone ? '#22c55e' : '#444', lineHeight: 1.2 }}>{e.label}</span>
@@ -686,14 +907,35 @@ export default function MedicalAgentePage() {
 
                 {/* Source tabs */}
                 <div style={{ display: 'flex', borderBottom: '1px solid #1C1C1E', background: '#0A0A0B', flexShrink: 0 }}>
-                  <button onClick={() => setChatSource('whatsapp')} style={{ padding: '8px 16px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', background: chatSource === 'whatsapp' ? '#1C1C1E' : 'transparent', color: chatSource === 'whatsapp' ? '#fff' : '#555', borderBottom: chatSource === 'whatsapp' ? '2px solid #25D366' : '2px solid transparent' }}>
+                  <button
+                    onClick={() => setChatSource('whatsapp')}
+                    style={{
+                      padding: '8px 16px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
+                      background: chatSource === 'whatsapp' ? '#1C1C1E' : 'transparent',
+                      color: chatSource === 'whatsapp' ? '#fff' : '#555',
+                      borderBottom: chatSource === 'whatsapp' ? '2px solid #25D366' : '2px solid transparent',
+                    }}
+                  >
                     📱 WhatsApp completo {zapiMsgsMerged.length > 0 ? `(${zapiMsgsMerged.length})` : ''}
                   </button>
-                  <button onClick={() => setChatSource('ana')} style={{ padding: '8px 16px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer', background: chatSource === 'ana' ? '#1C1C1E' : 'transparent', color: chatSource === 'ana' ? '#fff' : '#555', borderBottom: chatSource === 'ana' ? '2px solid #7B3FE4' : '2px solid transparent' }}>
+                  <button
+                    onClick={() => setChatSource('ana')}
+                    style={{
+                      padding: '8px 16px', fontSize: 11, fontWeight: 600, border: 'none', cursor: 'pointer',
+                      background: chatSource === 'ana' ? '#1C1C1E' : 'transparent',
+                      color: chatSource === 'ana' ? '#fff' : '#555',
+                      borderBottom: chatSource === 'ana' ? '2px solid #7B3FE4' : '2px solid transparent',
+                    }}
+                  >
                     🤖 Histórico Ana ({historico.length})
                   </button>
                   {chatSource === 'whatsapp' && (
-                    <button onClick={() => selected && fetchZapiHistory(selected.telefone, true)} style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: 10, color: '#555', background: 'transparent', border: 'none', cursor: 'pointer' }}>↺ atualizar</button>
+                    <button
+                      onClick={() => selected && fetchZapiHistory(selected.telefone, true)}
+                      style={{ marginLeft: 'auto', padding: '4px 12px', fontSize: 10, color: '#555', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                    >
+                      ↺ atualizar
+                    </button>
                   )}
                 </div>
 
@@ -714,7 +956,9 @@ export default function MedicalAgentePage() {
                           return (
                             <div key={i} style={{ display: 'flex', gap: 8, justifyContent: isUser ? 'flex-end' : 'flex-start', textAlign: 'left', marginBottom: 12 }}>
                               <div style={{ maxWidth: '68%', display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
-                                <div style={{ padding: '8px 14px', borderRadius: 16, fontSize: 13, lineHeight: 1.5, background: isUser ? '#14532d40' : '#1C1C1E', color: isUser ? '#bbf7d0' : '#E4E4E7', border: `1px solid ${isUser ? '#166534' : '#2a2a2a'}`, whiteSpace: 'pre-wrap' }}>{String(msg.content || '')}</div>
+                                <div style={{ padding: '8px 14px', borderRadius: 16, fontSize: 13, lineHeight: 1.5, background: isUser ? '#14532d40' : '#1C1C1E', color: isUser ? '#bbf7d0' : '#E4E4E7', border: `1px solid ${isUser ? '#166534' : '#2a2a2a'}`, whiteSpace: 'pre-wrap' }}>
+                                  {String(msg.content || '')}
+                                </div>
                                 {msg.ts && <span style={{ fontSize: 9, color: '#444', marginTop: 2 }}>{formatTime(msg.ts)}</span>}
                               </div>
                             </div>
@@ -730,12 +974,30 @@ export default function MedicalAgentePage() {
                       const isUser = msg.role === 'user'
                       return (
                         <div key={i} style={{ display: 'flex', gap: 8, justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
-                          {!isUser && <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#7B3FE420', border: '1px solid #7B3FE430', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}><Bot style={{ width: 13, height: 13, color: '#A78BFA' }} /></div>}
+                          {!isUser && (
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#7B3FE420', border: '1px solid #7B3FE430', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                              <Bot style={{ width: 13, height: 13, color: '#A78BFA' }} />
+                            </div>
+                          )}
                           <div style={{ maxWidth: '72%', display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
-                            <div style={{ padding: '8px 14px', borderRadius: 16, fontSize: 13, lineHeight: 1.5, background: isUser ? '#14532d40' : '#1C1C1E', color: isUser ? '#bbf7d0' : '#E4E4E7', border: `1px solid ${isUser ? '#166534' : '#2a2a2a'}`, borderBottomRightRadius: isUser ? 4 : 16, borderBottomLeftRadius: isUser ? 16 : 4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{String(msg.content || '')}</div>
+                            <div style={{
+                              padding: '8px 14px', borderRadius: 16, fontSize: 13, lineHeight: 1.5,
+                              background: isUser ? '#14532d40' : '#1C1C1E',
+                              color: isUser ? '#bbf7d0' : '#E4E4E7',
+                              border: `1px solid ${isUser ? '#166534' : '#2a2a2a'}`,
+                              borderBottomRightRadius: isUser ? 4 : 16,
+                              borderBottomLeftRadius: isUser ? 16 : 4,
+                              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                            }}>
+                              {String(msg.content || '')}
+                            </div>
                             {msg.ts && <span style={{ fontSize: 9, color: '#444', marginTop: 2, paddingLeft: 4 }}>{formatTime(msg.ts)}</span>}
                           </div>
-                          {isUser && <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#14532d30', border: '1px solid #16653440', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}><User style={{ width: 13, height: 13, color: '#4ade80' }} /></div>}
+                          {isUser && (
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#14532d30', border: '1px solid #16653440', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                              <User style={{ width: 13, height: 13, color: '#4ade80' }} />
+                            </div>
+                          )}
                         </div>
                       )
                     })
@@ -749,12 +1011,30 @@ export default function MedicalAgentePage() {
                       const isUser = msg.role === 'user'
                       return (
                         <div key={i} style={{ display: 'flex', gap: 8, justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
-                          {!isUser && <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#7B3FE420', border: '1px solid #7B3FE430', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}><Bot style={{ width: 13, height: 13, color: '#A78BFA' }} /></div>}
+                          {!isUser && (
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#7B3FE420', border: '1px solid #7B3FE430', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                              <Bot style={{ width: 13, height: 13, color: '#A78BFA' }} />
+                            </div>
+                          )}
                           <div style={{ maxWidth: '68%', display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
-                            <div style={{ padding: '8px 14px', borderRadius: 16, fontSize: 13, lineHeight: 1.5, background: isUser ? '#14532d40' : '#1C1C1E', color: isUser ? '#bbf7d0' : '#E4E4E7', border: `1px solid ${isUser ? '#166534' : '#2a2a2a'}`, borderBottomRightRadius: isUser ? 4 : 16, borderBottomLeftRadius: isUser ? 16 : 4, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{String(msg.content || '')}</div>
+                            <div style={{
+                              padding: '8px 14px', borderRadius: 16, fontSize: 13, lineHeight: 1.5,
+                              background: isUser ? '#14532d40' : '#1C1C1E',
+                              color: isUser ? '#bbf7d0' : '#E4E4E7',
+                              border: `1px solid ${isUser ? '#166534' : '#2a2a2a'}`,
+                              borderBottomRightRadius: isUser ? 4 : 16,
+                              borderBottomLeftRadius: isUser ? 16 : 4,
+                              whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                            }}>
+                              {String(msg.content || '')}
+                            </div>
                             {msg.ts && <span style={{ fontSize: 9, color: '#444', marginTop: 2, paddingLeft: 4 }}>{formatTime(msg.ts)}</span>}
                           </div>
-                          {isUser && <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#14532d30', border: '1px solid #16653440', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}><User style={{ width: 13, height: 13, color: '#4ade80' }} /></div>}
+                          {isUser && (
+                            <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#14532d30', border: '1px solid #16653440', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                              <User style={{ width: 13, height: 13, color: '#4ade80' }} />
+                            </div>
+                          )}
                         </div>
                       )
                     })
@@ -762,18 +1042,39 @@ export default function MedicalAgentePage() {
                   <div ref={chatEndRef} />
                 </div>
 
+                {/* Template row (when humano) */}
                 {selected.atendimento_humano && (
                   <div style={{ padding: '6px 16px', borderTop: '1px solid #1C1C1E', display: 'flex', gap: 6, overflowX: 'auto', flexShrink: 0, background: '#0D0D0F' }}>
                     {['Retomar contato', 'Link pagamento', 'Oferecer desconto'].map(t => (
-                      <button key={t} onClick={() => setMsgText(t)} style={{ fontSize: 10, padding: '4px 10px', background: '#1C1C1E', border: '1px solid #2a2a2a', borderRadius: 6, color: '#A78BFA', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>{t}</button>
+                      <button
+                        key={t}
+                        onClick={() => setMsgText(t)}
+                        style={{ fontSize: 10, padding: '4px 10px', background: '#1C1C1E', border: '1px solid #2a2a2a', borderRadius: 6, color: '#A78BFA', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}
+                      >
+                        {t}
+                      </button>
                     ))}
                   </div>
                 )}
 
+                {/* Message input or Ana control indicator */}
                 {selected.atendimento_humano ? (
                   <div style={{ padding: '10px 16px', borderTop: '1px solid #1C1C1E', background: '#0D0D0F', display: 'flex', gap: 8, flexShrink: 0 }}>
-                    <input type="text" value={msgText} onChange={e => setMsgText(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && enviarMensagem()} placeholder="Digite sua mensagem..." style={{ flex: 1, background: '#1C1C1E', border: '1px solid #2a2a2a', borderRadius: 10, padding: '8px 14px', fontSize: 13, color: '#fff', outline: 'none' }} />
-                    <button onClick={enviarMensagem} disabled={sending || !msgText.trim()} style={{ padding: '8px 18px', background: '#7B3FE4', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (sending || !msgText.trim()) ? 0.4 : 1 }}>{sending ? '...' : 'Enviar'}</button>
+                    <input
+                      type="text"
+                      value={msgText}
+                      onChange={e => setMsgText(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && !e.shiftKey && enviarMensagem()}
+                      placeholder="Digite sua mensagem..."
+                      style={{ flex: 1, background: '#1C1C1E', border: '1px solid #2a2a2a', borderRadius: 10, padding: '8px 14px', fontSize: 13, color: '#fff', outline: 'none' }}
+                    />
+                    <button
+                      onClick={enviarMensagem}
+                      disabled={sending || !msgText.trim()}
+                      style={{ padding: '8px 18px', background: '#7B3FE4', border: 'none', borderRadius: 10, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (sending || !msgText.trim()) ? 0.4 : 1 }}
+                    >
+                      {sending ? '...' : 'Enviar'}
+                    </button>
                   </div>
                 ) : (
                   <div style={{ padding: '10px 16px', borderTop: '1px solid #1C1C1E', background: '#0D0D0F', flexShrink: 0, textAlign: 'center', fontSize: 12, color: '#555' }}>
@@ -791,31 +1092,52 @@ export default function MedicalAgentePage() {
               </div>
             )}
 
-            {/* RIGHT: Intelligence panel */}
+            {/* ══ RIGHT: Intelligence panel (256px) ══ */}
             <div style={{ width: 256, borderLeft: '1px solid #222228', display: 'flex', flexDirection: 'column', background: '#0B0B0D', overflowY: 'auto', flexShrink: 0 }}>
               {selected ? (
                 <>
+                  {/* 1. Score de conversão */}
                   <div style={{ padding: '16px 16px', borderBottom: '1px solid #1E1E26' }}>
                     <div style={{ fontSize: 10, color: '#5A5A70', marginBottom: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Score de conversão IA</div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <svg width={ringSize} height={ringSize} style={{ flexShrink: 0 }}>
                         <circle cx={ringSize / 2} cy={ringSize / 2} r={r} fill="none" stroke="#1C1C1E" strokeWidth={strokeW} />
-                        <circle cx={ringSize / 2} cy={ringSize / 2} r={r} fill="none" stroke={convScore > 66 ? '#00D084' : convScore > 33 ? '#F5A623' : '#FF3B5C'} strokeWidth={strokeW} strokeDasharray={circ} strokeDashoffset={ringOffset} strokeLinecap="round" transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`} style={{ transition: 'stroke-dashoffset 0.5s ease' }} />
+                        <circle
+                          cx={ringSize / 2} cy={ringSize / 2} r={r} fill="none"
+                          stroke={convScore > 66 ? '#00D084' : convScore > 33 ? '#F5A623' : '#FF3B5C'}
+                          strokeWidth={strokeW}
+                          strokeDasharray={circ}
+                          strokeDashoffset={ringOffset}
+                          strokeLinecap="round"
+                          transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
+                          style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                        />
                         <text x={ringSize / 2} y={ringSize / 2 + 5} textAnchor="middle" fill="#fff" fontSize="14" fontWeight="700">{convScore}%</text>
                       </svg>
                       <div>
-                        <div style={{ fontSize: 11, color: convScore > 66 ? '#00D084' : convScore > 33 ? '#F5A623' : '#FF3B5C', fontWeight: 600, marginBottom: 2 }}>{convScore > 66 ? 'Alto' : convScore > 33 ? 'Médio' : 'Baixo'}</div>
+                        <div style={{ fontSize: 11, color: convScore > 66 ? '#00D084' : convScore > 33 ? '#F5A623' : '#FF3B5C', fontWeight: 600, marginBottom: 2 }}>
+                          {convScore > 66 ? 'Alto' : convScore > 33 ? 'Médio' : 'Baixo'}
+                        </div>
                         <div style={{ fontSize: 9, color: '#555' }}>+8% última hora</div>
                       </div>
                     </div>
                   </div>
 
+                  {/* 2. Sentimento */}
                   <div style={{ padding: '16px 16px', borderBottom: '1px solid #1E1E26' }}>
                     <div style={{ fontSize: 10, color: '#5A5A70', marginBottom: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sentimento da conversa</div>
                     <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 48 }}>
-                      {sentBars.length === 0 ? <div style={{ fontSize: 10, color: '#444' }}>Sem dados</div> : sentBars.map((b, i) => (
+                      {sentBars.length === 0 ? (
+                        <div style={{ fontSize: 10, color: '#444' }}>Sem dados</div>
+                      ) : sentBars.map((b, i) => (
                         <div key={i} style={{ flex: 1, display: 'flex', alignItems: 'flex-end', height: '100%' }}>
-                          <div style={{ width: '100%', borderRadius: 2, height: `${b.height}%`, background: b.type === 'positive' ? '#00D084' : b.type === 'negative' ? '#FF3B5C' : '#F5A623', opacity: 0.8, transition: 'height 0.3s' }} />
+                          <div style={{
+                            width: '100%', borderRadius: 2,
+                            height: `${b.height}%`,
+                            background: b.type === 'positive' ? '#00D084' : b.type === 'negative' ? '#FF3B5C' : '#F5A623',
+                            opacity: 0.8,
+                            transition: 'height 0.3s',
+                          }} />
                         </div>
                       ))}
                     </div>
@@ -828,6 +1150,7 @@ export default function MedicalAgentePage() {
                     </div>
                   </div>
 
+                  {/* 3. Dados da sessão */}
                   <div style={{ padding: '16px 16px', borderBottom: '1px solid #1E1E26' }}>
                     <div style={{ fontSize: 10, color: '#5A5A70', marginBottom: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Dados da sessão</div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
@@ -845,15 +1168,21 @@ export default function MedicalAgentePage() {
                     </div>
                   </div>
 
+                  {/* 4. Sinais detectados */}
                   <div style={{ padding: '16px 16px', borderBottom: '1px solid #1E1E26' }}>
                     <div style={{ fontSize: 10, color: '#5A5A70', marginBottom: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Sinais detectados</div>
-                    {signals.length === 0 ? <div style={{ fontSize: 10, color: '#444' }}>Nenhum sinal detectado</div> : (
+                    {signals.length === 0 ? (
+                      <div style={{ fontSize: 10, color: '#444' }}>Nenhum sinal detectado</div>
+                    ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {signals.map((s, i) => <span key={i} style={{ fontSize: 10, fontWeight: 600, color: s.color, background: s.color + '18', borderRadius: 5, padding: '3px 7px', border: `1px solid ${s.color}30` }}>{s.label}</span>)}
+                        {signals.map((s, i) => (
+                          <span key={i} style={{ fontSize: 10, fontWeight: 600, color: s.color, background: s.color + '18', borderRadius: 5, padding: '3px 7px', border: `1px solid ${s.color}30` }}>{s.label}</span>
+                        ))}
                       </div>
                     )}
                   </div>
 
+                  {/* 5. Ações rápidas */}
                   <div style={{ padding: '16px 16px', borderBottom: '1px solid #1E1E26' }}>
                     <div style={{ fontSize: 10, color: '#5A5A70', marginBottom: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Ações rápidas</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -863,7 +1192,18 @@ export default function MedicalAgentePage() {
                         { icon: '🔁', label: 'Devolver à Ana', hint: '⌘B', action: () => { if (selected.atendimento_humano) toggleHumano() } },
                         { icon: '📋', label: 'Ver no CRM', hint: '⌘I', action: () => window.open('/medical/crm', '_blank') },
                       ].map(a => (
-                        <button key={a.label} onClick={a.action} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '6px 8px', background: '#111113', border: '1px solid #1C1C1E', borderRadius: 7, cursor: 'pointer', fontSize: 11, color: '#A1A1AA', textAlign: 'left', transition: 'background 0.1s' }} onMouseEnter={e => (e.currentTarget.style.background = '#1C1C1E')} onMouseLeave={e => (e.currentTarget.style.background = '#111113')}>
+                        <button
+                          key={a.label}
+                          onClick={a.action}
+                          style={{
+                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                            width: '100%', padding: '6px 8px', background: '#111113', border: '1px solid #1C1C1E',
+                            borderRadius: 7, cursor: 'pointer', fontSize: 11, color: '#A1A1AA', textAlign: 'left',
+                            transition: 'background 0.1s',
+                          }}
+                          onMouseEnter={e => (e.currentTarget.style.background = '#1C1C1E')}
+                          onMouseLeave={e => (e.currentTarget.style.background = '#111113')}
+                        >
                           <span>{a.icon} {a.label}</span>
                           <span style={{ fontSize: 9, color: '#444', fontFamily: 'monospace' }}>{a.hint}</span>
                         </button>
@@ -871,23 +1211,56 @@ export default function MedicalAgentePage() {
                     </div>
                   </div>
 
+                  {/* 6. Log de atividade */}
+                  {/* PIX + Cartão blocks */}
                   {pixInfo && (pixInfo.pix_code || pixInfo.checkout_url) && (
                     <div style={{ padding: '16px 16px', borderBottom: '1px solid #1E1E26', display: 'flex', flexDirection: 'column', gap: 10 }}>
                       {pixInfo.pix_code && (
                         <div>
                           <div style={{ fontSize: 10, color: '#71717A', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>💰 Chave PIX</div>
-                          {pixInfo.valor != null && <div style={{ fontSize: 10, color: '#25D366', marginBottom: 4 }}>R$ {Number(pixInfo.valor).toFixed(2)} · {pixInfo.status}</div>}
-                          <div style={{ background: '#0A0A0B', border: '1px solid #2C2C2E', borderRadius: 6, padding: '6px 8px', fontSize: 9, color: '#aaa', wordBreak: 'break-all', maxHeight: 56, overflowY: 'auto', lineHeight: 1.4, marginBottom: 5 }}>{pixInfo.pix_code}</div>
-                          <button onClick={() => { navigator.clipboard.writeText(pixInfo!.pix_code!) }} style={{ width: '100%', padding: '5px 0', fontSize: 10, background: '#25D366', color: '#000', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}>📋 Copiar código PIX</button>
+                          {pixInfo.valor != null && (
+                            <div style={{ fontSize: 10, color: '#25D366', marginBottom: 4 }}>
+                              R$ {Number(pixInfo.valor).toFixed(2)} · {pixInfo.status}
+                            </div>
+                          )}
+                          <div style={{
+                            background: '#0A0A0B', border: '1px solid #2C2C2E', borderRadius: 6,
+                            padding: '6px 8px', fontSize: 9, color: '#aaa', wordBreak: 'break-all',
+                            maxHeight: 56, overflowY: 'auto', lineHeight: 1.4, marginBottom: 5,
+                          }}>
+                            {pixInfo.pix_code}
+                          </div>
+                          <button
+                            onClick={() => { navigator.clipboard.writeText(pixInfo!.pix_code!) }}
+                            style={{ width: '100%', padding: '5px 0', fontSize: 10, background: '#25D366', color: '#000', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}
+                          >
+                            📋 Copiar código PIX
+                          </button>
                         </div>
                       )}
                       {pixInfo.checkout_url && (
                         <div>
                           <div style={{ fontSize: 10, color: '#71717A', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>💳 Link Cartão</div>
-                          <div style={{ background: '#0A0A0B', border: '1px solid #2C2C2E', borderRadius: 6, padding: '6px 8px', fontSize: 9, color: '#aaa', wordBreak: 'break-all', lineHeight: 1.4, marginBottom: 5 }}>{pixInfo.checkout_url}</div>
+                          <div style={{
+                            background: '#0A0A0B', border: '1px solid #2C2C2E', borderRadius: 6,
+                            padding: '6px 8px', fontSize: 9, color: '#aaa', wordBreak: 'break-all',
+                            lineHeight: 1.4, marginBottom: 5,
+                          }}>
+                            {pixInfo.checkout_url}
+                          </div>
                           <div style={{ display: 'flex', gap: 4 }}>
-                            <button onClick={() => { navigator.clipboard.writeText(pixInfo!.checkout_url!) }} style={{ flex: 1, padding: '5px 0', fontSize: 10, background: '#7B3FE4', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}>📋 Copiar link</button>
-                            <button onClick={() => window.open(pixInfo!.checkout_url!, '_blank')} style={{ flex: 1, padding: '5px 0', fontSize: 10, background: '#2C2C2E', color: '#aaa', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}>🔗 Abrir</button>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(pixInfo!.checkout_url!) }}
+                              style={{ flex: 1, padding: '5px 0', fontSize: 10, background: '#7B3FE4', color: '#fff', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}
+                            >
+                              📋 Copiar link
+                            </button>
+                            <button
+                              onClick={() => window.open(pixInfo!.checkout_url!, '_blank')}
+                              style={{ flex: 1, padding: '5px 0', fontSize: 10, background: '#2C2C2E', color: '#aaa', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: 600 }}
+                            >
+                              🔗 Abrir
+                            </button>
                           </div>
                         </div>
                       )}
@@ -917,9 +1290,9 @@ export default function MedicalAgentePage() {
               )}
             </div>
 
-          </div>
-        </div>
-      </div>
+          </div>{/* end 3-col */}
+        </div>{/* end right col */}
+      </div>{/* end outer */}
     </ErrorBoundary>
   )
 }
