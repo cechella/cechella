@@ -1,3 +1,5 @@
+// [SYNC] Gerado automaticamente de admin/financeiro — NÃO editar manualmente
+// Para atualizar: Admin → Sistema → Sincronizar
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
@@ -108,7 +110,7 @@ function FunnelBar({ label, value, total, color, pct }: { label: string; value: 
   )
 }
 
-export default function MedicalFinanceiroDashboard() {
+export default function FinanceiroDashboard() {
   const [resumo, setResumo] = useState<Resumo | null>(null)
   const [periodo, setPeriodo] = useState('30')
   const [loading, setLoading] = useState(true)
@@ -135,7 +137,7 @@ export default function MedicalFinanceiroDashboard() {
     <div className="flex h-screen bg-zinc-950 text-white overflow-hidden">
       <Sidebar role="medical" />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar user={{ name: 'Dr. Ricardo Lima', role: 'doctor' }} />
+        <TopBar />
 
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
 
@@ -208,6 +210,7 @@ export default function MedicalFinanceiroDashboard() {
                     value={fmt(resumo.mrrAtivo)}
                     sub={`${resumo.assinaturasAtivas} assinaturas ativas`}
                     color="blue"
+                    href="/medical/financeiro/assinaturas"
                   />
                   <KpiCard
                     icon={<TrendingUp className="w-4 h-4" />}
@@ -223,6 +226,7 @@ export default function MedicalFinanceiroDashboard() {
                     sub={`${fmt(resumo.recusadosTotal)} · tx. apr. ${taxaAprovacao}%`}
                     color="red"
                     accent="text-red-400"
+                    href="/medical/financeiro/pagamentos?status=rejected"
                   />
                 </div>
               </div>
@@ -240,6 +244,7 @@ export default function MedicalFinanceiroDashboard() {
                     value={String(resumo.aVistaCount)}
                     sub={fmt(resumo.aVistaTotal)}
                     color="green"
+                    href="/medical/financeiro/pagamentos?metodo=cartao_avista"
                   />
                   <KpiCard
                     icon={<Repeat className="w-4 h-4" />}
@@ -247,6 +252,7 @@ export default function MedicalFinanceiroDashboard() {
                     value={String(resumo.recorrenteCount)}
                     sub={fmt(resumo.recorrenteTotal)}
                     color="blue"
+                    href="/medical/financeiro/pagamentos?metodo=cartao_recorrente"
                   />
                   <KpiCard
                     icon={<Zap className="w-4 h-4" />}
@@ -254,6 +260,7 @@ export default function MedicalFinanceiroDashboard() {
                     value={String(resumo.pixCount)}
                     sub={fmt(resumo.pixTotal)}
                     color="sky"
+                    href="/medical/financeiro/pagamentos?metodo=pix"
                   />
                   <KpiCard
                     icon={<AlertTriangle className="w-4 h-4" />}
@@ -261,6 +268,7 @@ export default function MedicalFinanceiroDashboard() {
                     value={String(resumo.leadsRecuperacao)}
                     sub="Leads sem pagamento"
                     color="yellow"
+                    href="/medical/financeiro/recuperacao"
                   />
                 </div>
               </div>
@@ -360,7 +368,7 @@ export default function MedicalFinanceiroDashboard() {
               {/* LINKS */}
               <div className="flex items-center justify-between pt-1">
                 <Link
-                  href="/medical/crm"
+                  href="/medical/financeiro/leads"
                   className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
                 >
                   <ArrowUpRight className="w-3.5 h-3.5" />
