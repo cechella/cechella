@@ -248,15 +248,13 @@ export async function POST(req: NextRequest) {
         const githubToken = process.env.GITHUB_TOKEN
         const webhookUrl = process.env.VERCEL_DEPLOY_WEBHOOK_URL
 
-        if (vercelToken && webhookUrl) {
-          // Best: webhook + Vercel API promote → direct production
-          deployResult = await vercelDeployAndPromote(webhookUrl, vercelToken)
-        } else if (githubToken) {
-          // Fallback: GitHub PR merge → Vercel detects
-          const merge = await githubMergeToProduction(git.branch, successPages, githubToken)
-          deployResult = { triggered: merge.success, message: merge.message, prUrl: merge.prUrl }
+        const effectiveToken = vercelToken ?? githubToken // reuse GitHub token as Vercel token if same account
+
+        if (effectiveToken && webhookUrl) {
+          // Trigger webhook + promote via Vercel API
+          deployResult = await vercelDeployAndPromote(webhookUrl, effectiveToken)
         } else if (webhookUrl) {
-          // Last resort: webhook Preview only
+          // Webhook only (Preview)
           const resp = await fetch(webhookUrl, { method: 'POST' })
           deployResult = {
             triggered: resp.ok,
@@ -265,7 +263,7 @@ export async function POST(req: NextRequest) {
               : `Webhook falhou: ${resp.status}`,
           }
         } else {
-          deployResult = { triggered: false, message: 'Configure VERCEL_TOKEN + VERCEL_DEPLOY_WEBHOOK_URL' }
+          deployResult = { triggered: false, message: 'Configure VERCEL_DEPLOY_WEBHOOK_URL' }
         }
       }
     } catch (err: unknown) {
