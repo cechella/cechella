@@ -23,5 +23,7 @@ export async function GET(request: NextRequest) {
 
   const lessons = (allLessons ?? []).filter((l: { module_id: string }) => l.module_id === mod.id)
 
-  return NextResponse.json({ mod, lessons })
+  return NextResponse.json({ mod, lessons }, {
+    headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' }
+  })
 }
