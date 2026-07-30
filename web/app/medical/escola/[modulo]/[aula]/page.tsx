@@ -158,15 +158,14 @@ export default function AulaPage() {
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
           process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
         )
-        const [modRes, userRes] = await Promise.all([
-          supabase.from('training_modules').select('*').eq('num', modNum).single(),
+        const [apiRes, userRes] = await Promise.all([
+          fetch(`/api/training/module?num=${modNum}`),
           supabase.auth.getUser(),
         ])
         if (userRes.data?.user?.email) setUserEmail(userRes.data.user.email)
-        if (modRes.data) {
-          const { data: lessons } = await supabase
-            .from('training_lessons').select('*').eq('module_id', modRes.data.id).order('num')
-          setMod({ ...modRes.data, lessons: lessons ?? [] })
+        if (apiRes.ok) {
+          const { mod: modData, lessons } = await apiRes.json()
+          if (modData) setMod({ ...modData, lessons: lessons ?? [] })
         }
       } catch { /* use fallback */ } finally { setLoading(false) }
     }
