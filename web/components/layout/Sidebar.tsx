@@ -33,6 +33,7 @@ import {
   Stethoscope,
   Building2,
   CreditCard,
+  RefreshCw,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -81,6 +82,7 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Rea
     { label: 'Resultados', href: '/admin/resultados', icon: <TrendingUp className="w-5 h-5" /> },
     { label: 'Teste', href: '/admin/teste', icon: <TestTube2 className="w-5 h-5" /> },
     { label: 'Configurações', href: '/admin/configuracoes', icon: <Settings className="w-5 h-5" /> },
+    { label: 'Sistema', href: '/admin/sistema', icon: <RefreshCw className="w-5 h-5" /> },
   ],
 }
 
