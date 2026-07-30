@@ -26,7 +26,6 @@ const PAGE_MAP: Record<string, { adminPath: string; medicalPath: string; label: 
 // ─── Transformation: admin → medical ─────────────────────────────────────────
 function transformAdminToMedical(source: string, pageName: string): string {
   let out = source
-
   out = out.replace(/role="admin"/g, 'role="medical"')
   out = out.replace(
     /user=\{\{[^}]*role:\s*['"]admin['"][^}]*\}\}/g,
@@ -48,14 +47,12 @@ function transformAdminToMedical(source: string, pageName: string): string {
     if (name.endsWith('-medical')) return match
     return `channel("${name}-medical")`
   })
-
   const marker = `// [SYNC] Gerado automaticamente de admin/${pageName} — NÃO editar manualmente\n// Para atualizar: Admin → Sistema → Sincronizar\n`
   if (!out.startsWith('// [SYNC]')) {
     out = marker + out
   } else {
     out = out.replace(/^\/\/ \[SYNC\].*\n\/\/ Para atualizar.*\n/, marker)
   }
-
   return out
 }
 
@@ -64,11 +61,71 @@ async function gitCommitAndPush(pages: string[], repoRoot: string): Promise<{ su
   const branch = (await execAsync(`git -C "${repoRoot}" rev-parse --abbrev-ref HEAD`)).stdout.trim()
   const filePaths = pages.map(p => `web/app/${PAGE_MAP[p].medicalPath}/page.tsx`).join(' ')
   const msg = `sync: auto-sync medical pages from admin [${pages.map(p => PAGE_MAP[p].label).join(', ')}]`
-
   await execAsync(`git -C "${repoRoot}" add ${filePaths}`)
   await execAsync(`git -C "${repoRoot}" commit -m "${msg}" || true`)
   const { stdout } = await execAsync(`git -C "${repoRoot}" push origin ${branch}`)
   return { success: true, output: `Pushed to ${branch}\n${stdout}`, branch }
+}
+
+// ─── Vercel API: trigger webhook + wait + promote to production ───────────────
+async function vercelDeployAndPromote(
+  webhookUrl: string,
+  vercelToken: string
+): Promise<{ triggered: boolean; message: string }> {
+  // 1. Trigger deploy via webhook
+  const hookResp = await fetch(webhookUrl, { method: 'POST' })
+  if (!hookResp.ok) {
+    return { triggered: false, message: `Webhook falhou: ${hookResp.status}` }
+  }
+
+  // 2. Extract project ID from webhook URL
+  // URL format: https://api.vercel.com/v1/integrations/deploy/prj_XXXXX/YYYYY
+  const match = webhookUrl.match(/\/deploy\/(prj_[^/]+)/)
+  const projectId = match?.[1]
+  if (!projectId) {
+    return { triggered: true, message: 'Deploy iniciado via webhook (não foi possível extrair project ID para promover)' }
+  }
+
+  // 3. Wait for the new deployment to appear (poll up to 3 min)
+  const headers = {
+    'Authorization': `Bearer ${vercelToken}`,
+    'Content-Type': 'application/json',
+  }
+
+  let deploymentId: string | null = null
+  for (let i = 0; i < 18; i++) {
+    await new Promise(r => setTimeout(r, 10000)) // wait 10s between polls
+    const listResp = await fetch(
+      `https://api.vercel.com/v6/deployments?projectId=${projectId}&limit=5&target=preview`,
+      { headers }
+    )
+    const listData = await listResp.json() as { deployments?: Array<{ uid: string; state: string; createdAt: number }> }
+    const recent = listData.deployments?.find(d =>
+      (d.state === 'READY' || d.state === 'BUILDING' || d.state === 'INITIALIZING') &&
+      Date.now() - d.createdAt < 300000 // created in last 5 min
+    )
+    if (recent?.state === 'READY') {
+      deploymentId = recent.uid
+      break
+    }
+  }
+
+  if (!deploymentId) {
+    return { triggered: true, message: 'Deploy iniciado — não foi possível aguardar conclusão para promover. Verifique o Vercel.' }
+  }
+
+  // 4. Promote deployment to production
+  const promoteResp = await fetch(
+    `https://api.vercel.com/v10/projects/${projectId}/promote/${deploymentId}`,
+    { method: 'POST', headers }
+  )
+  const promoteData = await promoteResp.json() as { state?: string; message?: string }
+
+  if (promoteResp.ok) {
+    return { triggered: true, message: `Deploy promovido para produção! ID: ${deploymentId}` }
+  } else {
+    return { triggered: true, message: `Deploy criado mas promoção falhou: ${promoteData.message ?? promoteResp.status}. Promova manualmente no Vercel.` }
+  }
 }
 
 // ─── GitHub API: create PR + merge ───────────────────────────────────────────
@@ -87,7 +144,6 @@ async function githubMergeToProduction(
   const pageLabels = pages.map(p => PAGE_MAP[p].label).join(', ')
   const timestamp = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
 
-  // 1. Check if PR already exists
   const searchResp = await fetch(
     `https://api.github.com/repos/${GITHUB_REPO}/pulls?head=${GITHUB_REPO.split('/')[0]}:${headBranch}&base=${encodeURIComponent(base)}&state=open`,
     { headers }
@@ -100,7 +156,6 @@ async function githubMergeToProduction(
     prNumber = existingPRs[0].number
     prUrl = existingPRs[0].html_url
   } else {
-    // 2. Create PR
     const createResp = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/pulls`, {
       method: 'POST',
       headers,
@@ -119,7 +174,6 @@ async function githubMergeToProduction(
     prUrl = pr.html_url ?? ''
   }
 
-  // 3. Merge PR
   const mergeResp = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/pulls/${prNumber}/merge`, {
     method: 'PUT',
     headers,
@@ -190,26 +244,28 @@ export async function POST(req: NextRequest) {
       gitResult = git
 
       if (deploy) {
+        const vercelToken = process.env.VERCEL_TOKEN
         const githubToken = process.env.GITHUB_TOKEN
+        const webhookUrl = process.env.VERCEL_DEPLOY_WEBHOOK_URL
 
-        if (githubToken) {
-          // Use GitHub API to merge → triggers Vercel production deploy
+        if (vercelToken && webhookUrl) {
+          // Best: webhook + Vercel API promote → direct production
+          deployResult = await vercelDeployAndPromote(webhookUrl, vercelToken)
+        } else if (githubToken) {
+          // Fallback: GitHub PR merge → Vercel detects
           const merge = await githubMergeToProduction(git.branch, successPages, githubToken)
           deployResult = { triggered: merge.success, message: merge.message, prUrl: merge.prUrl }
-        } else {
-          // Fallback: trigger Vercel webhook (Preview only)
-          const webhookUrl = process.env.VERCEL_DEPLOY_WEBHOOK_URL
-          if (webhookUrl) {
-            const resp = await fetch(webhookUrl, { method: 'POST' })
-            deployResult = {
-              triggered: resp.ok,
-              message: resp.ok
-                ? 'Deploy iniciado via webhook (Preview — adicione GITHUB_TOKEN para produção automática)'
-                : `Webhook falhou: ${resp.status}`,
-            }
-          } else {
-            deployResult = { triggered: false, message: 'Configure GITHUB_TOKEN para deploy automático em produção' }
+        } else if (webhookUrl) {
+          // Last resort: webhook Preview only
+          const resp = await fetch(webhookUrl, { method: 'POST' })
+          deployResult = {
+            triggered: resp.ok,
+            message: resp.ok
+              ? 'Deploy Preview iniciado (adicione VERCEL_TOKEN para produção automática)'
+              : `Webhook falhou: ${resp.status}`,
           }
+        } else {
+          deployResult = { triggered: false, message: 'Configure VERCEL_TOKEN + VERCEL_DEPLOY_WEBHOOK_URL' }
         }
       }
     } catch (err: unknown) {
