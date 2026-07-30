@@ -112,6 +112,12 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null)
+  const [linkVideo, setLinkVideo] = useState<Video | null>(null)
+  const [linkModNum, setLinkModNum] = useState(1)
+  const [linkLessonNum, setLinkLessonNum] = useState(1)
+  const [linkLoading, setLinkLoading] = useState(false)
+  const [linkError, setLinkError] = useState<string | null>(null)
+  const [linkSuccess, setLinkSuccess] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const thumbInputRef = useRef<HTMLInputElement>(null)
   const editVideoInputRef = useRef<HTMLInputElement>(null)
@@ -254,6 +260,35 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
       setUploadSuccess(true); await loadVideos()
       setTimeout(() => { setEditingVideo(null); setUploadSuccess(false) }, 1200)
     } catch { setUploadError('Erro ao salvar') } finally { setUploading(false) }
+  }
+
+  async function handleLink() {
+    if (!linkVideo) return
+    setLinkLoading(true); setLinkError(null); setLinkSuccess(false)
+    const fallbackMod = FALLBACK_MODULES.find(m => m.num === linkModNum)
+    const fallbackLesson = fallbackMod?.lessons.find(l => l.num === linkLessonNum)
+    try {
+      const res = await fetch('/api/training/link-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          modNum: linkModNum,
+          modTitle: fallbackMod?.title ?? `Módulo ${linkModNum}`,
+          modColor: fallbackMod?.color ?? 'from-[#7B3FE4] to-[#4C1B9B]',
+          lessonNum: linkLessonNum,
+          lessonTitle: fallbackLesson?.title ?? linkVideo.title,
+          lessonDuration: fallbackLesson?.duration ?? '',
+          videoId: linkVideo.id,
+        }),
+      })
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error ?? 'Erro ao vincular') }
+      setLinkSuccess(true)
+      setTimeout(() => { setLinkVideo(null); setLinkSuccess(false) }, 1500)
+    } catch (err) {
+      setLinkError(err instanceof Error ? err.message : 'Erro')
+    } finally {
+      setLinkLoading(false)
+    }
   }
 
   async function deleteVideo(video: Video) {
@@ -537,6 +572,9 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
               return <>
                 <button onClick={() => { toggleFeatured(video); setOpenMenuId(null); setMenuPos(null) }} className="w-full text-left px-4 py-2 text-sm text-[#A1A1AA] hover:text-white hover:bg-[#1C1C1E] flex items-center gap-2"><Star className="w-3.5 h-3.5" />{video.is_featured ? 'Remover destaque' : 'Destacar'}</button>
                 <button onClick={() => { startEdit(video); setOpenMenuId(null); setMenuPos(null) }} className="w-full text-left px-4 py-2 text-sm text-[#A1A1AA] hover:text-white hover:bg-[#1C1C1E] flex items-center gap-2"><Pencil className="w-3.5 h-3.5" />Editar detalhes</button>
+                {video.category === 'Treinamento Médico' && (
+                  <button onClick={() => { setLinkVideo(video); setLinkModNum(1); setLinkLessonNum(1); setLinkError(null); setLinkSuccess(false); setOpenMenuId(null); setMenuPos(null) }} className="w-full text-left px-4 py-2 text-sm text-[#A1A1AA] hover:text-white hover:bg-[#1C1C1E] flex items-center gap-2"><Link2 className="w-3.5 h-3.5" />Vincular à aula</button>
+                )}
                 <div className="border-t border-[#1C1C1E] my-1" />
                 <button onClick={() => { deleteVideo(video); setOpenMenuId(null); setMenuPos(null) }} className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 flex items-center gap-2"><Trash2 className="w-3.5 h-3.5" />Excluir</button>
               </>
@@ -544,6 +582,38 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
           </div>
         </>,
         document.body
+      )}
+
+      {/* Vincular à aula modal */}
+      {linkVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.7)' }}>
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-5">
+              <h2 className="text-white font-semibold flex items-center gap-2"><Link2 className="w-4 h-4 text-[#7B3FE4]" />Vincular à aula</h2>
+              <button onClick={() => setLinkVideo(null)} className="w-8 h-8 rounded-lg bg-[#18181A] flex items-center justify-center text-[#71717A] hover:text-white"><X className="w-4 h-4" /></button>
+            </div>
+            <p className="text-[#71717A] text-sm mb-4 truncate">Vídeo: <span className="text-white">{linkVideo.title}</span></p>
+            <div className="space-y-3 mb-5">
+              <div>
+                <label className="text-xs text-[#71717A] mb-1 block">Módulo</label>
+                <select value={linkModNum} onChange={e => { setLinkModNum(Number(e.target.value)); setLinkLessonNum(1) }} className="w-full bg-[#18181A] border border-[#27272A] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#7B3FE4]">
+                  {FALLBACK_MODULES.map(m => <option key={m.num} value={m.num}>Módulo {m.num} — {m.title}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-[#71717A] mb-1 block">Aula</label>
+                <select value={linkLessonNum} onChange={e => setLinkLessonNum(Number(e.target.value))} className="w-full bg-[#18181A] border border-[#27272A] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#7B3FE4]">
+                  {(FALLBACK_MODULES.find(m => m.num === linkModNum)?.lessons ?? []).map(l => <option key={l.num} value={l.num}>Aula {l.num} — {l.title}</option>)}
+                </select>
+              </div>
+            </div>
+            {linkError && <p className="text-red-400 text-sm mb-3">{linkError}</p>}
+            {linkSuccess && <p className="text-emerald-400 text-sm mb-3">Vinculado com sucesso!</p>}
+            <button onClick={handleLink} disabled={linkLoading || linkSuccess} className="w-full py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-[#7B3FE4] to-[#3B82F6] hover:opacity-90 transition-opacity disabled:opacity-50">
+              {linkLoading ? 'Vinculando...' : linkSuccess ? 'Vinculado ✓' : 'Vincular'}
+            </button>
+          </div>
+        </div>
       )}
     </>
   )
