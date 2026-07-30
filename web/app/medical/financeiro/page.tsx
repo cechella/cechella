@@ -1,215 +1,381 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import {
-  DollarSign, TrendingUp, TrendingDown, ArrowUpRight,
-  ArrowDownRight, ChevronRight, Download, Calendar,
-  FileText, BarChart3, CheckCircle2, AlertCircle,
+  DollarSign, TrendingUp, Users, RefreshCw,
+  CreditCard, Repeat, AlertTriangle, CheckCircle2,
+  ArrowUpRight, XCircle, Zap,
 } from 'lucide-react'
+import {
+  AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts'
+import Link from 'next/link'
 
-const months = [
-  { month: 'Fev', receita: 52000, despesa: 22000 },
-  { month: 'Mar', receita: 61000, despesa: 24000 },
-  { month: 'Abr', receita: 58000, despesa: 25000 },
-  { month: 'Mai', receita: 67000, despesa: 26000 },
-  { month: 'Jun', receita: 71000, despesa: 27000 },
-  { month: 'Jul', receita: 74000, despesa: 28000 },
+type Resumo = {
+  totalRecebido: number
+  mrrAtivo: number
+  assinaturasAtivas: number
+  taxaConversao: number
+  totalLeads: number
+  leadsPagantes: number
+  leadsRecuperacao: number
+  aVistaCount: number
+  aVistaTotal: number
+  recorrenteCount: number
+  recorrenteTotal: number
+  pixCount: number
+  pixTotal: number
+  recusadosCount: number
+  recusadosTotal: number
+  graficoReceita: { data: string; valor: number }[]
+}
+
+const PERIODO_OPTS = [
+  { label: '7 dias', value: '7' },
+  { label: '30 dias', value: '30' },
+  { label: '90 dias', value: '90' },
 ]
-const maxR = Math.max(...months.map(m => m.receita))
 
-const receitas = [
-  { desc: 'Implante Testosterona — 18 procedimentos', value: 'R$ 43.200', pct: 58 },
-  { desc: 'Implante Estrógeno — 8 procedimentos', value: 'R$ 19.200', pct: 26 },
-  { desc: 'Consultas e acompanhamentos', value: 'R$ 7.200', pct: 10 },
-  { desc: 'Outros procedimentos', value: 'R$ 4.400', pct: 6 },
-]
+function fmt(v: number) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
 
-const despesas = [
-  { desc: 'Insumos e implantes', value: 'R$ 12.400', icon: AlertCircle, color: 'text-red-400' },
-  { desc: 'Aluguel e estrutura', value: 'R$ 6.800', icon: AlertCircle, color: 'text-red-400' },
-  { desc: 'Equipe e folha', value: 'R$ 5.200', icon: AlertCircle, color: 'text-red-400' },
-  { desc: 'Marketing e tráfego', value: 'R$ 2.100', icon: AlertCircle, color: 'text-amber-400' },
-  { desc: 'Hormone Ecosystem (plano Elite)', value: 'R$ 1.500', icon: CheckCircle2, color: 'text-[#7B3FE4]' },
-]
+function KpiCard({
+  icon, label, value, sub, color = 'purple', href, accent,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: string
+  sub?: string
+  color?: string
+  href?: string
+  accent?: string
+}) {
+  const colors: Record<string, string> = {
+    purple: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+    blue: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    green: 'bg-green-500/10 text-green-400 border-green-500/20',
+    yellow: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20',
+    red: 'bg-red-500/10 text-red-400 border-red-500/20',
+    sky: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+  }
+  const topLine: Record<string, string> = {
+    purple: 'bg-purple-500',
+    blue: 'bg-blue-500',
+    green: 'bg-green-500',
+    yellow: 'bg-yellow-500',
+    red: 'bg-red-500',
+    sky: 'bg-sky-500',
+  }
+  const inner = (
+    <div className="relative bg-zinc-900 border border-zinc-800 rounded-xl p-5 flex flex-col gap-3 hover:border-zinc-700 transition-all group overflow-hidden">
+      <div className={`absolute top-0 left-0 right-0 h-0.5 ${topLine[color]}`} />
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center border ${colors[color]}`}>
+        {icon}
+      </div>
+      <div>
+        <p className="text-zinc-500 text-[10px] font-semibold uppercase tracking-widest mb-1.5">{label}</p>
+        <p className={`text-2xl font-bold font-mono ${accent || 'text-white'}`}>{value}</p>
+        {sub && <p className="text-zinc-500 text-xs mt-1">{sub}</p>}
+      </div>
+      {href && (
+        <div className="flex items-center gap-1 text-purple-400 text-xs mt-auto group-hover:text-purple-300 transition-colors">
+          <ArrowUpRight className="w-3 h-3" />
+          <span>Ver detalhes</span>
+        </div>
+      )}
+    </div>
+  )
+  return href ? <Link href={href}>{inner}</Link> : inner
+}
 
-const invoices = [
-  { desc: 'Fechamento Junho 2026', date: '01 Jul 2026', value: 'R$ 43.000', status: 'Pago' },
-  { desc: 'Fechamento Maio 2026', date: '01 Jun 2026', value: 'R$ 41.000', status: 'Pago' },
-  { desc: 'Fechamento Abril 2026', date: '01 Mai 2026', value: 'R$ 33.000', status: 'Pago' },
-]
+function FunnelBar({ label, value, total, color, pct }: { label: string; value: number; total: number; color: string; pct?: string }) {
+  const width = total > 0 ? Math.round((value / total) * 100) : 0
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex justify-between items-center">
+        <span className="text-xs text-zinc-400 font-medium">{label}</span>
+        <span className="text-xs font-bold text-white font-mono">{value}</span>
+      </div>
+      <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{ width: `${width}%` }} />
+      </div>
+      {pct && <p className="text-[10px] text-zinc-600">{pct}</p>}
+    </div>
+  )
+}
 
-export default function FinanceiroPage() {
-  const [tab, setTab] = useState<'dre' | 'receber' | 'historico'>('dre')
+export default function MedicalFinanceiroDashboard() {
+  const [resumo, setResumo] = useState<Resumo | null>(null)
+  const [periodo, setPeriodo] = useState('30')
+  const [loading, setLoading] = useState(true)
+  const [atualizadoEm, setAtualizadoEm] = useState('')
+
+  const carregar = useCallback(async () => {
+    setLoading(true)
+    try {
+      const r = await fetch(`/api/admin/financeiro?tipo=resumo&periodo=${periodo}`)
+      const d = await r.json()
+      setResumo(d)
+      setAtualizadoEm(new Date().toLocaleTimeString('pt-BR'))
+    } finally {
+      setLoading(false)
+    }
+  }, [periodo])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  const totalTentativas = resumo ? (resumo.aVistaCount + resumo.recusadosCount) : 0
+  const taxaAprovacao = totalTentativas > 0 ? Math.round((resumo!.aVistaCount / totalTentativas) * 100) : 0
 
   return (
-    <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
+    <div className="flex h-screen bg-zinc-950 text-white overflow-hidden">
       <Sidebar role="medical" />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar user={{ name: 'Dr. Ricardo Lima', role: 'doctor' }} title="Financeiro" />
-        <main className="flex-1 overflow-y-auto px-6 py-5">
+        <TopBar user={{ name: 'Dr. Ricardo Lima', role: 'doctor' }} />
 
-          {/* Header KPIs */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
-            {[
-              { label: 'RECEITA BRUTA', value: 'R$ 74k', sub: '+21% vs mês ant', icon: TrendingUp, up: true, color: 'text-emerald-400', border: 'border-emerald-500/20', bg: 'from-emerald-500/10 to-emerald-600/5' },
-              { label: 'DESPESAS', value: 'R$ 28k', sub: '+3% vs mês ant', icon: TrendingDown, up: false, color: 'text-red-400', border: 'border-red-500/20', bg: 'from-red-500/10 to-red-600/5' },
-              { label: 'LUCRO LÍQUIDO', value: 'R$ 46k', sub: 'margem 62%', icon: DollarSign, up: true, color: 'text-white', border: 'border-[#7B3FE4]/20', bg: 'from-[#7B3FE4]/10 to-[#3B82F6]/5' },
-              { label: 'MRR ESTIMADO', value: 'R$ 22k', sub: 'recorrência mensal', icon: BarChart3, up: null, color: 'text-amber-400', border: 'border-amber-500/20', bg: 'from-amber-500/10 to-amber-600/5' },
-            ].map((k, i) => (
-              <div key={i} className={`bg-gradient-to-br ${k.bg} border ${k.border} rounded-2xl p-4`}>
-                <div className="flex items-center justify-between mb-3">
-                  <k.icon className={`w-4 h-4 ${k.color}`} />
-                  {k.up === true && <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />}
-                  {k.up === false && <ArrowDownRight className="w-3.5 h-3.5 text-red-400" />}
-                </div>
-                <p className={`text-xl font-bold ${k.color}`}>{k.value}</p>
-                <p className="text-[10px] text-[#71717A] mt-1">{k.sub}</p>
-                <p className="text-[9px] font-semibold uppercase tracking-widest text-[#52525B] mt-2">{k.label}</p>
-              </div>
-            ))}
-          </div>
+        <main className="flex-1 overflow-y-auto p-6 space-y-6">
 
-          {/* Tabs */}
-          <div className="flex gap-1 mb-5 bg-[#111113] border border-[#1C1C1E] p-1 rounded-xl w-fit">
-            {(['dre', 'receber', 'historico'] as const).map(t => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`text-xs font-medium px-4 py-2 rounded-lg transition-all ${tab === t ? 'bg-gradient-to-r from-[#7B3FE4] to-[#3B82F6] text-white' : 'text-[#71717A] hover:text-white'}`}
-              >
-                {t === 'dre' ? 'DRE Mensal' : t === 'receber' ? 'A Receber' : 'Histórico'}
-              </button>
-            ))}
-          </div>
-
-          {tab === 'dre' && (
-            <div className="grid lg:grid-cols-2 gap-5">
-              {/* Chart */}
-              <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-sm font-semibold text-white">Receita vs Despesa (2026)</h3>
-                  <button className="flex items-center gap-1.5 text-xs text-[#52525B] hover:text-white transition-colors">
-                    <Download className="w-3.5 h-3.5" /> Exportar
-                  </button>
-                </div>
-                <div className="flex items-end gap-3 h-36 mb-3">
-                  {months.map((m, i) => (
-                    <div key={i} className="flex-1 flex items-end gap-1">
-                      <div
-                        className={`flex-1 rounded-t-md ${i === months.length - 1 ? 'bg-gradient-to-t from-emerald-600 to-emerald-400' : 'bg-[#27272A]'}`}
-                        style={{ height: `${Math.round((m.receita / maxR) * 120)}px` }}
-                      />
-                      <div
-                        className="flex-1 bg-red-500/30 rounded-t-md"
-                        style={{ height: `${Math.round((m.despesa / maxR) * 120)}px` }}
-                      />
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-between">
-                  {months.map((m, i) => (
-                    <div key={i} className="flex-1 text-center text-[9px] text-[#52525B]">{m.month}</div>
-                  ))}
-                </div>
-                <div className="flex items-center gap-4 mt-3 text-[10px]">
-                  <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-emerald-400" /><span className="text-[#71717A]">Receita</span></div>
-                  <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-red-500/50" /><span className="text-[#71717A]">Despesa</span></div>
+          {/* HEADER */}
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-0.5">
+                <h1 className="text-xl font-bold text-white">Painel Financeiro</h1>
+                <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-full px-2.5 py-0.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+                  <span className="text-[10px] font-semibold text-green-400 uppercase tracking-wide">Ao vivo</span>
                 </div>
               </div>
-
-              {/* DRE breakdown */}
-              <div className="space-y-3">
-                <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5">
-                  <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4 text-emerald-400" /> Receitas — Julho
-                  </h3>
-                  <div className="space-y-3">
-                    {receitas.map((r, i) => (
-                      <div key={i}>
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-[#A1A1AA]">{r.desc}</span>
-                          <span className="text-emerald-400 font-semibold">{r.value}</span>
-                        </div>
-                        <div className="h-1 bg-[#1C1C1E] rounded-full overflow-hidden">
-                          <div className="h-full bg-emerald-500/50 rounded-full" style={{ width: `${r.pct}%` }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-[#1C1C1E] flex justify-between text-sm font-bold">
-                    <span className="text-white">Total Receita</span>
-                    <span className="text-emerald-400">R$ 74.000</span>
-                  </div>
-                </div>
-
-                <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5">
-                  <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-                    <TrendingDown className="w-4 h-4 text-red-400" /> Despesas — Julho
-                  </h3>
-                  <div className="space-y-2">
-                    {despesas.map((d, i) => (
-                      <div key={i} className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <d.icon className={`w-3.5 h-3.5 ${d.color} flex-shrink-0`} />
-                          <span className="text-xs text-[#A1A1AA]">{d.desc}</span>
-                        </div>
-                        <span className="text-xs font-semibold text-red-400 flex-shrink-0">{d.value}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="mt-3 pt-3 border-t border-[#1C1C1E] flex justify-between text-sm font-bold">
-                    <span className="text-white">Total Despesas</span>
-                    <span className="text-red-400">R$ 28.000</span>
-                  </div>
-                </div>
-              </div>
+              <p className="text-zinc-500 text-sm">
+                {atualizadoEm ? `Atualizado às ${atualizadoEm}` : 'Visão geral de receita e conversão'}
+              </p>
             </div>
-          )}
-
-          {tab === 'historico' && (
-            <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-[#1C1C1E] flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-[#71717A]" /> Histórico de Fechamentos
-                </h3>
-                <button className="flex items-center gap-1.5 text-xs text-[#52525B] hover:text-white transition-colors">
-                  <Download className="w-3.5 h-3.5" /> Exportar CSV
-                </button>
+            <div className="flex items-center gap-3">
+              <div className="flex bg-zinc-900 border border-zinc-800 rounded-lg p-0.5">
+                {PERIODO_OPTS.map(o => (
+                  <button
+                    key={o.value}
+                    onClick={() => setPeriodo(o.value)}
+                    className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${
+                      periodo === o.value
+                        ? 'bg-purple-600 text-white shadow-sm'
+                        : 'text-zinc-500 hover:text-white'
+                    }`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
               </div>
-              {invoices.map((inv, i) => (
-                <div key={i} className="flex items-center justify-between px-5 py-4 border-b border-[#1C1C1E] last:border-0 hover:bg-[#18181A]/40 transition-colors">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    </div>
-                    <div>
-                      <p className="text-sm font-medium text-white">{inv.desc}</p>
-                      <p className="text-xs text-[#52525B] flex items-center gap-1 mt-0.5">
-                        <Calendar className="w-3 h-3" /> {inv.date}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-bold text-white">{inv.value}</span>
-                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">{inv.status}</span>
-                  </div>
-                </div>
+              <button
+                onClick={carregar}
+                disabled={loading}
+                className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-white transition-colors border border-zinc-800 rounded-lg px-3 py-1.5"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                Atualizar
+              </button>
+            </div>
+          </div>
+
+          {loading && !resumo ? (
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5 h-32 animate-pulse" />
               ))}
             </div>
-          )}
-
-          {tab === 'receber' && (
-            <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5">
-              <div className="text-center py-8">
-                <BarChart3 className="w-8 h-8 text-[#52525B] mx-auto mb-3" />
-                <p className="text-sm font-medium text-white">Sem valores a receber pendentes</p>
-                <p className="text-xs text-[#52525B] mt-1">Todos os pagamentos estão em dia</p>
+          ) : resumo && (
+            <>
+              {/* KPI ROW 1 — principais */}
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 mb-3 flex items-center gap-2">
+                  Visão geral · {periodo} dias
+                  <span className="flex-1 h-px bg-zinc-800" />
+                </p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <KpiCard
+                    icon={<DollarSign className="w-4 h-4" />}
+                    label="Receita Total"
+                    value={fmt(resumo.totalRecebido)}
+                    sub={`${resumo.aVistaCount + resumo.recorrenteCount + resumo.pixCount} transações aprovadas`}
+                    color="purple"
+                  />
+                  <KpiCard
+                    icon={<Repeat className="w-4 h-4" />}
+                    label="MRR Recorrência"
+                    value={fmt(resumo.mrrAtivo)}
+                    sub={`${resumo.assinaturasAtivas} assinaturas ativas`}
+                    color="blue"
+                  />
+                  <KpiCard
+                    icon={<TrendingUp className="w-4 h-4" />}
+                    label="Taxa de Conversão"
+                    value={`${resumo.taxaConversao}%`}
+                    sub={`${resumo.leadsPagantes} de ${resumo.totalLeads} leads`}
+                    color="green"
+                  />
+                  <KpiCard
+                    icon={<XCircle className="w-4 h-4" />}
+                    label="À Vista Recusados"
+                    value={String(resumo.recusadosCount)}
+                    sub={`${fmt(resumo.recusadosTotal)} · tx. apr. ${taxaAprovacao}%`}
+                    color="red"
+                    accent="text-red-400"
+                  />
+                </div>
               </div>
-            </div>
-          )}
 
+              {/* KPI ROW 2 — métodos */}
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-600 mb-3 flex items-center gap-2">
+                  Por método
+                  <span className="flex-1 h-px bg-zinc-800" />
+                </p>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  <KpiCard
+                    icon={<CreditCard className="w-4 h-4" />}
+                    label="À Vista Aprovados"
+                    value={String(resumo.aVistaCount)}
+                    sub={fmt(resumo.aVistaTotal)}
+                    color="green"
+                  />
+                  <KpiCard
+                    icon={<Repeat className="w-4 h-4" />}
+                    label="Parcelas Recorrentes"
+                    value={String(resumo.recorrenteCount)}
+                    sub={fmt(resumo.recorrenteTotal)}
+                    color="blue"
+                  />
+                  <KpiCard
+                    icon={<Zap className="w-4 h-4" />}
+                    label="PIX Aprovados"
+                    value={String(resumo.pixCount)}
+                    sub={fmt(resumo.pixTotal)}
+                    color="sky"
+                  />
+                  <KpiCard
+                    icon={<AlertTriangle className="w-4 h-4" />}
+                    label="Em Recuperação"
+                    value={String(resumo.leadsRecuperacao)}
+                    sub="Leads sem pagamento"
+                    color="yellow"
+                  />
+                </div>
+              </div>
+
+              {/* GRÁFICO + FUNIL */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+                {/* Receita por dia */}
+                <div className="lg:col-span-2 bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h2 className="text-sm font-semibold text-white">Receita por Dia</h2>
+                      <p className="text-zinc-600 text-xs mt-0.5">Pagamentos aprovados no período</p>
+                    </div>
+                    <div className="flex items-center gap-3 text-[10px] text-zinc-500">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-purple-500 inline-block" />Total</span>
+                    </div>
+                  </div>
+                  {resumo.graficoReceita.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={200}>
+                      <AreaChart data={resumo.graficoReceita}>
+                        <defs>
+                          <linearGradient id="colorValor" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#a855f7" stopOpacity={0.25} />
+                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#1f1f28" vertical={false} />
+                        <XAxis dataKey="data" tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fill: '#52525b', fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={v => `R$${v}`} width={44} />
+                        <Tooltip
+                          contentStyle={{ background: '#18181b', border: '1px solid #3f3f46', borderRadius: 8, fontSize: 12 }}
+                          labelStyle={{ color: '#a1a1aa' }}
+                          formatter={(v: number) => [fmt(v), 'Receita']}
+                        />
+                        <Area type="monotone" dataKey="valor" stroke="#a855f7" strokeWidth={2} fill="url(#colorValor)" dot={false} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-[200px] flex items-center justify-center text-zinc-600 text-sm">
+                      Sem dados neste período
+                    </div>
+                  )}
+                </div>
+
+                {/* Funil de conversão */}
+                <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
+                  <div className="mb-4">
+                    <h2 className="text-sm font-semibold text-white">Funil de Conversão</h2>
+                    <p className="text-zinc-600 text-xs mt-0.5">Do lead ao pagamento</p>
+                  </div>
+                  <div className="flex flex-col gap-4">
+                    <FunnelBar
+                      label="Leads no sistema"
+                      value={resumo.totalLeads}
+                      total={resumo.totalLeads}
+                      color="bg-zinc-500"
+                      pct="100% — base total"
+                    />
+                    <FunnelBar
+                      label="Pagantes (qualquer método)"
+                      value={resumo.leadsPagantes}
+                      total={resumo.totalLeads}
+                      color="bg-purple-500"
+                      pct={`${resumo.taxaConversao}% do total`}
+                    />
+                    <FunnelBar
+                      label="PIX aprovados"
+                      value={resumo.pixCount}
+                      total={resumo.totalLeads}
+                      color="bg-sky-500"
+                      pct={`${resumo.totalLeads > 0 ? Math.round(resumo.pixCount / resumo.totalLeads * 100) : 0}% do total`}
+                    />
+                    <FunnelBar
+                      label="Cartão à vista aprovado"
+                      value={resumo.aVistaCount}
+                      total={resumo.totalLeads}
+                      color="bg-green-500"
+                      pct={`Taxa apr. cartão: ${taxaAprovacao}%`}
+                    />
+                    <FunnelBar
+                      label="Assinatura 6x gerada"
+                      value={resumo.assinaturasAtivas}
+                      total={resumo.totalLeads}
+                      color="bg-blue-500"
+                      pct="Após recusa R$25"
+                    />
+
+                    <div className="pt-3 border-t border-zinc-800 flex items-center justify-between">
+                      <span className="text-[10px] text-zinc-500 uppercase tracking-wide font-semibold">Recusados cartão</span>
+                      <span className="text-sm font-bold text-red-400 font-mono">{resumo.recusadosCount}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* LINKS */}
+              <div className="flex items-center justify-between pt-1">
+                <Link
+                  href="/medical/crm"
+                  className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                >
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                  Ver funil de leads
+                </Link>
+                <Link
+                  href="/medical/financeiro/pagamentos"
+                  className="flex items-center gap-1.5 text-xs text-purple-400 hover:text-purple-300 transition-colors"
+                >
+                  Ver todos os pagamentos
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            </>
+          )}
         </main>
       </div>
     </div>
