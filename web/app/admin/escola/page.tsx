@@ -222,7 +222,7 @@ export default function AdminEscolaPage() {
                           Aulas <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                         </button>
                         {mod.unlocked ? (
-                          <a href={`/medical/escola/${mod.num}/1`} className={`flex items-center gap-1.5 bg-gradient-to-r ${mod.color} text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity`}>
+                          <a href={`/admin/escola/${mod.num}/1`} className={`flex items-center gap-1.5 bg-gradient-to-r ${mod.color} text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity`}>
                             <Play className="w-3 h-3" />{modDone > 0 ? 'Continuar' : 'Iniciar'}
                           </a>
                         ) : (
