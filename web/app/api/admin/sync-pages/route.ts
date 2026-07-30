@@ -119,7 +119,7 @@ function transformAdminToMedical(source: string, pageName: string): string {
   return out
 }
 
-// ─── Vercel API: trigger webhook + wait + promote to production ───────────────
+// ─── Vercel API: trigger webhook + wait + alias to production ────────────────
 async function vercelDeployAndPromote(
   webhookUrl: string,
   vercelToken: string
@@ -132,7 +132,7 @@ async function vercelDeployAndPromote(
   const match = webhookUrl.match(/\/deploy\/(prj_[^/]+)/)
   const projectId = match?.[1]
   if (!projectId) {
-    return { triggered: true, message: 'Deploy iniciado via webhook (não foi possível extrair project ID para promover)' }
+    return { triggered: true, message: 'Deploy iniciado via webhook (sem project ID para promover)' }
   }
 
   const headers = {
@@ -140,39 +140,67 @@ async function vercelDeployAndPromote(
     'Content-Type': 'application/json',
   }
 
+  // 1. Get production aliases from project
+  const projResp = await fetch(`https://api.vercel.com/v9/projects/${projectId}`, { headers })
+  const projData = await projResp.json() as { alias?: Array<{ domain: string; target?: string }> }
+  const productionDomain = projData.alias?.find(a => a.target === 'PRODUCTION')?.domain
+    ?? projData.alias?.[0]?.domain
+
+  // 2. Poll for new READY deployment (up to 3 min)
   let deploymentId: string | null = null
+  let deploymentUrl: string | null = null
   for (let i = 0; i < 18; i++) {
     await new Promise(r => setTimeout(r, 10000))
     const listResp = await fetch(
-      `https://api.vercel.com/v6/deployments?projectId=${projectId}&limit=5&target=preview`,
+      `https://api.vercel.com/v6/deployments?projectId=${projectId}&limit=5`,
       { headers }
     )
-    const listData = await listResp.json() as { deployments?: Array<{ uid: string; state: string; createdAt: number }> }
+    const listData = await listResp.json() as { deployments?: Array<{ uid: string; url: string; state: string; createdAt: number }> }
     const recent = listData.deployments?.find(d =>
-      (d.state === 'READY' || d.state === 'BUILDING' || d.state === 'INITIALIZING') &&
-      Date.now() - d.createdAt < 300000
+      d.state === 'READY' && Date.now() - d.createdAt < 300000
     )
-    if (recent?.state === 'READY') {
+    if (recent) {
       deploymentId = recent.uid
+      deploymentUrl = recent.url
       break
     }
   }
 
-  if (!deploymentId) {
-    return { triggered: true, message: 'Deploy iniciado — não foi possível aguardar conclusão para promover. Verifique o Vercel.' }
+  if (!deploymentId || !deploymentUrl) {
+    return { triggered: true, message: 'Deploy iniciado — aguardando conclusão. Verifique o Vercel.' }
   }
 
+  // 3. Try promote first
   const promoteResp = await fetch(
     `https://api.vercel.com/v10/projects/${projectId}/promote/${deploymentId}`,
     { method: 'POST', headers }
   )
-  const promoteData = await promoteResp.json() as { state?: string; message?: string }
 
   if (promoteResp.ok) {
     return { triggered: true, message: `Deploy promovido para produção! ID: ${deploymentId}` }
-  } else {
-    return { triggered: true, message: `Deploy criado mas promoção falhou: ${promoteData.message ?? promoteResp.status}. Promova manualmente no Vercel.` }
   }
+
+  // 4. Fallback: assign production domain alias
+  if (productionDomain) {
+    const aliasResp = await fetch(
+      `https://api.vercel.com/v2/deployments/${deploymentId}/aliases`,
+      {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ alias: productionDomain }),
+      }
+    )
+    const aliasData = await aliasResp.json() as { uid?: string; alias?: string; error?: { message: string } }
+    if (aliasResp.ok) {
+      return { triggered: true, message: `Produção atualizada via alias → ${productionDomain}` }
+    }
+    return {
+      triggered: true,
+      message: `Deploy criado (${deploymentId}) mas alias falhou: ${aliasData.error?.message ?? aliasResp.status}. Promova manualmente.`,
+    }
+  }
+
+  return { triggered: true, message: `Deploy criado (${deploymentId}). Promova manualmente no Vercel.` }
 }
 
 // ─── POST /api/admin/sync-pages ───────────────────────────────────────────────
