@@ -5,11 +5,14 @@ import { useParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
+import { SecureVideoPlayer } from '@/components/ui/SecureVideoPlayer'
 import {
   Play, ChevronLeft, ChevronRight, CheckCircle2, Clock,
   Download, MessageSquare, ThumbsUp, Share2, List, Loader2,
   X, Maximize,
 } from 'lucide-react'
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -146,6 +149,7 @@ export default function AulaPage() {
   const [loading, setLoading] = useState(true)
   const [completed, setCompleted] = useState(false)
   const [showPlayer, setShowPlayer] = useState(false)
+  const [userEmail, setUserEmail] = useState('médico@hormoneecosystem.com')
 
   useEffect(() => {
     async function load() {
@@ -154,12 +158,15 @@ export default function AulaPage() {
           process.env.NEXT_PUBLIC_SUPABASE_URL!,
           process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
         )
-        const { data: mods } = await supabase
-          .from('training_modules').select('*').eq('num', modNum).single()
-        if (mods) {
+        const [modRes, userRes] = await Promise.all([
+          supabase.from('training_modules').select('*').eq('num', modNum).single(),
+          supabase.auth.getUser(),
+        ])
+        if (userRes.data?.user?.email) setUserEmail(userRes.data.user.email)
+        if (modRes.data) {
           const { data: lessons } = await supabase
-            .from('training_lessons').select('*').eq('module_id', mods.id).order('num')
-          setMod({ ...mods, lessons: lessons ?? [] })
+            .from('training_lessons').select('*').eq('module_id', modRes.data.id).order('num')
+          setMod({ ...modRes.data, lessons: lessons ?? [] })
         }
       } catch { /* use fallback */ } finally { setLoading(false) }
     }
@@ -178,7 +185,10 @@ export default function AulaPage() {
   const lesson = lessons.find(l => l.num === aulaNum) ?? lessons[0]
   const prev = lessons.find(l => l.num === aulaNum - 1)
   const next = lessons.find(l => l.num === aulaNum + 1)
-  const embedUrl = lesson?.video_url ? getEmbedUrl(lesson.video_url) : null
+  const videoUrl = lesson?.video_url ?? null
+  const isUploadedVideo = videoUrl ? UUID_RE.test(videoUrl) : false
+  const embedUrl = (!isUploadedVideo && videoUrl) ? getEmbedUrl(videoUrl) : null
+  const hasVideo = isUploadedVideo || !!embedUrl
 
   return (
     <>
@@ -211,13 +221,12 @@ export default function AulaPage() {
                       <div className="absolute inset-0 flex items-center justify-center bg-[#111113]">
                         <Loader2 className="w-8 h-8 text-[#7B3FE4] animate-spin" />
                       </div>
-                    ) : embedUrl ? (
-                      /* Clickable thumbnail that opens fullscreen modal */
+                    ) : hasVideo ? (
+                      /* Clickable thumbnail → fullscreen player */
                       <button
                         onClick={() => setShowPlayer(true)}
                         className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-[#111113] to-[#0A0A0B] hover:from-[#18181A] transition-all duration-300"
                       >
-                        {/* Glow ring */}
                         <div className={`w-24 h-24 rounded-full bg-gradient-to-br ${color} flex items-center justify-center mb-5 shadow-[0_0_60px_rgba(123,63,228,0.4)] group-hover:scale-110 transition-transform duration-300`}>
                           <Play className="w-10 h-10 text-white ml-1.5" />
                         </div>
@@ -231,7 +240,7 @@ export default function AulaPage() {
                         </div>
                       </button>
                     ) : (
-                      /* No URL configured */
+                      /* No video configured */
                       <div className="absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-[#111113] to-[#0A0A0B]">
                         <div className={`w-20 h-20 rounded-2xl bg-gradient-to-br ${color} flex items-center justify-center mb-4 shadow-[0_0_40px_rgba(123,63,228,0.3)]`}>
                           <Play className="w-8 h-8 text-white ml-1" />
@@ -240,7 +249,7 @@ export default function AulaPage() {
                         <p className="text-[#71717A] text-sm flex items-center gap-1.5">
                           <Clock className="w-3.5 h-3.5" />{lesson?.duration}
                         </p>
-                        <p className="text-[#52525B] text-xs mt-4">Vídeo será exibido assim que a URL for configurada em Admin → Vídeos</p>
+                        <p className="text-[#52525B] text-xs mt-4">Vídeo será exibido assim que enviado em Admin → Vídeos</p>
                       </div>
                     )}
                   </div>
@@ -281,7 +290,7 @@ export default function AulaPage() {
                         {btn.icon}{btn.label}
                       </button>
                     ))}
-                    {embedUrl && (
+                    {hasVideo && (
                       <button
                         onClick={() => setShowPlayer(true)}
                         className="flex items-center gap-1.5 text-xs text-[#7B3FE4] bg-[#7B3FE4]/10 border border-[#7B3FE4]/30 px-3 py-2 rounded-xl hover:bg-[#7B3FE4]/20 transition-colors font-semibold"
@@ -371,8 +380,11 @@ export default function AulaPage() {
         </div>
       </div>
 
-      {/* Fullscreen video modal — same pattern as SecureVideoPlayer */}
-      {showPlayer && embedUrl && (
+      {/* Fullscreen player: SecureVideoPlayer for uploaded videos, iframe modal for external URLs */}
+      {showPlayer && isUploadedVideo && videoUrl && (
+        <SecureVideoPlayer videoId={videoUrl} title={lesson?.title ?? ''} userEmail={userEmail} onClose={close} />
+      )}
+      {showPlayer && !isUploadedVideo && embedUrl && (
         <VideoModal embedUrl={embedUrl} title={lesson?.title ?? ''} onClose={close} />
       )}
     </>
