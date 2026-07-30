@@ -248,11 +248,9 @@ export async function POST(req: NextRequest) {
         const githubToken = process.env.GITHUB_TOKEN
         const webhookUrl = process.env.VERCEL_DEPLOY_WEBHOOK_URL
 
-        const effectiveToken = vercelToken ?? githubToken // reuse GitHub token as Vercel token if same account
-
-        if (effectiveToken && webhookUrl) {
-          // Trigger webhook + promote via Vercel API
-          deployResult = await vercelDeployAndPromote(webhookUrl, effectiveToken)
+        if (vercelToken && webhookUrl) {
+          // Vercel token: trigger webhook + promote via Vercel API
+          deployResult = await vercelDeployAndPromote(webhookUrl, vercelToken)
         } else if (webhookUrl) {
           // Webhook only (Preview)
           const resp = await fetch(webhookUrl, { method: 'POST' })
