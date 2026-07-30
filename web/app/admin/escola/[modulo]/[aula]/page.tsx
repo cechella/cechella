@@ -129,7 +129,7 @@ export default function AdminAulaPage() {
           process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
         )
         const [apiRes, userRes] = await Promise.all([
-          fetch(`/api/training/module?num=${modNum}`),
+          fetch(`/api/training/module?num=${modNum}`, { cache: 'no-store' }),
           supabase.auth.getUser(),
         ])
         const uid = userRes.data?.user?.id ?? null

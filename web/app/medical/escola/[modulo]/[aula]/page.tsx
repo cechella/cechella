@@ -161,7 +161,7 @@ export default function AulaPage() {
     async function load() {
       try {
         const [apiRes, userRes] = await Promise.all([
-          fetch(`/api/training/module?num=${modNum}`),
+          fetch(`/api/training/module?num=${modNum}`, { cache: 'no-store' }),
           supabase.auth.getUser(),
         ])
         const uid = userRes.data?.user?.id ?? null
