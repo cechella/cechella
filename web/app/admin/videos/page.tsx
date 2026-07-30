@@ -76,11 +76,9 @@ export default function AdminVideosPage() {
       <Sidebar role="admin" />
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopBar user={{ name: 'Admin', role: 'admin' }} title="Gerenciar Vídeos" />
-        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-10">
+        <main className="flex-1 overflow-y-auto px-6 py-6">
 
           <PatientVideos supabase={supabase} />
-
-          <TrainingVideos supabase={supabase} />
 
         </main>
       </div>
@@ -132,7 +130,7 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
 
   async function loadVideos() {
     setIsLoading(true)
-    const { data } = await supabase.from('videos').select('*').neq('category', 'Treinamento Médico').order('created_at', { ascending: false })
+    const { data } = await supabase.from('videos').select('*').order('created_at', { ascending: false })
     setVideos(data ?? [])
     setIsLoading(false)
   }
@@ -272,7 +270,7 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
       {/* Info banner */}
       <div className="flex items-center gap-3 bg-[#7B3FE4]/8 border border-[#7B3FE4]/20 rounded-xl px-4 py-3 mb-5">
         <Users className="w-4 h-4 text-[#7B3FE4] flex-shrink-0" />
-        <p className="text-xs text-[#A1A1AA]">Vídeos exibidos na <span className="text-white font-medium">Landpage / Área do Paciente</span> — depoimentos e conteúdo de captação que aparecem em <span className="text-[#7B3FE4]">/patient/dashboard</span></p>
+        <p className="text-xs text-[#A1A1AA]">Todos os vídeos da plataforma — <span className="text-white font-medium">Landpage/Paciente</span> e <span className="text-white font-medium">Área do Médico</span></p>
       </div>
 
       {/* Stats */}
@@ -293,7 +291,7 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
 
       {/* Header + Add */}
       <div className="flex items-center justify-between mb-4">
-        <h2 className="font-semibold text-white">Biblioteca de Vídeos — Landpage/Paciente</h2>
+        <h2 className="font-semibold text-white">Biblioteca de Vídeos</h2>
         <button onClick={() => { setShowForm(true); setUploadError(null); setUploadSuccess(false) }} className="bg-[#7B3FE4] hover:bg-[#6325C8] text-white text-sm font-medium px-4 py-2 rounded-xl flex items-center gap-2 transition-colors">
           <Plus className="w-4 h-4" /> Adicionar Vídeo
         </button>
@@ -430,7 +428,7 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
             <table className="w-full" style={{ borderCollapse: 'separate' }}>
               <thead>
                 <tr className="border-b border-[#1C1C1E]">
-                  {['Título', 'Categoria', 'Duração', 'Status', 'Destaque', 'Criado em', 'Ações'].map((h) => (
+                  {['Título', 'Destino', 'Categoria', 'Duração', 'Status', 'Destaque', 'Criado em', 'Ações'].map((h) => (
                     <th key={h} className="text-left text-xs font-semibold text-[#71717A] px-5 py-3 uppercase tracking-wide">{h}</th>
                   ))}
                 </tr>
@@ -443,6 +441,11 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
                         <div className="w-8 h-8 rounded-lg bg-[#7B3FE4]/10 flex items-center justify-center flex-shrink-0"><Play className="w-3.5 h-3.5 text-[#7B3FE4]" /></div>
                         <div><p className="text-sm font-medium text-white line-clamp-1">{video.title}</p>{video.hls_path && <p className="text-[10px] text-[#52525B] mt-0.5 truncate max-w-[200px]">{video.hls_path}</p>}</div>
                       </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      {video.category === 'Treinamento Médico'
+                        ? <span className="text-xs bg-[#3B82F6]/10 text-[#60A5FA] px-2 py-1 rounded-lg border border-[#3B82F6]/20 flex items-center gap-1 w-fit"><GraduationCap className="w-3 h-3" />Área do Médico</span>
+                        : <span className="text-xs bg-[#7B3FE4]/10 text-[#9558EE] px-2 py-1 rounded-lg border border-[#7B3FE4]/20 flex items-center gap-1 w-fit"><Users className="w-3 h-3" />Landpage/Paciente</span>}
                     </td>
                     <td className="px-5 py-4"><span className="text-xs bg-[#7B3FE4]/10 text-[#9558EE] px-2 py-1 rounded-lg border border-[#7B3FE4]/20">{video.category}</span></td>
                     <td className="px-5 py-4"><span className="text-sm text-[#A1A1AA]">{formatDuration(video.duration_seconds)}</span></td>
