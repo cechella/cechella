@@ -76,9 +76,11 @@ export default function AdminVideosPage() {
       <Sidebar role="admin" />
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopBar user={{ name: 'Admin', role: 'admin' }} title="Gerenciar Vídeos" />
-        <main className="flex-1 overflow-y-auto px-6 py-6">
+        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-10">
 
           <PatientVideos supabase={supabase} />
+
+          <MedicalVideos supabase={supabase} />
 
         </main>
       </div>
