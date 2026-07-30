@@ -1,3 +1,5 @@
+// [SYNC] Gerado automaticamente de admin/crm — NÃO editar manualmente
+// Para atualizar: Admin → Sistema → Sincronizar
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -134,7 +136,7 @@ function tempoRelativo(data: string | null) {
 
 type Aba = 'leads' | 'referidos'
 
-export default function MedicalCRMPage() {
+export default function CRMPage() {
   const [aba, setAba] = useState<Aba>('leads')
   const [leads, setLeads] = useState<Lead[]>([])
   const [contatos, setContatos] = useState<ContatoReferido[]>([])
@@ -260,7 +262,7 @@ export default function MedicalCRMPage() {
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
       <Sidebar role="medical" />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar user={{ name: 'Dr. Ricardo Lima', role: 'doctor' }} title="CRM — Gestão de Leads e Referidos" />
+        <TopBar title="CRM — Gestão de Leads e Referidos" />
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
 
           {/* Abas */}
