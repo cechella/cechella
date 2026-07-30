@@ -39,14 +39,13 @@ async function fetchFileFromGitHub(filePath: string, token: string): Promise<str
   return resp.text()
 }
 
-// ─── GitHub API: write file (create or update) ────────────────────────────────
+// ─── GitHub API: write file (create or update), returns commit SHA ────────────
 async function writeFileToGitHub(
   filePath: string,
   content: string,
   token: string,
   commitMessage: string
-): Promise<void> {
-  // Get current SHA if file exists
+): Promise<string> {
   const getUrl = `https://api.github.com/repos/${GITHUB_REPO}/contents/${filePath}?ref=${PRODUCTION_BRANCH}`
   const getResp = await fetch(getUrl, {
     headers: {
@@ -84,6 +83,9 @@ async function writeFileToGitHub(
     const err = await putResp.json() as { message?: string }
     throw new Error(`GitHub write error ${putResp.status}: ${err.message ?? JSON.stringify(err)}`)
   }
+
+  const result = await putResp.json() as { commit?: { sha?: string } }
+  return result.commit?.sha ?? ''
 }
 
 // ─── Transformation: admin → medical ─────────────────────────────────────────
@@ -119,88 +121,67 @@ function transformAdminToMedical(source: string, pageName: string): string {
   return out
 }
 
-// ─── Vercel API: trigger webhook + wait + alias to production ────────────────
-async function vercelDeployAndPromote(
+// ─── Vercel API: create production deployment directly (works on Hobby) ───────
+async function vercelCreateProductionDeployment(
+  commitSha: string,
+  vercelToken: string,
   webhookUrl: string,
-  vercelToken: string
 ): Promise<{ triggered: boolean; message: string }> {
-  const hookResp = await fetch(webhookUrl, { method: 'POST' })
-  if (!hookResp.ok) {
-    return { triggered: false, message: `Webhook falhou: ${hookResp.status}` }
-  }
-
-  const match = webhookUrl.match(/\/deploy\/(prj_[^/]+)/)
-  const projectId = match?.[1]
-  if (!projectId) {
-    return { triggered: true, message: 'Deploy iniciado via webhook (sem project ID para promover)' }
-  }
-
   const headers = {
     'Authorization': `Bearer ${vercelToken}`,
     'Content-Type': 'application/json',
   }
 
-  // 1. Get production aliases from project
+  // Extract project ID from webhook URL
+  const match = webhookUrl.match(/\/deploy\/(prj_[^/]+)/)
+  const projectId = match?.[1]
+  if (!projectId) {
+    return { triggered: false, message: 'Não foi possível extrair project ID do webhook URL' }
+  }
+
+  // Get project details (name + git repo ID)
   const projResp = await fetch(`https://api.vercel.com/v9/projects/${projectId}`, { headers })
-  const projData = await projResp.json() as { alias?: Array<{ domain: string; target?: string }> }
-  const productionDomain = projData.alias?.find(a => a.target === 'PRODUCTION')?.domain
-    ?? projData.alias?.[0]?.domain
-
-  // 2. Poll for new READY deployment (up to 3 min)
-  let deploymentId: string | null = null
-  let deploymentUrl: string | null = null
-  for (let i = 0; i < 18; i++) {
-    await new Promise(r => setTimeout(r, 10000))
-    const listResp = await fetch(
-      `https://api.vercel.com/v6/deployments?projectId=${projectId}&limit=5`,
-      { headers }
-    )
-    const listData = await listResp.json() as { deployments?: Array<{ uid: string; url: string; state: string; createdAt: number }> }
-    const recent = listData.deployments?.find(d =>
-      d.state === 'READY' && Date.now() - d.createdAt < 300000
-    )
-    if (recent) {
-      deploymentId = recent.uid
-      deploymentUrl = recent.url
-      break
-    }
+  if (!projResp.ok) {
+    return { triggered: false, message: `Erro ao buscar projeto: ${projResp.status}` }
+  }
+  const projData = await projResp.json() as {
+    name?: string
+    link?: { repoId?: number; type?: string }
   }
 
-  if (!deploymentId || !deploymentUrl) {
-    return { triggered: true, message: 'Deploy iniciado — aguardando conclusão. Verifique o Vercel.' }
+  const projectName = projData.name
+  const repoId = projData.link?.repoId
+
+  if (!projectName || !repoId) {
+    return { triggered: false, message: 'Não foi possível obter nome/repoId do projeto Vercel' }
   }
 
-  // 3. Try promote first
-  const promoteResp = await fetch(
-    `https://api.vercel.com/v10/projects/${projectId}/promote/${deploymentId}`,
-    { method: 'POST', headers }
-  )
+  // Create deployment directly targeting production with the commit SHA
+  const deployResp = await fetch('https://api.vercel.com/v13/deployments', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      name: projectName,
+      target: 'production',
+      gitSource: {
+        type: 'github',
+        repoId: String(repoId),
+        ref: PRODUCTION_BRANCH,
+        sha: commitSha,
+      },
+    }),
+  })
 
-  if (promoteResp.ok) {
-    return { triggered: true, message: `Deploy promovido para produção! ID: ${deploymentId}` }
+  const deployData = await deployResp.json() as { id?: string; url?: string; error?: { message: string }; message?: string }
+
+  if (deployResp.ok && deployData.id) {
+    return { triggered: true, message: `🚀 Deploy de produção iniciado! ID: ${deployData.id} — hormoneecosystem.com será atualizado em ~1 min` }
   }
 
-  // 4. Fallback: assign production domain alias
-  if (productionDomain) {
-    const aliasResp = await fetch(
-      `https://api.vercel.com/v2/deployments/${deploymentId}/aliases`,
-      {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ alias: productionDomain }),
-      }
-    )
-    const aliasData = await aliasResp.json() as { uid?: string; alias?: string; error?: { message: string } }
-    if (aliasResp.ok) {
-      return { triggered: true, message: `Produção atualizada via alias → ${productionDomain}` }
-    }
-    return {
-      triggered: true,
-      message: `Deploy criado (${deploymentId}) mas alias falhou: ${aliasData.error?.message ?? aliasResp.status}. Promova manualmente.`,
-    }
+  return {
+    triggered: false,
+    message: `Erro ao criar deploy: ${deployData.error?.message ?? deployData.message ?? deployResp.status}`,
   }
-
-  return { triggered: true, message: `Deploy criado (${deploymentId}). Promova manualmente no Vercel.` }
 }
 
 // ─── POST /api/admin/sync-pages ───────────────────────────────────────────────
@@ -226,6 +207,7 @@ export async function POST(req: NextRequest) {
     // 1. Fetch, transform and write files via GitHub API
     const results: Record<string, { success: boolean; message: string }> = {}
     const timestamp = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' })
+    let lastCommitSha = ''
 
     for (const pageName of pages) {
       const { adminPath, medicalPath, label } = PAGE_MAP[pageName]
@@ -237,7 +219,8 @@ export async function POST(req: NextRequest) {
         const transformed = transformAdminToMedical(source, pageName)
         const commitMsg = `sync: auto-sync ${label} medical page from admin [${timestamp}]`
 
-        await writeFileToGitHub(medicalGitPath, transformed, githubToken, commitMsg)
+        const sha = await writeFileToGitHub(medicalGitPath, transformed, githubToken, commitMsg)
+        if (sha) lastCommitSha = sha
         results[pageName] = { success: true, message: `${label} sincronizado com sucesso` }
       } catch (err: unknown) {
         results[pageName] = { success: false, message: `Erro: ${err instanceof Error ? err.message : String(err)}` }
@@ -255,25 +238,21 @@ export async function POST(req: NextRequest) {
       branch: PRODUCTION_BRANCH,
     }
 
-    // 2. Trigger deploy if requested
+    // 2. Trigger production deploy if requested
     let deployResult: { triggered: boolean; message: string } | null = null
 
     if (deploy) {
       const vercelToken = process.env.VERCEL_TOKEN
       const webhookUrl = process.env.VERCEL_DEPLOY_WEBHOOK_URL
 
-      if (vercelToken && webhookUrl) {
-        deployResult = await vercelDeployAndPromote(webhookUrl, vercelToken)
-      } else if (webhookUrl) {
-        const resp = await fetch(webhookUrl, { method: 'POST' })
-        deployResult = {
-          triggered: resp.ok,
-          message: resp.ok
-            ? 'Deploy Preview iniciado (adicione VERCEL_TOKEN para produção automática)'
-            : `Webhook falhou: ${resp.status}`,
-        }
+      if (vercelToken && webhookUrl && lastCommitSha) {
+        deployResult = await vercelCreateProductionDeployment(lastCommitSha, vercelToken, webhookUrl)
+      } else if (!vercelToken) {
+        deployResult = { triggered: false, message: 'Configure VERCEL_TOKEN nas variáveis de ambiente' }
+      } else if (!webhookUrl) {
+        deployResult = { triggered: false, message: 'Configure VERCEL_DEPLOY_WEBHOOK_URL nas variáveis de ambiente' }
       } else {
-        deployResult = { triggered: false, message: 'Configure VERCEL_DEPLOY_WEBHOOK_URL' }
+        deployResult = { triggered: false, message: 'Commit SHA não disponível para deploy' }
       }
     }
 
