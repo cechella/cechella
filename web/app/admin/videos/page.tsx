@@ -115,6 +115,20 @@ export default function AdminVideosPage() {
   )
 }
 
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function uploadWithProgress(url: string, file: File, contentType: string, onProgress: (pct: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', contentType)
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)) }
+    xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) resolve(); else reject(new Error(`Upload failed: ${xhr.status}`)) }
+    xhr.onerror = () => reject(new Error('Erro de rede no upload'))
+    xhr.send(file)
+  })
+}
+
 // ─── Patient Videos Section ──────────────────────────────────────────────────
 
 function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowserClient> }) {
@@ -135,7 +149,13 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
 
   const [form, setForm] = useState({
     title: '', description: '', category: CATEGORIES[0], duration_seconds: '',
+    destino: 'patient' as 'patient' | 'medical',
+    medModNum: 1, medLessonNum: 1,
   })
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [videoFileName, setVideoFileName] = useState<string | null>(null)
+
+  const medLessons = FALLBACK_MODULES.find(m => m.num === form.medModNum)?.lessons ?? []
 
   async function loadVideos() {
     setIsLoading(true)
@@ -150,13 +170,21 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
     e.preventDefault()
     setUploadError(null)
     setUploadSuccess(false)
-    if (!form.title.trim()) { setUploadError('Título é obrigatório'); return }
+    const isMedical = form.destino === 'medical'
     const file = fileInputRef.current?.files?.[0]
-    setUploading(true)
+    if (isMedical && !file) { setUploadError('Selecione um arquivo de vídeo'); return }
+    if (!isMedical && !form.title.trim()) { setUploadError('Título é obrigatório'); return }
+
+    const fallbackMod = FALLBACK_MODULES.find(m => m.num === form.medModNum)
+    const fallbackLesson = fallbackMod?.lessons.find(l => l.num === form.medLessonNum)
+    const title = isMedical ? (fallbackLesson?.title ?? form.title.trim()) : form.title.trim()
+    const category = isMedical ? 'Treinamento Médico' : form.category
+
+    setUploading(true); setUploadProgress(0)
     try {
       const { data: newVideo, error: insertError } = await supabase
         .from('videos')
-        .insert({ title: form.title.trim(), description: form.description.trim() || null, category: form.category, duration_seconds: form.duration_seconds ? parseInt(form.duration_seconds) : null, is_published: false })
+        .insert({ title, description: isMedical ? null : (form.description.trim() || null), category, duration_seconds: form.duration_seconds ? parseInt(form.duration_seconds) : null, is_published: isMedical })
         .select().single()
       if (insertError || !newVideo) throw new Error(insertError?.message ?? 'Falha ao criar registro')
 
@@ -164,8 +192,12 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
         const urlRes = await fetch('/api/video/upload-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoId: newVideo.id, fileName: file.name, contentType: file.type || 'video/mp4' }) })
         if (!urlRes.ok) { await supabase.from('videos').delete().eq('id', newVideo.id); throw new Error('Falha ao obter URL de upload') }
         const { uploadUrl, key } = await urlRes.json()
-        const uploadRes = await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type || 'video/mp4' } })
-        if (!uploadRes.ok) { await supabase.from('videos').delete().eq('id', newVideo.id); throw new Error('Falha no upload do vídeo') }
+        if (isMedical) {
+          await uploadWithProgress(uploadUrl, file, file.type || 'video/mp4', setUploadProgress)
+        } else {
+          const uploadRes = await fetch(uploadUrl, { method: 'PUT', body: file, headers: { 'Content-Type': file.type || 'video/mp4' } })
+          if (!uploadRes.ok) { await supabase.from('videos').delete().eq('id', newVideo.id); throw new Error('Falha no upload do vídeo') }
+        }
         await supabase.from('videos').update({ hls_path: key }).eq('id', newVideo.id)
       }
 
@@ -179,17 +211,37 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
         }
       }
 
+      if (isMedical) {
+        const linkRes = await fetch('/api/training/link-video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            modNum: form.medModNum,
+            modTitle: fallbackMod?.title ?? `Módulo ${form.medModNum}`,
+            modColor: fallbackMod?.color ?? 'from-[#7B3FE4] to-[#4C1B9B]',
+            lessonNum: form.medLessonNum,
+            lessonTitle: fallbackLesson?.title ?? title,
+            lessonDuration: fallbackLesson?.duration ?? '',
+            videoId: newVideo.id,
+          }),
+        })
+        if (!linkRes.ok) {
+          const e = await linkRes.json().catch(() => ({}))
+          throw new Error(`Falha ao vincular aula: ${e.error ?? linkRes.status}`)
+        }
+      }
+
       setUploadSuccess(true)
-      setForm({ title: '', description: '', category: CATEGORIES[0], duration_seconds: '' })
+      setForm({ title: '', description: '', category: CATEGORIES[0], duration_seconds: '', destino: form.destino, medModNum: form.medModNum, medLessonNum: form.medLessonNum })
       if (fileInputRef.current) fileInputRef.current.value = ''
       if (thumbInputRef.current) thumbInputRef.current.value = ''
-      setThumbPreview(null)
-      await loadVideos()
+      setThumbPreview(null); setVideoFileName(null)
+      if (!isMedical) await loadVideos()
       setTimeout(() => { setShowForm(false); setUploadSuccess(false) }, 1500)
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Upload failed')
     } finally {
-      setUploading(false)
+      setUploading(false); setUploadProgress(0)
     }
   }
 
@@ -207,7 +259,7 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
 
   function startEdit(video: Video) {
     setEditingVideo(video)
-    setForm({ title: video.title, description: video.description ?? '', category: video.category, duration_seconds: video.duration_seconds?.toString() ?? '' })
+    setForm(f => ({ ...f, title: video.title, description: video.description ?? '', category: video.category, duration_seconds: video.duration_seconds?.toString() ?? '' }))
     setThumbPreview(null); setEditVideoName(null); setUploadError(null); setUploadSuccess(false); setOpenMenuId(null)
     if (editVideoInputRef.current) editVideoInputRef.current.value = ''
   }
@@ -279,30 +331,72 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
           <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
-              <h3 className="font-semibold text-white">Adicionar Vídeo — Landpage Paciente</h3>
+              <h3 className="font-semibold text-white">Adicionar Vídeo</h3>
               <button onClick={() => setShowForm(false)} className="text-[#71717A] hover:text-white transition-colors"><X className="w-5 h-5" /></button>
             </div>
             <form onSubmit={handleUpload} className="space-y-4">
+
+              {/* Destino */}
               <div>
-                <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Título *</label>
-                <input type="text" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Ex: Depoimento Adriana Mendes" className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm placeholder-[#52525B] focus:outline-none focus:border-[#7B3FE4] transition-colors" required />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Descrição</label>
-                <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Descrição do vídeo..." rows={2} className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm placeholder-[#52525B] focus:outline-none focus:border-[#7B3FE4] transition-colors resize-none" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Categoria</label>
-                  <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#7B3FE4] transition-colors">
-                    {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Duração (segundos)</label>
-                  <input type="number" value={form.duration_seconds} onChange={(e) => setForm((f) => ({ ...f, duration_seconds: e.target.value }))} placeholder="Ex: 102" min={0} className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm placeholder-[#52525B] focus:outline-none focus:border-[#7B3FE4] transition-colors" />
+                <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Destino</label>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setForm(f => ({ ...f, destino: 'patient' }))}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition-all ${form.destino === 'patient' ? 'bg-[#7B3FE4]/15 border-[#7B3FE4] text-[#7B3FE4]' : 'bg-[#18181A] border-[#1C1C1E] text-[#71717A] hover:text-white'}`}>
+                    <Users className="w-4 h-4" /> Landpage / Paciente
+                  </button>
+                  <button type="button" onClick={() => setForm(f => ({ ...f, destino: 'medical' }))}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition-all ${form.destino === 'medical' ? 'bg-[#3B82F6]/15 border-[#3B82F6] text-[#3B82F6]' : 'bg-[#18181A] border-[#1C1C1E] text-[#71717A] hover:text-white'}`}>
+                    <GraduationCap className="w-4 h-4" /> Área do Médico
+                  </button>
                 </div>
               </div>
+
+              {/* Medical: module + lesson selectors */}
+              {form.destino === 'medical' && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Módulo</label>
+                    <select value={form.medModNum} onChange={(e) => setForm(f => ({ ...f, medModNum: parseInt(e.target.value), medLessonNum: 1 }))} className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#3B82F6] transition-colors">
+                      {FALLBACK_MODULES.map(m => <option key={m.num} value={m.num}>Módulo {m.num} — {m.title}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Aula</label>
+                    <select value={form.medLessonNum} onChange={(e) => setForm(f => ({ ...f, medLessonNum: parseInt(e.target.value) }))} className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#3B82F6] transition-colors">
+                      {medLessons.map(l => <option key={l.num} value={l.num}>Aula {String(l.num).padStart(2,'0')}</option>)}
+                    </select>
+                  </div>
+                  <div className="col-span-2 bg-[#3B82F6]/8 border border-[#3B82F6]/20 rounded-xl px-3 py-2 text-xs text-[#60A5FA]">
+                    {medLessons.find(l => l.num === form.medLessonNum)?.title}
+                  </div>
+                </div>
+              )}
+
+              {/* Patient: title + description + category */}
+              {form.destino === 'patient' && <>
+                <div>
+                  <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Título *</label>
+                  <input type="text" value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))} placeholder="Ex: Depoimento Adriana Mendes" className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm placeholder-[#52525B] focus:outline-none focus:border-[#7B3FE4] transition-colors" required />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Descrição</label>
+                  <textarea value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Descrição do vídeo..." rows={2} className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm placeholder-[#52525B] focus:outline-none focus:border-[#7B3FE4] transition-colors resize-none" />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Categoria</label>
+                    <select value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#7B3FE4] transition-colors">
+                      {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Duração (segundos)</label>
+                    <input type="number" value={form.duration_seconds} onChange={(e) => setForm((f) => ({ ...f, duration_seconds: e.target.value }))} placeholder="Ex: 102" min={0} className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm placeholder-[#52525B] focus:outline-none focus:border-[#7B3FE4] transition-colors" />
+                  </div>
+                </div>
+              </>}
+
+              {/* Thumbnail */}
               <div>
                 <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Capa (opcional)</label>
                 <div className="border border-dashed border-[#2A2A2E] rounded-xl overflow-hidden cursor-pointer hover:border-[#7B3FE4]/50 transition-colors" onClick={() => thumbInputRef.current?.click()}>
@@ -311,22 +405,40 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
                   <input ref={thumbInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) setThumbPreview(URL.createObjectURL(f)) }} />
                 </div>
               </div>
+
+              {/* Video file */}
               <div>
-                <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Arquivo de Vídeo (opcional)</label>
-                <div className="border border-dashed border-[#2A2A2E] rounded-xl p-4 text-center cursor-pointer hover:border-[#7B3FE4]/50 transition-colors" onClick={() => fileInputRef.current?.click()}>
-                  <Upload className="w-5 h-5 text-[#52525B] mx-auto mb-1" />
-                  <p className="text-xs text-[#71717A]">Clique para selecionar</p>
-                  <p className="text-[10px] text-[#52525B] mt-0.5">MP4, MOV — máx. 2GB</p>
+                <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Arquivo de Vídeo {form.destino === 'medical' ? '*' : '(opcional)'}</label>
+                <div className="border border-dashed border-[#2A2A2E] rounded-xl overflow-hidden cursor-pointer hover:border-[#7B3FE4]/50 transition-colors" onClick={() => !uploading && fileInputRef.current?.click()}>
+                  {videoFileName
+                    ? <div className="px-4 py-3 flex items-center gap-2"><Film className="w-4 h-4 text-[#7B3FE4] shrink-0" /><span className="text-xs text-white truncate">{videoFileName}</span></div>
+                    : <div className="p-4 text-center"><Upload className="w-5 h-5 text-[#52525B] mx-auto mb-1" /><p className="text-xs text-[#71717A]">Clique para selecionar</p><p className="text-[10px] text-[#52525B] mt-0.5">MP4, MOV — máx. 2GB</p></div>}
                   <input ref={fileInputRef} type="file" accept="video/*,.m3u8" className="hidden"
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f && !form.duration_seconds) { const url = URL.createObjectURL(f); const vid = document.createElement('video'); vid.src = url; vid.onloadedmetadata = () => { setForm((prev) => ({ ...prev, duration_seconds: Math.floor(vid.duration).toString() })); URL.revokeObjectURL(url) } } }} />
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) { setVideoFileName(f.name); if (!form.duration_seconds) { const url = URL.createObjectURL(f); const vid = document.createElement('video'); vid.src = url; vid.onloadedmetadata = () => { setForm((prev) => ({ ...prev, duration_seconds: Math.floor(vid.duration).toString() })); URL.revokeObjectURL(url) } } } }} />
                 </div>
               </div>
+
+              {/* Progress bar (medical only) */}
+              {uploading && form.destino === 'medical' && (
+                <div className="bg-[#18181A] border border-[#1C1C1E] rounded-xl px-4 py-3">
+                  <div className="flex items-center justify-between text-xs text-[#A1A1AA] mb-2">
+                    <span>Enviando para o servidor...</span><span className="font-mono">{uploadProgress}%</span>
+                  </div>
+                  <div className="h-1.5 bg-[#27272A] rounded-full overflow-hidden">
+                    <div className="h-full bg-[#3B82F6] rounded-full transition-all duration-300" style={{ width: `${uploadProgress}%` }} />
+                  </div>
+                  <p className="text-[10px] text-[#52525B] mt-2">Não feche esta janela durante o envio</p>
+                </div>
+              )}
+
               {uploadError && <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5"><AlertCircle className="w-4 h-4 flex-shrink-0" />{uploadError}</div>}
-              {uploadSuccess && <div className="flex items-center gap-2 text-green-400 text-xs bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5"><CheckCircle className="w-4 h-4 flex-shrink-0" />Vídeo adicionado!</div>}
+              {uploadSuccess && <div className="flex items-center gap-2 text-green-400 text-xs bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5"><CheckCircle className="w-4 h-4 flex-shrink-0" />Vídeo enviado com sucesso!</div>}
               <div className="flex gap-3 pt-1">
                 <button type="button" onClick={() => setShowForm(false)} className="flex-1 bg-[#18181A] border border-[#1C1C1E] text-[#A1A1AA] text-sm font-medium py-2.5 rounded-xl hover:border-[#27272A] transition-colors">Cancelar</button>
                 <button type="submit" disabled={uploading} className="flex-1 bg-[#7B3FE4] hover:bg-[#6325C8] disabled:opacity-60 text-white text-sm font-medium py-2.5 rounded-xl flex items-center justify-center gap-2 transition-colors">
-                  {uploading ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Enviando...</> : <><Upload className="w-4 h-4" />Adicionar</>}
+                  {uploading
+                    ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />{form.destino === 'medical' ? `${uploadProgress}%` : 'Enviando...'}</>
+                    : <><Upload className="w-4 h-4" />Adicionar</>}
                 </button>
               </div>
             </form>
@@ -505,35 +617,9 @@ const FALLBACK_MODULES = [
   },
 ]
 
-interface LessonUpload { modNum: number; lessonNum: number; lessonId: string | null; lessonTitle: string }
-
-function uploadWithProgress(url: string, file: File, contentType: string, onProgress: (pct: number) => void): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest()
-    xhr.open('PUT', url)
-    xhr.setRequestHeader('Content-Type', contentType)
-    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)) }
-    xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) resolve(); else reject(new Error(`Upload failed: ${xhr.status}`)) }
-    xhr.onerror = () => reject(new Error('Erro de rede no upload'))
-    xhr.send(file)
-  })
-}
-
 function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowserClient> }) {
   const [modules, setModules] = useState<TrainingModule[]>([])
   const [loading, setLoading] = useState(true)
-  const [uploadForm, setUploadForm] = useState<LessonUpload | null>(null)
-  const [uploading, setUploading] = useState(false)
-  const [uploadProgress, setUploadProgress] = useState(0)
-  const [uploadError, setUploadError] = useState<string | null>(null)
-  const [uploadSuccess, setUploadSuccess] = useState(false)
-  const [thumbPreview, setThumbPreview] = useState<string | null>(null)
-  const [videoName, setVideoName] = useState<string | null>(null)
-  const [videoSize, setVideoSize] = useState<string | null>(null)
-  const [saved, setSaved] = useState<string | null>(null)
-  const [localVideoMap, setLocalVideoMap] = useState<Record<string, string>>({})
-  const trainingThumbRef = useRef<HTMLInputElement>(null)
-  const trainingFileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => { load() }, []) // eslint-disable-line
 
@@ -543,7 +629,7 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
       const { data: mods } = await supabase.from('training_modules').select('*').order('num')
       const { data: lessons } = await supabase.from('training_lessons').select('*').order('num')
       if (mods && mods.length > 0) {
-        setModules((mods ?? []).map((m: TrainingModule) => ({
+        setModules(mods.map((m: TrainingModule) => ({
           ...m,
           lessons: (lessons ?? []).filter((l: TrainingLesson) => l.module_id === m.id),
         })))
@@ -554,203 +640,54 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
   const displayModules = modules.length > 0
     ? modules
     : FALLBACK_MODULES.map(fb => ({
-        id: '',
-        num: fb.num,
-        title: fb.title,
-        color: fb.color,
-        lessons: fb.lessons.map(l => ({
-          id: '',
-          module_id: '',
-          num: l.num,
-          title: l.title,
-          duration: l.duration,
-          video_url: localVideoMap[`${fb.num}-${l.num}`] ?? '',
-        })),
+        id: '', num: fb.num, title: fb.title, color: fb.color,
+        lessons: fb.lessons.map(l => ({ id: '', module_id: '', num: l.num, title: l.title, duration: l.duration, video_url: '' })),
       }))
 
   const totalLessons = displayModules.reduce((a, m) => a + m.lessons.length, 0)
   const withVideo = displayModules.reduce((a, m) => a + m.lessons.filter(l => l.video_url).length, 0)
 
-  function openUpload(mod: TrainingModule, lesson: TrainingLesson) {
-    setUploadForm({ modNum: mod.num, lessonNum: lesson.num, lessonId: lesson.id || null, lessonTitle: lesson.title })
-    setUploadError(null); setUploadSuccess(false); setThumbPreview(null); setVideoName(null); setVideoSize(null); setUploadProgress(0); setSaved(null)
-    if (trainingThumbRef.current) trainingThumbRef.current.value = ''
-    if (trainingFileRef.current) trainingFileRef.current.value = ''
-  }
-
-  async function handleUpload(e: React.FormEvent) {
-    e.preventDefault()
-    if (!uploadForm) return
-    const videoFile = trainingFileRef.current?.files?.[0]
-    if (!videoFile) { setUploadError('Selecione um arquivo de vídeo'); return }
-    setUploading(true); setUploadError(null); setUploadSuccess(false); setUploadProgress(0)
-    try {
-      // 1. Insert into videos table
-      const { data: newVideo, error: insertError } = await supabase
-        .from('videos')
-        .insert({ title: uploadForm.lessonTitle, category: 'Treinamento Médico', is_published: true })
-        .select().single()
-      if (insertError || !newVideo) throw new Error(insertError?.message ?? 'Falha ao criar registro')
-
-      // 2. Upload video file to R2 with progress tracking
-      const urlRes = await fetch('/api/video/upload-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoId: newVideo.id, fileName: videoFile.name, contentType: videoFile.type || 'video/mp4' }),
-      })
-      if (!urlRes.ok) { await supabase.from('videos').delete().eq('id', newVideo.id); throw new Error('Falha ao obter URL de upload') }
-      const { uploadUrl, key } = await urlRes.json()
-      await uploadWithProgress(uploadUrl, videoFile, videoFile.type || 'video/mp4', setUploadProgress)
-      await supabase.from('videos').update({ hls_path: key }).eq('id', newVideo.id)
-
-      // 3. Upload thumbnail if selected
-      const thumbFile = trainingThumbRef.current?.files?.[0]
-      if (thumbFile) {
-        const thumbRes = await fetch('/api/video/upload-url', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ videoId: newVideo.id, fileName: thumbFile.name, contentType: thumbFile.type || 'image/jpeg', type: 'thumbnail' }),
-        })
-        if (thumbRes.ok) {
-          const { uploadUrl: tu, key: tk } = await thumbRes.json()
-          const tr = await fetch(tu, { method: 'PUT', body: thumbFile, headers: { 'Content-Type': thumbFile.type || 'image/jpeg' } })
-          if (tr.ok) await supabase.from('videos').update({ thumbnail_path: tk }).eq('id', newVideo.id)
-        }
-      }
-
-      // 4. Link video UUID to lesson via server-side API (uses service role to bypass RLS)
-      const mapKey = `${uploadForm.modNum}-${uploadForm.lessonNum}`
-      const fallbackMod = FALLBACK_MODULES.find(m => m.num === uploadForm.modNum)
-      const fallbackLesson = fallbackMod?.lessons.find(l => l.num === uploadForm.lessonNum)
-
-      const linkRes = await fetch('/api/training/link-video', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          modNum: uploadForm.modNum,
-          modTitle: fallbackMod?.title ?? `Módulo ${uploadForm.modNum}`,
-          modColor: fallbackMod?.color ?? 'from-[#7B3FE4] to-[#4C1B9B]',
-          lessonNum: uploadForm.lessonNum,
-          lessonTitle: fallbackLesson?.title ?? uploadForm.lessonTitle,
-          lessonDuration: fallbackLesson?.duration ?? '',
-          videoId: newVideo.id,
-        }),
-      })
-      if (!linkRes.ok) {
-        const linkErr = await linkRes.json().catch(() => ({}))
-        throw new Error(`Falha ao vincular vídeo: ${linkErr.error ?? linkRes.status}`)
-      }
-
-      // Reload modules from DB to reflect updated video_url
-      await loadModules()
-      setLocalVideoMap(prev => ({ ...prev, [mapKey]: newVideo.id }))
-
-      setSaved(mapKey)
-      setUploadSuccess(true)
-      setTimeout(() => { setUploadForm(null); setUploadSuccess(false) }, 1500)
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : 'Erro no upload')
-    } finally {
-      setUploading(false)
-    }
-  }
-
-  if (loading) {
-    return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 rounded-full border-2 border-[#3B82F6] border-t-transparent animate-spin" /></div>
-  }
+  if (loading) return <div className="flex items-center justify-center py-20"><div className="w-8 h-8 rounded-full border-2 border-[#3B82F6] border-t-transparent animate-spin" /></div>
 
   return (
     <>
-      {/* Info banner */}
       <div className="flex items-center gap-3 bg-[#3B82F6]/8 border border-[#3B82F6]/20 rounded-xl px-4 py-3 mb-5">
         <GraduationCap className="w-4 h-4 text-[#3B82F6] flex-shrink-0" />
-        <p className="text-xs text-[#A1A1AA]">
-          Vídeos das aulas da <span className="text-white font-medium">Escola de Negócios Médicos</span> — aparecem em{' '}
-          <a href="/medical/escola" className="text-[#3B82F6] hover:underline">/medical/escola</a>.
-          {modules.length === 0 && <span className="text-amber-400 ml-2">Crie módulos em <a href="/admin/treinamento" className="underline">Ger. Treinamento</a> para vincular permanentemente.</span>}
-        </p>
+        <p className="text-xs text-[#A1A1AA]">Status dos vídeos da <span className="text-white font-medium">Escola de Negócios Médicos</span>. Para enviar vídeos use <span className="text-[#7B3FE4] font-medium">+ Adicionar Vídeo → Área do Médico</span>.</p>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-3 mb-5">
         {[
-          { label: 'Total de aulas', value: totalLessons, icon: <Film className="w-4 h-4 text-[#3B82F6]" />, bg: 'bg-[#3B82F6]/8 border-[#3B82F6]/20' },
-          { label: 'Com vídeo', value: withVideo, icon: <CheckCircle className="w-4 h-4 text-emerald-400" />, bg: 'bg-emerald-500/8 border-emerald-500/20' },
-          { label: 'Sem vídeo', value: totalLessons - withVideo, icon: <AlertCircle className="w-4 h-4 text-amber-400" />, bg: 'bg-amber-500/8 border-amber-500/20' },
+          { label: 'Total de aulas', value: totalLessons, icon: <Film className="w-4 h-4 text-[#3B82F6]" />, bg: 'border-[#3B82F6]/20' },
+          { label: 'Com vídeo', value: withVideo, icon: <CheckCircle className="w-4 h-4 text-emerald-400" />, bg: 'border-emerald-500/20' },
+          { label: 'Sem vídeo', value: totalLessons - withVideo, icon: <AlertCircle className="w-4 h-4 text-amber-400" />, bg: 'border-amber-500/20' },
         ].map((s, i) => (
           <div key={i} className={`flex items-center gap-3 bg-[#111113] border ${s.bg} rounded-xl px-4 py-3`}>
-            {s.icon}
-            <div>
-              <p className="text-xl font-bold text-white">{s.value}</p>
-              <p className="text-[10px] text-[#71717A]">{s.label}</p>
-            </div>
+            {s.icon}<div><p className="text-xl font-bold text-white">{s.value}</p><p className="text-[10px] text-[#71717A]">{s.label}</p></div>
           </div>
         ))}
       </div>
 
-      {/* Modules */}
       <div className="space-y-4">
         {displayModules.map((mod) => (
           <div key={mod.num} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden">
             <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[#1C1C1E]">
-              <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${mod.color || 'from-[#7B3FE4] to-[#4C1B9B]'} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>{mod.num}</div>
-              <div>
-                <p className="text-sm font-semibold text-white">{mod.title}</p>
-                <p className="text-[10px] text-[#52525B]">{mod.lessons.length} aulas</p>
-              </div>
-              <div className="ml-auto">
-                <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${mod.lessons.filter(l => l.video_url).length === mod.lessons.length ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'}`}>
-                  {mod.lessons.filter(l => l.video_url).length}/{mod.lessons.length} vídeos
-                </span>
-              </div>
+              <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${mod.color || 'from-[#7B3FE4] to-[#4C1B9B]'} flex items-center justify-center text-white text-xs font-bold`}>{mod.num}</div>
+              <div><p className="text-sm font-semibold text-white">{mod.title}</p><p className="text-[10px] text-[#52525B]">{mod.lessons.length} aulas</p></div>
+              <span className={`ml-auto text-[10px] font-semibold px-2 py-1 rounded-full ${mod.lessons.filter(l => l.video_url).length === mod.lessons.length ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'}`}>
+                {mod.lessons.filter(l => l.video_url).length}/{mod.lessons.length} vídeos
+              </span>
             </div>
-
             <div className="divide-y divide-[#1C1C1E]">
-              <div className="grid grid-cols-[2fr_2fr_auto] gap-4 px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-[#52525B]">
-                <span>Aula</span><span>Vídeo</span><span>Ação</span>
-              </div>
               {mod.lessons.map((lesson) => {
-                const isSaved = saved === `${mod.num}-${lesson.num}`
                 const hasVideo = !!lesson.video_url
                 return (
-                  <div key={lesson.num} className="grid grid-cols-[2fr_2fr_auto] gap-4 items-center px-5 py-3 hover:bg-[#18181A]/40 transition-colors">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className={`w-6 h-6 rounded-lg flex-shrink-0 flex items-center justify-center ${hasVideo ? 'bg-emerald-500/15 border border-emerald-500/20' : 'bg-[#18181A] border border-[#27272A]'}`}>
-                        {hasVideo ? <CheckCircle className="w-3 h-3 text-emerald-400" /> : <Play className="w-3 h-3 text-[#3F3F46]" />}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-[10px] text-[#52525B]">Aula {String(lesson.num).padStart(2, '0')}</p>
-                        <p className="text-xs text-[#A1A1AA] truncate">{lesson.title}</p>
-                      </div>
+                  <div key={lesson.num} className="grid grid-cols-[auto_1fr_auto] gap-4 items-center px-5 py-3">
+                    <div className={`w-6 h-6 rounded-lg flex-shrink-0 flex items-center justify-center ${hasVideo ? 'bg-emerald-500/15 border border-emerald-500/20' : 'bg-[#18181A] border border-[#27272A]'}`}>
+                      {hasVideo ? <CheckCircle className="w-3 h-3 text-emerald-400" /> : <Play className="w-3 h-3 text-[#3F3F46]" />}
                     </div>
-
-                    <div className="min-w-0">
-                      {isSaved ? (
-                        <p className="text-[10px] text-emerald-400 font-medium">✓ Vídeo enviado!</p>
-                      ) : hasVideo ? (
-                        <div className="flex items-center gap-1.5">
-                          <div className="w-5 h-5 rounded bg-[#3B82F6]/15 border border-[#3B82F6]/30 flex items-center justify-center">
-                            <Film className="w-2.5 h-2.5 text-[#3B82F6]" />
-                          </div>
-                          <p className="text-[10px] text-emerald-400 font-medium">Vídeo configurado</p>
-                        </div>
-                      ) : (
-                        <p className="text-[10px] text-[#3F3F46] italic">Sem vídeo</p>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                      {lesson.duration && (
-                        <span className="hidden xl:flex items-center gap-1 text-[10px] text-[#52525B] mr-1"><Clock className="w-3 h-3" />{lesson.duration}</span>
-                      )}
-                      <button
-                        onClick={() => openUpload(mod as TrainingModule, lesson as TrainingLesson)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${hasVideo ? 'text-[#3B82F6] border-[#3B82F6]/30 bg-[#3B82F6]/8 hover:bg-[#3B82F6]/15' : 'text-white border-[#3B82F6] bg-[#3B82F6] hover:bg-[#3B82F6]/90 shadow-[0_0_8px_rgba(59,130,246,0.3)]'}`}
-                      >
-                        <Upload className="w-3 h-3" />
-                        {hasVideo ? 'Substituir' : 'Enviar Vídeo'}
-                      </button>
-                    </div>
+                    <div><p className="text-[10px] text-[#52525B]">Aula {String(lesson.num).padStart(2, '0')}</p><p className="text-xs text-[#A1A1AA] truncate">{lesson.title}</p></div>
+                    <span className={`text-[10px] font-medium ${hasVideo ? 'text-emerald-400' : 'text-[#3F3F46] italic'}`}>{hasVideo ? '● Vídeo configurado' : 'Sem vídeo'}</span>
                   </div>
                 )
               })}
@@ -758,120 +695,6 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
           </div>
         ))}
       </div>
-
-      {/* Upload Modal */}
-      {uploadForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <h3 className="font-semibold text-white">Adicionar Vídeo — Aula {String(uploadForm.lessonNum).padStart(2, '0')}</h3>
-                <p className="text-xs text-[#71717A] mt-0.5 truncate max-w-[360px]">{uploadForm.lessonTitle}</p>
-              </div>
-              <button onClick={() => setUploadForm(null)} className="text-[#71717A] hover:text-white transition-colors"><X className="w-5 h-5" /></button>
-            </div>
-
-            <form onSubmit={handleUpload} className="space-y-4">
-              {/* Thumbnail */}
-              <div>
-                <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Capa (opcional)</label>
-                <div
-                  className="border border-dashed border-[#2A2A2E] rounded-xl overflow-hidden cursor-pointer hover:border-[#3B82F6]/50 transition-colors"
-                  onClick={() => trainingThumbRef.current?.click()}
-                >
-                  {thumbPreview
-                    ? <div className="relative h-28"><img src={thumbPreview} alt="Capa" className="w-full h-full object-cover" /></div>
-                    : <div className="p-4 text-center">
-                        <Upload className="w-4 h-4 text-[#3B82F6] mx-auto mb-1" />
-                        <p className="text-xs text-[#71717A]">Clique para selecionar a capa</p>
-                        <p className="text-[10px] text-[#52525B] mt-0.5">JPG, PNG — recomendado 16:9</p>
-                      </div>
-                  }
-                  <input
-                    ref={trainingThumbRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) setThumbPreview(URL.createObjectURL(f)) }}
-                  />
-                </div>
-              </div>
-
-              {/* Video file */}
-              <div>
-                <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Arquivo de Vídeo *</label>
-                <div
-                  className="border border-dashed border-[#2A2A2E] rounded-xl p-4 text-center cursor-pointer hover:border-[#3B82F6]/50 transition-colors"
-                  onClick={() => trainingFileRef.current?.click()}
-                >
-                  {videoName
-                    ? <div className="flex items-center justify-center gap-2"><Film className="w-4 h-4 text-[#3B82F6]" /><span className="text-xs text-white truncate">{videoName}</span>{videoSize && <span className="text-[10px] text-[#71717A] flex-shrink-0">{videoSize}</span>}</div>
-                    : <>
-                        <Upload className="w-5 h-5 text-[#52525B] mx-auto mb-1" />
-                        <p className="text-xs text-[#71717A]">Clique para selecionar</p>
-                        <p className="text-[10px] text-[#52525B] mt-0.5">MP4, MOV — máx. 2GB</p>
-                      </>
-                  }
-                  <input
-                    ref={trainingFileRef}
-                    type="file"
-                    accept="video/*,.m3u8"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0]
-                      if (f) {
-                        setVideoName(f.name)
-                        setVideoSize((f.size / (1024 * 1024)).toFixed(0) + ' MB')
-                      }
-                    }}
-                  />
-                </div>
-              </div>
-
-
-              {/* Progress bar (shows during upload) */}
-              {uploading && (
-                <div className="bg-[#18181A] border border-[#27272A] rounded-xl px-4 py-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs text-[#A1A1AA] font-medium">
-                      {uploadProgress < 100 ? 'Enviando para o servidor...' : 'Finalizando...'}
-                    </span>
-                    <span className="text-xs font-bold text-[#3B82F6] tabular-nums">{uploadProgress}%</span>
-                  </div>
-                  <div className="h-2 bg-[#1C1C1E] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] rounded-full transition-all duration-300"
-                      style={{ width: `${uploadProgress}%` }}
-                    />
-                  </div>
-                  <p className="text-[10px] text-[#52525B] mt-1.5">Não feche esta janela durante o envio</p>
-                </div>
-              )}
-
-              {uploadError && (
-                <div className="flex items-center gap-2 text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />{uploadError}
-                </div>
-              )}
-              {uploadSuccess && (
-                <div className="flex items-center gap-2 text-emerald-400 text-xs bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2.5">
-                  <CheckCircle className="w-4 h-4 flex-shrink-0" />Vídeo enviado com sucesso!
-                </div>
-              )}
-
-              <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setUploadForm(null)} disabled={uploading} className="flex-1 bg-[#18181A] border border-[#1C1C1E] text-[#A1A1AA] text-sm font-medium py-2.5 rounded-xl hover:border-[#27272A] transition-colors disabled:opacity-40">Cancelar</button>
-                <button type="submit" disabled={uploading} className="flex-1 bg-[#3B82F6] hover:bg-[#3B82F6]/90 disabled:opacity-80 text-white text-sm font-medium py-2.5 rounded-xl flex items-center justify-center gap-2 transition-colors">
-                  {uploading
-                    ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />{uploadProgress < 100 ? `${uploadProgress}%` : 'Finalizando...'}</>
-                    : <><Upload className="w-4 h-4" />Adicionar Vídeo</>
-                  }
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </>
   )
 }
