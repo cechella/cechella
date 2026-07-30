@@ -463,12 +463,60 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
 
 // ─── Medical Videos Section ──────────────────────────────────────────────────
 
+const FALLBACK_MODULES = [
+  {
+    num: 1, title: 'Técnica de Vendas', color: 'from-[#7B3FE4] to-[#4C1B9B]',
+    lessons: [
+      { num: 1, title: 'Módulo 01 — Aula Modelo Mental / Comportamento', duration: '1h 08min' },
+      { num: 2, title: 'Módulo 02 — Cultura de Vendas', duration: '1h 19min' },
+      { num: 3, title: 'Módulo 03 — Canais de Vendas', duration: '1h 05min' },
+      { num: 4, title: 'Módulo 04 — Técnicas de Vendas', duration: '1h 10min' },
+      { num: 5, title: 'Módulo 05 — Resumo', duration: '1h 04min' },
+    ],
+  },
+  {
+    num: 2, title: 'Influência', color: 'from-[#3B82F6] to-[#1D4ED8]',
+    lessons: [
+      { num: 1, title: 'Posicionamento — encontre o nicho que te pagará R$150k/mês', duration: '1h 02min' },
+      { num: 2, title: 'Instagram médico de alta conversão — sem dançar reels', duration: '57min' },
+      { num: 3, title: 'LinkedIn e autoridade B2B para atrair parceiros estratégicos', duration: '1h 02min' },
+      { num: 4, title: 'YouTube e podcast médico — conteúdo evergreen que vende', duration: '1h 01min' },
+      { num: 5, title: 'Relações públicas e imprensa — como aparecer nos grandes veículos', duration: '1h 02min' },
+    ],
+  },
+  {
+    num: 3, title: 'Liderança & Recrutamento', color: 'from-[#F59E0B] to-[#D97706]',
+    lessons: [
+      { num: 1, title: 'Quando e como contratar o primeiro funcionário do consultório', duration: '1h 01min' },
+      { num: 2, title: 'Formação de times de vendas — recrutando e treinando consultores', duration: '56min' },
+      { num: 3, title: 'Cultura de alta performance — o playbook do consultório campeão', duration: '1h 03min' },
+      { num: 4, title: 'Liderança situacional — gerenciar sem perder tempo clínico', duration: '1h 01min' },
+    ],
+  },
+  {
+    num: 4, title: 'Modelos de Negócio', color: 'from-[#10B981] to-[#059669]',
+    lessons: [
+      { num: 1, title: 'Os 7 modelos de receita para clínicas hormonais', duration: '1h 13min' },
+      { num: 2, title: 'Franquia médica — como replicar seu consultório em outras cidades', duration: '1h 07min' },
+      { num: 3, title: 'Parcerias estratégicas — academia, estética, nutrição, psicologia', duration: '1h 05min' },
+      { num: 4, title: 'Receita recorrente — planos de acompanhamento e assinaturas de saúde', duration: '1h 10min' },
+      { num: 5, title: 'Valuation e exit — quanto vale seu consultório e como vendê-lo', duration: '1h 04min' },
+    ],
+  },
+]
+
+interface UrlForm { modNum: number; lessonNum: number; lessonId: string | null; title: string; currentUrl: string }
+
 function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowserClient> }) {
   const [modules, setModules] = useState<TrainingModule[]>([])
   const [loading, setLoading] = useState(true)
-  const [editingUrl, setEditingUrl] = useState<{ lessonId: string; value: string } | null>(null)
+  const [urlForm, setUrlForm] = useState<UrlForm | null>(null)
+  const [urlValue, setUrlValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState<string | null>(null)
+
+  // Map to store URLs for fallback lessons (no Supabase ID): key = "modNum-lessonNum"
+  const [fallbackUrls, setFallbackUrls] = useState<Record<string, string>>({})
 
   useEffect(() => { load() }, []) // eslint-disable-line
 
@@ -477,21 +525,71 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
     try {
       const { data: mods } = await supabase.from('training_modules').select('*').order('num')
       const { data: lessons } = await supabase.from('training_lessons').select('*').order('num')
-      setModules((mods ?? []).map((m: TrainingModule) => ({
-        ...m,
-        lessons: (lessons ?? []).filter((l: TrainingLesson) => l.module_id === m.id),
-      })))
-    } catch { setModules([]) } finally { setLoading(false) }
+      if (mods && mods.length > 0) {
+        setModules((mods ?? []).map((m: TrainingModule) => ({
+          ...m,
+          lessons: (lessons ?? []).filter((l: TrainingLesson) => l.module_id === m.id),
+        })))
+      }
+      // if empty, modules stays [] and we render from FALLBACK_MODULES
+    } catch { /* use fallback */ } finally { setLoading(false) }
   }
 
-  async function saveUrl(lessonId: string, url: string) {
+  // Build display list: DB data if available, else fallback
+  const displayModules = modules.length > 0
+    ? modules
+    : FALLBACK_MODULES.map(fb => ({
+        id: '',
+        num: fb.num,
+        title: fb.title,
+        color: fb.color,
+        lessons: fb.lessons.map(l => ({
+          id: '',
+          module_id: '',
+          num: l.num,
+          title: l.title,
+          duration: l.duration,
+          video_url: fallbackUrls[`${fb.num}-${l.num}`] ?? '',
+        })),
+      }))
+
+  const totalLessons = displayModules.reduce((a, m) => a + m.lessons.length, 0)
+  const withVideo = displayModules.reduce((a, m) => a + m.lessons.filter(l => l.video_url).length, 0)
+
+  function openUrlForm(mod: TrainingModule, lesson: TrainingLesson) {
+    setUrlForm({
+      modNum: mod.num,
+      lessonNum: lesson.num,
+      lessonId: lesson.id || null,
+      title: lesson.title,
+      currentUrl: lesson.video_url || '',
+    })
+    setUrlValue(lesson.video_url || '')
+  }
+
+  async function handleSaveUrl(e: React.FormEvent) {
+    e.preventDefault()
+    if (!urlForm) return
     setSaving(true)
-    await supabase.from('training_lessons').update({ video_url: url }).eq('id', lessonId)
-    setModules((prev: TrainingModule[]) => prev.map((m: TrainingModule) => ({ ...m, lessons: m.lessons.map((l: TrainingLesson) => l.id === lessonId ? { ...l, video_url: url } : l) })))
-    setSaved(lessonId)
-    setEditingUrl(null)
+
+    if (urlForm.lessonId) {
+      // Lesson exists in DB — just update video_url
+      await supabase.from('training_lessons').update({ video_url: urlValue }).eq('id', urlForm.lessonId)
+      setModules(prev => prev.map((m: TrainingModule) => ({
+        ...m,
+        lessons: m.lessons.map((l: TrainingLesson) =>
+          l.id === urlForm.lessonId ? { ...l, video_url: urlValue } : l
+        ),
+      })))
+    } else {
+      // Fallback mode — store locally (user should seed DB via Ger. Treinamento for persistence)
+      setFallbackUrls(prev => ({ ...prev, [`${urlForm.modNum}-${urlForm.lessonNum}`]: urlValue }))
+    }
+
+    setSaved(`${urlForm.modNum}-${urlForm.lessonNum}`)
     setSaving(false)
-    setTimeout(() => setSaved(null), 2000)
+    setUrlForm(null)
+    setTimeout(() => setSaved(null), 3000)
   }
 
   if (loading) {
@@ -503,86 +601,150 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
       {/* Info banner */}
       <div className="flex items-center gap-3 bg-[#3B82F6]/8 border border-[#3B82F6]/20 rounded-xl px-4 py-3 mb-5">
         <GraduationCap className="w-4 h-4 text-[#3B82F6] flex-shrink-0" />
-        <p className="text-xs text-[#A1A1AA]">URLs de vídeo para as aulas da <span className="text-white font-medium">Escola de Negócios Médicos</span> — aparece em <span className="text-[#3B82F6]">/medical/escola</span>. Para gerenciar módulos e aulas: <a href="/admin/treinamento" className="text-[#3B82F6] hover:underline">Ger. Treinamento →</a></p>
+        <p className="text-xs text-[#A1A1AA]">
+          URLs de vídeo para as aulas da <span className="text-white font-medium">Escola de Negócios Médicos</span> — aparece em{' '}
+          <a href="/medical/escola" className="text-[#3B82F6] hover:underline">/medical/escola</a>.
+          {modules.length === 0 && <span className="text-amber-400 ml-1">Para salvar permanentemente, crie os módulos em <a href="/admin/treinamento" className="underline">Ger. Treinamento →</a></span>}
+        </p>
       </div>
 
-      {modules.length === 0 ? (
-        <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-12 text-center">
-          <GraduationCap className="w-10 h-10 text-[#3A3A3E] mx-auto mb-3" />
-          <p className="text-[#71717A] mb-1">Nenhum módulo encontrado</p>
-          <p className="text-xs text-[#52525B]">Crie módulos e aulas em <a href="/admin/treinamento" className="text-[#3B82F6] hover:underline">Ger. Treinamento</a></p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {modules.map((mod) => (
-            <div key={mod.id} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden">
-              {/* Module header */}
-              <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[#1C1C1E]">
-                <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${mod.color || 'from-[#7B3FE4] to-[#4C1B9B]'} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>{mod.num}</div>
-                <div>
-                  <p className="text-sm font-semibold text-white">{mod.title}</p>
-                  <p className="text-[10px] text-[#52525B]">{mod.lessons.length} aulas · {mod.lessons.filter((l) => l.video_url).length} com vídeo</p>
-                </div>
-                <div className="ml-auto">
-                  <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${mod.lessons.filter((l) => l.video_url).length === mod.lessons.length && mod.lessons.length > 0 ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'}`}>
-                    {mod.lessons.filter((l) => l.video_url).length}/{mod.lessons.length} vídeos
-                  </span>
-                </div>
-              </div>
-
-              {/* Lessons */}
-              {mod.lessons.length === 0 ? (
-                <div className="px-5 py-4 text-xs text-[#52525B]">Nenhuma aula neste módulo. <a href="/admin/treinamento" className="text-[#3B82F6] hover:underline">Adicionar aulas →</a></div>
-              ) : mod.lessons.map((lesson) => (
-                <div key={lesson.id} className="flex items-center gap-3 px-5 py-3 border-b border-[#1C1C1E] last:border-0 hover:bg-[#18181A]/40 transition-colors">
-                  <div className={`w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 ${lesson.video_url ? 'bg-emerald-500/15 border border-emerald-500/20' : 'bg-[#18181A] border border-[#27272A]'}`}>
-                    {lesson.video_url ? <CheckCircle className="w-3 h-3 text-emerald-400" /> : <Play className="w-3 h-3 text-[#52525B]" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-[#A1A1AA] truncate">
-                      <span className="text-[#52525B] mr-1.5">Aula {String(lesson.num).padStart(2, '0')}</span>
-                      {lesson.title}
-                    </p>
-                    {editingUrl?.lessonId === lesson.id ? (
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <input
-                          autoFocus
-                          value={editingUrl.value}
-                          onChange={(e) => setEditingUrl({ lessonId: lesson.id, value: e.target.value })}
-                          placeholder="https://... (URL do vídeo)"
-                          className="flex-1 bg-[#18181A] border border-[#3B82F6]/40 rounded-lg px-2 py-1 text-white text-xs focus:outline-none font-mono"
-                          onKeyDown={(e) => { if (e.key === 'Enter') saveUrl(lesson.id, editingUrl.value); if (e.key === 'Escape') setEditingUrl(null) }}
-                        />
-                        <button onClick={() => saveUrl(lesson.id, editingUrl.value)} disabled={saving} className="flex-shrink-0 w-7 h-7 rounded-lg bg-[#3B82F6]/15 border border-[#3B82F6]/30 flex items-center justify-center text-[#3B82F6] hover:bg-[#3B82F6]/25 transition-colors">
-                          <Save className="w-3 h-3" />
-                        </button>
-                        <button onClick={() => setEditingUrl(null)} className="flex-shrink-0 w-7 h-7 rounded-lg bg-[#18181A] border border-[#1C1C1E] flex items-center justify-center text-[#71717A] hover:text-white transition-colors">
-                          <X className="w-3 h-3" />
-                        </button>
-                      </div>
-                    ) : (
-                      <p className={`text-[10px] mt-0.5 font-mono truncate ${lesson.video_url ? 'text-[#3B82F6]' : 'text-[#3F3F46] italic'}`}>
-                        {lesson.video_url || 'Sem URL de vídeo'}
-                      </p>
-                    )}
-                    {saved === lesson.id && <p className="text-[10px] text-emerald-400 mt-0.5">✓ Salvo</p>}
-                  </div>
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {lesson.duration && (
-                      <span className="flex items-center gap-1 text-[10px] text-[#52525B]"><Clock className="w-3 h-3" />{lesson.duration}</span>
-                    )}
-                    <button
-                      onClick={() => setEditingUrl({ lessonId: lesson.id, value: lesson.video_url || '' })}
-                      className="w-7 h-7 rounded-lg bg-[#18181A] border border-[#1C1C1E] flex items-center justify-center text-[#71717A] hover:text-[#3B82F6] hover:border-[#3B82F6]/30 transition-all"
-                      title="Editar URL do vídeo"
-                    >
-                      <Link2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        {[
+          { label: 'Total de aulas', value: totalLessons, icon: <Film className="w-4 h-4 text-[#3B82F6]" />, bg: 'bg-[#3B82F6]/8 border-[#3B82F6]/20' },
+          { label: 'Com vídeo', value: withVideo, icon: <CheckCircle className="w-4 h-4 text-emerald-400" />, bg: 'bg-emerald-500/8 border-emerald-500/20' },
+          { label: 'Sem vídeo', value: totalLessons - withVideo, icon: <AlertCircle className="w-4 h-4 text-amber-400" />, bg: 'bg-amber-500/8 border-amber-500/20' },
+        ].map((s, i) => (
+          <div key={i} className={`flex items-center gap-3 bg-[#111113] border ${s.bg} rounded-xl px-4 py-3`}>
+            {s.icon}
+            <div>
+              <p className="text-xl font-bold text-white">{s.value}</p>
+              <p className="text-[10px] text-[#71717A]">{s.label}</p>
             </div>
-          ))}
+          </div>
+        ))}
+      </div>
+
+      {/* Modules */}
+      <div className="space-y-4">
+        {displayModules.map((mod) => (
+          <div key={mod.num} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden">
+            {/* Module header */}
+            <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[#1C1C1E]">
+              <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${mod.color || 'from-[#7B3FE4] to-[#4C1B9B]'} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>{mod.num}</div>
+              <div>
+                <p className="text-sm font-semibold text-white">{mod.title}</p>
+                <p className="text-[10px] text-[#52525B]">{mod.lessons.length} aulas</p>
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${mod.lessons.filter(l => l.video_url).length === mod.lessons.length ? 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20' : 'text-amber-400 bg-amber-500/10 border border-amber-500/20'}`}>
+                  {mod.lessons.filter(l => l.video_url).length}/{mod.lessons.length} vídeos
+                </span>
+              </div>
+            </div>
+
+            {/* Lessons table */}
+            <div className="divide-y divide-[#1C1C1E]">
+              <div className="grid grid-cols-[2fr_3fr_auto] gap-4 px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-[#52525B]">
+                <span>Aula</span><span>URL do Vídeo</span><span>Ação</span>
+              </div>
+              {mod.lessons.map((lesson) => {
+                const key = `${mod.num}-${lesson.num}`
+                const isSaved = saved === key
+                return (
+                  <div key={lesson.num} className="grid grid-cols-[2fr_3fr_auto] gap-4 items-center px-5 py-3 hover:bg-[#18181A]/40 transition-colors">
+                    {/* Lesson name */}
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={`w-6 h-6 rounded-lg flex-shrink-0 flex items-center justify-center ${lesson.video_url ? 'bg-emerald-500/15 border border-emerald-500/20' : 'bg-[#18181A] border border-[#27272A]'}`}>
+                        {lesson.video_url ? <CheckCircle className="w-3 h-3 text-emerald-400" /> : <Play className="w-3 h-3 text-[#3F3F46]" />}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-[10px] text-[#52525B]">Aula {String(lesson.num).padStart(2, '0')}</p>
+                        <p className="text-xs text-[#A1A1AA] truncate">{lesson.title}</p>
+                      </div>
+                    </div>
+
+                    {/* URL preview */}
+                    <div className="min-w-0">
+                      {isSaved ? (
+                        <p className="text-[10px] text-emerald-400 font-medium">✓ URL salva</p>
+                      ) : lesson.video_url ? (
+                        <p className="text-[10px] text-[#3B82F6] font-mono truncate">{lesson.video_url}</p>
+                      ) : (
+                        <p className="text-[10px] text-[#3F3F46] italic">Sem URL configurada</p>
+                      )}
+                    </div>
+
+                    {/* Edit button */}
+                    <div className="flex items-center gap-1.5">
+                      {lesson.duration && (
+                        <span className="hidden xl:flex items-center gap-1 text-[10px] text-[#52525B] mr-1"><Clock className="w-3 h-3" />{lesson.duration}</span>
+                      )}
+                      <button
+                        onClick={() => openUrlForm(mod as TrainingModule, lesson as TrainingLesson)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all border ${lesson.video_url ? 'text-[#3B82F6] border-[#3B82F6]/30 bg-[#3B82F6]/8 hover:bg-[#3B82F6]/15' : 'text-white border-[#3B82F6] bg-[#3B82F6] hover:bg-[#3B82F6]/90 shadow-[0_0_8px_rgba(59,130,246,0.3)]'}`}
+                      >
+                        <Link2 className="w-3 h-3" />
+                        {lesson.video_url ? 'Editar' : 'Adicionar URL'}
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* URL Modal */}
+      {urlForm && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl w-full max-w-lg shadow-2xl">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#1C1C1E]">
+              <h2 className="text-base font-bold text-white">{urlForm.currentUrl ? 'Editar URL' : 'Adicionar URL'} — Aula {String(urlForm.lessonNum).padStart(2, '0')}</h2>
+              <button onClick={() => setUrlForm(null)} className="w-8 h-8 rounded-lg bg-[#18181A] border border-[#27272A] flex items-center justify-center text-[#71717A] hover:text-white transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleSaveUrl} className="px-6 py-5 space-y-4">
+              <div>
+                <p className="text-xs text-[#52525B] mb-1 uppercase tracking-wider font-semibold">Aula</p>
+                <p className="text-sm text-white font-medium">{urlForm.title}</p>
+              </div>
+              <div>
+                <label className="block text-xs text-[#A1A1AA] mb-2 font-semibold">URL do Vídeo *</label>
+                <input
+                  autoFocus
+                  type="url"
+                  value={urlValue}
+                  onChange={e => setUrlValue(e.target.value)}
+                  placeholder="https://vimeo.com/... ou https://youtu.be/..."
+                  required
+                  className="w-full bg-[#18181A] border border-[#27272A] rounded-xl px-4 py-3 text-white text-sm placeholder-[#52525B] focus:outline-none focus:border-[#3B82F6]/60 font-mono"
+                />
+                <p className="text-[10px] text-[#52525B] mt-1.5">Suporta Vimeo, YouTube e links diretos de vídeo</p>
+              </div>
+              {urlValue && (
+                <div className="bg-[#18181A] border border-[#27272A] rounded-xl px-4 py-3">
+                  <p className="text-[10px] text-[#52525B] mb-1 font-semibold uppercase tracking-wider">Preview</p>
+                  <p className="text-xs text-[#3B82F6] font-mono truncate">{urlValue}</p>
+                </div>
+              )}
+              {!urlForm.lessonId && (
+                <div className="flex items-start gap-2 bg-amber-500/8 border border-amber-500/20 rounded-xl px-4 py-3">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-[10px] text-amber-400">Esta aula ainda não está no banco de dados. A URL será salva apenas nesta sessão. Para salvar permanentemente, crie os módulos em <a href="/admin/treinamento" className="underline">Ger. Treinamento</a>.</p>
+                </div>
+              )}
+              <div className="flex items-center gap-3 pt-1">
+                <button type="button" onClick={() => setUrlForm(null)} className="flex-1 px-4 py-2.5 rounded-xl border border-[#27272A] text-sm text-[#71717A] hover:text-white transition-colors">Cancelar</button>
+                <button type="submit" disabled={saving || !urlValue.trim()} className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#3B82F6] text-white text-sm font-semibold hover:bg-[#3B82F6]/90 transition-colors disabled:opacity-50 shadow-[0_0_12px_rgba(59,130,246,0.25)]">
+                  <Save className="w-4 h-4" />
+                  {saving ? 'Salvando...' : 'Salvar URL'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </>
