@@ -78,36 +78,7 @@ export default function AdminVideosPage() {
         <TopBar user={{ name: 'Admin', role: 'admin' }} title="Gerenciar Vídeos" />
         <main className="flex-1 overflow-y-auto px-6 py-6">
 
-          {/* Tab switcher */}
-          <div className="flex gap-2 mb-6 bg-[#111113] border border-[#1C1C1E] rounded-2xl p-1.5 w-fit">
-            <button
-              onClick={() => setTab('patient')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                tab === 'patient'
-                  ? 'bg-[#7B3FE4] text-white shadow-[0_0_12px_rgba(123,63,228,0.3)]'
-                  : 'text-[#71717A] hover:text-white'
-              }`}
-            >
-              <Users className="w-4 h-4" />
-              Landpage / Paciente
-            </button>
-            <button
-              onClick={() => setTab('medical')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                tab === 'medical'
-                  ? 'bg-[#3B82F6] text-white shadow-[0_0_12px_rgba(59,130,246,0.3)]'
-                  : 'text-[#71717A] hover:text-white'
-              }`}
-            >
-              <GraduationCap className="w-4 h-4" />
-              Área do Médico
-            </button>
-          </div>
-
-          {tab === 'patient'
-            ? <PatientVideos supabase={supabase} />
-            : <MedicalVideos supabase={supabase} />
-          }
+          <PatientVideos supabase={supabase} />
 
         </main>
       </div>
