@@ -477,9 +477,9 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
     try {
       const { data: mods } = await supabase.from('training_modules').select('*').order('num')
       const { data: lessons } = await supabase.from('training_lessons').select('*').order('num')
-      setModules((mods ?? []).map((m) => ({
+      setModules((mods ?? []).map((m: TrainingModule) => ({
         ...m,
-        lessons: (lessons ?? []).filter((l) => l.module_id === m.id),
+        lessons: (lessons ?? []).filter((l: TrainingLesson) => l.module_id === m.id),
       })))
     } catch { setModules([]) } finally { setLoading(false) }
   }
@@ -487,7 +487,7 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
   async function saveUrl(lessonId: string, url: string) {
     setSaving(true)
     await supabase.from('training_lessons').update({ video_url: url }).eq('id', lessonId)
-    setModules((prev) => prev.map((m) => ({ ...m, lessons: m.lessons.map((l) => l.id === lessonId ? { ...l, video_url: url } : l) })))
+    setModules((prev: TrainingModule[]) => prev.map((m: TrainingModule) => ({ ...m, lessons: m.lessons.map((l: TrainingLesson) => l.id === lessonId ? { ...l, video_url: url } : l) })))
     setSaved(lessonId)
     setEditingUrl(null)
     setSaving(false)
