@@ -1,90 +1,136 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
+import { createBrowserClient } from '@supabase/ssr'
 import {
   GraduationCap, Play, Lock, CheckCircle2, Clock,
-  TrendingUp, Users, Zap, Shield, ChevronRight, ChevronDown, Star,
+  TrendingUp, ChevronRight, ChevronDown, Star,
 } from 'lucide-react'
 
-const modules = [
+interface Lesson {
+  id: string
+  num: number
+  title: string
+  duration: string
+  video_url: string
+  is_free: boolean
+  done?: boolean
+}
+
+interface Module {
+  id: string
+  num: number
+  title: string
+  subtitle: string
+  color: string
+  unlocked: boolean
+  published: boolean
+  lessons: Lesson[]
+}
+
+const FALLBACK_MODULES: Module[] = [
   {
-    num: 1,
-    slug: 'vendas',
-    title: 'Vendas',
-    subtitle: 'Domine o processo consultivo high ticket',
-    color: 'from-[#7B3FE4] to-[#4C1B9B]',
-    border: 'border-[#7B3FE4]/30',
-    icon: TrendingUp,
-    unlocked: true,
+    id: '1', num: 1, title: 'Vendas', subtitle: 'Domine o processo consultivo high ticket',
+    color: 'from-[#7B3FE4] to-[#4C1B9B]', unlocked: true, published: true,
     lessons: [
-      { num: 1, title: 'A mentalidade do médico-vendedor — quebrando o tabu', duration: '1h 08min', done: true },
-      { num: 2, title: 'Técnica da Venda Consultiva — SPIN Hormonal adaptado', duration: '1h 19min', done: true },
-      { num: 3, title: 'O processo de vendas do implante de R$4.800 ao R$12.000', duration: '1h 05min', done: true },
-      { num: 4, title: 'Manejo de objeções: preço, medo, tempo e outros médicos', duration: '1h 10min', done: false },
-      { num: 5, title: 'Construindo o pipeline: da consulta inicial ao paciente fidelizado', duration: '1h 04min', done: false },
+      { id: '1', num: 1, title: 'A mentalidade do médico-vendedor — quebrando o tabu', duration: '1h 08min', video_url: '', is_free: false, done: true },
+      { id: '2', num: 2, title: 'Técnica da Venda Consultiva — SPIN Hormonal adaptado', duration: '1h 19min', video_url: '', is_free: false, done: true },
+      { id: '3', num: 3, title: 'O processo de vendas do implante de R$4.800 ao R$12.000', duration: '1h 05min', video_url: '', is_free: false, done: true },
+      { id: '4', num: 4, title: 'Manejo de objeções: preço, medo, tempo e outros médicos', duration: '1h 10min', video_url: '', is_free: false, done: false },
+      { id: '5', num: 5, title: 'Construindo o pipeline: da consulta inicial ao paciente fidelizado', duration: '1h 04min', video_url: '', is_free: false, done: false },
     ],
   },
   {
-    num: 2,
-    slug: 'influencia',
-    title: 'Influência',
-    subtitle: 'Construa autoridade e audiência médica',
-    color: 'from-[#3B82F6] to-[#1D4ED8]',
-    border: 'border-[#3B82F6]/30',
-    icon: Users,
-    unlocked: true,
+    id: '2', num: 2, title: 'Influência', subtitle: 'Construa autoridade e audiência médica',
+    color: 'from-[#3B82F6] to-[#1D4ED8]', unlocked: true, published: true,
     lessons: [
-      { num: 1, title: 'Posicionamento — encontre o nicho que te pagará R$150k/mês', duration: '1h 02min', done: true },
-      { num: 2, title: 'Instagram médico de alta conversão — sem dançar reels', duration: '57min', done: false },
-      { num: 3, title: 'LinkedIn e autoridade B2B para atrair parceiros estratégicos', duration: '1h 02min', done: false },
-      { num: 4, title: 'YouTube e podcast médico — conteúdo evergreen que vende', duration: '1h 01min', done: false },
-      { num: 5, title: 'Relações públicas e imprensa — como aparecer nos grandes veículos', duration: '1h 02min', done: false },
+      { id: '6', num: 1, title: 'Posicionamento — encontre o nicho que te pagará R$150k/mês', duration: '1h 02min', video_url: '', is_free: false, done: true },
+      { id: '7', num: 2, title: 'Instagram médico de alta conversão — sem dançar reels', duration: '57min', video_url: '', is_free: false, done: false },
+      { id: '8', num: 3, title: 'LinkedIn e autoridade B2B para atrair parceiros estratégicos', duration: '1h 02min', video_url: '', is_free: false, done: false },
+      { id: '9', num: 4, title: 'YouTube e podcast médico — conteúdo evergreen que vende', duration: '1h 01min', video_url: '', is_free: false, done: false },
+      { id: '10', num: 5, title: 'Relações públicas e imprensa — como aparecer nos grandes veículos', duration: '1h 02min', video_url: '', is_free: false, done: false },
     ],
   },
   {
-    num: 3,
-    slug: 'lideranca',
-    title: 'Liderança & Recrutamento',
-    subtitle: 'Forme e lidere times de alto desempenho',
-    color: 'from-[#F59E0B] to-[#D97706]',
-    border: 'border-amber-500/30',
-    icon: Zap,
-    unlocked: false,
+    id: '3', num: 3, title: 'Liderança & Recrutamento', subtitle: 'Forme e lidere times de alto desempenho',
+    color: 'from-[#F59E0B] to-[#D97706]', unlocked: false, published: true,
     lessons: [
-      { num: 1, title: 'Quando e como contratar o primeiro funcionário do consultório', duration: '1h 01min', done: false },
-      { num: 2, title: 'Formação de times de vendas — recrutando e treinando consultores', duration: '56min', done: false },
-      { num: 3, title: 'Cultura de alta performance — o playbook do consultório campeão', duration: '1h 03min', done: false },
-      { num: 4, title: 'Liderança situacional — gerenciar sem perder tempo clínico', duration: '1h 01min', done: false },
+      { id: '11', num: 1, title: 'Quando e como contratar o primeiro funcionário do consultório', duration: '1h 01min', video_url: '', is_free: false },
+      { id: '12', num: 2, title: 'Formação de times de vendas — recrutando e treinando consultores', duration: '56min', video_url: '', is_free: false },
+      { id: '13', num: 3, title: 'Cultura de alta performance — o playbook do consultório campeão', duration: '1h 03min', video_url: '', is_free: false },
+      { id: '14', num: 4, title: 'Liderança situacional — gerenciar sem perder tempo clínico', duration: '1h 01min', video_url: '', is_free: false },
     ],
   },
   {
-    num: 4,
-    slug: 'modelos',
-    title: 'Modelos de Negócio',
-    subtitle: 'Estruture sua empresa para escala e lucro',
-    color: 'from-[#10B981] to-[#059669]',
-    border: 'border-emerald-500/30',
-    icon: Shield,
-    unlocked: false,
+    id: '4', num: 4, title: 'Modelos de Negócio', subtitle: 'Estruture sua empresa para escala e lucro',
+    color: 'from-[#10B981] to-[#059669]', unlocked: false, published: true,
     lessons: [
-      { num: 1, title: 'Os 7 modelos de receita para clínicas hormonais', duration: '1h 13min', done: false },
-      { num: 2, title: 'Franquia médica — como replicar seu consultório em outras cidades', duration: '1h 07min', done: false },
-      { num: 3, title: 'Parcerias estratégicas — academia, estética, nutrição, psicologia', duration: '1h 05min', done: false },
-      { num: 4, title: 'Receita recorrente — planos de acompanhamento e assinaturas de saúde', duration: '1h 10min', done: false },
-      { num: 5, title: 'Valuation e exit — quanto vale seu consultório e como vendê-lo', duration: '1h 04min', done: false },
+      { id: '15', num: 1, title: 'Os 7 modelos de receita para clínicas hormonais', duration: '1h 13min', video_url: '', is_free: false },
+      { id: '16', num: 2, title: 'Franquia médica — como replicar seu consultório em outras cidades', duration: '1h 07min', video_url: '', is_free: false },
+      { id: '17', num: 3, title: 'Parcerias estratégicas — academia, estética, nutrição, psicologia', duration: '1h 05min', video_url: '', is_free: false },
+      { id: '18', num: 4, title: 'Receita recorrente — planos de acompanhamento e assinaturas de saúde', duration: '1h 10min', video_url: '', is_free: false },
+      { id: '19', num: 5, title: 'Valuation e exit — quanto vale seu consultório e como vendê-lo', duration: '1h 04min', video_url: '', is_free: false },
     ],
   },
 ]
 
 export default function EscolaPage() {
-  const [expanded, setExpanded] = useState<number | null>(null)
+  const [modules, setModules] = useState<Module[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<string | null>(null)
 
-  const totalLessons = modules.flatMap(m => m.lessons).length
-  const doneLessons = modules.flatMap(m => m.lessons).filter(l => l.done).length
-  const pct = Math.round((doneLessons / totalLessons) * 100)
-  const totalHours = '~19h'
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  useEffect(() => { load() }, []) // eslint-disable-line
+
+  async function load() {
+    try {
+      const { data: mods, error: e1 } = await supabase
+        .from('training_modules')
+        .select('*')
+        .eq('published', true)
+        .order('num')
+
+      const { data: lessons, error: e2 } = await supabase
+        .from('training_lessons')
+        .select('*')
+        .order('num')
+
+      if (e1 || e2 || !mods?.length) {
+        setModules(FALLBACK_MODULES)
+      } else {
+        setModules(mods.map((m) => ({
+          ...m,
+          lessons: (lessons ?? []).filter((l) => l.module_id === m.id),
+        })))
+      }
+    } catch {
+      setModules(FALLBACK_MODULES)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const allLessons = modules.flatMap((m) => m.lessons)
+  const doneLessons = allLessons.filter((l) => l.done).length
+  const pct = allLessons.length ? Math.round((doneLessons / allLessons.length) * 100) : 0
+  const totalHours = `~${Math.round(allLessons.length * 1.05)}h`
+
+  if (loading) {
+    return (
+      <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
+        <Sidebar role="medical" />
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full border-2 border-[#7B3FE4] border-t-transparent animate-spin" />
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
@@ -102,15 +148,15 @@ export default function EscolaPage() {
                   <GraduationCap className="w-4 h-4 text-amber-400" />
                   <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider">Escola de Negócios Médicos</span>
                 </div>
-                <h2 className="text-xl font-bold text-white">4 Módulos · 19 Aulas · {totalHours} de conteúdo</h2>
+                <h2 className="text-xl font-bold text-white">{modules.length} Módulos · {allLessons.length} Aulas · {totalHours} de conteúdo</h2>
                 <p className="text-xs text-[#71717A] mt-0.5">Do zero ao G800 — pilote seu consultório como uma empresa de alto desempenho</p>
               </div>
               <div className="flex gap-2">
                 {[
                   { label: 'Concluídas', value: doneLessons },
                   { label: 'Progresso', value: `${pct}%` },
-                  { label: 'Módulos', value: `${modules.filter(m => m.unlocked).length}/4` },
-                ].map(s => (
+                  { label: 'Módulos', value: `${modules.filter((m) => m.unlocked).length}/${modules.length}` },
+                ].map((s) => (
                   <div key={s.label} className="bg-[#18181A] border border-[#1C1C1E] rounded-xl px-4 py-2.5 text-center min-w-[66px]">
                     <p className="text-lg font-bold text-white">{s.value}</p>
                     <p className="text-[10px] text-[#71717A]">{s.label}</p>
@@ -129,38 +175,30 @@ export default function EscolaPage() {
             </div>
           </div>
 
-          {/* Module cards 2×2 grid */}
+          {/* Module cards */}
           <div className="grid md:grid-cols-2 gap-4 mb-5">
             {modules.map((mod) => {
-              const modDone = mod.lessons.filter(l => l.done).length
-              const modPct = Math.round((modDone / mod.lessons.length) * 100)
-              const isOpen = expanded === mod.num
-              const Icon = mod.icon
+              const modDone = mod.lessons.filter((l) => l.done).length
+              const modPct = mod.lessons.length ? Math.round((modDone / mod.lessons.length) * 100) : 0
+              const isOpen = expanded === mod.id
 
               return (
-                <div key={mod.num} className={`bg-[#111113] border rounded-2xl overflow-hidden ${mod.unlocked ? mod.border : 'border-[#1C1C1E]'}`}>
+                <div key={mod.id} className={`bg-[#111113] border rounded-2xl overflow-hidden ${mod.unlocked ? `border-[${mod.color.split(' ')[0].replace('from-', '')}]/30` : 'border-[#1C1C1E]'}`}>
                   <div className="p-5">
-                    {/* Module header */}
                     <div className="flex items-start gap-4 mb-4">
                       <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${mod.color} flex items-center justify-center flex-shrink-0 text-white shadow-lg ${!mod.unlocked ? 'opacity-40' : ''}`}>
-                        {mod.unlocked ? <Icon className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+                        {mod.unlocked ? <TrendingUp className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                           <span className="text-[10px] font-semibold text-[#52525B] uppercase tracking-wider">Módulo {mod.num}</span>
-                          {!mod.unlocked && (
-                            <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">Bloqueado</span>
-                          )}
-                          {modPct === 100 && (
-                            <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">Concluído</span>
-                          )}
+                          {!mod.unlocked && <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/20">Bloqueado</span>}
+                          {modPct === 100 && <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">Concluído</span>}
                         </div>
                         <h3 className={`font-bold text-base ${mod.unlocked ? 'text-white' : 'text-[#52525B]'}`}>{mod.title}</h3>
                         <p className={`text-xs mt-0.5 ${mod.unlocked ? 'text-[#71717A]' : 'text-[#3F3F46]'}`}>{mod.subtitle}</p>
                       </div>
                     </div>
-
-                    {/* Progress */}
                     <div className="mb-3">
                       <div className="flex justify-between text-xs mb-1">
                         <span className="text-[#52525B]">{modDone}/{mod.lessons.length} aulas</span>
@@ -170,33 +208,20 @@ export default function EscolaPage() {
                         <div className={`h-full rounded-full bg-gradient-to-r ${mod.color} ${!mod.unlocked ? 'opacity-30' : ''} transition-all`} style={{ width: `${modPct || 2}%` }} />
                       </div>
                     </div>
-
-                    {/* Footer */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 text-[10px] text-[#52525B]">
-                        <Clock className="w-3 h-3" />
-                        {mod.lessons.length} aulas
+                        <Clock className="w-3 h-3" />{mod.lessons.length} aulas
                       </div>
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setExpanded(isOpen ? null : mod.num)}
-                          className="flex items-center gap-1 text-xs text-[#71717A] hover:text-white transition-colors"
-                        >
+                        <button onClick={() => setExpanded(isOpen ? null : mod.id)} className="flex items-center gap-1 text-xs text-[#71717A] hover:text-white transition-colors">
                           Aulas <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
                         </button>
                         {mod.unlocked ? (
-                          <a
-                            href={`/medical/escola/${mod.slug}/1`}
-                            className={`flex items-center gap-1.5 bg-gradient-to-r ${mod.color} text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity`}
-                          >
-                            <Play className="w-3 h-3" />
-                            {modDone > 0 ? 'Continuar' : 'Iniciar'}
+                          <a href={`/medical/escola/${mod.num}/1`} className={`flex items-center gap-1.5 bg-gradient-to-r ${mod.color} text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity`}>
+                            <Play className="w-3 h-3" />{modDone > 0 ? 'Continuar' : 'Iniciar'}
                           </a>
                         ) : (
-                          <a
-                            href="/medical/assinatura"
-                            className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity"
-                          >
+                          <a href="/medical/assinatura" className="flex items-center gap-1.5 bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-semibold px-3 py-1.5 rounded-lg hover:opacity-90 transition-opacity">
                             <Lock className="w-3 h-3" /> Desbloquear
                           </a>
                         )}
@@ -204,20 +229,15 @@ export default function EscolaPage() {
                     </div>
                   </div>
 
-                  {/* Lessons list (collapsible) */}
                   {isOpen && (
                     <div className="border-t border-[#1C1C1E]">
                       {mod.lessons.map((lesson) => (
                         <a
-                          key={lesson.num}
-                          href={mod.unlocked ? `/medical/escola/${mod.slug}/${lesson.num}` : '#'}
-                          className={`flex items-center gap-3 px-5 py-3 border-b border-[#1C1C1E] last:border-0 transition-all group ${
-                            mod.unlocked ? 'hover:bg-[#18181A]/60 cursor-pointer' : 'cursor-not-allowed opacity-50'
-                          }`}
+                          key={lesson.id}
+                          href={mod.unlocked && lesson.video_url ? lesson.video_url : '#'}
+                          className={`flex items-center gap-3 px-5 py-3 border-b border-[#1C1C1E] last:border-0 transition-all group ${mod.unlocked ? 'hover:bg-[#18181A]/60 cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
                         >
-                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                            lesson.done ? 'bg-emerald-500/15' : 'bg-[#18181A] border border-[#27272A]'
-                          }`}>
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${lesson.done ? 'bg-emerald-500/15' : 'bg-[#18181A] border border-[#27272A]'}`}>
                             {lesson.done
                               ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                               : mod.unlocked
@@ -234,9 +254,7 @@ export default function EscolaPage() {
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             <Clock className="w-3 h-3 text-[#52525B]" />
                             <span className="text-[10px] text-[#52525B]">{lesson.duration}</span>
-                            {lesson.done && (
-                              <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">Assistida</span>
-                            )}
+                            {lesson.done && <span className="text-[9px] text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded-full">Assistida</span>}
                           </div>
                         </a>
                       ))}
@@ -252,8 +270,8 @@ export default function EscolaPage() {
             <div className="flex items-center gap-3">
               <Star className="w-5 h-5 text-amber-400 flex-shrink-0" />
               <div className="flex-1">
-                <p className="font-semibold text-white text-sm">Desbloqueie os Módulos 3 e 4</p>
-                <p className="text-xs text-[#71717A] mt-0.5">Liderança & Recrutamento e Modelos de Negócio estão disponíveis no Plano Pro ou superior.</p>
+                <p className="font-semibold text-white text-sm">Desbloqueie mais módulos</p>
+                <p className="text-xs text-[#71717A] mt-0.5">Módulos avançados disponíveis no Plano Pro ou superior.</p>
               </div>
               <a href="/medical/assinatura" className="flex-shrink-0 flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-xs font-semibold px-4 py-2.5 rounded-xl hover:opacity-90 transition-opacity">
                 Fazer Upgrade <ChevronRight className="w-3 h-3" />
