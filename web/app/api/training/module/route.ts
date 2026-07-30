@@ -18,8 +18,10 @@ export async function GET(request: NextRequest) {
   const mod = mods?.[0] ?? null
   if (!mod) return NextResponse.json({ mod: null, lessons: [] })
 
-  const { data: lessons } = await admin
-    .from('training_lessons').select('*').eq('module_id', mod.id).order('num')
+  const { data: allLessons } = await admin
+    .from('training_lessons').select('*').order('num')
 
-  return NextResponse.json({ mod, lessons: lessons ?? [] })
+  const lessons = (allLessons ?? []).filter((l: { module_id: string }) => l.module_id === mod.id)
+
+  return NextResponse.json({ mod, lessons })
 }
