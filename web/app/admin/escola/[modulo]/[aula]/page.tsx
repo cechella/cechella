@@ -176,7 +176,7 @@ export default function AdminAulaPage() {
     } else {
       await supabase.from('training_progress').upsert({ user_id: userId, lesson_id: lesson.id, completed: true, completed_at: new Date().toISOString() })
       setCompleted(true)
-      setCompletedIds(prev => new Set([...prev, lesson.id]))
+      setCompletedIds(prev => new Set(Array.from(prev).concat(lesson.id)))
     }
   }
 
