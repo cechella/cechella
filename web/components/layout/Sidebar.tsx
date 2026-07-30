@@ -34,6 +34,8 @@ import {
   Building2,
   CreditCard,
   RefreshCw,
+  HeartPulse,
+  BadgeCheck,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -73,6 +75,8 @@ const navConfig: Record<UserRole, { label: string; href: string; icon: React.Rea
     { label: 'CRM', href: '/admin/crm', icon: <Kanban className="w-5 h-5" /> },
     { label: 'Vídeos', href: '/admin/videos', icon: <Play className="w-5 h-5" /> },
     { label: 'Treinamento', href: '/admin/treinamento', icon: <GraduationCap className="w-5 h-5" /> },
+    { label: 'Pacientes', href: '/admin/pacientes', icon: <HeartPulse className="w-5 h-5" /> },
+    { label: 'Assinaturas', href: '/admin/assinaturas', icon: <BadgeCheck className="w-5 h-5" /> },
     { label: 'Usuários', href: '/admin/users', icon: <Users className="w-5 h-5" /> },
     { label: 'Área do Paciente', href: '/admin/patient-settings', icon: <Settings className="w-5 h-5" /> },
     { label: 'Área Médico', href: '/admin/medico-settings', icon: <Stethoscope className="w-5 h-5" /> },
