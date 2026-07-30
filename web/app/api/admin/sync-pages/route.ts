@@ -207,12 +207,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Páginas inválidas: ${invalid.join(', ')}` }, { status: 400 })
     }
 
-    // In Vercel production, process.cwd() = /var/task (repo root)
-    // Locally / in Next.js dev, process.cwd() = /path/to/web
-    const cwd = process.cwd()
-    const hasWebDir = await fs.access(path.join(cwd, 'web', 'app')).then(() => true).catch(() => false)
-    const repoRoot = hasWebDir ? cwd : path.resolve(cwd, '..')
-    const webRoot = hasWebDir ? path.join(cwd, 'web') : cwd
+    // __dirname = /var/task/web/app/api/admin/sync-pages (Vercel) or similar locally
+    // Go up 5 levels to reach the web root: sync-pages → admin → api → app → web
+    const webRoot = path.resolve(__dirname, '../../../../..')
+    const repoRoot = path.resolve(webRoot, '..')
 
     // 1. Transform and write files
     const results: Record<string, { success: boolean; message: string }> = {}
