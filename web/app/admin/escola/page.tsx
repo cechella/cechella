@@ -32,14 +32,14 @@ interface Module {
 
 const FALLBACK_MODULES: Module[] = [
   {
-    id: '1', num: 1, title: 'Vendas', subtitle: 'Domine o processo consultivo high ticket',
+    id: '1', num: 1, title: 'Técnica de Vendas', subtitle: 'Modelo mental, cultura, canais e técnicas de vendas',
     color: 'from-[#7B3FE4] to-[#4C1B9B]', unlocked: true, published: true,
     lessons: [
-      { id: '1', num: 1, title: 'A mentalidade do médico-vendedor — quebrando o tabu', duration: '1h 08min', video_url: '', is_free: false, done: true },
-      { id: '2', num: 2, title: 'Técnica da Venda Consultiva — SPIN Hormonal adaptado', duration: '1h 19min', video_url: '', is_free: false, done: true },
-      { id: '3', num: 3, title: 'O processo de vendas do implante de R$4.800 ao R$12.000', duration: '1h 05min', video_url: '', is_free: false, done: true },
-      { id: '4', num: 4, title: 'Manejo de objeções: preço, medo, tempo e outros médicos', duration: '1h 10min', video_url: '', is_free: false, done: false },
-      { id: '5', num: 5, title: 'Construindo o pipeline: da consulta inicial ao paciente fidelizado', duration: '1h 04min', video_url: '', is_free: false, done: false },
+      { id: '1', num: 1, title: 'Módulo 01 — Aula Modelo Mental / Comportamento', duration: '1h 08min', video_url: '', is_free: false, done: true },
+      { id: '2', num: 2, title: 'Módulo 02 — Cultura de Vendas', duration: '1h 19min', video_url: '', is_free: false, done: true },
+      { id: '3', num: 3, title: 'Módulo 03 — Canais de Vendas', duration: '1h 05min', video_url: '', is_free: false, done: true },
+      { id: '4', num: 4, title: 'Módulo 04 — Técnicas de Vendas', duration: '1h 10min', video_url: '', is_free: false, done: false },
+      { id: '5', num: 5, title: 'Módulo 05 — Resumo', duration: '1h 04min', video_url: '', is_free: false, done: false },
     ],
   },
   {

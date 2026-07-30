@@ -9,23 +9,23 @@ import {
   Download, MessageSquare, ThumbsUp, BookOpen, Share2, List
 } from 'lucide-react'
 
-const moduleData: Record<string, {
+const moduleData: Record<number, {
   title: string
   color: string
   lessons: { num: number; title: string; duration: string; done: boolean }[]
 }> = {
-  vendas: {
-    title: 'Vendas',
+  1: {
+    title: 'Técnica de Vendas',
     color: 'from-[#7B3FE4] to-[#4C1B9B]',
     lessons: [
-      { num: 1, title: 'A mentalidade do médico-vendedor — quebrando o tabu', duration: '1h 08min', done: true },
-      { num: 2, title: 'Técnica da Venda Consultiva — SPIN Hormonal adaptado', duration: '1h 19min', done: true },
-      { num: 3, title: 'O processo de vendas do implante de R$4.800 ao R$12.000', duration: '1h 05min', done: true },
-      { num: 4, title: 'Manejo de objeções: preço, medo, tempo e outros médicos', duration: '1h 10min', done: false },
-      { num: 5, title: 'Construindo o pipeline: da consulta inicial ao paciente fidelizado', duration: '1h 04min', done: false },
+      { num: 1, title: 'Módulo 01 — Aula Modelo Mental / Comportamento', duration: '1h 08min', done: true },
+      { num: 2, title: 'Módulo 02 — Cultura de Vendas', duration: '1h 19min', done: true },
+      { num: 3, title: 'Módulo 03 — Canais de Vendas', duration: '1h 05min', done: true },
+      { num: 4, title: 'Módulo 04 — Técnicas de Vendas', duration: '1h 10min', done: false },
+      { num: 5, title: 'Módulo 05 — Resumo', duration: '1h 04min', done: false },
     ],
   },
-  influencia: {
+  2: {
     title: 'Influência',
     color: 'from-[#3B82F6] to-[#1D4ED8]',
     lessons: [
@@ -36,7 +36,7 @@ const moduleData: Record<string, {
       { num: 5, title: 'Relações públicas e imprensa — como aparecer nos grandes veículos', duration: '1h 02min', done: false },
     ],
   },
-  lideranca: {
+  3: {
     title: 'Liderança & Recrutamento',
     color: 'from-[#F59E0B] to-[#D97706]',
     lessons: [
@@ -46,7 +46,7 @@ const moduleData: Record<string, {
       { num: 4, title: 'Liderança situacional — gerenciar sem perder tempo clínico', duration: '1h 01min', done: false },
     ],
   },
-  modelos: {
+  4: {
     title: 'Modelos de Negócio',
     color: 'from-[#10B981] to-[#059669]',
     lessons: [
@@ -59,20 +59,17 @@ const moduleData: Record<string, {
   },
 }
 
-const moduloNums: Record<string, number> = { vendas: 1, influencia: 2, lideranca: 3, modelos: 4 }
-
 export default function AulaPage() {
   const params = useParams()
-  const moduloSlug = params?.modulo as string ?? 'vendas'
+  const modNum = parseInt(params?.modulo as string ?? '1')
   const aulaNum = parseInt(params?.aula as string ?? '1')
   const [showList, setShowList] = useState(false)
   const [completed, setCompleted] = useState(false)
 
-  const mod = moduleData[moduloSlug] ?? moduleData.vendas
+  const mod = moduleData[modNum] ?? moduleData[1]
   const lesson = mod.lessons.find(l => l.num === aulaNum) ?? mod.lessons[0]
   const prev = mod.lessons.find(l => l.num === aulaNum - 1)
   const next = mod.lessons.find(l => l.num === aulaNum + 1)
-  const modNum = moduloNums[moduloSlug] ?? 1
 
   return (
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
@@ -152,7 +149,7 @@ export default function AulaPage() {
               {/* Navigation */}
               <div className="px-6 pb-6 flex items-center justify-between gap-3">
                 {prev ? (
-                  <a href={`/medical/escola/${moduloSlug}/${prev.num}`}
+                  <a href={`/medical/escola/${modNum}/${prev.num}`}
                     className="flex items-center gap-2 text-sm text-[#71717A] bg-[#111113] border border-[#1C1C1E] px-4 py-2.5 rounded-xl hover:text-white hover:border-[#27272A] transition-colors">
                     <ChevronLeft className="w-4 h-4" />
                     <span className="hidden md:inline">Aula anterior</span>
@@ -165,7 +162,7 @@ export default function AulaPage() {
                 </a>
 
                 {next ? (
-                  <a href={`/medical/escola/${moduloSlug}/${next.num}`}
+                  <a href={`/medical/escola/${modNum}/${next.num}`}
                     className="flex items-center gap-2 text-sm font-semibold text-white bg-gradient-to-r from-[#7B3FE4] to-[#3B82F6] px-4 py-2.5 rounded-xl hover:opacity-90 transition-opacity shadow-[0_0_10px_rgba(123,63,228,0.2)]">
                     <span className="hidden md:inline">Próxima aula</span>
                     <ChevronRight className="w-4 h-4" />
@@ -196,7 +193,7 @@ export default function AulaPage() {
                 {mod.lessons.map((l) => (
                   <a
                     key={l.num}
-                    href={`/medical/escola/${moduloSlug}/${l.num}`}
+                    href={`/medical/escola/${modNum}/${l.num}`}
                     className={`flex items-center gap-3 px-4 py-3.5 border-b border-[#1C1C1E] transition-all hover:bg-[#18181A]/60 ${
                       l.num === aulaNum ? 'bg-[#7B3FE4]/10 border-l-2 border-l-[#7B3FE4]' : ''
                     }`}
