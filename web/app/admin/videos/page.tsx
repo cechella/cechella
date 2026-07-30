@@ -139,7 +139,7 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
 
   async function loadVideos() {
     setIsLoading(true)
-    const { data } = await supabase.from('videos').select('*').order('created_at', { ascending: false })
+    const { data } = await supabase.from('videos').select('*').neq('category', 'Treinamento Médico').order('created_at', { ascending: false })
     setVideos(data ?? [])
     setIsLoading(false)
   }
@@ -623,7 +623,7 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
       const fallbackMod = FALLBACK_MODULES.find(m => m.num === uploadForm.modNum)
       const fallbackLesson = fallbackMod?.lessons.find(l => l.num === uploadForm.lessonNum)
 
-      await fetch('/api/training/link-video', {
+      const linkRes = await fetch('/api/training/link-video', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -636,16 +636,13 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
           videoId: newVideo.id,
         }),
       })
-
-      // Update local UI immediately
-      if (uploadForm.lessonId) {
-        setModules(prev => prev.map((m: TrainingModule) => ({
-          ...m,
-          lessons: m.lessons.map((l: TrainingLesson) =>
-            l.id === uploadForm.lessonId ? { ...l, video_url: newVideo.id } : l
-          ),
-        })))
+      if (!linkRes.ok) {
+        const linkErr = await linkRes.json().catch(() => ({}))
+        throw new Error(`Falha ao vincular vídeo: ${linkErr.error ?? linkRes.status}`)
       }
+
+      // Reload modules from DB to reflect updated video_url
+      await loadModules()
       setLocalVideoMap(prev => ({ ...prev, [mapKey]: newVideo.id }))
 
       setSaved(mapKey)
