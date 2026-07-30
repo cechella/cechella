@@ -618,20 +618,62 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
         }
       }
 
-      // 4. Link video UUID to lesson (DB if exists, else local state)
+      // 4. Link video UUID to lesson — create module/lesson rows in DB if missing
       const mapKey = `${uploadForm.modNum}-${uploadForm.lessonNum}`
-      if (uploadForm.lessonId) {
-        await supabase.from('training_lessons').update({ video_url: newVideo.id }).eq('id', uploadForm.lessonId)
+      let resolvedLessonId = uploadForm.lessonId
+
+      if (!resolvedLessonId) {
+        // Find or create training_module row
+        const fallbackMod = FALLBACK_MODULES.find(m => m.num === uploadForm.modNum)
+        const fallbackLesson = fallbackMod?.lessons.find(l => l.num === uploadForm.lessonNum)
+
+        let { data: modRow } = await supabase
+          .from('training_modules')
+          .select('id')
+          .eq('num', uploadForm.modNum)
+          .single()
+
+        if (!modRow) {
+          const { data: inserted } = await supabase
+            .from('training_modules')
+            .insert({ num: uploadForm.modNum, title: fallbackMod?.title ?? `Módulo ${uploadForm.modNum}`, subtitle: '', color: fallbackMod?.color ?? 'from-[#7B3FE4] to-[#4C1B9B]', unlocked: true, published: true })
+            .select('id').single()
+          modRow = inserted
+        }
+
+        if (modRow) {
+          let { data: lessonRow } = await supabase
+            .from('training_lessons')
+            .select('id')
+            .eq('module_id', modRow.id)
+            .eq('num', uploadForm.lessonNum)
+            .single()
+
+          if (!lessonRow) {
+            const { data: inserted } = await supabase
+              .from('training_lessons')
+              .insert({ module_id: modRow.id, num: uploadForm.lessonNum, title: fallbackLesson?.title ?? uploadForm.lessonTitle, duration: fallbackLesson?.duration ?? '', video_url: newVideo.id, is_free: false })
+              .select('id').single()
+            lessonRow = inserted
+          } else {
+            await supabase.from('training_lessons').update({ video_url: newVideo.id }).eq('id', lessonRow.id)
+          }
+          resolvedLessonId = lessonRow?.id ?? null
+        }
+      } else {
+        await supabase.from('training_lessons').update({ video_url: newVideo.id }).eq('id', resolvedLessonId)
+      }
+
+      // Update local UI immediately regardless
+      if (resolvedLessonId) {
         setModules(prev => prev.map((m: TrainingModule) => ({
           ...m,
           lessons: m.lessons.map((l: TrainingLesson) =>
-            l.id === uploadForm.lessonId ? { ...l, video_url: newVideo.id } : l
+            l.id === resolvedLessonId ? { ...l, video_url: newVideo.id } : l
           ),
         })))
-      } else {
-        // Fallback: keep video UUID in local state so UI updates immediately
-        setLocalVideoMap(prev => ({ ...prev, [mapKey]: newVideo.id }))
       }
+      setLocalVideoMap(prev => ({ ...prev, [mapKey]: newVideo.id }))
 
       setSaved(mapKey)
       setUploadSuccess(true)
@@ -816,12 +858,6 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
                 </div>
               </div>
 
-              {!uploadForm.lessonId && (
-                <div className="flex items-start gap-2 bg-amber-500/8 border border-amber-500/20 rounded-xl px-4 py-3">
-                  <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-[10px] text-amber-400">Esta aula ainda não está no banco de dados. Crie os módulos em <a href="/admin/treinamento" className="underline">Ger. Treinamento</a> para vincular permanentemente.</p>
-                </div>
-              )}
 
               {/* Progress bar (shows during upload) */}
               {uploading && (
