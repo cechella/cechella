@@ -131,8 +131,15 @@ export default function AdminAulaPage() {
         ])
         if (userRes.data?.user?.email) setUserEmail(userRes.data.user.email)
         if (apiRes.ok) {
-          const { mod: modData, lessons } = await apiRes.json()
-          if (modData) setMod({ ...modData, lessons: lessons ?? [] })
+          const { mod: modData, lessons: dbLessons } = await apiRes.json()
+          if (modData) {
+            const fb = FALLBACK[modNum] ?? FALLBACK[1]
+            const merged = fb.lessons.map(fl => {
+              const found = (dbLessons ?? []).find((dl: LessonData) => dl.num === fl.num)
+              return found ?? { id: '', module_id: modData.id, num: fl.num, title: fl.title, duration: fl.duration, video_url: null, is_free: false }
+            })
+            setMod({ ...modData, lessons: merged })
+          }
         }
       } catch { /* use fallback */ } finally { setLoading(false) }
     }
