@@ -77,6 +77,7 @@ export default function VideosPage() {
           .from('videos')
           .select('id, title, category, duration_seconds, is_published')
           .eq('is_published', true)
+          .neq('category', 'Treinamento Médico')
           .order('created_at', { ascending: false })
 
         setVideos(vids ?? [])

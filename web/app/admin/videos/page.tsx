@@ -618,58 +618,31 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
         }
       }
 
-      // 4. Link video UUID to lesson — create module/lesson rows in DB if missing
+      // 4. Link video UUID to lesson via server-side API (uses service role to bypass RLS)
       const mapKey = `${uploadForm.modNum}-${uploadForm.lessonNum}`
-      let resolvedLessonId = uploadForm.lessonId
+      const fallbackMod = FALLBACK_MODULES.find(m => m.num === uploadForm.modNum)
+      const fallbackLesson = fallbackMod?.lessons.find(l => l.num === uploadForm.lessonNum)
 
-      if (!resolvedLessonId) {
-        // Find or create training_module row
-        const fallbackMod = FALLBACK_MODULES.find(m => m.num === uploadForm.modNum)
-        const fallbackLesson = fallbackMod?.lessons.find(l => l.num === uploadForm.lessonNum)
+      await fetch('/api/training/link-video', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          modNum: uploadForm.modNum,
+          modTitle: fallbackMod?.title ?? `Módulo ${uploadForm.modNum}`,
+          modColor: fallbackMod?.color ?? 'from-[#7B3FE4] to-[#4C1B9B]',
+          lessonNum: uploadForm.lessonNum,
+          lessonTitle: fallbackLesson?.title ?? uploadForm.lessonTitle,
+          lessonDuration: fallbackLesson?.duration ?? '',
+          videoId: newVideo.id,
+        }),
+      })
 
-        let { data: modRow } = await supabase
-          .from('training_modules')
-          .select('id')
-          .eq('num', uploadForm.modNum)
-          .single()
-
-        if (!modRow) {
-          const { data: inserted } = await supabase
-            .from('training_modules')
-            .insert({ num: uploadForm.modNum, title: fallbackMod?.title ?? `Módulo ${uploadForm.modNum}`, subtitle: '', color: fallbackMod?.color ?? 'from-[#7B3FE4] to-[#4C1B9B]', unlocked: true, published: true })
-            .select('id').single()
-          modRow = inserted
-        }
-
-        if (modRow) {
-          let { data: lessonRow } = await supabase
-            .from('training_lessons')
-            .select('id')
-            .eq('module_id', modRow.id)
-            .eq('num', uploadForm.lessonNum)
-            .single()
-
-          if (!lessonRow) {
-            const { data: inserted } = await supabase
-              .from('training_lessons')
-              .insert({ module_id: modRow.id, num: uploadForm.lessonNum, title: fallbackLesson?.title ?? uploadForm.lessonTitle, duration: fallbackLesson?.duration ?? '', video_url: newVideo.id, is_free: false })
-              .select('id').single()
-            lessonRow = inserted
-          } else {
-            await supabase.from('training_lessons').update({ video_url: newVideo.id }).eq('id', lessonRow.id)
-          }
-          resolvedLessonId = lessonRow?.id ?? null
-        }
-      } else {
-        await supabase.from('training_lessons').update({ video_url: newVideo.id }).eq('id', resolvedLessonId)
-      }
-
-      // Update local UI immediately regardless
-      if (resolvedLessonId) {
+      // Update local UI immediately
+      if (uploadForm.lessonId) {
         setModules(prev => prev.map((m: TrainingModule) => ({
           ...m,
           lessons: m.lessons.map((l: TrainingLesson) =>
-            l.id === resolvedLessonId ? { ...l, video_url: newVideo.id } : l
+            l.id === uploadForm.lessonId ? { ...l, video_url: newVideo.id } : l
           ),
         })))
       }

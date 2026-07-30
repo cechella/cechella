@@ -54,6 +54,7 @@ export default function VideosPage() {
         .from('videos')
         .select('*')
         .eq('is_published', true)
+        .neq('category', 'Treinamento Médico')
         .order('created_at', { ascending: false })
       setVideos(data ?? [])
       setLoading(false)
