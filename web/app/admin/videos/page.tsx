@@ -507,15 +507,29 @@ const FALLBACK_MODULES = [
 
 interface LessonUpload { modNum: number; lessonNum: number; lessonId: string | null; lessonTitle: string }
 
+function uploadWithProgress(url: string, file: File, contentType: string, onProgress: (pct: number) => void): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', contentType)
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)) }
+    xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) resolve(); else reject(new Error(`Upload failed: ${xhr.status}`)) }
+    xhr.onerror = () => reject(new Error('Erro de rede no upload'))
+    xhr.send(file)
+  })
+}
+
 function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowserClient> }) {
   const [modules, setModules] = useState<TrainingModule[]>([])
   const [loading, setLoading] = useState(true)
   const [uploadForm, setUploadForm] = useState<LessonUpload | null>(null)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const [thumbPreview, setThumbPreview] = useState<string | null>(null)
   const [videoName, setVideoName] = useState<string | null>(null)
+  const [videoSize, setVideoSize] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
   const trainingThumbRef = useRef<HTMLInputElement>(null)
   const trainingFileRef = useRef<HTMLInputElement>(null)
@@ -558,7 +572,7 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
 
   function openUpload(mod: TrainingModule, lesson: TrainingLesson) {
     setUploadForm({ modNum: mod.num, lessonNum: lesson.num, lessonId: lesson.id || null, lessonTitle: lesson.title })
-    setUploadError(null); setUploadSuccess(false); setThumbPreview(null); setVideoName(null)
+    setUploadError(null); setUploadSuccess(false); setThumbPreview(null); setVideoName(null); setVideoSize(null); setUploadProgress(0)
     if (trainingThumbRef.current) trainingThumbRef.current.value = ''
     if (trainingFileRef.current) trainingFileRef.current.value = ''
   }
@@ -568,7 +582,7 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
     if (!uploadForm) return
     const videoFile = trainingFileRef.current?.files?.[0]
     if (!videoFile) { setUploadError('Selecione um arquivo de vídeo'); return }
-    setUploading(true); setUploadError(null); setUploadSuccess(false)
+    setUploading(true); setUploadError(null); setUploadSuccess(false); setUploadProgress(0)
     try {
       // 1. Insert into videos table
       const { data: newVideo, error: insertError } = await supabase
@@ -577,7 +591,7 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
         .select().single()
       if (insertError || !newVideo) throw new Error(insertError?.message ?? 'Falha ao criar registro')
 
-      // 2. Upload video file to R2
+      // 2. Upload video file to R2 with progress tracking
       const urlRes = await fetch('/api/video/upload-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -585,8 +599,7 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
       })
       if (!urlRes.ok) { await supabase.from('videos').delete().eq('id', newVideo.id); throw new Error('Falha ao obter URL de upload') }
       const { uploadUrl, key } = await urlRes.json()
-      const uploadRes = await fetch(uploadUrl, { method: 'PUT', body: videoFile, headers: { 'Content-Type': videoFile.type || 'video/mp4' } })
-      if (!uploadRes.ok) { await supabase.from('videos').delete().eq('id', newVideo.id); throw new Error('Falha no upload do vídeo') }
+      await uploadWithProgress(uploadUrl, videoFile, videoFile.type || 'video/mp4', setUploadProgress)
       await supabase.from('videos').update({ hls_path: key }).eq('id', newVideo.id)
 
       // 3. Upload thumbnail if selected
@@ -775,7 +788,7 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
                   onClick={() => trainingFileRef.current?.click()}
                 >
                   {videoName
-                    ? <div className="flex items-center justify-center gap-2"><Film className="w-4 h-4 text-[#3B82F6]" /><span className="text-xs text-white truncate">{videoName}</span></div>
+                    ? <div className="flex items-center justify-center gap-2"><Film className="w-4 h-4 text-[#3B82F6]" /><span className="text-xs text-white truncate">{videoName}</span>{videoSize && <span className="text-[10px] text-[#71717A] flex-shrink-0">{videoSize}</span>}</div>
                     : <>
                         <Upload className="w-5 h-5 text-[#52525B] mx-auto mb-1" />
                         <p className="text-xs text-[#71717A]">Clique para selecionar</p>
@@ -787,7 +800,13 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
                     type="file"
                     accept="video/*,.m3u8"
                     className="hidden"
-                    onChange={(e) => { const f = e.target.files?.[0]; if (f) setVideoName(f.name) }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (f) {
+                        setVideoName(f.name)
+                        setVideoSize((f.size / (1024 * 1024)).toFixed(0) + ' MB')
+                      }
+                    }}
                   />
                 </div>
               </div>
@@ -796,6 +815,25 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
                 <div className="flex items-start gap-2 bg-amber-500/8 border border-amber-500/20 rounded-xl px-4 py-3">
                   <AlertCircle className="w-3.5 h-3.5 text-amber-400 flex-shrink-0 mt-0.5" />
                   <p className="text-[10px] text-amber-400">Esta aula ainda não está no banco de dados. Crie os módulos em <a href="/admin/treinamento" className="underline">Ger. Treinamento</a> para vincular permanentemente.</p>
+                </div>
+              )}
+
+              {/* Progress bar (shows during upload) */}
+              {uploading && (
+                <div className="bg-[#18181A] border border-[#27272A] rounded-xl px-4 py-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-[#A1A1AA] font-medium">
+                      {uploadProgress < 100 ? 'Enviando para o servidor...' : 'Finalizando...'}
+                    </span>
+                    <span className="text-xs font-bold text-[#3B82F6] tabular-nums">{uploadProgress}%</span>
+                  </div>
+                  <div className="h-2 bg-[#1C1C1E] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#3B82F6] to-[#60A5FA] rounded-full transition-all duration-300"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-[#52525B] mt-1.5">Não feche esta janela durante o envio</p>
                 </div>
               )}
 
@@ -811,10 +849,10 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
               )}
 
               <div className="flex gap-3 pt-1">
-                <button type="button" onClick={() => setUploadForm(null)} className="flex-1 bg-[#18181A] border border-[#1C1C1E] text-[#A1A1AA] text-sm font-medium py-2.5 rounded-xl hover:border-[#27272A] transition-colors">Cancelar</button>
-                <button type="submit" disabled={uploading} className="flex-1 bg-[#3B82F6] hover:bg-[#3B82F6]/90 disabled:opacity-60 text-white text-sm font-medium py-2.5 rounded-xl flex items-center justify-center gap-2 transition-colors">
+                <button type="button" onClick={() => setUploadForm(null)} disabled={uploading} className="flex-1 bg-[#18181A] border border-[#1C1C1E] text-[#A1A1AA] text-sm font-medium py-2.5 rounded-xl hover:border-[#27272A] transition-colors disabled:opacity-40">Cancelar</button>
+                <button type="submit" disabled={uploading} className="flex-1 bg-[#3B82F6] hover:bg-[#3B82F6]/90 disabled:opacity-80 text-white text-sm font-medium py-2.5 rounded-xl flex items-center justify-center gap-2 transition-colors">
                   {uploading
-                    ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Enviando...</>
+                    ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />{uploadProgress < 100 ? `${uploadProgress}%` : 'Finalizando...'}</>
                     : <><Upload className="w-4 h-4" />Adicionar Vídeo</>
                   }
                 </button>
