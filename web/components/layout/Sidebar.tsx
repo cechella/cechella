@@ -94,10 +94,10 @@ const adminNav: NavSection[] = [
     section: 'Área Médico',
     items: [
       { label: 'Treinamento',  href: '/admin/escola',      icon: <GraduationCap className="w-5 h-5" /> },
-      { label: 'Meus Pacientes',href: '/medical/pacientes',icon: <Users className="w-5 h-5" /> },
+      { label: 'Pacientes',    href: '/admin/pacientes',   icon: <Users className="w-5 h-5" /> },
       { label: 'Agente IA',    href: '/admin/agente',      icon: <Bot className="w-5 h-5" /> },
       { label: 'Referidos',    href: '/admin/referidos',   icon: <Share2 className="w-5 h-5" /> },
-      { label: 'Assinatura',   href: '/medical/assinatura',icon: <CreditCard className="w-5 h-5" /> },
+      { label: 'Assinatura',   href: '/admin/assinatura',  icon: <CreditCard className="w-5 h-5" /> },
     ],
   },
   {
