@@ -10,9 +10,10 @@ export async function GET(request: NextRequest) {
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
 
-  const { data: mod } = await admin
-    .from('training_modules').select('*').eq('num', modNum).single()
+  const { data: mods } = await admin
+    .from('training_modules').select('*').eq('num', modNum).order('created_at').limit(1)
 
+  const mod = mods?.[0] ?? null
   if (!mod) return NextResponse.json({ mod: null, lessons: [] })
 
   const { data: lessons } = await admin

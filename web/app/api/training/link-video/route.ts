@@ -27,9 +27,10 @@ export async function POST(request: NextRequest) {
 
   const { modNum, modTitle, modColor, lessonNum, lessonTitle, lessonDuration, videoId } = await request.json()
 
-  // Find or create training_module
-  let { data: modRow } = await admin
-    .from('training_modules').select('id').eq('num', modNum).single()
+  // Find or create training_module (use limit(1) to handle duplicates)
+  const { data: modRows } = await admin
+    .from('training_modules').select('id').eq('num', modNum).order('created_at').limit(1)
+  let modRow = modRows?.[0] ?? null
 
   if (!modRow) {
     const { data: inserted, error } = await admin
@@ -40,9 +41,10 @@ export async function POST(request: NextRequest) {
     modRow = inserted
   }
 
-  // Find or create training_lesson
-  let { data: lessonRow } = await admin
-    .from('training_lessons').select('id').eq('module_id', modRow!.id).eq('num', lessonNum).single()
+  // Find or create training_lesson (use limit(1) to handle duplicates)
+  const { data: lessonRows } = await admin
+    .from('training_lessons').select('id').eq('module_id', modRow!.id).eq('num', lessonNum).limit(1)
+  let lessonRow = lessonRows?.[0] ?? null
 
   if (!lessonRow) {
     const { data: inserted, error } = await admin
