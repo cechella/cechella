@@ -76,9 +76,11 @@ export default function AdminVideosPage() {
       <Sidebar role="admin" />
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopBar user={{ name: 'Admin', role: 'admin' }} title="Gerenciar Vídeos" />
-        <main className="flex-1 overflow-y-auto px-6 py-6">
+        <main className="flex-1 overflow-y-auto px-6 py-6 space-y-10">
 
           <PatientVideos supabase={supabase} />
+
+          <TrainingVideos supabase={supabase} />
 
         </main>
       </div>
@@ -539,6 +541,170 @@ function PatientVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
           </div>
         </>,
         document.body
+      )}
+    </>
+  )
+}
+
+// ─── Training Videos Management ─────────────────────────────────────────────
+
+function TrainingVideos({ supabase }: { supabase: ReturnType<typeof createBrowserClient> }) {
+  const [videos, setVideos] = useState<Video[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [editingVideo, setEditingVideo] = useState<Video | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const [uploadSuccess, setUploadSuccess] = useState(false)
+  const [thumbPreview, setThumbPreview] = useState<string | null>(null)
+  const [editVideoName, setEditVideoName] = useState<string | null>(null)
+  const thumbInputRef = useRef<HTMLInputElement>(null)
+  const editVideoInputRef = useRef<HTMLInputElement>(null)
+  const [form, setForm] = useState({ title: '', description: '', category: 'Treinamento Médico', duration_seconds: '' })
+
+  async function load() {
+    setIsLoading(true)
+    const { data } = await supabase.from('videos').select('*').eq('category', 'Treinamento Médico').order('created_at', { ascending: false })
+    setVideos(data ?? [])
+    setIsLoading(false)
+  }
+
+  useEffect(() => { load() }, []) // eslint-disable-line
+
+  function startEdit(video: Video) {
+    setEditingVideo(video)
+    setForm(f => ({ ...f, title: video.title, description: video.description ?? '', duration_seconds: video.duration_seconds?.toString() ?? '' }))
+    setThumbPreview(null); setEditVideoName(null); setUploadError(null); setUploadSuccess(false)
+    if (editVideoInputRef.current) editVideoInputRef.current.value = ''
+    if (thumbInputRef.current) thumbInputRef.current.value = ''
+  }
+
+  async function handleEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editingVideo) return
+    setUploadError(null); setUploading(true)
+    try {
+      await supabase.from('videos').update({ title: form.title.trim(), duration_seconds: form.duration_seconds ? parseInt(form.duration_seconds) : null }).eq('id', editingVideo.id)
+      const thumbFile = thumbInputRef.current?.files?.[0]
+      if (thumbFile) {
+        const thumbRes = await fetch('/api/video/upload-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoId: editingVideo.id, fileName: thumbFile.name, contentType: thumbFile.type || 'image/jpeg', type: 'thumbnail' }) })
+        if (thumbRes.ok) { const { uploadUrl: tu, key: tk } = await thumbRes.json(); const tr = await fetch(tu, { method: 'PUT', body: thumbFile, headers: { 'Content-Type': thumbFile.type || 'image/jpeg' } }); if (tr.ok) await supabase.from('videos').update({ thumbnail_path: tk }).eq('id', editingVideo.id) }
+      }
+      const newVideoFile = editVideoInputRef.current?.files?.[0]
+      if (newVideoFile) {
+        const urlRes = await fetch('/api/video/upload-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ videoId: editingVideo.id, fileName: newVideoFile.name, contentType: newVideoFile.type || 'video/mp4' }) })
+        if (urlRes.ok) { const { uploadUrl, key } = await urlRes.json(); await uploadWithProgress(uploadUrl, newVideoFile, newVideoFile.type || 'video/mp4', () => {}); await supabase.from('videos').update({ hls_path: key }).eq('id', editingVideo.id) }
+      }
+      setUploadSuccess(true); await load()
+      setTimeout(() => { setEditingVideo(null); setUploadSuccess(false) }, 1200)
+    } catch { setUploadError('Erro ao salvar') } finally { setUploading(false) }
+  }
+
+  async function deleteVideo(video: Video) {
+    if (!confirm(`Excluir "${video.title}"?`)) return
+    await supabase.from('videos').delete().eq('id', video.id)
+    setVideos(prev => prev.filter(v => v.id !== video.id))
+  }
+
+  return (
+    <>
+      <div>
+        <div className="flex items-center gap-3 bg-[#3B82F6]/8 border border-[#3B82F6]/20 rounded-xl px-4 py-3 mb-5">
+          <GraduationCap className="w-4 h-4 text-[#3B82F6] flex-shrink-0" />
+          <p className="text-xs text-[#A1A1AA]">Vídeos da <span className="text-white font-medium">Escola de Negócios Médicos</span> — gerencie capas e substitua arquivos</p>
+        </div>
+
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold text-white">Vídeos de Treinamento</h2>
+        </div>
+
+        <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12"><div className="w-8 h-8 rounded-full border-2 border-[#3B82F6] border-t-transparent animate-spin" /></div>
+          ) : videos.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <Film className="w-8 h-8 text-[#3A3A3E] mb-2" />
+              <p className="text-[#71717A] text-sm">Nenhum vídeo de treinamento ainda</p>
+              <p className="text-xs text-[#52525B] mt-1">Use "+ Adicionar Vídeo → Área do Médico" para enviar</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full" style={{ borderCollapse: 'separate' }}>
+                <thead>
+                  <tr className="border-b border-[#1C1C1E]">
+                    {['Título', 'Duração', 'Capa', 'Criado em', 'Ações'].map(h => (
+                      <th key={h} className="text-left text-xs font-semibold text-[#71717A] px-5 py-3 uppercase tracking-wide">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {videos.map((video, i) => (
+                    <tr key={video.id} className={`border-b border-[#1C1C1E] hover:bg-[#18181A] transition-colors ${i === videos.length - 1 ? 'border-b-0' : ''}`}>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-[#3B82F6]/10 flex items-center justify-center flex-shrink-0"><Play className="w-3.5 h-3.5 text-[#3B82F6]" /></div>
+                          <div><p className="text-sm font-medium text-white line-clamp-1">{video.title}</p>{video.hls_path && <p className="text-[10px] text-[#52525B] mt-0.5 truncate max-w-[200px]">{video.hls_path}</p>}</div>
+                        </div>
+                      </td>
+                      <td className="px-5 py-4"><span className="text-sm text-[#A1A1AA]">{formatDuration(video.duration_seconds)}</span></td>
+                      <td className="px-5 py-4">
+                        {video.thumbnail_path
+                          ? <span className="text-xs text-green-400 flex items-center gap-1"><CheckCircle className="w-3 h-3" />Com capa</span>
+                          : <span className="text-xs text-[#52525B]">Sem capa</span>}
+                      </td>
+                      <td className="px-5 py-4"><span className="text-sm text-[#71717A]">{formatDate(video.created_at)}</span></td>
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-2">
+                          <button onClick={() => startEdit(video)} className="w-8 h-8 rounded-lg bg-[#18181A] border border-[#1C1C1E] flex items-center justify-center text-[#71717A] hover:text-[#3B82F6] hover:border-[#3B82F6]/30 transition-all"><Pencil className="w-3.5 h-3.5" /></button>
+                          <button onClick={() => deleteVideo(video)} className="w-8 h-8 rounded-lg bg-[#18181A] border border-[#1C1C1E] flex items-center justify-center text-[#71717A] hover:text-red-400 hover:border-red-500/30 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Edit Modal */}
+      {editingVideo && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="font-semibold text-white">Editar Vídeo de Treinamento</h3>
+              <button onClick={() => setEditingVideo(null)} className="text-[#71717A] hover:text-white transition-colors"><X className="w-5 h-5" /></button>
+            </div>
+            <form onSubmit={handleEdit} className="space-y-4">
+              <div><label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Título</label><input type="text" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#3B82F6] transition-colors" required /></div>
+              <div><label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Duração (seg)</label><input type="number" value={form.duration_seconds} onChange={e => setForm(f => ({ ...f, duration_seconds: e.target.value }))} min={0} className="w-full bg-[#18181A] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-[#3B82F6] transition-colors" /></div>
+              <div>
+                <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Capa (thumbnail)</label>
+                <div className="border border-dashed border-[#2A2A2E] rounded-xl overflow-hidden cursor-pointer hover:border-[#3B82F6]/50 transition-colors" onClick={() => thumbInputRef.current?.click()}>
+                  {thumbPreview ? <div className="relative h-28"><img src={thumbPreview} alt="Capa" className="w-full h-full object-cover" /></div>
+                    : <div className="p-4 text-center"><Upload className="w-4 h-4 text-[#3B82F6] mx-auto mb-1" /><p className="text-xs text-[#71717A]">{editingVideo.thumbnail_path ? 'Trocar capa' : 'Adicionar capa'}</p></div>}
+                  <input ref={thumbInputRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setThumbPreview(URL.createObjectURL(f)) }} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-[#A1A1AA] mb-1.5">Substituir vídeo</label>
+                <div className="border border-dashed border-[#2A2A2E] rounded-xl cursor-pointer hover:border-[#3B82F6]/50 transition-colors" onClick={() => editVideoInputRef.current?.click()}>
+                  {editVideoName ? <div className="px-4 py-3 flex items-center gap-2"><Film className="w-4 h-4 text-[#3B82F6] shrink-0" /><span className="text-xs text-white truncate">{editVideoName}</span></div>
+                    : <div className="p-3 text-center"><Upload className="w-4 h-4 text-[#3B82F6] mx-auto mb-1" /><p className="text-xs text-[#71717A]">Substituir arquivo MP4</p></div>}
+                  <input ref={editVideoInputRef} type="file" accept="video/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setEditVideoName(f.name) }} />
+                </div>
+              </div>
+              {uploadError && <p className="text-red-400 text-xs bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">{uploadError}</p>}
+              {uploadSuccess && <p className="text-green-400 text-xs bg-green-500/10 border border-green-500/20 rounded-xl px-3 py-2.5">Salvo com sucesso!</p>}
+              <div className="flex gap-3 pt-1">
+                <button type="button" onClick={() => setEditingVideo(null)} className="flex-1 bg-[#18181A] border border-[#1C1C1E] text-[#A1A1AA] text-sm font-medium py-2.5 rounded-xl hover:border-[#27272A] transition-colors">Cancelar</button>
+                <button type="submit" disabled={uploading} className="flex-1 bg-[#3B82F6] hover:bg-[#2563EB] disabled:opacity-60 text-white text-sm font-medium py-2.5 rounded-xl flex items-center justify-center gap-2 transition-colors">
+                  {uploading ? <><div className="w-4 h-4 rounded-full border-2 border-white border-t-transparent animate-spin" />Salvando...</> : <><Save className="w-4 h-4" />Salvar</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </>
   )
