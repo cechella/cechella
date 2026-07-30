@@ -531,6 +531,7 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
   const [videoName, setVideoName] = useState<string | null>(null)
   const [videoSize, setVideoSize] = useState<string | null>(null)
   const [saved, setSaved] = useState<string | null>(null)
+  const [localVideoMap, setLocalVideoMap] = useState<Record<string, string>>({})
   const trainingThumbRef = useRef<HTMLInputElement>(null)
   const trainingFileRef = useRef<HTMLInputElement>(null)
 
@@ -563,7 +564,7 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
           num: l.num,
           title: l.title,
           duration: l.duration,
-          video_url: '',
+          video_url: localVideoMap[`${fb.num}-${l.num}`] ?? '',
         })),
       }))
 
@@ -572,7 +573,7 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
 
   function openUpload(mod: TrainingModule, lesson: TrainingLesson) {
     setUploadForm({ modNum: mod.num, lessonNum: lesson.num, lessonId: lesson.id || null, lessonTitle: lesson.title })
-    setUploadError(null); setUploadSuccess(false); setThumbPreview(null); setVideoName(null); setVideoSize(null); setUploadProgress(0)
+    setUploadError(null); setUploadSuccess(false); setThumbPreview(null); setVideoName(null); setVideoSize(null); setUploadProgress(0); setSaved(null)
     if (trainingThumbRef.current) trainingThumbRef.current.value = ''
     if (trainingFileRef.current) trainingFileRef.current.value = ''
   }
@@ -617,7 +618,8 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
         }
       }
 
-      // 4. Link video UUID to lesson
+      // 4. Link video UUID to lesson (DB if exists, else local state)
+      const mapKey = `${uploadForm.modNum}-${uploadForm.lessonNum}`
       if (uploadForm.lessonId) {
         await supabase.from('training_lessons').update({ video_url: newVideo.id }).eq('id', uploadForm.lessonId)
         setModules(prev => prev.map((m: TrainingModule) => ({
@@ -626,11 +628,14 @@ function MedicalVideos({ supabase }: { supabase: ReturnType<typeof createBrowser
             l.id === uploadForm.lessonId ? { ...l, video_url: newVideo.id } : l
           ),
         })))
+      } else {
+        // Fallback: keep video UUID in local state so UI updates immediately
+        setLocalVideoMap(prev => ({ ...prev, [mapKey]: newVideo.id }))
       }
 
-      setSaved(`${uploadForm.modNum}-${uploadForm.lessonNum}`)
+      setSaved(mapKey)
       setUploadSuccess(true)
-      setTimeout(() => { setUploadForm(null); setUploadSuccess(false); setSaved(null) }, 1500)
+      setTimeout(() => { setUploadForm(null); setUploadSuccess(false) }, 1500)
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : 'Erro no upload')
     } finally {
