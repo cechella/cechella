@@ -31,6 +31,7 @@ import {
   BadgeCheck,
   Eye,
   Wrench,
+  PhoneCall,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -111,6 +112,7 @@ const adminNav: NavSection[] = [
       { label: 'Configurações',    href: '/admin/configuracoes',    icon: <Settings className="w-5 h-5" /> },
       { label: 'Sistema',          href: '/admin/sistema',          icon: <RefreshCw className="w-5 h-5" /> },
       { label: 'Teste',            href: '/admin/teste',            icon: <TestTube2 className="w-5 h-5" /> },
+      { label: 'Agente IA voz test', href: '/admin/voz-test',       icon: <PhoneCall className="w-5 h-5" /> },
     ],
   },
 ]
