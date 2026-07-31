@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { TestTube2, Search, RotateCcw, Trash2, RefreshCw, AlertTriangle } from 'lucide-react'
+import { TestTube2, Search, RotateCcw, Trash2, RefreshCw, AlertTriangle, PhoneOff, Radio } from 'lucide-react'
 
 interface Lead {
   id: string
@@ -77,6 +77,22 @@ export default function TestePage() {
       desc: 'Volta os referidos desse telefone para "aguardando"',
       icon: <RefreshCw className="w-4 h-4" />,
       cor: 'from-purple-500/20 to-purple-600/10 border-purple-500/30 text-purple-400',
+      semTelefone: false,
+    },
+    {
+      action: 'zerar_historico_voz',
+      label: 'Zerar histórico de voz',
+      desc: 'Apaga registros de historico_voz desse telefone (para novo teste PTL)',
+      icon: <Radio className="w-4 h-4" />,
+      cor: 'from-cyan-500/20 to-cyan-600/10 border-cyan-500/30 text-cyan-400',
+      semTelefone: false,
+    },
+    {
+      action: 'resetar_em_ligacao',
+      label: 'Resetar flag em_ligacao',
+      desc: 'Força em_ligacao = false — corrige trava se ligação caiu sem cleanup',
+      icon: <PhoneOff className="w-4 h-4" />,
+      cor: 'from-orange-500/20 to-orange-600/10 border-orange-500/30 text-orange-400',
       semTelefone: false,
     },
   ]

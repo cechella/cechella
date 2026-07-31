@@ -100,8 +100,32 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ data, rows: data?.length ?? 0 })
     }
 
+    if (action === 'zerar_historico_voz') {
+      if (!telefone) return NextResponse.json({ error: 'Telefone obrigatório' }, { status: 400 })
+      const suffix = telefone.replace(/\D/g, '').slice(-8)
+      const { data, error } = await supabase
+        .from('historico_voz')
+        .delete()
+        .like('telefone', `%${suffix}%`)
+        .select('id')
+      if (error) throw error
+      return NextResponse.json({ data, rows: data?.length ?? 0 })
+    }
+
+    if (action === 'resetar_em_ligacao') {
+      if (!telefone) return NextResponse.json({ error: 'Telefone obrigatório' }, { status: 400 })
+      const suffix = telefone.replace(/\D/g, '').slice(-8)
+      const { data, error } = await supabase
+        .from('leads')
+        .update({ em_ligacao: false })
+        .like('telefone', `%${suffix}%`)
+        .select('id, telefone, em_ligacao')
+      if (error) throw error
+      return NextResponse.json({ data, rows: data?.length ?? 0 })
+    }
+
     if (action === 'ver_estado_banco') {
-      const tabelas = ['leads', 'contatos_referidos', 'leads_m4_flag', 'ana_memoria', 'ana_padroes', 'pagamentos', 'pagamentos_recorrentes', 'mensagens_whatsapp'] as const
+      const tabelas = ['leads', 'contatos_referidos', 'leads_m4_flag', 'ana_memoria', 'ana_padroes', 'pagamentos', 'pagamentos_recorrentes', 'mensagens_whatsapp', 'historico_voz'] as const
       const contagens: Record<string, number> = {}
       for (const tabela of tabelas) {
         const { count } = await supabase.from(tabela).select('*', { count: 'exact', head: true })
@@ -138,7 +162,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'reset_total') {
-      const [r1, r2, r3, r4, r5, r6, r7, r8] = await Promise.all([
+      const [r1, r2, r3, r4, r5, r6, r7, r8, r9] = await Promise.all([
         supabase.from('leads').delete().gte('created_at', '2000-01-01').select('id'),
         supabase.from('contatos_referidos').delete().gte('created_at', '2000-01-01').select('id'),
         supabase.from('leads_m4_flag').delete().gte('created_at', '2000-01-01').select('telefone'),
@@ -147,9 +171,10 @@ export async function POST(req: NextRequest) {
         supabase.from('pagamentos').delete().gte('created_at', '2000-01-01').select('id'),
         supabase.from('pagamentos_recorrentes').delete().gte('created_at', '2000-01-01').select('id'),
         supabase.from('mensagens_whatsapp').delete().gte('ts', '2000-01-01').select('id'),
+        supabase.from('historico_voz').delete().gte('created_at', '2000-01-01').select('id'),
       ])
-      const rows = (r1.data?.length ?? 0) + (r2.data?.length ?? 0) + (r3.data?.length ?? 0) + (r4.data?.length ?? 0) + (r5.data?.length ?? 0) + (r6.data?.length ?? 0) + (r7.data?.length ?? 0) + (r8.data?.length ?? 0)
-      return NextResponse.json({ rows, detalhes: { leads: r1.data?.length ?? 0, referidos: r2.data?.length ?? 0, m4_flag: r3.data?.length ?? 0, memoria: r4.data?.length ?? 0, padroes: r5.data?.length ?? 0, pagamentos: r6.data?.length ?? 0, recorrentes: r7.data?.length ?? 0, mensagens: r8.data?.length ?? 0 } })
+      const rows = (r1.data?.length ?? 0) + (r2.data?.length ?? 0) + (r3.data?.length ?? 0) + (r4.data?.length ?? 0) + (r5.data?.length ?? 0) + (r6.data?.length ?? 0) + (r7.data?.length ?? 0) + (r8.data?.length ?? 0) + (r9.data?.length ?? 0)
+      return NextResponse.json({ rows, detalhes: { leads: r1.data?.length ?? 0, referidos: r2.data?.length ?? 0, m4_flag: r3.data?.length ?? 0, memoria: r4.data?.length ?? 0, padroes: r5.data?.length ?? 0, pagamentos: r6.data?.length ?? 0, recorrentes: r7.data?.length ?? 0, mensagens: r8.data?.length ?? 0, historico_voz: r9.data?.length ?? 0 } })
     }
 
     return NextResponse.json({ error: 'Ação inválida' }, { status: 400 })
