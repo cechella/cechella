@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, Component, ReactNode } from '
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { createBrowserClient } from '@supabase/ssr'
-import { RefreshCw, Bot, User, MessageSquare } from 'lucide-react'
+import { RefreshCw, Bot, User, MessageSquare, PhoneCall, Mic, Volume2, ChevronDown, ChevronUp } from 'lucide-react'
 
 /* ─── Error Boundary ─────────────────────────────────────────────────────── */
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
@@ -337,8 +337,288 @@ function CommandPalette({ leads, onClose, onSelectLead, onToggleHumano, selected
   )
 }
 
+/* ─── VAPI constants ─────────────────────────────────────────────────────── */
+const VAPI_API_KEY = 'e3bc519a-7466-4450-bcfc-2ae9566d9e2f'
+const ASSISTANT_ID = 'f2ab9277-dcf3-4fe5-9ac4-5cd0c45229c5'
+
+/* ─── VozView ─────────────────────────────────────────────────────────────── */
+interface VozCall {
+  id: string
+  telefone: string
+  call_id: string | null
+  created_at: string
+  status: string | null
+  duracao: number | null
+  summary: string | null
+  ended_reason: string | null
+}
+
+interface VapiMsg {
+  role: string
+  message?: string
+  content?: string | any[]
+  result?: string
+  name?: string
+  duration?: number
+}
+
+function vapiMsgText(msg: VapiMsg): string {
+  if (msg.message) return msg.message
+  if (typeof msg.content === 'string') return msg.content
+  if (Array.isArray(msg.content)) return msg.content.map((c: any) => c.text || c.content || '').join(' ')
+  if (msg.result) return msg.result
+  return ''
+}
+
+function VozView() {
+  const [calls, setCalls] = useState<VozCall[]>([])
+  const [loadingCalls, setLoadingCalls] = useState(true)
+  const [selected, setSelected] = useState<VozCall | null>(null)
+  const [vapiData, setVapiData] = useState<any>(null)
+  const [vapiLoading, setVapiLoading] = useState(false)
+  const [showTranscript, setShowTranscript] = useState(true)
+
+  useEffect(() => {
+    const supabase = getSupabase()
+    supabase
+      .from('historico_voz')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(50)
+      .then(({ data }: { data: VozCall[] | null }) => {
+        setCalls(data || [])
+        setLoadingCalls(false)
+      })
+  }, [])
+
+  const fetchVapi = async (call: VozCall) => {
+    setSelected(call)
+    setVapiData(null)
+    if (!call.call_id) return
+    setVapiLoading(true)
+    try {
+      const res = await fetch(`https://api.vapi.ai/call/${call.call_id}`, {
+        headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
+      })
+      const data = await res.json()
+      if (res.ok) setVapiData(data)
+    } catch {}
+    setVapiLoading(false)
+  }
+
+  const durStr = (s: number | null) => {
+    if (!s) return '—'
+    return `${Math.floor(s / 60)}m ${s % 60}s`
+  }
+
+  const messages: VapiMsg[] = vapiData?.messages || []
+
+  return (
+    <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      {/* Left: call list */}
+      <div style={{ width: 280, borderRight: '1px solid #222228', display: 'flex', flexDirection: 'column', background: '#0B0B0D', flexShrink: 0 }}>
+        <div style={{ padding: '12px 14px', borderBottom: '1px solid #1E1E26' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, color: '#888', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            Ligações PTL — Ana Voz
+          </span>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {loadingCalls ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', paddingTop: 48 }}>
+              <div className="w-5 h-5 border-2 border-[#7B3FE4] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : calls.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: 32, color: '#444', fontSize: 12 }}>
+              <PhoneCall style={{ width: 28, height: 28, margin: '0 auto 8px', opacity: 0.3 }} />
+              <p>Nenhuma ligação registrada</p>
+              <p style={{ fontSize: 10, marginTop: 4, color: '#333' }}>As ligações aparecem após a Ana Voz atender</p>
+            </div>
+          ) : calls.map(call => {
+            const isActive = selected?.id === call.id
+            return (
+              <button
+                key={call.id}
+                onClick={() => fetchVapi(call)}
+                style={{
+                  width: '100%', textAlign: 'left', padding: '12px 14px',
+                  borderBottom: '1px solid #18181E',
+                  borderLeft: isActive ? '3px solid #7B3FE4' : '3px solid transparent',
+                  background: isActive ? 'linear-gradient(90deg,#7B3FE412 0%,transparent 100%)' : 'transparent',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#14141A' }}
+                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#F0F0F5', fontFamily: 'monospace' }}>
+                    {call.telefone.replace(/^55/, '+55 ')}
+                  </span>
+                  <span style={{ fontSize: 9, color: call.status === 'ended' ? '#22c55e' : '#F5A623', background: call.status === 'ended' ? '#14532d30' : '#78350f30', padding: '2px 6px', borderRadius: 4, border: `1px solid ${call.status === 'ended' ? '#166534' : '#92400e'}` }}>
+                    {call.status || 'desconhecido'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, fontSize: 10, color: '#555', marginBottom: 3 }}>
+                  <span>⏱ {durStr(call.duracao)}</span>
+                  {call.ended_reason && <span>· {call.ended_reason}</span>}
+                </div>
+                {call.summary && (
+                  <p style={{ fontSize: 10, color: '#4A4A58', margin: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                    {call.summary}
+                  </p>
+                )}
+                <div style={{ fontSize: 9, color: '#333', marginTop: 3 }}>
+                  {new Date(call.created_at).toLocaleString('pt-BR')}
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Right: transcript */}
+      {selected ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          {/* Header */}
+          <div style={{ padding: '14px 20px', borderBottom: '1px solid #222228', background: '#0B0B0D', flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <h2 style={{ fontSize: 16, fontWeight: 700, color: '#F0F0F5', margin: 0 }}>
+                  {selected.telefone.replace(/^55/, '+55 ')}
+                </h2>
+                <div style={{ fontSize: 10, color: '#555', fontFamily: 'monospace', marginTop: 2 }}>
+                  {selected.call_id || 'sem call ID'}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {vapiData?.durationSeconds && (
+                  <span style={{ fontSize: 11, color: '#A1A1AA', background: '#1C1C1E', padding: '4px 10px', borderRadius: 7 }}>
+                    ⏱ {Math.floor(vapiData.durationSeconds / 60)}m {Math.round(vapiData.durationSeconds % 60)}s
+                  </span>
+                )}
+                {vapiData?.endedReason && (
+                  <span style={{ fontSize: 11, color: '#F5A623', background: '#78350f20', border: '1px solid #92400e', padding: '4px 10px', borderRadius: 7 }}>
+                    {vapiData.endedReason}
+                  </span>
+                )}
+                {vapiData?.costBreakdown?.total !== undefined && (
+                  <span style={{ fontSize: 10, color: '#555', background: '#1C1C1E', padding: '4px 8px', borderRadius: 6 }}>
+                    ${vapiData.costBreakdown.total.toFixed(3)}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {vapiLoading ? (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="w-6 h-6 border-2 border-[#7B3FE4] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+
+              {/* Summary */}
+              {vapiData?.analysis?.summary && (
+                <div style={{ background: '#7B3FE410', border: '1px solid #7B3FE430', borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
+                  <p style={{ fontSize: 10, color: '#7B3FE4', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Resumo VAPI</p>
+                  <p style={{ fontSize: 13, color: '#A1A1AA', lineHeight: 1.6, margin: 0 }}>{vapiData.analysis.summary}</p>
+                </div>
+              )}
+
+              {/* Audio */}
+              {(vapiData?.recordingUrl || vapiData?.stereoRecordingUrl) && (
+                <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
+                  <p style={{ fontSize: 10, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Volume2 style={{ width: 12, height: 12 }} /> Gravação
+                  </p>
+                  <audio controls src={vapiData.stereoRecordingUrl || vapiData.recordingUrl} style={{ width: '100%' }} />
+                </div>
+              )}
+
+              {/* Transcript messages */}
+              {messages.length > 0 && (
+                <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+                  <button
+                    onClick={() => setShowTranscript(v => !v)}
+                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#555', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+                  >
+                    <span>Conversa — {messages.length} mensagens</span>
+                    {showTranscript ? <ChevronUp style={{ width: 14, height: 14 }} /> : <ChevronDown style={{ width: 14, height: 14 }} />}
+                  </button>
+                  {showTranscript && (
+                    <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 600, overflowY: 'auto' }}>
+                      {messages.map((msg, i) => {
+                        const text = vapiMsgText(msg)
+                        if (!text && msg.role !== 'tool_call') return null
+                        const isAna = msg.role === 'assistant'
+                        const isUser = msg.role === 'user'
+                        const isTool = msg.role === 'tool_call' || msg.role === 'tool_result'
+                        return (
+                          <div key={i} style={{ display: 'flex', gap: 8, justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
+                            {isAna && (
+                              <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#7B3FE420', border: '1px solid #7B3FE430', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                                <Mic style={{ width: 12, height: 12, color: '#A78BFA' }} />
+                              </div>
+                            )}
+                            <div style={{ maxWidth: isTool ? '90%' : '72%', display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
+                              {isTool && (
+                                <span style={{ fontSize: 9, color: '#F5A623', marginBottom: 2 }}>{msg.role === 'tool_call' ? `Tool: ${msg.name}` : 'Resultado'}</span>
+                              )}
+                              <div style={{
+                                padding: '8px 12px', borderRadius: 14, fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                                background: isAna ? '#1C1C1E' : isUser ? '#14532d40' : '#78350f20',
+                                color: isAna ? '#E4E4E7' : isUser ? '#bbf7d0' : '#F5A623',
+                                border: `1px solid ${isAna ? '#2a2a2a' : isUser ? '#166534' : '#92400e'}`,
+                                borderBottomRightRadius: isUser ? 4 : 14,
+                                borderBottomLeftRadius: isAna ? 4 : 14,
+                              }}>
+                                {text || '—'}
+                              </div>
+                              {msg.duration !== undefined && (
+                                <span style={{ fontSize: 9, color: '#444', marginTop: 2 }}>{msg.duration.toFixed(1)}s</span>
+                              )}
+                            </div>
+                            {isUser && (
+                              <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#14532d30', border: '1px solid #16653440', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                                <User style={{ width: 12, height: 12, color: '#4ade80' }} />
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* No VAPI data */}
+              {!vapiData && !vapiLoading && selected.call_id && (
+                <div style={{ textAlign: 'center', color: '#444', fontSize: 12, paddingTop: 32 }}>
+                  <p>Não foi possível carregar o transcript do VAPI</p>
+                </div>
+              )}
+              {!selected.call_id && (
+                <div style={{ textAlign: 'center', color: '#444', fontSize: 12, paddingTop: 32 }}>
+                  <p>Essa ligação não tem call_id registrado — transcript indisponível</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
+            <PhoneCall style={{ width: 40, height: 40, margin: '0 auto 12px', color: '#2a2a2a' }} />
+            <p style={{ fontSize: 13, color: '#444' }}>Selecione uma ligação para ver o transcript</p>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ─── Main component ─────────────────────────────────────────────────────── */
 export default function AgenteAdminPage() {
+  const [mode, setMode] = useState<'whatsapp' | 'voz'>('whatsapp')
   const [leads, setLeads] = useState<LeadAgente[]>([])
   const [selected, setSelected] = useState<LeadAgente | null>(null)
   const [loading, setLoading] = useState(true)
@@ -674,6 +954,34 @@ export default function AgenteAdminPage() {
         <div className="flex-1 flex flex-col overflow-hidden">
           <TopBar title="Agente WhatsApp — Monitor em Tempo Real" />
 
+          {/* ─── Mode toggle ─── */}
+          <div style={{ background: '#0A0A0B', borderBottom: '1px solid #1A1A1C', padding: '8px 20px', display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button
+              onClick={() => setMode('whatsapp')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none',
+                background: mode === 'whatsapp' ? '#25D36620' : '#1A1A20',
+                color: mode === 'whatsapp' ? '#25D366' : '#555',
+                borderBottom: mode === 'whatsapp' ? '2px solid #25D366' : '2px solid transparent',
+              }}
+            >
+              <MessageSquare style={{ width: 13, height: 13 }} />
+              Agente IA Mensagem
+            </button>
+            <button
+              onClick={() => setMode('voz')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none',
+                background: mode === 'voz' ? '#7B3FE420' : '#1A1A20',
+                color: mode === 'voz' ? '#A78BFA' : '#555',
+                borderBottom: mode === 'voz' ? '2px solid #7B3FE4' : '2px solid transparent',
+              }}
+            >
+              <PhoneCall style={{ width: 13, height: 13 }} />
+              Agente IA Voz
+            </button>
+          </div>
+
           {/* ─── Metrics bar ─── */}
           <div style={{ background: '#0B0B0D', borderBottom: '1px solid #222228', padding: '0 20px', display: 'flex', alignItems: 'stretch', gap: 0, flexShrink: 0, overflowX: 'auto', height: 52 }}>
             {[
@@ -710,8 +1018,11 @@ export default function AgenteAdminPage() {
             </div>
           </div>
 
-          {/* ─── 3-col layout ─── */}
-          <div className="flex flex-1 overflow-hidden">
+          {/* ─── Voz mode ─── */}
+          {mode === 'voz' && <VozView />}
+
+          {/* ─── 3-col layout (WhatsApp) ─── */}
+          <div className="flex flex-1 overflow-hidden" style={{ display: mode === 'whatsapp' ? 'flex' : 'none' }}>
 
             {/* ══ LEFT: Lead priority queue (272px) ══ */}
             <div style={{ width: 272, borderRight: '1px solid #222228', display: 'flex', flexDirection: 'column', background: '#0B0B0D', flexShrink: 0 }}>
