@@ -341,11 +341,11 @@ export default function VozTestPage() {
                     </p>
                     <audio
                       controls
-                      src={callData.stereoRecordingUrl || callData.recordingUrl}
+                      src={`/api/admin/vapi-audio?url=${encodeURIComponent(callData.stereoRecordingUrl || callData.recordingUrl || '')}`}
                       className="w-full h-10 rounded-lg"
                     />
                     <a
-                      href={callData.stereoRecordingUrl || callData.recordingUrl}
+                      href={`/api/admin/vapi-audio?url=${encodeURIComponent(callData.stereoRecordingUrl || callData.recordingUrl || '')}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs text-[#7B3FE4] hover:text-[#A78BFA] mt-2 inline-block"
