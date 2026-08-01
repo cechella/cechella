@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, Component, ReactNode } from '
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { createBrowserClient } from '@supabase/ssr'
-import { RefreshCw, Bot, User, MessageSquare, PhoneCall, Mic, Volume2, ChevronDown, ChevronUp } from 'lucide-react'
+import { RefreshCw, Bot, User, MessageSquare, PhoneCall, Mic, Volume2, ChevronDown, ChevronUp, Copy } from 'lucide-react'
 
 /* ─── Error Boundary ─────────────────────────────────────────────────────── */
 class ErrorBoundary extends Component<{ children: ReactNode }, { error: string | null }> {
@@ -537,13 +537,30 @@ function VozView() {
               {/* Transcript messages */}
               {messages.length > 0 && (
                 <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-                  <button
-                    onClick={() => setShowTranscript(v => !v)}
-                    style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#555', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
-                  >
-                    <span>Conversa — {messages.length} mensagens</span>
-                    {showTranscript ? <ChevronUp style={{ width: 14, height: 14 }} /> : <ChevronDown style={{ width: 14, height: 14 }} />}
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', borderBottom: showTranscript ? '1px solid #1C1C1E' : 'none' }}>
+                    <button
+                      onClick={() => setShowTranscript(v => !v)}
+                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#555', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+                    >
+                      <span>Conversa — {messages.length} mensagens</span>
+                      {showTranscript ? <ChevronUp style={{ width: 14, height: 14 }} /> : <ChevronDown style={{ width: 14, height: 14 }} />}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const text = messages.map(m => {
+                          const t = vapiMsgText(m)
+                          if (!t) return null
+                          const role = m.role === 'assistant' ? 'AI' : m.role === 'user' ? 'User' : m.role
+                          return `${role}: ${t}`
+                        }).filter(Boolean).join('\n')
+                        navigator.clipboard.writeText(text)
+                      }}
+                      title="Copiar transcrição"
+                      style={{ padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#555', flexShrink: 0 }}
+                    >
+                      <Copy style={{ width: 14, height: 14 }} />
+                    </button>
+                  </div>
                   {showTranscript && (
                     <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 600, overflowY: 'auto' }}>
                       {messages.map((msg, i) => {
