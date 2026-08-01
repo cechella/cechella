@@ -38,8 +38,9 @@ async function saveReferidos(telefoneLead: string, contacts: Record<string, unkn
   let saved = 0
   for (const c of contacts) {
     const nomeReferido = String(c.displayName || c.name || '')
+    // Z-API phones is string[] (e.g. ["5548..."]), not object[]
     const telefoneReferido = Array.isArray(c.phones)
-      ? String((c.phones as Record<string, unknown>[])[0]?.phone || '')
+      ? String((c.phones as string[])[0] || '')
       : String(c.phone || '')
 
     if (!telefoneReferido) continue
@@ -161,18 +162,20 @@ export async function POST(req: NextRequest) {
     else if (body.document) content = `📄 ${body.document.fileName || 'Documento'}`
     else if (body.sticker) content = '🎭 Sticker'
     else if (body.location) content = `📍 Localização: ${body.location.name || ''}`
-    else if (body.contacts?.length) {
-      content = body.contacts.map((c: Record<string, unknown>) => {
+    else if (body.contactArray?.length || body.contacts?.length) {
+      // Z-API uses contactArray; some other formats use contacts
+      const contactList = (body.contactArray || body.contacts) as Record<string, unknown>[]
+      content = contactList.map((c) => {
         const name = String(c.displayName || c.name || '')
-        const phones = Array.isArray(c.phones)
-          ? (c.phones as Record<string, unknown>[]).map(p => String(p.phone || '')).join(', ')
+        const phone = Array.isArray(c.phones)
+          ? String((c.phones as string[])[0] || '')
           : String(c.phone || '')
-        return `📇 ${name}${phones ? ` — ${phones}` : ''}`
+        return `📇 ${name}${phone ? ` — ${phone}` : ''}`
       }).join('\n')
 
       // Save referidos to Supabase when contacts arrive from a lead (not fromMe)
       if (!fromMe) {
-        saveReferidos(phone, body.contacts as Record<string, unknown>[]).catch(() => {})
+        saveReferidos(phone, contactList).catch(() => {})
       }
     }
     else if (body.contact) {
