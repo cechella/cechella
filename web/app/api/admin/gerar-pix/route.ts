@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
     const data = await res.json()
 
     if (!res.ok) {
-      return NextResponse.json({ error: data }, { status: res.status })
+      return NextResponse.json({ error: data })
     }
 
     const pixCode = data?.point_of_interaction?.transaction_data?.qr_code || ''
@@ -45,6 +45,6 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ pixCode, paymentId })
   } catch (e: any) {
-    return NextResponse.json({ error: e.message }, { status: 500 })
+    return NextResponse.json({ error: e.message })
   }
 }
