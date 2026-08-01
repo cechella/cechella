@@ -48,7 +48,7 @@ async function saveReferidos(telefoneLead: string, contacts: Record<string, unkn
     const { count } = await supabase
       .from('contatos_referidos')
       .select('id', { count: 'exact', head: true })
-      .eq('telefone_lead', telefoneLead)
+      .eq('indicado_por_telefone', telefoneLead)
 
     if ((count || 0) >= maxReferidos) break
 
@@ -56,16 +56,18 @@ async function saveReferidos(telefoneLead: string, contacts: Record<string, unkn
     const { data: existing } = await supabase
       .from('contatos_referidos')
       .select('id')
-      .eq('telefone_lead', telefoneLead)
-      .eq('telefone_referido', telefoneReferido)
+      .eq('indicado_por_telefone', telefoneLead)
+      .eq('telefone', telefoneReferido)
       .maybeSingle()
 
     if (existing) continue
 
     await supabase.from('contatos_referidos').insert({
-      telefone_lead: telefoneLead,
-      nome_referido: nomeReferido,
-      telefone_referido: telefoneReferido,
+      indicado_por_telefone: telefoneLead,
+      nome: nomeReferido,
+      telefone: telefoneReferido,
+      fonte: 'zapi',
+      tipo_envio: 'contato_whatsapp',
     })
     saved++
   }
@@ -76,25 +78,12 @@ async function saveReferidos(telefoneLead: string, contacts: Record<string, unkn
   const newTotal = (lead.total_referidos || 0) + saved
   await supabase.from('leads').update({ total_referidos: newTotal }).eq('id', lead.id)
 
-  // When >= 20, send congratulations messages and mark
-  if (newTotal >= 20) {
-    const { data: alreadySent } = await supabase
-      .from('contatos_referidos')
-      .select('id')
-      .eq('telefone_lead', telefoneLead)
-      .eq('mensagem_enviada', true)
-      .maybeSingle()
-
-    if (!alreadySent) {
-      await zapiSend(telefoneLead, '🎉 Parabéns! Você completou os 20 indicados!')
-      await zapiSend(telefoneLead, '✅ Seu acesso ao Programa Hormonal está garantido. Em breve entraremos em contato para confirmar os detalhes.')
-      await zapiSend(telefoneLead, '💪 Obrigado por confiar no Dr. Vinicius e indicar seus amigos!')
-
-      await supabase
-        .from('contatos_referidos')
-        .update({ mensagem_enviada: true })
-        .eq('telefone_lead', telefoneLead)
-    }
+  // When >= 20 for the first time, send congratulations messages
+  const previousTotal = lead.total_referidos || 0
+  if (newTotal >= 20 && previousTotal < 20) {
+    await zapiSend(telefoneLead, '🎉 Parabéns! Você completou os 20 indicados!')
+    await zapiSend(telefoneLead, '✅ Seu acesso ao Programa Hormonal está garantido. Em breve entraremos em contato para confirmar os detalhes.')
+    await zapiSend(telefoneLead, '💪 Obrigado por confiar no Dr. Vinicius e indicar seus amigos!')
   }
 }
 
