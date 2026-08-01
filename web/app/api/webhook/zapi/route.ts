@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
 
       // Save referidos to Supabase when contacts arrive from a lead (not fromMe)
       if (!fromMe) {
-        saveReferidos(phone, contactList).catch(() => {})
+        await saveReferidos(phone, contactList)
       }
     }
     else if (body.contact) {
