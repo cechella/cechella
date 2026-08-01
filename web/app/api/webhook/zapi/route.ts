@@ -75,15 +75,24 @@ async function saveReferidos(telefoneLead: string, contacts: Record<string, unkn
   if (saved === 0) return
 
   // Update total_referidos
-  const newTotal = (lead.total_referidos || 0) + saved
+  const previousTotal = lead.total_referidos || 0
+  const newTotal = previousTotal + saved
   await supabase.from('leads').update({ total_referidos: newTotal }).eq('id', lead.id)
 
-  // When >= 20 for the first time, send congratulations messages
-  const previousTotal = lead.total_referidos || 0
-  if (newTotal >= 20 && previousTotal < 20) {
+  const meta = isM4 ? 4 : 20
+
+  if (newTotal >= meta && previousTotal < meta) {
+    // Reached the goal — send congratulations
     await zapiSend(telefoneLead, '🎉 Parabéns! Você completou os 20 indicados!')
     await zapiSend(telefoneLead, '✅ Seu acesso ao Programa Hormonal está garantido. Em breve entraremos em contato para confirmar os detalhes.')
     await zapiSend(telefoneLead, '💪 Obrigado por confiar no Dr. Vinicius e indicar seus amigos!')
+  } else if (newTotal < meta) {
+    // Progress update — how many received and how many left
+    const faltam = meta - newTotal
+    await zapiSend(
+      telefoneLead,
+      `✅ Recebi ${saved} contato${saved > 1 ? 's' : ''}! Você já tem ${newTotal} de ${meta} indicadas.\n💜 Faltam apenas ${faltam} para garantir seu acesso — continue enviando!`
+    )
   }
 }
 
