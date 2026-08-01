@@ -11,6 +11,93 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
+const ZAPI_SEND = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text'
+const ZAPI_CLIENT_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
+
+async function zapiSend(phone: string, message: string) {
+  await fetch(ZAPI_SEND, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_CLIENT_TOKEN },
+    body: JSON.stringify({ phone, message }),
+  })
+}
+
+async function saveReferidos(telefoneLead: string, contacts: Record<string, unknown>[]) {
+  // Check M4 flag (post-NO leads limited to 4 referidos)
+  const { data: lead } = await supabase
+    .from('leads')
+    .select('id, total_referidos, etapa, m4')
+    .eq('telefone', telefoneLead)
+    .maybeSingle()
+
+  if (!lead) return
+
+  const isM4 = lead.m4 === true
+  const maxReferidos = isM4 ? 4 : 999
+
+  let saved = 0
+  for (const c of contacts) {
+    const nomeReferido = String(c.displayName || c.name || '')
+    const telefoneReferido = Array.isArray(c.phones)
+      ? String((c.phones as Record<string, unknown>[])[0]?.phone || '')
+      : String(c.phone || '')
+
+    if (!telefoneReferido) continue
+
+    // Check current total to respect M4 limit
+    const { count } = await supabase
+      .from('contatos_referidos')
+      .select('id', { count: 'exact', head: true })
+      .eq('telefone_lead', telefoneLead)
+
+    if ((count || 0) >= maxReferidos) break
+
+    // Dedup check
+    const { data: existing } = await supabase
+      .from('contatos_referidos')
+      .select('id')
+      .eq('telefone_lead', telefoneLead)
+      .eq('telefone_referido', telefoneReferido)
+      .maybeSingle()
+
+    if (existing) continue
+
+    await supabase.from('contatos_referidos').insert({
+      telefone_lead: telefoneLead,
+      nome_referido: nomeReferido,
+      telefone_referido: telefoneReferido,
+    })
+    saved++
+  }
+
+  if (saved === 0) return
+
+  // Update total_referidos
+  const newTotal = (lead.total_referidos || 0) + saved
+  await supabase.from('leads').update({ total_referidos: newTotal }).eq('id', lead.id)
+
+  // When >= 20, send congratulations messages and mark
+  if (newTotal >= 20) {
+    const { data: alreadySent } = await supabase
+      .from('contatos_referidos')
+      .select('id')
+      .eq('telefone_lead', telefoneLead)
+      .eq('mensagem_enviada', true)
+      .maybeSingle()
+
+    if (!alreadySent) {
+      await zapiSend(telefoneLead, '🎉 Parabéns! Você completou os 20 indicados!')
+      await zapiSend(telefoneLead, '✅ Seu acesso ao Programa Hormonal está garantido. Em breve entraremos em contato para confirmar os detalhes.')
+      await zapiSend(telefoneLead, '💪 Obrigado por confiar no Dr. Vinicius e indicar seus amigos!')
+
+      await supabase
+        .from('contatos_referidos')
+        .update({ mensagem_enviada: true })
+        .eq('telefone_lead', telefoneLead)
+    }
+  }
+}
+
 // Z-API sends all WhatsApp events here — we persist every message to mensagens_whatsapp AND forward to n8n
 export async function POST(req: NextRequest) {
   try {
@@ -84,6 +171,11 @@ export async function POST(req: NextRequest) {
           : String(c.phone || '')
         return `📇 ${name}${phones ? ` — ${phones}` : ''}`
       }).join('\n')
+
+      // Save referidos to Supabase when contacts arrive from a lead (not fromMe)
+      if (!fromMe) {
+        saveReferidos(phone, body.contacts as Record<string, unknown>[]).catch(() => {})
+      }
     }
     else if (body.contact) {
       const c = body.contact as Record<string, unknown>
