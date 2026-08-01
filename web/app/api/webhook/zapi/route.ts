@@ -26,14 +26,13 @@ async function saveReferidos(telefoneLead: string, contacts: Record<string, unkn
   // Check M4 flag (post-NO leads limited to 4 referidos)
   const { data: lead } = await supabase
     .from('leads')
-    .select('id, total_referidos, etapa, m4')
+    .select('id, total_referidos')
     .eq('telefone', telefoneLead)
     .maybeSingle()
 
   if (!lead) return
 
-  const isM4 = lead.m4 === true
-  const maxReferidos = isM4 ? 4 : 999
+  const maxReferidos = 999
 
   let saved = 0
   for (const c of contacts) {
