@@ -79,7 +79,7 @@ async function saveReferidos(telefoneLead: string, contacts: Record<string, unkn
   const newTotal = previousTotal + saved
   await supabase.from('leads').update({ total_referidos: newTotal }).eq('id', lead.id)
 
-  const meta = isM4 ? 4 : 20
+  const meta = 20
 
   if (newTotal >= meta && previousTotal < meta) {
     // Reached the goal — send congratulations
