@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const { telefone, valor, callId } = body
 
   if (!telefone || !valor) {
-    return NextResponse.json({ error: 'telefone e valor obrigatórios' }, { status: 400 })
+    return NextResponse.json({ error: 'telefone e valor obrigatórios', telefone, valor })
   }
 
   const idempotencyKey = `voz-pix-${telefone}-${Date.now()}`
