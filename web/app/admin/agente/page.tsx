@@ -392,7 +392,7 @@ function VozView() {
         setCalls(rows)
         setLoadingCalls(false)
         if (rows.length > 0) {
-          const phones = [...new Set(rows.map(r => r.telefone))]
+          const phones = Array.from(new Set(rows.map(r => r.telefone)))
           const { data: lData } = await supabase
             .from('leads')
             .select('telefone, nome')
