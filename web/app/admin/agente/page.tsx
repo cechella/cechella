@@ -377,6 +377,8 @@ function VozView() {
   const [vapiData, setVapiData] = useState<any>(null)
   const [vapiLoading, setVapiLoading] = useState(false)
   const [showTranscript, setShowTranscript] = useState(true)
+  const [leadNames, setLeadNames] = useState<Record<string, string>>({})
+  const [ligando, setLigando] = useState<string | null>(null)
 
   useEffect(() => {
     const supabase = getSupabase()
@@ -385,11 +387,43 @@ function VozView() {
       .select('*')
       .order('created_at', { ascending: false })
       .limit(50)
-      .then(({ data }: { data: VozCall[] | null }) => {
-        setCalls(data || [])
+      .then(async ({ data }: { data: VozCall[] | null }) => {
+        const rows = data || []
+        setCalls(rows)
         setLoadingCalls(false)
+        if (rows.length > 0) {
+          const phones = [...new Set(rows.map(r => r.telefone))]
+          const { data: lData } = await supabase
+            .from('leads')
+            .select('telefone, nome')
+            .in('telefone', phones)
+          if (lData) {
+            const map: Record<string, string> = {}
+            for (const l of lData as { telefone: string; nome: string | null }[]) {
+              if (l.nome) map[l.telefone] = l.nome
+            }
+            setLeadNames(map)
+          }
+        }
       })
   }, [])
+
+  const ligarVoz = async (e: React.MouseEvent, telefone: string) => {
+    e.stopPropagation()
+    if (ligando) return
+    setLigando(telefone)
+    try {
+      const digits = telefone.replace(/\D/g, '')
+      const number = digits.startsWith('55') ? `+${digits}` : `+55${digits}`
+      await fetch('/api/admin/vapi-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number }),
+      })
+    } finally {
+      setTimeout(() => setLigando(null), 3000)
+    }
+  }
 
   const fetchVapi = async (call: VozCall) => {
     setSelected(call)
@@ -435,41 +469,70 @@ function VozView() {
             </div>
           ) : calls.map(call => {
             const isActive = selected?.id === call.id
+            const leadName = leadNames[call.telefone]
+            const isCallingThis = ligando === call.telefone
             return (
-              <button
+              <div
                 key={call.id}
-                onClick={() => fetchVapi(call)}
                 style={{
-                  width: '100%', textAlign: 'left', padding: '12px 14px',
                   borderBottom: '1px solid #18181E',
                   borderLeft: isActive ? '3px solid #7B3FE4' : '3px solid transparent',
                   background: isActive ? 'linear-gradient(90deg,#7B3FE412 0%,transparent 100%)' : 'transparent',
-                  cursor: 'pointer',
+                  position: 'relative',
                 }}
-                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = '#14141A' }}
-                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent' }}
+                onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = '#14141A' }}
+                onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#F0F0F5', fontFamily: 'monospace' }}>
-                    {call.telefone.replace(/^55/, '+55 ')}
-                  </span>
-                  <span style={{ fontSize: 9, color: call.status === 'ended' ? '#22c55e' : '#F5A623', background: call.status === 'ended' ? '#14532d30' : '#78350f30', padding: '2px 6px', borderRadius: 4, border: `1px solid ${call.status === 'ended' ? '#166534' : '#92400e'}` }}>
-                    {call.status || 'desconhecido'}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', gap: 8, fontSize: 10, color: '#555', marginBottom: 3 }}>
-                  <span>⏱ {durStr(call.duracao)}</span>
-                  {call.ended_reason && <span>· {call.ended_reason}</span>}
-                </div>
-                {call.summary && (
-                  <p style={{ fontSize: 10, color: '#4A4A58', margin: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                    {call.summary}
-                  </p>
-                )}
-                <div style={{ fontSize: 9, color: '#333', marginTop: 3 }}>
-                  {new Date(call.created_at).toLocaleString('pt-BR')}
-                </div>
-              </button>
+                <button
+                  onClick={() => fetchVapi(call)}
+                  style={{ width: '100%', textAlign: 'left', padding: '12px 14px 12px 14px', background: 'transparent', border: 'none', cursor: 'pointer', paddingRight: 44 }}
+                >
+                  {leadName && (
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#F0F0F5', marginBottom: 2, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                      {leadName}
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: leadName ? 10 : 13, fontWeight: leadName ? 400 : 700, color: leadName ? '#555' : '#F0F0F5', fontFamily: 'monospace' }}>
+                      {call.telefone.replace(/^55/, '+55 ')}
+                    </span>
+                    <span style={{ fontSize: 9, color: call.status === 'ended' ? '#22c55e' : '#F5A623', background: call.status === 'ended' ? '#14532d30' : '#78350f30', padding: '2px 6px', borderRadius: 4, border: `1px solid ${call.status === 'ended' ? '#166534' : '#92400e'}` }}>
+                      {call.status || 'desconhecido'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, fontSize: 10, color: '#555', marginBottom: 3 }}>
+                    <span>⏱ {durStr(call.duracao)}</span>
+                    {call.ended_reason && <span>· {call.ended_reason}</span>}
+                  </div>
+                  {call.summary && (
+                    <p style={{ fontSize: 10, color: '#4A4A58', margin: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                      {call.summary}
+                    </p>
+                  )}
+                  <div style={{ fontSize: 9, color: '#333', marginTop: 3 }}>
+                    {new Date(call.created_at).toLocaleString('pt-BR')}
+                  </div>
+                </button>
+                <button
+                  onClick={e => ligarVoz(e, call.telefone)}
+                  title="Ligar agora"
+                  disabled={!!ligando}
+                  style={{
+                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                    width: 28, height: 28, borderRadius: '50%', border: 'none', cursor: ligando ? 'not-allowed' : 'pointer',
+                    background: isCallingThis ? '#22c55e30' : '#16532d30',
+                    color: isCallingThis ? '#22c55e' : '#4ade80',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    opacity: ligando && !isCallingThis ? 0.4 : 1,
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  {isCallingThis
+                    ? <div style={{ width: 10, height: 10, borderRadius: '50%', border: '2px solid #22c55e', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} />
+                    : <PhoneCall style={{ width: 12, height: 12 }} />
+                  }
+                </button>
+              </div>
             )
           })}
         </div>
@@ -483,13 +546,31 @@ function VozView() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <h2 style={{ fontSize: 16, fontWeight: 700, color: '#F0F0F5', margin: 0 }}>
-                  {selected.telefone.replace(/^55/, '+55 ')}
+                  {leadNames[selected.telefone] || selected.telefone.replace(/^55/, '+55 ')}
                 </h2>
                 <div style={{ fontSize: 10, color: '#555', fontFamily: 'monospace', marginTop: 2 }}>
-                  {selected.call_id || 'sem call ID'}
+                  {leadNames[selected.telefone] ? selected.telefone.replace(/^55/, '+55 ') + ' · ' : ''}{selected.call_id || 'sem call ID'}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <button
+                  onClick={e => ligarVoz(e, selected.telefone)}
+                  disabled={!!ligando}
+                  title="Religar este número"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                    background: ligando === selected.telefone ? '#22c55e20' : '#16532d20',
+                    border: `1px solid ${ligando === selected.telefone ? '#22c55e40' : '#16532d40'}`,
+                    borderRadius: 8, cursor: ligando ? 'not-allowed' : 'pointer',
+                    color: '#4ade80', fontSize: 11, fontWeight: 600,
+                    opacity: ligando && ligando !== selected.telefone ? 0.4 : 1,
+                  }}
+                >
+                  {ligando === selected.telefone
+                    ? <><div style={{ width: 10, height: 10, borderRadius: '50%', border: '2px solid #22c55e', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} /> Ligando...</>
+                    : <><PhoneCall style={{ width: 12, height: 12 }} /> Ligar</>
+                  }
+                </button>
                 {vapiData?.durationSeconds && (
                   <span style={{ fontSize: 11, color: '#A1A1AA', background: '#1C1C1E', padding: '4px 10px', borderRadius: 7 }}>
                     ⏱ {Math.floor(vapiData.durationSeconds / 60)}m {Math.round(vapiData.durationSeconds % 60)}s
@@ -954,6 +1035,7 @@ export default function AgenteAdminPage() {
 
   return (
     <ErrorBoundary>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       {cmdOpen && (
         <CommandPalette
           leads={leads}
