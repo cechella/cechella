@@ -57,6 +57,16 @@ export async function POST(req: NextRequest) {
     const lead = leads?.[0]
 
     if (!lead) {
+      // Create lead immediately so it appears in CRM/Pipeline when call starts
+      const telefoneNorm = digits.startsWith('55') ? digits : `55${digits}`
+      await supabase.from('leads').insert({
+        telefone: telefoneNorm,
+        etapa: 'apresentacao',
+        etapa_agente: 1,
+        origem: 'vapi_voz',
+        updated_at: new Date().toISOString(),
+      })
+
       return NextResponse.json({
         result: JSON.stringify({
           status: 'novo_lead',
