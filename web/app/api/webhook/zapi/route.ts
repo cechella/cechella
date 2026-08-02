@@ -136,6 +136,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Block n8n if lead is currently in a voice call (em_ligacao)
+    const { data: leadVoz } = await supabase
+      .from('leads')
+      .select('em_ligacao')
+      .eq('telefone', phone)
+      .maybeSingle()
+
+    if (leadVoz?.em_ligacao === true) {
+      // Lead is in a voice call — save contacts/messages but don't trigger Ana WhatsApp
+      const ts2 = body.momentoMensagem
+        ? new Date(body.momentoMensagem * 1000).toISOString()
+        : new Date().toISOString()
+      const type2 = body.type || 'text'
+      let content2 = ''
+      if (body.text?.message) content2 = body.text.message
+      else if (body.contactArray?.length || body.contacts?.length) {
+        const contactList2 = (body.contactArray || body.contacts) as Record<string, unknown>[]
+        content2 = contactList2.map((c) => `📇 ${String(c.displayName || c.name || '')}`).join('\n')
+        await saveReferidos(phone, contactList2)
+      }
+      if (content2) {
+        await supabase.from('mensagens_whatsapp').insert({ phone, role: 'user', content: content2, type: type2, ts: ts2, raw: body })
+      }
+      return NextResponse.json({ ok: true, blocked: 'em_ligacao' })
+    }
+
     // Forward to n8n only when ANA is in control
     fetch(N8N_URL, {
       method: 'POST',
