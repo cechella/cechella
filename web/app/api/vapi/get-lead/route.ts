@@ -22,14 +22,24 @@ export async function POST(req: NextRequest) {
 
     if (body.message?.type === 'function-call') {
       telefone = body.message.functionCall?.parameters?.telefone
+        || body.message.call?.customer?.number
+        || body.message.call?.phoneNumber?.number
     } else if (body.message?.type === 'tool-calls') {
       const tool = body.message.toolCallList?.find((t: any) => t.function?.name === 'get_lead_context')
       if (tool) {
         const params = JSON.parse(tool.function?.arguments || '{}')
         telefone = params.telefone
       }
+      // Fallback: pega o telefone do objeto da ligação
+      if (!telefone) {
+        telefone = body.message.call?.customer?.number
+          || body.message.call?.phoneNumber?.number
+      }
     } else {
+      // Direct call or VAPI server-url format
       telefone = body.telefone
+        || body.call?.customer?.number
+        || body.call?.phoneNumber?.number
     }
 
     if (!telefone) {
