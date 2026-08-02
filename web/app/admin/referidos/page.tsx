@@ -277,6 +277,30 @@ export default function ReferidosPage() {
     setSalvandoEdicao(false)
   }
 
+  const [ligandoVoz, setLigandoVoz] = useState<string | null>(null)
+
+  const ligarVoz = async (telefone: string, id: string) => {
+    if (!telefone) return showToast('Sem telefone', 'err')
+    setLigandoVoz(id)
+    const tel = telefone.replace(/\D/g, '')
+    const number = `+55${tel}`
+    try {
+      const res = await fetch('/api/admin/vapi-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number }),
+      })
+      if (res.ok) {
+        showToast(`Ligando para ${number}...`)
+      } else {
+        showToast('Erro ao iniciar ligação', 'err')
+      }
+    } catch {
+      showToast('Erro de conexão', 'err')
+    }
+    setLigandoVoz(null)
+  }
+
   // Acionar Ana para referido (existente — sem alteração)
   const acionarAna = async (ref: Referido) => {
     if (!ref.telefone) return showToast('Referido sem telefone', 'err')
@@ -709,11 +733,22 @@ export default function ReferidosPage() {
                                   onClick={() => acionarAnaLead(lead)}
                                   disabled={acionandoAna === lead.id}
                                   className="flex items-center gap-1 text-xs px-2 py-1.5 bg-[#7B3FE4]/20 hover:bg-[#7B3FE4]/30 text-[#A78BFA] border border-[#7B3FE4]/30 rounded-lg transition-colors disabled:opacity-50"
-                                  title="Acionar Ana agora"
+                                  title="Acionar Ana — WhatsApp"
                                 >
                                   <Bot className="w-3 h-3" />
-                                  {acionandoAna === lead.id ? '...' : 'Acionar Ana'}
+                                  {acionandoAna === lead.id ? '...' : 'Ana'}
                                 </button>
+                                {lead.telefone && (
+                                  <button
+                                    onClick={() => ligarVoz(lead.telefone!, lead.id)}
+                                    disabled={ligandoVoz === lead.id}
+                                    className="flex items-center gap-1 text-xs px-2 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
+                                    title="Ligar via Ana Voz"
+                                  >
+                                    <PhoneCall className="w-3 h-3" />
+                                    {ligandoVoz === lead.id ? '...' : 'Voz'}
+                                  </button>
+                                )}
                                 {lead.telefone && (
                                   <a
                                     href={`https://wa.me/${lead.telefone.replace(/\D/g, '')}`}
@@ -946,16 +981,28 @@ export default function ReferidosPage() {
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-1">
-                                  {/* Acionar Ana */}
+                                  {/* Acionar Ana — Mensagem */}
                                   {(ref.status === 'aguardando' || ref.status === 'mensagem_enviada') && (
                                     <button
                                       onClick={() => acionarAna(ref)}
                                       disabled={acionandoAna === ref.id}
                                       className="flex items-center gap-1 text-xs px-2 py-1.5 bg-[#7B3FE4]/20 hover:bg-[#7B3FE4]/30 text-[#A78BFA] border border-[#7B3FE4]/30 rounded-lg transition-colors disabled:opacity-50"
-                                      title="Acionar Ana agora"
+                                      title="Acionar Ana — WhatsApp"
                                     >
                                       <Bot className="w-3 h-3" />
                                       {acionandoAna === ref.id ? '...' : 'Ana'}
+                                    </button>
+                                  )}
+                                  {/* Acionar Ana — Voz */}
+                                  {ref.telefone && (
+                                    <button
+                                      onClick={() => ligarVoz(ref.telefone!, ref.id)}
+                                      disabled={ligandoVoz === ref.id}
+                                      className="flex items-center gap-1 text-xs px-2 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
+                                      title="Ligar via Ana Voz"
+                                    >
+                                      <PhoneCall className="w-3 h-3" />
+                                      {ligandoVoz === ref.id ? '...' : 'Voz'}
                                     </button>
                                   )}
                                   {/* Status buttons */}

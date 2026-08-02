@@ -8,7 +8,7 @@ import {
   MessageSquare, Phone, Search, RefreshCw,
   Flame, Minus, Snowflake, X, Plus, Eye,
   Users, CheckCircle, Share2, ShieldAlert, Ban, PauseCircle, RotateCcw,
-  MoreVertical, Trash2, Scale
+  MoreVertical, Trash2, Scale, PhoneCall
 } from 'lucide-react'
 
 type Temperatura = 'quente' | 'morno' | 'frio'
@@ -147,6 +147,21 @@ export default function CRMPage() {
   const [showNovoLead, setShowNovoLead] = useState(false)
   const [novoLead, setNovoLead] = useState({ nome: '', telefone: '', etapa_agente: 1, temperatura: 'frio' as Temperatura })
   const [salvando, setSalvando] = useState(false)
+  const [ligandoVoz, setLigandoVoz] = useState<string | null>(null)
+
+  const ligarVoz = async (telefone: string, id: string) => {
+    if (!telefone) return
+    setLigandoVoz(id)
+    const tel = telefone.replace(/\D/g, '')
+    try {
+      await fetch('/api/admin/vapi-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: `+55${tel}` }),
+      })
+    } catch {}
+    setLigandoVoz(null)
+  }
   const [filtroOrigem, setFiltroOrigem] = useState<string>('todas')
   const [filtroStatus, setFiltroStatus] = useState<StatusLead | 'todos'>('todos')
   const [menuAberto, setMenuAberto] = useState<string | null>(null)
@@ -502,6 +517,16 @@ export default function CRMPage() {
                                   >
                                     <Phone className="w-4 h-4" />
                                   </a>
+                                )}
+                                {lead.telefone && (
+                                  <button
+                                    onClick={() => ligarVoz(lead.telefone!, lead.id)}
+                                    disabled={ligandoVoz === lead.id}
+                                    className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors disabled:opacity-50"
+                                    title="Ligar via Ana Voz"
+                                  >
+                                    <PhoneCall className="w-4 h-4" />
+                                  </button>
                                 )}
                                 <button
                                   onClick={(e) => {
