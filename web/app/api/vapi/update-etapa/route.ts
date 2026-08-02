@@ -28,21 +28,21 @@ export async function POST(req: NextRequest) {
     if (body.message?.type === 'function-call') {
       const params = body.message.functionCall?.parameters || {}
       telefone = params.telefone
-      etapa = params.etapa
+      etapa = params.etapa ?? params.nova_etapa
       callId = body.message.call?.id
     } else if (body.message?.type === 'tool-calls') {
       const tool = body.message.toolCallList?.find((t: any) => t.function?.name === 'update_etapa')
       if (tool) {
         const params = JSON.parse(tool.function?.arguments || '{}')
         telefone = params.telefone
-        etapa = params.etapa
+        etapa = params.etapa ?? params.nova_etapa
         callId = body.message.call?.id
       }
     } else {
-      // Direct call (admin or test)
+      // Direct call from VAPI server-url or admin
       telefone = body.telefone
-      etapa = body.etapa
-      callId = body.call_id
+      etapa = body.etapa ?? body.nova_etapa
+      callId = body.call_id ?? body.callId
     }
 
     if (!telefone || etapa === undefined) {
