@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
         .single()
 
       if (callId && newLead) {
-        await supabase.from('historico_voz').update({ etapa_fim: etapaStr })
+        await supabase.from('historico_voz').update({ etapa_fim: etapaNum })
           .eq('call_id', callId)
       }
 
@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
 
     if (callId) {
       await supabase.from('historico_voz')
-        .update({ etapa_fim: etapaStr })
+        .update({ etapa_fim: etapaNum })
         .eq('call_id', callId)
     }
 
