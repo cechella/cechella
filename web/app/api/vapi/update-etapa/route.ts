@@ -36,8 +36,13 @@ export async function POST(req: NextRequest) {
         const params = JSON.parse(tool.function?.arguments || '{}')
         telefone = params.telefone
         etapa = params.etapa ?? params.nova_etapa
-        callId = body.message.call?.id
       }
+      if (!telefone) {
+        telefone = body.telefone
+          || body.message.call?.customer?.number
+          || body.message.call?.phoneNumber?.number
+      }
+      callId = body.message.call?.id
     } else {
       // Direct call from VAPI server-url or admin
       telefone = body.telefone

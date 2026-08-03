@@ -33,7 +33,8 @@ export async function POST(req: NextRequest) {
         telefone = params.telefone
       }
       if (!telefone) {
-        telefone = body.message.call?.customer?.number
+        telefone = body.telefone
+          || body.message.call?.customer?.number
           || body.message.call?.phoneNumber?.number
       }
       callId = body.message.call?.id
