@@ -167,7 +167,7 @@ export async function POST(req: NextRequest) {
       else if (body.contactArray?.length || body.contacts?.length) {
         const contactList2 = (body.contactArray || body.contacts) as Record<string, unknown>[]
         content2 = contactList2.map((c) => `📇 ${String(c.displayName || c.name || '')}`).join('\n')
-        await saveReferidos(phoneRaw, contactList2)
+        await saveReferidos(phone, contactList2)
       }
       if (content2) {
         await supabase.from('mensagens_whatsapp').insert({ phone, role: 'user', content: content2, type: type2, ts: ts2, raw: body })
@@ -175,11 +175,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, blocked: 'em_ligacao' })
     }
 
-    // Forward to n8n only when ANA is in control
+    // Forward to n8n with normalized phone so Ana Mensagem finds the lead correctly
+    const bodyToForward = { ...body, phone }
     fetch(N8N_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(bodyToForward),
     }).catch(() => {})
 
     const role = fromMe ? 'assistant' : 'user'
@@ -211,9 +212,8 @@ export async function POST(req: NextRequest) {
         return `📇 ${name}${phone ? ` — ${phone}` : ''}`
       }).join('\n')
 
-      // Save referidos using raw phone so contatos_referidos matches what "Parsear Referidos" queries
       if (!fromMe) {
-        await saveReferidos(phoneRaw, contactList)
+        await saveReferidos(phone, contactList)
       }
     }
     else if (body.contact) {
