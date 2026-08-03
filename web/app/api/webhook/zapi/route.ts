@@ -193,11 +193,13 @@ export async function POST(req: NextRequest) {
       if (isTextMsg && !isContact) {
         const { data: leadEtapa } = await supabase
           .from('leads')
-          .select('etapa_agente')
+          .select('etapa_agente, total_referidos')
           .eq('telefone', phone)
           .maybeSingle()
 
-        if (leadEtapa?.etapa_agente === 7) {
+        // Only intercept when still collecting referidos (< 20)
+        // When total >= 20, let n8n handle the transition (forwarding confirmation → profissao/hobby)
+        if (leadEtapa?.etapa_agente === 7 && (leadEtapa?.total_referidos || 0) < 20) {
           // Save message but don't forward to n8n — respond with vCard reminder
           const tsE7 = body.momentoMensagem ? new Date(body.momentoMensagem * 1000).toISOString() : new Date().toISOString()
           await supabase.from('mensagens_whatsapp').insert({ phone, role: 'user', content: body.text.message, type: 'text', ts: tsE7, raw: body })
