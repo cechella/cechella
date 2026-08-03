@@ -175,6 +175,41 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, blocked: 'em_ligacao' })
     }
 
+    // Intercept text messages when lead is in etapa 7 (referidos) or etapa 8 (validacao)
+    // Ana Mensagem doesn't handle text in these etapas — it restarts the flow
+    if (!fromMe) {
+      const isTextMsg = !!(body.text?.message)
+      const isContact = !!(body.contactArray?.length || body.contacts?.length)
+
+      if (isTextMsg && !isContact) {
+        const { data: leadEtapa } = await supabase
+          .from('leads')
+          .select('etapa_agente')
+          .eq('telefone', phone)
+          .maybeSingle()
+
+        if (leadEtapa?.etapa_agente === 7) {
+          // Save message but don't forward to n8n — respond with vCard reminder
+          const tsE7 = body.momentoMensagem ? new Date(body.momentoMensagem * 1000).toISOString() : new Date().toISOString()
+          await supabase.from('mensagens_whatsapp').insert({ phone, role: 'user', content: body.text.message, type: 'text', ts: tsE7, raw: body })
+          await zapiSend(phoneRaw,
+            '📲 Para me enviar os contatos, siga estes passos:\n\n' +
+            '*Se você tem iPhone:*\n' +
+            '1️⃣ Olha abaixo da caixa de texto — botão com sinal de + no lado esquerdo\n' +
+            '2️⃣ Clica em "Contato"\n' +
+            '3️⃣ Seleciona até 10 amigas\n' +
+            '4️⃣ Clica em "Avançar" → "Enviar" e pronto! 🎉\n\n' +
+            '*Se você tem Android:*\n' +
+            '1️⃣ Clipe 📎 no lado esquerdo\n' +
+            '2️⃣ Clica em "Contato"\n' +
+            '3️⃣ Seleciona as amigas → "Enviar" e pronto! 🎉\n\n' +
+            'Manda quantas quiser — vou recebendo! 🥳'
+          )
+          return NextResponse.json({ ok: true, handled: 'etapa7_text' })
+        }
+      }
+    }
+
     // Forward to n8n with normalized phone so Ana Mensagem finds the lead correctly
     const bodyToForward = { ...body, phone }
     fetch(N8N_URL, {
