@@ -22,12 +22,24 @@ async function zapiSend(phone: string, message: string) {
   })
 }
 
+// Z-API omits the 9th digit for some carriers: 554888416899 → 5548988416899
+function normalizarTelefone(phone: string): string {
+  if (/^\d{12}$/.test(phone) && phone.startsWith('55')) {
+    const ddd = phone.substring(2, 4)
+    const numero = phone.substring(4)
+    if (numero.length === 8) return '55' + ddd + '9' + numero
+  }
+  return phone
+}
+
 async function saveReferidos(telefoneLead: string, contacts: Record<string, unknown>[]) {
-  // Check M4 flag (post-NO leads limited to 4 referidos)
+  // Use normalized phone to find lead, but keep raw phone for contatos_referidos
+  // so Ana Mensagem "Parsear Referidos" (which uses telefoneRaw) can still find them
+  const telefoneNorm = normalizarTelefone(telefoneLead)
   const { data: lead } = await supabase
     .from('leads')
     .select('id, total_referidos')
-    .eq('telefone', telefoneLead)
+    .eq('telefone', telefoneNorm)
     .maybeSingle()
 
   if (!lead) return
@@ -81,13 +93,12 @@ async function saveReferidos(telefoneLead: string, contacts: Record<string, unkn
 
   const meta = 20
 
+  // Send WhatsApp progress using raw phone (Z-API format)
   if (newTotal >= meta && previousTotal < meta) {
-    // Reached the goal — send congratulations
     await zapiSend(telefoneLead, '🎉 Parabéns! Você completou os 20 indicados!')
     await zapiSend(telefoneLead, '✅ Seu acesso ao Programa Hormonal está garantido. Em breve entraremos em contato para confirmar os detalhes.')
     await zapiSend(telefoneLead, '💪 Obrigado por confiar no Dr. Vinicius e indicar seus amigos!')
   } else if (newTotal < meta) {
-    // Progress update — how many received and how many left
     const faltam = meta - newTotal
     await zapiSend(
       telefoneLead,
@@ -102,8 +113,10 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
 
     // Z-API multi-device payload structure
-    const phone = body.phone || body.from || body.chatId?.replace('@s.whatsapp.net', '').replace('@c.us', '')
-    if (!phone) return NextResponse.json({ ok: true })
+    const phoneRaw = body.phone || body.from || body.chatId?.replace('@s.whatsapp.net', '').replace('@c.us', '')
+    if (!phoneRaw) return NextResponse.json({ ok: true })
+    // Normalize for Supabase lookups (Z-API omits 9th digit for some carriers)
+    const phone = normalizarTelefone(phoneRaw)
 
     // Block ANA from responding when human attendance is active
     const fromMe = body.fromMe === true
@@ -154,7 +167,7 @@ export async function POST(req: NextRequest) {
       else if (body.contactArray?.length || body.contacts?.length) {
         const contactList2 = (body.contactArray || body.contacts) as Record<string, unknown>[]
         content2 = contactList2.map((c) => `📇 ${String(c.displayName || c.name || '')}`).join('\n')
-        await saveReferidos(phone, contactList2)
+        await saveReferidos(phoneRaw, contactList2)
       }
       if (content2) {
         await supabase.from('mensagens_whatsapp').insert({ phone, role: 'user', content: content2, type: type2, ts: ts2, raw: body })
@@ -198,9 +211,9 @@ export async function POST(req: NextRequest) {
         return `📇 ${name}${phone ? ` — ${phone}` : ''}`
       }).join('\n')
 
-      // Save referidos to Supabase when contacts arrive from a lead (not fromMe)
+      // Save referidos using raw phone so contatos_referidos matches what "Parsear Referidos" queries
       if (!fromMe) {
-        await saveReferidos(phone, contactList)
+        await saveReferidos(phoneRaw, contactList)
       }
     }
     else if (body.contact) {
