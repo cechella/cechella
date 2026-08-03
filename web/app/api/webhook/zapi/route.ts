@@ -98,6 +98,20 @@ async function saveReferidos(telefoneLead: string, contacts: Record<string, unkn
     await zapiSend(telefoneLead, '🎉 Parabéns! Você completou os 20 indicados!')
     await zapiSend(telefoneLead, '✅ Seu acesso ao Programa Hormonal está garantido. Em breve entraremos em contato para confirmar os detalhes.')
     await zapiSend(telefoneLead, '💪 Obrigado por confiar no Dr. Vinicius e indicar seus amigos!')
+
+    // Advance to etapa 8 (validação) and trigger the profissão/hobby form via n8n
+    await supabase.from('leads').update({ etapa_agente: 8, etapa: 'validacao' }).eq('id', lead.id)
+    // Send synthetic event to n8n to start etapa 8 form
+    fetch(N8N_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        phone: normalizarTelefone(telefoneLead),
+        type: 'text',
+        text: { message: '[[INICIO_ETAPA_8]]' },
+        _trigger: 'etapa8_start',
+      }),
+    }).catch(() => {})
   } else if (newTotal < meta) {
     const faltam = meta - newTotal
     await zapiSend(
