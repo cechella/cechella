@@ -50,7 +50,6 @@ export async function POST(req: NextRequest) {
       prioridade: (c.profissao && c.hobby) ? 1 : 2,
       status: 'aguardando',
       tipo_envio: 'link_indicacao',
-      origem: 'link_indicacao',
     }))
 
     const validos = registros.filter((r: any) => r.telefone && r.telefone.length >= 8)
