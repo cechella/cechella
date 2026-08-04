@@ -189,8 +189,29 @@ export default function PaginaIndicacao() {
         body: JSON.stringify({ token, contatos: validos }),
       })
       const data = await res.json()
-      if (data.ok) setSucesso(true)
-      else alert(data.error || 'Erro ao enviar')
+      if (data.ok) {
+        // Calcula novo jaEnviados após envio
+        setJaEnviados(prev => {
+          const telsExistentes = new Set(prev.map(x => x.telefone.replace(/\D/g, '')))
+          const novos = validos
+            .filter((v: Contato) => !telsExistentes.has(v.telefone.replace(/\D/g, '')))
+            .map((v: Contato) => ({ ...v, telefone: v.telefone.replace(/\D/g, '') }))
+          const atualizados = prev.map(p => {
+            const match = validos.find((v: Contato) => v.telefone.replace(/\D/g, '') === p.telefone.replace(/\D/g, ''))
+            return match ? { ...p, profissao: match.profissao, hobby: match.hobby } : p
+          })
+          const resultado = [...atualizados, ...novos].slice(0, 20)
+          if (resultado.length >= 20) {
+            // Usa setTimeout para não setar estado dentro de updater
+            setTimeout(() => setSucesso(true), 0)
+          }
+          return resultado
+        })
+        // Limpa formulário para novos contatos
+        setContatos(Array.from({ length: 3 }, (_, i) => ({ id: Date.now() + i, nome: '', telefone: '', profissao: '', hobby: '' })))
+      } else {
+        alert(data.error || 'Erro ao enviar')
+      }
     } catch {
       alert('Erro ao enviar')
     } finally {
