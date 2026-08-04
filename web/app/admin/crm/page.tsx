@@ -156,6 +156,7 @@ export default function CRMPage() {
 
   const acionarAna = async (lead: Lead) => {
     if (!lead.telefone) return
+    if (lead.status === 'opt_out') return
     setAcionandoAna(lead.id)
     const tel = lead.telefone.replace(/\D/g, '')
     const mensagem = `Olá${lead.nome ? `, ${lead.nome}` : ''}! 👋 Aqui é a Ana, consultora do Hormone Ecosystem. Tudo bem com você? Queria retomar nossa conversa sobre o implante hormonal. Pode falar agora?`
@@ -204,7 +205,7 @@ export default function CRMPage() {
   }
 
   const iniciarVozLote = () => {
-    const alvos = leads.filter(l => selecionados.has(l.id) && l.telefone)
+    const alvos = leads.filter(l => selecionados.has(l.id) && l.telefone && l.status !== 'opt_out')
     if (alvos.length === 0) return
     setConfirmarVozLote({ alvos })
   }
@@ -239,7 +240,7 @@ export default function CRMPage() {
   }
 
   const enviarMensagemLote = async () => {
-    const alvos = leads.filter(l => selecionados.has(l.id) && l.telefone)
+    const alvos = leads.filter(l => selecionados.has(l.id) && l.telefone && l.status !== 'opt_out')
     if (alvos.length === 0) return
     setEnviandoMsgLote(true)
     let ok = 0

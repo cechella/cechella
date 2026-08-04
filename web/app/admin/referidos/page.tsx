@@ -310,6 +310,10 @@ export default function ReferidosPage() {
   // Acionar Ana para referido (existente — sem alteração)
   const acionarAna = async (ref: Referido) => {
     if (!ref.telefone) return showToast('Referido sem telefone', 'err')
+    const tel = ref.telefone.replace(/\D/g, '')
+    const { data: leadCheck } = await supabase.from('leads').select('status')
+      .or(`telefone.eq.${tel},telefone.eq.55${tel},telefone.eq.${tel.replace(/^55/, '')}`).limit(1).single()
+    if (leadCheck?.status === 'opt_out') return showToast('Lead bloqueado — mensagem não enviada', 'err')
     setAcionandoAna(ref.id)
     const nomeInd = ref.indicado_por_nome || 'uma amiga'
     const mensagem = montarMensagemAna(ref, nomeInd)
@@ -395,8 +399,14 @@ export default function ReferidosPage() {
 
   // Acionar Ana em lote (existente — sem alteração)
   const acionarAnaLote = async () => {
-    const alvos = referidos.filter(r => selecionados.has(r.id) && (r.status === 'aguardando' || r.status === 'mensagem_enviada') && r.telefone)
-    if (alvos.length === 0) return showToast('Nenhum referido aguardando com telefone', 'err')
+    const candidatos = referidos.filter(r => selecionados.has(r.id) && (r.status === 'aguardando' || r.status === 'mensagem_enviada') && r.telefone)
+    if (candidatos.length === 0) return showToast('Nenhum referido aguardando com telefone', 'err')
+    const telefones = candidatos.map(r => r.telefone!.replace(/\D/g, ''))
+    const { data: bloqueados } = await supabase.from('leads').select('telefone').eq('status', 'opt_out')
+      .in('telefone', [...telefones, ...telefones.map(t => `55${t}`), ...telefones.map(t => t.replace(/^55/, ''))])
+    const bloqueadosSet = new Set((bloqueados || []).map((l: any) => l.telefone.replace(/^55/, '')))
+    const alvos = candidatos.filter(r => !bloqueadosSet.has(r.telefone!.replace(/\D/g, '').replace(/^55/, '')))
+    if (alvos.length === 0) return showToast('Todos os selecionados estão bloqueados', 'err')
     setAcionandoLote(true)
     let ok = 0
     for (const ref of alvos) {
