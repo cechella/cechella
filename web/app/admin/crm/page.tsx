@@ -171,6 +171,7 @@ export default function CRMPage() {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
   const [ligandoVozLote, setLigandoVozLote] = useState(false)
   const [vozLoteProgresso, setVozLoteProgresso] = useState<{ atual: number; total: number } | null>(null)
+  const [confirmarVozLote, setConfirmarVozLote] = useState<{ alvos: typeof leads } | null>(null)
   const [paginaAtual, setPaginaAtual] = useState(1)
   const POR_PAGINA = 50
   type Coluna = 'updated_at' | 'etapa_agente' | 'total_referidos'
@@ -201,8 +202,15 @@ export default function CRMPage() {
     })
   }
 
-  const ligarVozLote = async () => {
+  const iniciarVozLote = () => {
     const alvos = leads.filter(l => selecionados.has(l.id) && l.telefone)
+    if (alvos.length === 0) return
+    setConfirmarVozLote({ alvos })
+  }
+
+  const ligarVozLote = async () => {
+    const alvos = confirmarVozLote?.alvos ?? []
+    setConfirmarVozLote(null)
     if (alvos.length === 0) return
     setLigandoVozLote(true)
     setVozLoteProgresso({ atual: 0, total: alvos.length })
@@ -527,7 +535,7 @@ export default function CRMPage() {
                   <span className="text-xs text-[#A78BFA] font-medium">{selecionados.size} selecionado{selecionados.size !== 1 ? 's' : ''}</span>
                   <div className="flex-1 flex items-center gap-2">
                     <button
-                      onClick={ligarVozLote}
+                      onClick={iniciarVozLote}
                       disabled={ligandoVozLote}
                       className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
                     >
@@ -1095,6 +1103,43 @@ export default function CRMPage() {
               className="w-full bg-[#7B3FE4] hover:bg-[#6B2FD4] disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">
               {salvando ? 'Salvando...' : 'Criar Lead'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {confirmarVozLote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-6 w-full max-w-md mx-4 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
+                <PhoneCall className="w-5 h-5 text-green-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white">Confirmar ligações via Ana Voz</h3>
+                <p className="text-xs text-[#71717A] mt-0.5">Ana Voz vai ligar para {confirmarVozLote.alvos.length} lead{confirmarVozLote.alvos.length !== 1 ? 's' : ''}</p>
+              </div>
+            </div>
+            <div className="max-h-48 overflow-y-auto space-y-1.5 mb-4">
+              {confirmarVozLote.alvos.map(lead => (
+                <div key={lead.id} className="flex items-center justify-between bg-[#18181A] rounded-lg px-3 py-2">
+                  <span className="text-xs text-white">{lead.nome || '—'}</span>
+                  <span className="text-xs text-[#71717A] font-mono">{lead.telefone}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-amber-400/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2 mb-4">
+              Isso vai consumir créditos VAPI. Certifique-se que os leads estão prontos para contato.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setConfirmarVozLote(null)}
+                className="flex-1 text-xs px-4 py-2.5 bg-[#1C1C1E] hover:bg-[#232325] text-[#A1A1AA] rounded-xl transition-colors">
+                Cancelar
+              </button>
+              <button onClick={ligarVozLote}
+                className="flex-1 text-xs px-4 py-2.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-xl transition-colors font-medium">
+                Confirmar e ligar
+              </button>
+            </div>
           </div>
         </div>
       )}
