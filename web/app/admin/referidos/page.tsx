@@ -1057,25 +1057,6 @@ export default function ReferidosPage() {
                                       {ligandoVoz === ref.id ? '...' : 'Ligar Voz'}
                                     </button>
                                   )}
-                                  {/* Status buttons */}
-                                  {(ref.status === 'aguardando' || ref.status === 'mensagem_enviada') && acionandoAna !== ref.id && (
-                                    <button
-                                      onClick={() => atualizarStatus(ref.id, 'contatado')}
-                                      disabled={atualizando === ref.id}
-                                      className="text-xs px-2 py-1.5 bg-orange-500/20 hover:bg-orange-500/30 text-orange-400 rounded-lg transition-colors disabled:opacity-50"
-                                    >
-                                      {atualizando === ref.id ? '...' : 'Contatar'}
-                                    </button>
-                                  )}
-                                  {ref.status === 'contatado' && (
-                                    <button
-                                      onClick={() => atualizarStatus(ref.id, 'fechado')}
-                                      disabled={atualizando === ref.id}
-                                      className="text-xs px-2 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg transition-colors disabled:opacity-50"
-                                    >
-                                      {atualizando === ref.id ? '...' : 'Fechado'}
-                                    </button>
-                                  )}
                                   {/* Editar */}
                                   <button
                                     onClick={() => iniciarEdicao(ref)}
