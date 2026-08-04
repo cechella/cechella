@@ -34,11 +34,9 @@ export default function PaginaIndicacao() {
     setImportandoWpp(true)
   }
 
-  // Polling contínuo — verifica contatos enquanto campos estiverem vazios
+  // Polling — ativo apenas quando importandoWpp=true (clicou botão verde)
   useEffect(() => {
-    if (loading) return
-    const camposVazios = contatos.every(x => !x.nome && !x.telefone)
-    if (!camposVazios) return
+    if (!importandoWpp) return
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/indicar/sessao?token=${token}`)
@@ -57,7 +55,7 @@ export default function PaginaIndicacao() {
       } catch {}
     }, 2500)
     return () => clearInterval(interval)
-  }, [loading, token, contatos])
+  }, [importandoWpp, token])
 
   useEffect(() => {
     setTemContacts(supportsContactsPicker())
