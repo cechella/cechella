@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
       const phone = String(body.phone).replace(/\D/g, '')
       await supabase
         .from('sessao_wpp')
-        .upsert({ phone, token: body.token, contatos: null }, { onConflict: 'phone' })
+        .upsert({ phone, token: body.token }, { onConflict: 'phone' })
       return NextResponse.json({ ok: true, step: 'registered' })
     }
 
