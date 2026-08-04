@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     .select('status')
     .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${digits.replace(/^55/, '')}`)
     .limit(1)
-    .single()
+    .maybeSingle()
 
   if (lead?.status === 'opt_out') {
     return NextResponse.json({ error: 'Lead bloqueado (opt_out)' }, { status: 403 })
