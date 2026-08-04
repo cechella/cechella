@@ -34,7 +34,6 @@ export async function POST(req: NextRequest) {
       }
       if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
         telefone = body.message.call?.customer?.number
-          || body.message.call?.phoneNumber?.number
           || body.message.call?.customer?.numberE164
           || body.telefone
           || body.message.call?.to
