@@ -317,7 +317,6 @@ export default function ReferidosPage() {
     setAcionandoAna(ref.id)
     const nomeInd = ref.indicado_por_nome || 'uma amiga'
     const mensagem = montarMensagemAna(ref, nomeInd)
-    const tel = ref.telefone.replace(/\D/g, '')
     try {
       const res = await fetch(ZAPI_URL, {
         method: 'POST',
