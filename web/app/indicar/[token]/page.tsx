@@ -34,9 +34,11 @@ export default function PaginaIndicacao() {
     setImportandoWpp(true)
   }
 
-  // Polling — verifica contatos via WhatsApp (ao clicar botão ou ao carregar página)
+  // Polling contínuo — verifica contatos enquanto campos estiverem vazios
   useEffect(() => {
-    if (!importandoWpp && !loading) return
+    if (loading) return
+    const camposVazios = contatos.every(x => !x.nome && !x.telefone)
+    if (!camposVazios) return
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/indicar/sessao?token=${token}`)
@@ -49,19 +51,13 @@ export default function PaginaIndicacao() {
             profissao: '',
             hobby: '',
           }))
-          setContatos(prev => {
-            const temVazio = prev.every(x => !x.nome && !x.telefone)
-            return temVazio ? novos : prev
-          })
+          setContatos(novos)
           setImportandoWpp(false)
-          clearInterval(interval)
         }
       } catch {}
     }, 2500)
-    // Para o polling após 3 minutos se nada chegar
-    const timeout = setTimeout(() => clearInterval(interval), 3 * 60 * 1000)
-    return () => { clearInterval(interval); clearTimeout(timeout) }
-  }, [importandoWpp, loading, token])
+    return () => clearInterval(interval)
+  }, [loading, token, contatos])
 
   useEffect(() => {
     setTemContacts(supportsContactsPicker())
