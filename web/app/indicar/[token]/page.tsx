@@ -29,6 +29,7 @@ export default function PaginaIndicacao() {
     Array.from({ length: 20 }, (_, i) => ({ id: i + 1, nome: '', telefone: '', profissao: '', hobby: '' }))
   )
   const primeiroVazioRef = useRef<HTMLInputElement>(null)
+  const [toast, setToast] = useState<string | null>(null)
 
   const abrirWhatsAppImport = () => {
     const msg = encodeURIComponent(`REF-${token}`)
@@ -213,23 +214,36 @@ export default function PaginaIndicacao() {
           return
         }
 
-        // Monta próximo formulário: contatos sem profissão/hobby primeiro, depois slots vazios
-        const semDados = novoJaEnviados
-          .filter(c => !c.profissao && !c.hobby)
-          .map(c => ({ ...c, id: Date.now() + Math.random() }))
         const faltamSlots = Math.max(0, 20 - novoJaEnviados.length)
+
+        // Contatos que ainda precisam de profissão/hobby
+        const semDados = novoJaEnviados
+          .filter(c => !c.profissao || !c.hobby)
+          .map(c => ({ ...c, id: Date.now() + Math.random() }))
+
+        // Slots em branco para novos contatos (máx 3 de uma vez)
         const slots = Array.from({ length: Math.min(faltamSlots, 3) }, (_, i) => ({
           id: Date.now() + i + 1000,
           nome: '', telefone: '', profissao: '', hobby: '',
         }))
+
         setContatos([...semDados, ...slots])
 
-        // Sobe para o topo para mostrar o banner, depois foca no primeiro campo vazio
-        window.scrollTo({ top: 0, behavior: 'smooth' })
-        setTimeout(() => {
-          primeiroVazioRef.current?.focus()
-          primeiroVazioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }, 600)
+        if (semDados.length > 0) {
+          // Ainda há contatos incompletos → rola direto até o primeiro deles
+          setTimeout(() => {
+            primeiroVazioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            primeiroVazioRef.current?.focus()
+          }, 300)
+        } else {
+          // Todos têm profissão/hobby → parabéns, fica no topo para adicionar mais
+          window.scrollTo({ top: 0, behavior: 'smooth' })
+          const msg = faltamSlots > 0
+            ? `🎉 Ótimo! Dados completos. Adicione mais ${faltamSlots} amiga${faltamSlots !== 1 ? 's' : ''} para chegar em 20!`
+            : '🎉 Meta atingida! 20 indicações enviadas!'
+          setToast(msg)
+          setTimeout(() => setToast(null), 5000)
+        }
       } else {
         alert(data.error || 'Erro ao enviar')
       }
@@ -342,6 +356,13 @@ export default function PaginaIndicacao() {
                 ⚠️ {semProfHobby} amiga{semProfHobby !== 1 ? 's' : ''} sem profissão/hobby — preencha abaixo para Ana personalizar o contato
               </p>
             )}
+          </div>
+        )}
+
+        {/* Toast de parabéns após completar dados */}
+        {toast && (
+          <div className="bg-emerald-900/40 border border-emerald-500/30 rounded-2xl px-4 py-3 text-center">
+            <p className="text-emerald-300 text-sm font-medium">{toast}</p>
           </div>
         )}
 
