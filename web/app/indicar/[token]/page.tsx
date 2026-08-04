@@ -71,6 +71,24 @@ export default function PaginaIndicacao() {
       })
       .catch(() => setErro('Erro ao carregar'))
       .finally(() => setLoading(false))
+
+    // Verifica imediatamente se já há contatos salvos (ex: usuário voltou à página)
+    fetch(`/api/indicar/sessao?token=${token}`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.contatos?.length) {
+          const novos: Contato[] = data.contatos.map((c: any, i: number) => ({
+            id: Date.now() + i,
+            nome: c.nome || '',
+            telefone: c.telefone || '',
+            profissao: '',
+            hobby: '',
+          }))
+          setContatos(novos)
+          setImportandoWpp(false)
+        }
+      })
+      .catch(() => {})
   }, [token])
 
   const importarDoCelular = async (contatoId: number) => {
