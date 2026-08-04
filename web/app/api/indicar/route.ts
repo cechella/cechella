@@ -56,7 +56,10 @@ export async function POST(req: NextRequest) {
     const validos = registros.filter((r: any) => r.telefone && r.telefone.length >= 8)
     if (!validos.length) return NextResponse.json({ error: 'Nenhum contato válido' }, { status: 400 })
 
-    const { error } = await supabase.from('contatos_referidos').insert(validos)
+    const { error } = await supabase.from('contatos_referidos').upsert(validos, {
+      onConflict: 'telefone,indicado_por_telefone',
+      ignoreDuplicates: false,
+    })
     if (error) throw error
 
     return NextResponse.json({ ok: true, salvos: validos.length })
