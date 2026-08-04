@@ -37,7 +37,6 @@ export async function POST(req: NextRequest) {
         assistantId: ASSISTANT_ID,
         phoneNumberId: PHONE_NUMBER_ID,
         customer: { number },
-        serverUrl: 'https://www.hormoneecosystem.com/api/vapi/end-call',
       }),
     })
 
