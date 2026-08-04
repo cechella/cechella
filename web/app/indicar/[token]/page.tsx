@@ -23,9 +23,9 @@ export default function PaginaIndicacao() {
   const [enviando, setEnviando] = useState(false)
   const [sucesso, setSucesso] = useState(false)
   const [temContacts, setTemContacts] = useState(false)
-  const [contatos, setContatos] = useState<Contato[]>([
-    { id: 1, nome: '', telefone: '', profissao: '', hobby: '' }
-  ])
+  const [contatos, setContatos] = useState<Contato[]>(
+    Array.from({ length: 20 }, (_, i) => ({ id: i + 1, nome: '', telefone: '', profissao: '', hobby: '' }))
+  )
 
   useEffect(() => {
     setTemContacts(supportsContactsPicker())
@@ -203,7 +203,7 @@ export default function PaginaIndicacao() {
         )}
 
         <p className="text-[#4B5563] text-xs text-center py-1">
-          {temContacts ? '— ou adicione manualmente —' : 'Preencha os dados de cada amiga que você quer indicar'}
+          {temContacts ? '— ou preencha manualmente abaixo —' : 'Tente preencher as 20 amigas — quanto mais, melhor!'}
         </p>
 
         {/* Cards de contato */}
