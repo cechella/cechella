@@ -302,7 +302,16 @@ export default function PaginaIndicacao() {
   const nomeIndicador = indicador?.nome?.split(' ')[0] || 'você'
   const totalValidos = contatos.filter(c => c.telefone.replace(/\D/g, '').length >= 8).length
   const totalJaEnviados = jaEnviados.length
-  const faltam = Math.max(0, 20 - totalJaEnviados)
+
+  // Contatos no formulário que ainda não foram confirmados no banco
+  const telefonesConfirmados = new Set(jaEnviados.map(c => c.telefone.replace(/\D/g, '')))
+  const pendentesNoForm = contatos.filter(c => {
+    const tel = c.telefone.replace(/\D/g, '')
+    return tel.length >= 8 && !telefonesConfirmados.has(tel)
+  }).length
+
+  const totalConhecidos = totalJaEnviados + pendentesNoForm
+  const faltam = Math.max(0, 20 - totalConhecidos)
   const semProfHobby = jaEnviados.filter(c => !c.profissao || !c.hobby).length
 
   return (
@@ -343,14 +352,21 @@ export default function PaginaIndicacao() {
       <div className="max-w-lg mx-auto px-4 space-y-3">
 
         {/* Banner de progresso */}
-        {totalJaEnviados > 0 && (
+        {totalConhecidos > 0 && (
           <div className="bg-[#1A1528] border border-[#3D2D6B] rounded-2xl px-4 py-3.5 space-y-2">
             <p className="text-white text-sm font-semibold">
-              {totalJaEnviados >= 20 ? '🎉 Meta atingida! 20 indicações enviadas' : `✅ ${totalJaEnviados} enviadas · faltam ${faltam} para completar 20`}
+              {totalConhecidos >= 20
+                ? '🎉 Meta atingida! 20 indicações enviadas'
+                : `✅ ${totalConhecidos} de 20 · faltam ${faltam} para completar`}
             </p>
             <div className="w-full bg-[#0D0B14] rounded-full h-1.5">
-              <div className="bg-[#7C3AED] h-1.5 rounded-full transition-all" style={{ width: `${Math.min(100, (totalJaEnviados / 20) * 100)}%` }} />
+              <div className="bg-[#7C3AED] h-1.5 rounded-full transition-all" style={{ width: `${Math.min(100, (totalConhecidos / 20) * 100)}%` }} />
             </div>
+            {pendentesNoForm > 0 && (
+              <p className="text-[#A78BFA] text-xs">
+                📋 {totalJaEnviados} confirmadas no banco · {pendentesNoForm} aguardando envio no formulário
+              </p>
+            )}
             {semProfHobby > 0 && (
               <p className="text-[#F59E0B] text-xs">
                 ⚠️ {semProfHobby} amiga{semProfHobby !== 1 ? 's' : ''} sem profissão/hobby — preencha abaixo para Ana personalizar o contato
