@@ -37,39 +37,54 @@ export default function PaginaIndicacao() {
     setImportandoWpp(true)
   }
 
-  // Polling — ativo apenas quando importandoWpp=true (clicou botão verde)
+  const mergeSessaoContatos = (apiContatos: any[]) => {
+    if (!apiContatos?.length) return
+    setContatos(prev => {
+      const existentes = prev.filter(x => x.nome || x.telefone)
+      const mapExistentes = new Map(existentes.map(x => [x.telefone, x]))
+      const merged: Contato[] = apiContatos.map((c: any, i: number) => {
+        const existente = mapExistentes.get(c.telefone)
+        return {
+          id: existente?.id ?? Date.now() + i,
+          nome: c.nome || existente?.nome || '',
+          telefone: c.telefone || '',
+          profissao: c.profissao || existente?.profissao || '',
+          hobby: c.hobby || existente?.hobby || '',
+        }
+      })
+      const telsApi = new Set(apiContatos.map((c: any) => c.telefone))
+      const extras = existentes.filter(x => !telsApi.has(x.telefone))
+      return [...merged, ...extras].slice(0, 20)
+    })
+    setImportandoWpp(false)
+  }
+
+  // Polling ativo quando importandoWpp=true (clicou botão verde)
   useEffect(() => {
     if (!importandoWpp) return
     const interval = setInterval(async () => {
       try {
         const res = await fetch(`/api/indicar/sessao?token=${token}`)
         const data = await res.json()
-        if (data.contatos?.length) {
-          setContatos(prev => {
-            const existentes = prev.filter(x => x.nome || x.telefone)
-            const mapExistentes = new Map(existentes.map(x => [x.telefone, x]))
-            // Merge: novos contatos da API, preservando profissão/hobby já preenchidos
-            const merged: Contato[] = data.contatos.map((c: any, i: number) => {
-              const existente = mapExistentes.get(c.telefone)
-              return {
-                id: existente?.id ?? Date.now() + i,
-                nome: c.nome || existente?.nome || '',
-                telefone: c.telefone || '',
-                profissao: existente?.profissao || '',
-                hobby: existente?.hobby || '',
-              }
-            })
-            // Adiciona contatos extras que só estão no frontend (não vieram da API)
-            const telsApi = new Set(data.contatos.map((c: any) => c.telefone))
-            const extras = existentes.filter(x => !telsApi.has(x.telefone))
-            return [...merged, ...extras].slice(0, 20)
-          })
-          setImportandoWpp(false)
-        }
+        if (data.contatos?.length) mergeSessaoContatos(data.contatos)
       } catch {}
     }, 2500)
     return () => clearInterval(interval)
   }, [importandoWpp, token])
+
+  // Problema 3: quando página volta ao foco (saiu do WhatsApp e voltou), recarrega contatos
+  useEffect(() => {
+    const onVisible = async () => {
+      if (document.visibilityState !== 'visible') return
+      try {
+        const res = await fetch(`/api/indicar/sessao?token=${token}`)
+        const data = await res.json()
+        if (data.contatos?.length) mergeSessaoContatos(data.contatos)
+      } catch {}
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [token])
 
   useEffect(() => {
     setTemContacts(supportsContactsPicker())
@@ -313,7 +328,25 @@ export default function PaginaIndicacao() {
 
   const totalConhecidos = totalJaEnviados + pendentesNoForm
   const faltam = Math.max(0, 20 - totalConhecidos)
-  const semProfHobby = jaEnviados.filter(c => !c.profissao || !c.hobby).length
+
+  // Problema 2: conta sem prof/hobby tanto os confirmados quanto os pendentes no formulário
+  const semProfHobbyConfirmados = jaEnviados.filter(c => !c.profissao || !c.hobby).length
+  const semProfHobbyPendentes = contatos.filter(c => {
+    const tel = c.telefone.replace(/\D/g, '')
+    return tel.length >= 8 && !telefonesConfirmados.has(tel) && (!c.profissao || !c.hobby)
+  }).length
+  const semProfHobby = semProfHobbyConfirmados + semProfHobbyPendentes
+
+  // Problema 1: botão mostra só os que vão ser NOVOS ou atualizados com prof/hobby
+  const novosNoForm = contatos.filter(c => {
+    const tel = c.telefone.replace(/\D/g, '')
+    return tel.length >= 8 && !telefonesConfirmados.has(tel)
+  }).length
+  const atualizandoProfHobby = contatos.filter(c => {
+    const tel = c.telefone.replace(/\D/g, '')
+    return tel.length >= 8 && telefonesConfirmados.has(tel) && (c.profissao || c.hobby)
+  }).length
+  const totalBotao = novosNoForm + atualizandoProfHobby || totalValidos
 
   return (
     <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(135deg, #0D0B14 0%, #120D1F 100%)' }}>
@@ -534,7 +567,7 @@ export default function PaginaIndicacao() {
           {enviando
             ? 'Enviando...'
             : totalValidos > 0
-              ? `Enviar ${totalValidos} indicação${totalValidos !== 1 ? 'ões' : ''}`
+              ? `Enviar ${totalConhecidos} indicaç${totalConhecidos !== 1 ? 'ões' : 'ão'}`
               : 'Preencha ao menos um telefone'}
         </button>
 
