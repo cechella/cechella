@@ -1,3 +1,18 @@
+/**
+ * VAPI Call Dispatcher — /api/admin/vapi-call
+ *
+ * Dispara ligação outbound via API do VAPI.
+ * Usado pela página /admin/voz-test (botão "Ligar Agora").
+ *
+ * IMPORTANTE: o campo `serverUrl` é obrigatório no body do request.
+ * Sem ele, o VAPI não envia eventos (call-start, end-of-call-report) para o webhook.
+ * Resultado: lead não aparece no CRM/pipeline quando a ligação começa.
+ *
+ * Se o lead não aparecer ao ligar, verificar:
+ * 1. `serverUrl` está presente no body do POST para api.vapi.ai/call? (esta rota)
+ * 2. A rota /api/vapi/end-call está deployada e respondendo? (curl de teste)
+ * 3. O VAPI Assistant → Advanced → Server URL também aponta para /api/vapi/end-call?
+ */
 import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
