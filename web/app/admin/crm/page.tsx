@@ -8,7 +8,7 @@ import {
   MessageSquare, Phone, Search, RefreshCw,
   Flame, Minus, Snowflake, X, Plus, Eye,
   Users, CheckCircle, Share2, ShieldAlert, Ban, PauseCircle, RotateCcw,
-  MoreVertical, Trash2, Scale, PhoneCall
+  MoreVertical, Trash2, Scale, PhoneCall, ChevronDown, ChevronUp, ChevronsUpDown, Download
 } from 'lucide-react'
 
 type Temperatura = 'quente' | 'morno' | 'frio'
@@ -148,6 +148,98 @@ export default function CRMPage() {
   const [novoLead, setNovoLead] = useState({ nome: '', telefone: '', etapa_agente: 1, temperatura: 'frio' as Temperatura })
   const [salvando, setSalvando] = useState(false)
   const [ligandoVoz, setLigandoVoz] = useState<string | null>(null)
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
+  const [ligandoVozLote, setLigandoVozLote] = useState(false)
+  const [vozLoteProgresso, setVozLoteProgresso] = useState<{ atual: number; total: number } | null>(null)
+  const [paginaAtual, setPaginaAtual] = useState(1)
+  const POR_PAGINA = 50
+  type Coluna = 'updated_at' | 'etapa_agente' | 'total_referidos'
+  const [ordenacao, setOrdenacao] = useState<{ coluna: Coluna; direcao: 'asc' | 'desc' }>({ coluna: 'updated_at', direcao: 'desc' })
+
+  const toggleOrdenacao = (coluna: Coluna) => {
+    setOrdenacao(prev => prev.coluna === coluna
+      ? { coluna, direcao: prev.direcao === 'desc' ? 'asc' : 'desc' }
+      : { coluna, direcao: 'desc' }
+    )
+  }
+
+  const toggleSelecionado = (id: string) => {
+    setSelecionados(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const toggleTodos = () => {
+    const ids = leadsFiltradosPaginados.map(l => l.id)
+    const todosSelecionados = ids.every(id => selecionados.has(id))
+    setSelecionados(prev => {
+      const next = new Set(prev)
+      todosSelecionados ? ids.forEach(id => next.delete(id)) : ids.forEach(id => next.add(id))
+      return next
+    })
+  }
+
+  const ligarVozLote = async () => {
+    const alvos = leads.filter(l => selecionados.has(l.id) && l.telefone)
+    if (alvos.length === 0) return
+    setLigandoVozLote(true)
+    setVozLoteProgresso({ atual: 0, total: alvos.length })
+    let ok = 0
+    const CONCORRENCIA = 10
+    for (let i = 0; i < alvos.length; i += CONCORRENCIA) {
+      const lote = alvos.slice(i, i + CONCORRENCIA)
+      await Promise.all(lote.map(async (lead) => {
+        const tel = lead.telefone!.replace(/\D/g, '')
+        try {
+          const res = await fetch('/api/admin/vapi-call', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ number: `+55${tel}` }),
+          })
+          if (res.ok) ok++
+        } catch {}
+      }))
+      setVozLoteProgresso({ atual: Math.min(i + CONCORRENCIA, alvos.length), total: alvos.length })
+      if (i + CONCORRENCIA < alvos.length) await new Promise(r => setTimeout(r, 60000))
+    }
+    setSelecionados(new Set())
+    setLigandoVozLote(false)
+    setVozLoteProgresso(null)
+  }
+
+  const pausarLote = async () => {
+    const ids = Array.from(selecionados)
+    await Promise.all(ids.map(id => supabase.from('leads').update({ status: 'pausado' }).eq('id', id)))
+    setLeads(prev => prev.map(l => selecionados.has(l.id) ? { ...l, status: 'pausado' as StatusLead } : l))
+    setSelecionados(new Set())
+  }
+
+  const exportarCSV = () => {
+    const alvos = selecionados.size > 0
+      ? leads.filter(l => selecionados.has(l.id))
+      : leadsFiltrados
+    const linhas = [
+      ['Nome', 'Telefone', 'Etapa', 'Temperatura', 'Origem', 'Referidos', 'Dor Principal', 'Status', 'Atualizado'],
+      ...alvos.map(l => [
+        l.nome || '',
+        l.telefone || '',
+        etapaAgentLabels[l.etapa_agente ?? 1] || '',
+        l.temperatura,
+        l.origem || '',
+        String(l.total_referidos ?? 0),
+        l.dor_principal || '',
+        l.status || 'ativo',
+        l.updated_at,
+      ])
+    ]
+    const csv = linhas.map(row => row.map(v => `"${v}"`).join(',')).join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a'); a.href = url; a.download = 'leads.csv'; a.click()
+    URL.revokeObjectURL(url)
+  }
 
   const ligarVoz = async (telefone: string, id: string) => {
     if (!telefone) return
@@ -203,7 +295,16 @@ export default function CRMPage() {
     const matchOrigem = filtroOrigem === 'todas' || l.origem === filtroOrigem
     const matchStatus = filtroStatus === 'todos' || (l.status || 'ativo') === filtroStatus
     return matchSearch && matchEtapa && matchTemp && matchOrigem && matchStatus
+  }).sort((a, b) => {
+    const { coluna, direcao } = ordenacao
+    let va: number, vb: number
+    if (coluna === 'etapa_agente') { va = a.etapa_agente ?? 0; vb = b.etapa_agente ?? 0 }
+    else if (coluna === 'total_referidos') { va = a.total_referidos ?? 0; vb = b.total_referidos ?? 0 }
+    else { va = new Date(a.updated_at).getTime(); vb = new Date(b.updated_at).getTime() }
+    return direcao === 'desc' ? vb - va : va - vb
   })
+
+  const leadsFiltradosPaginados = leadsFiltrados.slice(0, paginaAtual * POR_PAGINA)
 
   const atualizarStatus = async (id: string, status: StatusLead) => {
     await supabase.from('leads').update({ status }).eq('id', id)
@@ -398,11 +499,46 @@ export default function CRMPage() {
                 </button>
               </div>
 
+              {/* Barra de ações em lote */}
+              {selecionados.size > 0 && (
+                <div className="flex items-center gap-3 bg-[#7B3FE4]/10 border border-[#7B3FE4]/30 rounded-xl px-4 py-2.5">
+                  <span className="text-xs text-[#A78BFA] font-medium">{selecionados.size} selecionado{selecionados.size !== 1 ? 's' : ''}</span>
+                  <div className="flex-1 flex items-center gap-2">
+                    <button
+                      onClick={ligarVozLote}
+                      disabled={ligandoVozLote}
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <PhoneCall className="w-3.5 h-3.5" />
+                      {ligandoVozLote && vozLoteProgresso ? `Ligando... ${vozLoteProgresso.atual}/${vozLoteProgresso.total}` : `Ligar com Voz (${selecionados.size})`}
+                    </button>
+                    <button
+                      onClick={pausarLote}
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 rounded-lg transition-colors"
+                    >
+                      <PauseCircle className="w-3.5 h-3.5" /> Pausar selecionados
+                    </button>
+                    <button
+                      onClick={exportarCSV}
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg transition-colors"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Exportar CSV
+                    </button>
+                  </div>
+                  <button onClick={() => setSelecionados(new Set())} className="text-xs text-[#71717A] hover:text-white">Limpar seleção</button>
+                </div>
+              )}
+
               {/* Tabela leads */}
               <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-[#1C1C1E]">
-                  <h2 className="text-sm font-semibold text-white">{leadsFiltrados.length} leads</h2>
-                  <span className="text-xs text-[#71717A]">{leads.filter(l => (l.etapa_agente ?? 0) >= 7).length} ganhos</span>
+                  <h2 className="text-sm font-semibold text-white">{leadsFiltrados.length} leads {leadsFiltrados.length > POR_PAGINA && <span className="text-[#71717A] font-normal">— mostrando {Math.min(paginaAtual * POR_PAGINA, leadsFiltrados.length)}</span>}</h2>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-[#71717A]">{leads.filter(l => (l.etapa_agente ?? 0) >= 7).length} ganhos</span>
+                    <button onClick={exportarCSV} className="flex items-center gap-1.5 text-xs text-[#71717A] hover:text-white transition-colors">
+                      <Download className="w-3.5 h-3.5" /> Exportar
+                    </button>
+                  </div>
                 </div>
                 {loading ? (
                   <div className="flex items-center justify-center py-16">
@@ -418,20 +554,40 @@ export default function CRMPage() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-[#1C1C1E]">
+                          <th className="px-4 py-3 w-8">
+                            <input type="checkbox"
+                              checked={leadsFiltradosPaginados.length > 0 && leadsFiltradosPaginados.every(l => selecionados.has(l.id))}
+                              onChange={toggleTodos}
+                              className="w-3.5 h-3.5 accent-[#7B3FE4] cursor-pointer"
+                            />
+                          </th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-6 py-3">Lead</th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Status</th>
-                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Etapa</th>
+                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3 cursor-pointer select-none hover:text-white transition-colors" onClick={() => toggleOrdenacao('etapa_agente')}>
+                            <span className="flex items-center gap-1">Etapa {ordenacao.coluna === 'etapa_agente' ? (ordenacao.direcao === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</span>
+                          </th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Temp.</th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Origem</th>
-                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Referidos</th>
+                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3 cursor-pointer select-none hover:text-white transition-colors" onClick={() => toggleOrdenacao('total_referidos')}>
+                            <span className="flex items-center gap-1">Referidos {ordenacao.coluna === 'total_referidos' ? (ordenacao.direcao === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</span>
+                          </th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Dor Principal</th>
-                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Atualizado</th>
+                          <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3 cursor-pointer select-none hover:text-white transition-colors" onClick={() => toggleOrdenacao('updated_at')}>
+                            <span className="flex items-center gap-1">Atualizado {ordenacao.coluna === 'updated_at' ? (ordenacao.direcao === 'desc' ? <ChevronDown className="w-3 h-3" /> : <ChevronUp className="w-3 h-3" />) : <ChevronsUpDown className="w-3 h-3 opacity-40" />}</span>
+                          </th>
                           <th className="text-left text-xs text-[#71717A] font-medium px-4 py-3">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {leadsFiltrados.map(lead => (
-                          <tr key={lead.id} className="border-b border-[#1C1C1E] hover:bg-[#18181A] transition-colors">
+                        {leadsFiltradosPaginados.map(lead => (
+                          <tr key={lead.id} className={`border-b border-[#1C1C1E] hover:bg-[#18181A] transition-colors ${selecionados.has(lead.id) ? 'bg-[#7B3FE4]/5' : ''}`}>
+                            <td className="px-4 py-4 w-8">
+                              <input type="checkbox"
+                                checked={selecionados.has(lead.id)}
+                                onChange={() => toggleSelecionado(lead.id)}
+                                className="w-3.5 h-3.5 accent-[#7B3FE4] cursor-pointer"
+                              />
+                            </td>
                             <td className="px-6 py-4">
                               <p className="text-sm font-medium text-white">{lead.nome || '—'}</p>
                               {lead.telefone && (
@@ -548,6 +704,18 @@ export default function CRMPage() {
                   </div>
                 )}
               </div>
+
+              {/* Carregar mais */}
+              {leadsFiltrados.length > paginaAtual * POR_PAGINA && (
+                <div className="flex justify-center">
+                  <button
+                    onClick={() => setPaginaAtual(p => p + 1)}
+                    className="text-sm text-[#71717A] hover:text-white border border-[#1C1C1E] hover:border-[#7B3FE4] px-6 py-2.5 rounded-xl transition-all"
+                  >
+                    Carregar mais ({leadsFiltrados.length - paginaAtual * POR_PAGINA} restantes)
+                  </button>
+                </div>
+              )}
             </>
           )}
 
