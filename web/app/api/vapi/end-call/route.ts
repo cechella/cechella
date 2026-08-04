@@ -1,3 +1,22 @@
+/**
+ * VAPI Server URL Webhook — /api/vapi/end-call
+ *
+ * Esta rota é configurada no VAPI em: Assistant → Advanced → Webhook Server → Server URL
+ * URL: https://www.hormoneecosystem.com/api/vapi/end-call
+ *
+ * Recebe TODOS os eventos do servidor VAPI (não apenas end-of-call):
+ *
+ * - call-start / call.started → cria lead no banco se não existir, marca em_ligacao: true
+ * - end-of-call-report        → limpa em_ligacao: false, salva duração/resumo em historico_voz
+ *
+ * ATENÇÃO: Se o lead não aparecer no CRM/pipeline quando a ligação começa, verificar:
+ * 1. No VAPI Advanced → Server URL aponta para esta rota? (não para o n8n)
+ * 2. O evento call-start está chegando? (verificar Vercel logs)
+ * 3. O telefone customer.number está preenchido no payload do VAPI?
+ *
+ * As ferramentas (get_lead_context, register_interesse, etc.) têm URLs próprias
+ * configuradas em VAPI → Tools → cada tool → Request URL.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
