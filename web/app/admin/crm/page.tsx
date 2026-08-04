@@ -5,7 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { createBrowserClient } from '@supabase/ssr'
 import {
-  MessageSquare, Phone, Search, RefreshCw,
+  MessageSquare, Phone, Search, RefreshCw, Link,
   Flame, Minus, Snowflake, X, Plus, Eye,
   Users, CheckCircle, Share2, ShieldAlert, Ban, PauseCircle, RotateCcw,
   MoreVertical, Trash2, Scale, PhoneCall, ChevronDown, ChevronUp, ChevronsUpDown, Download
@@ -174,6 +174,23 @@ export default function CRMPage() {
   const [vozLoteProgresso, setVozLoteProgresso] = useState<{ atual: number; total: number } | null>(null)
   const [confirmarVozLote, setConfirmarVozLote] = useState<{ alvos: typeof leads } | null>(null)
   const [enviandoMsgLote, setEnviandoMsgLote] = useState(false)
+  const [copiandoLink, setCopiandoLink] = useState<string | null>(null)
+
+  const copiarLinkIndicacao = async (leadId: string) => {
+    setCopiandoLink(leadId)
+    try {
+      const res = await fetch('/api/admin/gerar-link-indicacao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId }),
+      })
+      const data = await res.json()
+      if (data.url) {
+        await navigator.clipboard.writeText(data.url)
+      }
+    } catch {}
+    setTimeout(() => setCopiandoLink(null), 2000)
+  }
   const [paginaAtual, setPaginaAtual] = useState(1)
   const POR_PAGINA = 50
   type Coluna = 'updated_at' | 'etapa_agente' | 'total_referidos'
@@ -755,6 +772,15 @@ export default function CRMPage() {
                                     <PhoneCall className="w-4 h-4" />
                                   </button>
                                 )}
+                                <button
+                                  onClick={() => copiarLinkIndicacao(lead.id)}
+                                  className="p-1.5 text-[#71717A] hover:text-[#A78BFA] hover:bg-[#1C1C1E] rounded-lg transition-colors"
+                                  title="Copiar link de indicação"
+                                >
+                                  {copiandoLink === lead.id
+                                    ? <CheckCircle className="w-4 h-4 text-emerald-400" />
+                                    : <Link className="w-4 h-4" />}
+                                </button>
                                 <button
                                   onClick={(e) => {
                                     const rect = e.currentTarget.getBoundingClientRect()
