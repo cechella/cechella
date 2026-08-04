@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Plus, Trash2, Send, CheckCircle, Phone, User, Briefcase, Heart } from 'lucide-react'
+import { Plus, Trash2, Send, CheckCircle, Phone, User, Briefcase, Heart, BookUser } from 'lucide-react'
 
 interface Contato {
   id: number
@@ -12,6 +12,9 @@ interface Contato {
   hobby: string
 }
 
+const supportsContactsPicker = () =>
+  typeof window !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window
+
 export default function PaginaIndicacao() {
   const { token } = useParams<{ token: string }>()
   const [indicador, setIndicador] = useState<{ nome: string | null } | null>(null)
@@ -19,11 +22,13 @@ export default function PaginaIndicacao() {
   const [loading, setLoading] = useState(true)
   const [enviando, setEnviando] = useState(false)
   const [sucesso, setSucesso] = useState(false)
+  const [temContacts, setTemContacts] = useState(false)
   const [contatos, setContatos] = useState<Contato[]>([
     { id: 1, nome: '', telefone: '', profissao: '', hobby: '' }
   ])
 
   useEffect(() => {
+    setTemContacts(supportsContactsPicker())
     fetch(`/api/indicar?token=${token}`)
       .then(r => r.json())
       .then(d => {
@@ -33,6 +38,42 @@ export default function PaginaIndicacao() {
       .catch(() => setErro('Erro ao carregar'))
       .finally(() => setLoading(false))
   }, [token])
+
+  const importarDoCelular = async (contatoId: number) => {
+    if (!supportsContactsPicker()) return
+    try {
+      // @ts-ignore
+      const results = await navigator.contacts.select(['name', 'tel'], { multiple: false })
+      if (!results?.length) return
+      const c = results[0]
+      const nome = c.name?.[0] || ''
+      const tel = c.tel?.[0] || ''
+      setContatos(prev => prev.map(x =>
+        x.id === contatoId ? { ...x, nome, telefone: tel } : x
+      ))
+    } catch {}
+  }
+
+  const importarMultiplos = async () => {
+    if (!supportsContactsPicker()) return
+    try {
+      // @ts-ignore
+      const results = await navigator.contacts.select(['name', 'tel'], { multiple: true })
+      if (!results?.length) return
+      const novos: Contato[] = results.map((c: any) => ({
+        id: Date.now() + Math.random(),
+        nome: c.name?.[0] || '',
+        telefone: c.tel?.[0] || '',
+        profissao: '',
+        hobby: '',
+      }))
+      setContatos(prev => {
+        // substitui o primeiro vazio se existir, senão adiciona
+        const temVazio = prev.length === 1 && !prev[0].nome && !prev[0].telefone
+        return temVazio ? novos : [...prev, ...novos]
+      })
+    } catch {}
+  }
 
   const adicionarContato = () => {
     setContatos(prev => [...prev, { id: Date.now(), nome: '', telefone: '', profissao: '', hobby: '' }])
@@ -118,19 +159,40 @@ export default function PaginaIndicacao() {
 
       {/* Formulário */}
       <div className="max-w-lg mx-auto px-4 space-y-4">
-        <p className="text-[#71717A] text-xs text-center mb-2">
-          Preencha os dados de cada amiga que você quer indicar
+        {temContacts && (
+          <button
+            onClick={importarMultiplos}
+            className="w-full flex items-center justify-center gap-2 py-3 bg-[#7B3FE4]/15 border border-[#7B3FE4]/40 hover:bg-[#7B3FE4]/25 text-[#A78BFA] rounded-2xl text-sm font-medium transition-colors"
+          >
+            <BookUser className="w-4 h-4" />
+            Importar amigas do celular
+          </button>
+        )}
+
+        <p className="text-[#71717A] text-xs text-center">
+          {temContacts ? 'ou preencha manualmente abaixo' : 'Preencha os dados de cada amiga que você quer indicar'}
         </p>
 
         {contatos.map((contato, idx) => (
           <div key={contato.id} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4 space-y-3">
             <div className="flex items-center justify-between mb-1">
               <span className="text-xs text-[#71717A] font-medium">Amiga {idx + 1}</span>
-              {contatos.length > 1 && (
-                <button onClick={() => removerContato(contato.id)} className="text-[#71717A] hover:text-red-400 transition-colors">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {temContacts && (
+                  <button
+                    onClick={() => importarDoCelular(contato.id)}
+                    className="text-[#7B3FE4] hover:text-[#A78BFA] transition-colors"
+                    title="Importar contato do celular"
+                  >
+                    <BookUser className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                {contatos.length > 1 && (
+                  <button onClick={() => removerContato(contato.id)} className="text-[#71717A] hover:text-red-400 transition-colors">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="relative">
