@@ -237,7 +237,8 @@ export default function PaginaIndicacao() {
           }, 300)
         } else {
           // Todos têm profissão/hobby → parabéns, fica no topo para adicionar mais
-          window.scrollTo({ top: 0, behavior: 'smooth' })
+          // setTimeout garante que o scroll roda APÓS o React re-renderizar o DOM
+          setTimeout(() => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }), 50)
           const msg = faltamSlots > 0
             ? `🎉 Ótimo! Dados completos. Adicione mais ${faltamSlots} amiga${faltamSlots !== 1 ? 's' : ''} para chegar em 20!`
             : '🎉 Meta atingida! 20 indicações enviadas!'
