@@ -148,6 +148,26 @@ export default function CRMPage() {
   const [novoLead, setNovoLead] = useState({ nome: '', telefone: '', etapa_agente: 1, temperatura: 'frio' as Temperatura })
   const [salvando, setSalvando] = useState(false)
   const [ligandoVoz, setLigandoVoz] = useState<string | null>(null)
+  const [acionandoAna, setAcionandoAna] = useState<string | null>(null)
+  const [filtroStatusRef, setFiltroStatusRef] = useState<string>('todos')
+
+  const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text'
+  const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
+
+  const acionarAna = async (lead: Lead) => {
+    if (!lead.telefone) return
+    setAcionandoAna(lead.id)
+    const tel = lead.telefone.replace(/\D/g, '')
+    const mensagem = `Olá${lead.nome ? `, ${lead.nome}` : ''}! 👋 Aqui é a Ana, consultora do Hormone Ecosystem. Tudo bem com você? Queria retomar nossa conversa sobre o implante hormonal. Pode falar agora?`
+    try {
+      await fetch(ZAPI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+        body: JSON.stringify({ phone: tel, message: mensagem }),
+      })
+    } catch {}
+    setAcionandoAna(null)
+  }
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
   const [ligandoVozLote, setLigandoVozLote] = useState(false)
   const [vozLoteProgresso, setVozLoteProgresso] = useState<{ atual: number; total: number } | null>(null)
@@ -321,10 +341,12 @@ export default function CRMPage() {
   const leadsBloqueados = leads.filter(l => l.status === 'opt_out').length
   const leadsPausados = leads.filter(l => l.status === 'pausado').length
 
-  const referidosFiltrados = contatos.filter(r =>
-    (r.nome || '').toLowerCase().includes(search.toLowerCase()) ||
-    (r.telefone || '').includes(search)
-  )
+  const referidosFiltrados = contatos.filter(r => {
+    const matchSearch = (r.nome || '').toLowerCase().includes(search.toLowerCase()) ||
+      (r.telefone || '').includes(search)
+    const matchStatus = filtroStatusRef === 'todos' || r.status === filtroStatusRef
+    return matchSearch && matchStatus
+  })
 
   const atualizarEtapa = async (id: string, etapa: number) => {
     await supabase.from('leads').update({ etapa_agente: etapa, updated_at: new Date().toISOString() }).eq('id', id)
@@ -664,6 +686,16 @@ export default function CRMPage() {
                                   <Eye className="w-4 h-4" />
                                 </button>
                                 {lead.telefone && (
+                                  <button
+                                    onClick={() => acionarAna(lead)}
+                                    disabled={acionandoAna === lead.id}
+                                    className="p-1.5 text-[#71717A] hover:text-[#A78BFA] hover:bg-[#1C1C1E] rounded-lg transition-colors disabled:opacity-50"
+                                    title="Acionar Ana (WhatsApp)"
+                                  >
+                                    <MessageSquare className="w-4 h-4" />
+                                  </button>
+                                )}
+                                {lead.telefone && (
                                   <a
                                     href={`https://wa.me/55${lead.telefone.replace(/\D/g, '')}`}
                                     target="_blank"
@@ -739,8 +771,8 @@ export default function CRMPage() {
               </div>
 
               {/* Filtros referidos */}
-              <div className="flex items-center gap-3">
-                <div className="relative flex-1">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="relative flex-1 min-w-[200px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#71717A]" />
                   <input
                     value={search}
@@ -749,6 +781,17 @@ export default function CRMPage() {
                     className="w-full bg-[#111113] border border-[#1C1C1E] rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-[#71717A] focus:outline-none focus:border-[#7B3FE4]"
                   />
                 </div>
+                <select
+                  value={filtroStatusRef}
+                  onChange={e => setFiltroStatusRef(e.target.value)}
+                  className="bg-[#111113] border border-[#1C1C1E] rounded-xl px-3 py-2.5 text-sm text-white focus:outline-none focus:border-[#7B3FE4]"
+                >
+                  <option value="todos">Todos status</option>
+                  <option value="aguardando">Aguardando</option>
+                  <option value="contatado">Contatado</option>
+                  <option value="interessado">Interessado</option>
+                  <option value="vendido">Vendido</option>
+                </select>
                 <button onClick={carregarReferidos} className="p-2.5 bg-[#111113] border border-[#1C1C1E] rounded-xl text-[#71717A] hover:text-white hover:border-[#7B3FE4] transition-all">
                   <RefreshCw className="w-4 h-4" />
                 </button>
@@ -811,17 +854,29 @@ export default function CRMPage() {
                                 </select>
                               </td>
                               <td className="px-4 py-4">
-                                {ref.telefone && (
-                                  <a
-                                    href={`https://wa.me/55${ref.telefone.replace(/\D/g, '')}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors inline-flex"
-                                    title="Abrir WhatsApp"
-                                  >
-                                    <Phone className="w-4 h-4" />
-                                  </a>
-                                )}
+                                <div className="flex items-center gap-1">
+                                  {ref.telefone && (
+                                    <a
+                                      href={`https://wa.me/55${ref.telefone.replace(/\D/g, '')}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors inline-flex"
+                                      title="Abrir WhatsApp"
+                                    >
+                                      <Phone className="w-4 h-4" />
+                                    </a>
+                                  )}
+                                  {ref.telefone && (
+                                    <button
+                                      onClick={() => ligarVoz(ref.telefone!, ref.id)}
+                                      disabled={ligandoVoz === ref.id}
+                                      className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors disabled:opacity-50"
+                                      title="Ligar via Ana Voz"
+                                    >
+                                      <PhoneCall className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           )
@@ -907,7 +962,7 @@ export default function CRMPage() {
       {/* Modal detalhe lead */}
       {showModal && leadSelecionado && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl w-full max-w-md p-6 space-y-4">
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl w-full max-w-lg p-6 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-white">{leadSelecionado.nome || '—'}</h3>
               <button onClick={() => setShowModal(false)} className="text-[#71717A] hover:text-white"><X className="w-5 h-5" /></button>
@@ -948,16 +1003,48 @@ export default function CRMPage() {
                 <span>{tempoRelativo(leadSelecionado.updated_at)}</span>
               </div>
             </div>
-            {leadSelecionado.telefone && (
-              <a
-                href={`https://wa.me/55${leadSelecionado.telefone.replace(/\D/g, '')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-center gap-2 w-full bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-xl text-sm font-medium transition-colors"
-              >
-                <Phone className="w-4 h-4" /> Abrir no WhatsApp
-              </a>
+
+            {/* Histórico de conversa */}
+            {leadSelecionado.historico && leadSelecionado.historico.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-[#71717A] mb-2">Histórico com Ana Mensagem</p>
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {leadSelecionado.historico.map((msg, i) => (
+                    <div key={i} className={`flex ${msg.role === 'assistant' ? 'justify-start' : 'justify-end'}`}>
+                      <div className={`max-w-[80%] px-3 py-2 rounded-xl text-xs ${
+                        msg.role === 'assistant'
+                          ? 'bg-[#7B3FE4]/20 text-[#C4B5FD] rounded-tl-none'
+                          : 'bg-[#1C1C1E] text-white rounded-tr-none'
+                      }`}>
+                        {msg.content}
+                        {msg.ts && <p className="text-[10px] opacity-50 mt-1">{tempoRelativo(msg.ts)}</p>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
+
+            <div className="flex gap-2">
+              {leadSelecionado.telefone && (
+                <button
+                  onClick={() => { acionarAna(leadSelecionado); setShowModal(false) }}
+                  className="flex items-center justify-center gap-2 flex-1 bg-[#7B3FE4]/20 hover:bg-[#7B3FE4]/30 border border-[#7B3FE4]/40 text-[#A78BFA] py-2.5 rounded-xl text-sm font-medium transition-colors"
+                >
+                  <MessageSquare className="w-4 h-4" /> Acionar Ana
+                </button>
+              )}
+              {leadSelecionado.telefone && (
+                <a
+                  href={`https://wa.me/55${leadSelecionado.telefone.replace(/\D/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-2 flex-1 bg-green-600 hover:bg-green-500 text-white py-2.5 rounded-xl text-sm font-medium transition-colors"
+                >
+                  <Phone className="w-4 h-4" /> Abrir WhatsApp
+                </a>
+              )}
+            </div>
           </div>
         </div>
       )}
