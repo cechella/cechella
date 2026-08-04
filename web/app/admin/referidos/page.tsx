@@ -692,7 +692,7 @@ export default function ReferidosPage() {
                   className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-[#7B3FE4]/20 hover:bg-[#7B3FE4]/30 text-[#A78BFA] border border-[#7B3FE4]/40 rounded-lg transition-colors disabled:opacity-50"
                 >
                   <Bot className="w-3.5 h-3.5" />
-                  {acionandoLote ? 'Acionando...' : 'Acionar Ana para selecionados'}
+                  {acionandoLote ? 'Enviando...' : `Mensagem (${selecionados.size})`}
                 </button>
                 <button
                   onClick={iniciarVozLote}
@@ -702,7 +702,7 @@ export default function ReferidosPage() {
                   <PhoneCall className="w-3.5 h-3.5" />
                   {ligandoVozLote && vozLoteProgresso
                     ? `Ligando... ${vozLoteProgresso.atual}/${vozLoteProgresso.total}`
-                    : `Ligar com Voz (${selecionados.size})`}
+                    : `Ligar Voz (${selecionados.size})`}
                 </button>
                 <button
                   onClick={notificarLote}
@@ -710,7 +710,7 @@ export default function ReferidosPage() {
                   className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg transition-colors disabled:opacity-50"
                 >
                   <UserCheck className="w-3.5 h-3.5" />
-                  {notificandoLote ? 'Notificando...' : `Distribuir para ${consultores.length} consultor${consultores.length !== 1 ? 'es' : ''}`}
+                  {notificandoLote ? 'Distribuindo...' : `Distribuir (${selecionados.size})`}
                 </button>
               </div>
               <button onClick={() => setSelecionados(new Set())} className="text-xs text-[#71717A] hover:text-white">Limpar seleção</button>
@@ -1039,10 +1039,10 @@ export default function ReferidosPage() {
                                       onClick={() => acionarAna(ref)}
                                       disabled={acionandoAna === ref.id}
                                       className="flex items-center gap-1 text-xs px-2 py-1.5 bg-[#7B3FE4]/20 hover:bg-[#7B3FE4]/30 text-[#A78BFA] border border-[#7B3FE4]/30 rounded-lg transition-colors disabled:opacity-50"
-                                      title="Acionar Ana — WhatsApp"
+                                      title="Contatar por Mensagem"
                                     >
                                       <Bot className="w-3 h-3" />
-                                      {acionandoAna === ref.id ? '...' : 'Ana'}
+                                      {acionandoAna === ref.id ? '...' : 'Mensagem'}
                                     </button>
                                   )}
                                   {/* Acionar Ana — Voz */}
@@ -1054,7 +1054,7 @@ export default function ReferidosPage() {
                                       title="Ligar via Ana Voz"
                                     >
                                       <PhoneCall className="w-3 h-3" />
-                                      {ligandoVoz === ref.id ? '...' : 'Voz'}
+                                      {ligandoVoz === ref.id ? '...' : 'Ligar Voz'}
                                     </button>
                                   )}
                                   {/* Status buttons */}
@@ -1096,14 +1096,15 @@ export default function ReferidosPage() {
                                       <Phone className="w-3.5 h-3.5" />
                                     </a>
                                   )}
-                                  {/* Notificar consultor */}
+                                  {/* Distribuir consultor */}
                                   <button
                                     onClick={() => notificarConsultor(ref)}
                                     disabled={notificando === ref.id}
-                                    className="p-1.5 text-[#71717A] hover:text-amber-400 hover:bg-[#1C1C1E] rounded-lg transition-colors disabled:opacity-50"
-                                    title="Notificar consultor"
+                                    className="flex items-center gap-1 text-xs px-2 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 rounded-lg transition-colors disabled:opacity-50"
+                                    title="Distribuir para consultor"
                                   >
-                                    <UserCheck className="w-3.5 h-3.5" />
+                                    <UserCheck className="w-3 h-3" />
+                                    {notificando === ref.id ? '...' : 'Distribuir'}
                                   </button>
                                 </div>
                               )}

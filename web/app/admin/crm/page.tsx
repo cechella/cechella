@@ -172,6 +172,7 @@ export default function CRMPage() {
   const [ligandoVozLote, setLigandoVozLote] = useState(false)
   const [vozLoteProgresso, setVozLoteProgresso] = useState<{ atual: number; total: number } | null>(null)
   const [confirmarVozLote, setConfirmarVozLote] = useState<{ alvos: typeof leads } | null>(null)
+  const [enviandoMsgLote, setEnviandoMsgLote] = useState(false)
   const [paginaAtual, setPaginaAtual] = useState(1)
   const POR_PAGINA = 50
   type Coluna = 'updated_at' | 'etapa_agente' | 'total_referidos'
@@ -235,6 +236,27 @@ export default function CRMPage() {
     setSelecionados(new Set())
     setLigandoVozLote(false)
     setVozLoteProgresso(null)
+  }
+
+  const enviarMensagemLote = async () => {
+    const alvos = leads.filter(l => selecionados.has(l.id) && l.telefone)
+    if (alvos.length === 0) return
+    setEnviandoMsgLote(true)
+    let ok = 0
+    await Promise.all(alvos.map(async (lead) => {
+      const tel = lead.telefone!.replace(/\D/g, '')
+      const mensagem = `Olá${lead.nome ? `, ${lead.nome}` : ''}! 👋 Aqui é a Ana, consultora do Hormone Ecosystem. Tudo bem com você? Queria retomar nossa conversa sobre o implante hormonal. Pode falar agora?`
+      try {
+        await fetch(ZAPI_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+          body: JSON.stringify({ phone: tel, message: mensagem }),
+        })
+        ok++
+      } catch {}
+    }))
+    setSelecionados(new Set())
+    setEnviandoMsgLote(false)
   }
 
   const pausarLote = async () => {
@@ -535,12 +557,20 @@ export default function CRMPage() {
                   <span className="text-xs text-[#A78BFA] font-medium">{selecionados.size} selecionado{selecionados.size !== 1 ? 's' : ''}</span>
                   <div className="flex-1 flex items-center gap-2">
                     <button
+                      onClick={enviarMensagemLote}
+                      disabled={enviandoMsgLote}
+                      className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-[#7B3FE4]/20 hover:bg-[#7B3FE4]/30 text-[#A78BFA] border border-[#7B3FE4]/40 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      {enviandoMsgLote ? 'Enviando...' : `Mensagem (${selecionados.size})`}
+                    </button>
+                    <button
                       onClick={iniciarVozLote}
                       disabled={ligandoVozLote}
                       className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
                     >
                       <PhoneCall className="w-3.5 h-3.5" />
-                      {ligandoVozLote && vozLoteProgresso ? `Ligando... ${vozLoteProgresso.atual}/${vozLoteProgresso.total}` : `Ligar com Voz (${selecionados.size})`}
+                      {ligandoVozLote && vozLoteProgresso ? `Ligando... ${vozLoteProgresso.atual}/${vozLoteProgresso.total}` : `Ligar Voz (${selecionados.size})`}
                     </button>
                     <button
                       onClick={pausarLote}
