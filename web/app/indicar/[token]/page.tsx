@@ -245,6 +245,7 @@ export default function PaginaIndicacao() {
                 <input
                   type="text"
                   placeholder="Nome completo"
+                  autoComplete="name"
                   value={contato.nome}
                   onChange={e => atualizarContato(contato.id, 'nome', e.target.value)}
                   className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
@@ -256,6 +257,7 @@ export default function PaginaIndicacao() {
                 <input
                   type="tel"
                   placeholder="WhatsApp *"
+                  autoComplete="tel"
                   value={contato.telefone}
                   onChange={e => atualizarContato(contato.id, 'telefone', e.target.value)}
                   className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
