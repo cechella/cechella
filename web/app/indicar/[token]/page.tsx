@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { Plus, Trash2, Send, CheckCircle, Phone, User, Briefcase, Heart, BookUser, Sparkles, MessageCircle } from 'lucide-react'
 
@@ -28,6 +28,7 @@ export default function PaginaIndicacao() {
   const [contatos, setContatos] = useState<Contato[]>(
     Array.from({ length: 20 }, (_, i) => ({ id: i + 1, nome: '', telefone: '', profissao: '', hobby: '' }))
   )
+  const primeiroVazioRef = useRef<HTMLInputElement>(null)
 
   const abrirWhatsAppImport = () => {
     const msg = encodeURIComponent(`REF-${token}`)
@@ -223,8 +224,12 @@ export default function PaginaIndicacao() {
         }))
         setContatos([...semDados, ...slots])
 
-        // Sobe para o topo para mostrar o banner de progresso
+        // Sobe para o topo para mostrar o banner, depois foca no primeiro campo vazio
         window.scrollTo({ top: 0, behavior: 'smooth' })
+        setTimeout(() => {
+          primeiroVazioRef.current?.focus()
+          primeiroVazioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }, 600)
       } else {
         alert(data.error || 'Erro ao enviar')
       }
@@ -451,7 +456,8 @@ export default function PaginaIndicacao() {
                     placeholder="Profissão"
                     value={contato.profissao}
                     onChange={e => atualizarContato(contato.id, 'profissao', e.target.value)}
-                    className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
+                    ref={precisaCompletar && idx === contatos.findIndex(c => !!c.telefone && (!c.profissao || !c.hobby)) ? primeiroVazioRef : undefined}
+                    className={`w-full bg-[#0D0B14] border rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors ${precisaCompletar ? 'border-[#F59E0B]/50' : 'border-[#1F1935]'}`}
                   />
                 </div>
                 <div className="relative">
