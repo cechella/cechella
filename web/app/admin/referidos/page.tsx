@@ -278,6 +278,8 @@ export default function ReferidosPage() {
   }
 
   const [ligandoVoz, setLigandoVoz] = useState<string | null>(null)
+  const [ligandoVozLote, setLigandoVozLote] = useState(false)
+  const [vozLoteProgresso, setVozLoteProgresso] = useState<{ atual: number; total: number } | null>(null)
 
   const ligarVoz = async (telefone: string, id: string) => {
     if (!telefone) return showToast('Sem telefone', 'err')
@@ -349,6 +351,35 @@ export default function ReferidosPage() {
       showToast('Erro de conexão', 'err')
     }
     setAcionandoAna(null)
+  }
+
+  const ligarVozLote = async () => {
+    const alvos = referidos.filter(r => selecionados.has(r.id) && r.telefone)
+    if (alvos.length === 0) return showToast('Nenhum referido com telefone selecionado', 'err')
+    setLigandoVozLote(true)
+    setVozLoteProgresso({ atual: 0, total: alvos.length })
+    let ok = 0
+    const CONCORRENCIA = 10
+    for (let i = 0; i < alvos.length; i += CONCORRENCIA) {
+      const lote = alvos.slice(i, i + CONCORRENCIA)
+      await Promise.all(lote.map(async (ref) => {
+        const tel = ref.telefone!.replace(/\D/g, '')
+        try {
+          const res = await fetch('/api/admin/vapi-call', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ number: `+55${tel}` }),
+          })
+          if (res.ok) ok++
+        } catch {}
+      }))
+      setVozLoteProgresso({ atual: Math.min(i + CONCORRENCIA, alvos.length), total: alvos.length })
+      if (i + CONCORRENCIA < alvos.length) await new Promise(r => setTimeout(r, 60000))
+    }
+    showToast(`${ok}/${alvos.length} ligações disparadas!`)
+    setSelecionados(new Set())
+    setLigandoVozLote(false)
+    setVozLoteProgresso(null)
   }
 
   // Acionar Ana em lote (existente — sem alteração)
@@ -651,6 +682,16 @@ export default function ReferidosPage() {
                 >
                   <Bot className="w-3.5 h-3.5" />
                   {acionandoLote ? 'Acionando...' : 'Acionar Ana para selecionados'}
+                </button>
+                <button
+                  onClick={ligarVozLote}
+                  disabled={ligandoVozLote}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
+                >
+                  <PhoneCall className="w-3.5 h-3.5" />
+                  {ligandoVozLote && vozLoteProgresso
+                    ? `Ligando... ${vozLoteProgresso.atual}/${vozLoteProgresso.total}`
+                    : `Ligar com Voz (${selecionados.size})`}
                 </button>
                 <button
                   onClick={notificarLote}
