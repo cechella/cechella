@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { createBrowserClient } from '@supabase/ssr'
-import { Flame, Circle, Phone, RefreshCw, Search, CheckCircle, Clock, PhoneCall, Copy, Check, CreditCard, Users, TrendingUp, Pencil, X, Bot, UserCheck, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Flame, Circle, Phone, RefreshCw, Search, CheckCircle, Clock, PhoneCall, Copy, Check, CreditCard, Users, TrendingUp, Pencil, X, Bot, UserCheck, ToggleLeft, ToggleRight, Link } from 'lucide-react'
 
 type StatusReferido = 'aguardando' | 'mensagem_enviada' | 'contatado' | 'fechado'
 type FiltroPrioridade = 'todas' | '1' | '2'
@@ -284,6 +284,32 @@ export default function ReferidosPage() {
   const [ligandoVozLote, setLigandoVozLote] = useState(false)
   const [vozLoteProgresso, setVozLoteProgresso] = useState<{ atual: number; total: number } | null>(null)
   const [confirmarVozLote, setConfirmarVozLote] = useState<{ alvos: typeof referidos } | null>(null)
+  const [copiandoLink, setCopiandoLink] = useState<string | null>(null)
+
+  const copiarLinkIndicacao = async (telefone: string | null, nome: string | null) => {
+    if (!telefone) return
+    const digits = telefone.replace(/\D/g, '')
+    const id_key = digits
+    setCopiandoLink(id_key)
+    try {
+      // Busca o lead pelo telefone para obter o leadId
+      const { data: lead } = await supabase
+        .from('leads')
+        .select('id')
+        .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${digits.replace(/^55/, '')}`)
+        .limit(1)
+        .maybeSingle()
+      if (!lead) { alert('Lead não encontrado no CRM para gerar o link'); setCopiandoLink(null); return }
+      const res = await fetch('/api/admin/gerar-link-indicacao', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadId: lead.id }),
+      })
+      const data = await res.json()
+      if (data.url) await navigator.clipboard.writeText(data.url)
+    } catch {}
+    setTimeout(() => setCopiandoLink(null), 2000)
+  }
 
   const ligarVoz = async (telefone: string, id: string) => {
     if (!telefone) return showToast('Sem telefone', 'err')
@@ -1095,6 +1121,17 @@ export default function ReferidosPage() {
                                   >
                                     <UserCheck className="w-3 h-3" />
                                     {notificando === ref.id ? '...' : 'Distribuir'}
+                                  </button>
+
+                                  {/* Copiar link de indicação */}
+                                  <button
+                                    onClick={() => copiarLinkIndicacao(ref.indicado_por_telefone, ref.indicado_por_nome)}
+                                    className="flex items-center gap-1 text-xs px-2 py-1.5 bg-[#7B3FE4]/20 hover:bg-[#7B3FE4]/30 text-[#A78BFA] border border-[#7B3FE4]/30 rounded-lg transition-colors"
+                                    title="Copiar link de indicação do indicador"
+                                  >
+                                    {copiandoLink === ref.indicado_por_telefone?.replace(/\D/g, '')
+                                      ? <><CheckCircle className="w-3 h-3 text-emerald-400" /> Copiado!</>
+                                      : <><Link className="w-3 h-3" /> Link</>}
                                   </button>
                                 </div>
                               )}
