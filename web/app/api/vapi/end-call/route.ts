@@ -9,26 +9,55 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-// Called by VAPI end-of-call-report webhook
+// Called by VAPI server URL webhook (call-start, end-of-call-report, etc.)
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
 
-    const callId = body.call?.id || body.callId
-    const telefone = body.call?.customer?.number || body.call?.phoneNumber?.number || body.telefone
-    const duracao = body.call?.endedAt && body.call?.startedAt
-      ? Math.round((new Date(body.call.endedAt).getTime() - new Date(body.call.startedAt).getTime()) / 1000)
-      : body.durationSeconds || null
-    const endedReason = body.call?.endedReason || body.endedReason || null
-    const resumo = body.summary || body.call?.summary || null
+    const type = body.message?.type || body.type || ''
+    const callId = body.message?.call?.id || body.call?.id || body.callId
+    const rawPhone = body.message?.call?.customer?.number
+      || body.call?.customer?.number
+      || body.telefone
+      || ''
+    const telefone = String(rawPhone).replace(/\D/g, '')
+
+    // Handle call-start: create lead if not exists
+    if (type === 'call-start' || type === 'call.started') {
+      if (telefone && telefone.length >= 10) {
+        const { data: existing } = await supabase
+          .from('leads')
+          .select('id')
+          .or(`telefone.eq.${telefone},telefone.eq.55${telefone},telefone.eq.${telefone.replace(/^55/, '')}`)
+          .limit(1)
+
+        if (existing && existing.length > 0) {
+          await supabase.from('leads').update({ em_ligacao: true, updated_at: new Date().toISOString() }).eq('id', existing[0].id)
+        } else {
+          const tel = telefone.startsWith('55') ? telefone : `55${telefone}`
+          await supabase.from('leads').insert({
+            telefone: tel,
+            em_ligacao: true,
+            etapa_agente: 1,
+            origem: 'vapi_voz',
+            updated_at: new Date().toISOString(),
+          })
+        }
+      }
+      return NextResponse.json({ ok: true })
+    }
+    const duracao = body.message?.durationSeconds
+      || (body.call?.endedAt && body.call?.startedAt
+        ? Math.round((new Date(body.call.endedAt).getTime() - new Date(body.call.startedAt).getTime()) / 1000)
+        : null)
+    const endedReason = body.message?.endedReason || body.call?.endedReason || null
+    const resumo = body.message?.summary || body.summary || null
 
     if (telefone) {
-      const digits = String(telefone).replace(/\D/g, '')
-      // Clear em_ligacao flag so Ana WhatsApp resumes
       await supabase
         .from('leads')
         .update({ em_ligacao: false, updated_at: new Date().toISOString() })
-        .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${digits.replace(/^55/, '')}`)
+        .or(`telefone.eq.${telefone},telefone.eq.55${telefone},telefone.eq.${telefone.replace(/^55/, '')}`)
     }
 
     if (callId) {
