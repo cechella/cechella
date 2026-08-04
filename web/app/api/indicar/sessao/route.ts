@@ -50,9 +50,21 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Sessão não encontrada. Paciente deve enviar REF-TOKEN primeiro.' }, { status: 404 })
       }
 
+      // Busca contatos existentes e acumula (sem duplicar por telefone)
+      const { data: atual } = await supabase
+        .from('sessao_wpp')
+        .select('contatos')
+        .eq('phone', phone)
+        .maybeSingle()
+
+      const existentes: any[] = atual?.contatos || []
+      const novos: any[] = body.contatos || []
+      const telefonesExistentes = new Set(existentes.map((c: any) => c.telefone))
+      const merged = [...existentes, ...novos.filter((c: any) => !telefonesExistentes.has(c.telefone))].slice(0, 20)
+
       await supabase
         .from('sessao_wpp')
-        .update({ contatos: body.contatos })
+        .update({ contatos: merged })
         .eq('phone', phone)
 
       return NextResponse.json({ ok: true, step: 'contacts_saved', token: sessao.token })

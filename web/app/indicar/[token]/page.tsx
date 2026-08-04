@@ -42,14 +42,20 @@ export default function PaginaIndicacao() {
         const res = await fetch(`/api/indicar/sessao?token=${token}`)
         const data = await res.json()
         if (data.contatos?.length) {
-          const novos: Contato[] = data.contatos.map((c: any, i: number) => ({
-            id: Date.now() + i,
-            nome: c.nome || '',
-            telefone: c.telefone || '',
-            profissao: '',
-            hobby: '',
-          }))
-          setContatos(novos)
+          setContatos(prev => {
+            const existentes = prev.filter(x => x.nome || x.telefone)
+            const telsExistentes = new Set(existentes.map(x => x.telefone))
+            const novos: Contato[] = data.contatos
+              .filter((c: any) => c.telefone && !telsExistentes.has(c.telefone))
+              .map((c: any, i: number) => ({
+                id: Date.now() + i,
+                nome: c.nome || '',
+                telefone: c.telefone || '',
+                profissao: '',
+                hobby: '',
+              }))
+            return [...existentes, ...novos].slice(0, 20)
+          })
           setImportandoWpp(false)
         }
       } catch {}
