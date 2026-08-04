@@ -44,17 +44,22 @@ export default function PaginaIndicacao() {
         if (data.contatos?.length) {
           setContatos(prev => {
             const existentes = prev.filter(x => x.nome || x.telefone)
-            const telsExistentes = new Set(existentes.map(x => x.telefone))
-            const novos: Contato[] = data.contatos
-              .filter((c: any) => c.telefone && !telsExistentes.has(c.telefone))
-              .map((c: any, i: number) => ({
-                id: Date.now() + i,
-                nome: c.nome || '',
+            const mapExistentes = new Map(existentes.map(x => [x.telefone, x]))
+            // Merge: novos contatos da API, preservando profissão/hobby já preenchidos
+            const merged: Contato[] = data.contatos.map((c: any, i: number) => {
+              const existente = mapExistentes.get(c.telefone)
+              return {
+                id: existente?.id ?? Date.now() + i,
+                nome: c.nome || existente?.nome || '',
                 telefone: c.telefone || '',
-                profissao: '',
-                hobby: '',
-              }))
-            return [...existentes, ...novos].slice(0, 20)
+                profissao: existente?.profissao || '',
+                hobby: existente?.hobby || '',
+              }
+            })
+            // Adiciona contatos extras que só estão no frontend (não vieram da API)
+            const telsApi = new Set(data.contatos.map((c: any) => c.telefone))
+            const extras = existentes.filter(x => !telsApi.has(x.telefone))
+            return [...merged, ...extras].slice(0, 20)
           })
           setImportandoWpp(false)
         }
@@ -83,8 +88,8 @@ export default function PaginaIndicacao() {
             id: Date.now() + i,
             nome: c.nome || '',
             telefone: c.telefone || '',
-            profissao: '',
-            hobby: '',
+            profissao: c.profissao || '',
+            hobby: c.hobby || '',
           }))
           setContatos(novos)
           setImportandoWpp(false)
