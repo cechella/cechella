@@ -271,7 +271,10 @@ export default function ReferidosPage() {
       } : r))
       showToast('Dados salvos com sucesso!')
     } else {
-      showToast('Erro ao salvar', 'err')
+      const msg = error.code === '23505'
+        ? 'Telefone já cadastrado em outro referido'
+        : 'Erro ao salvar'
+      showToast(msg, 'err')
     }
     setEditandoId(null)
     setSalvandoEdicao(false)
