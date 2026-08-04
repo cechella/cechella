@@ -364,7 +364,7 @@ export default function PaginaIndicacao() {
             </div>
             {pendentesNoForm > 0 && (
               <p className="text-[#A78BFA] text-xs">
-                📋 {totalJaEnviados} confirmadas no banco · {pendentesNoForm} aguardando envio no formulário
+                📋 {totalJaEnviados} confirmadas · {pendentesNoForm} aguardando envio
               </p>
             )}
             {semProfHobby > 0 && (
