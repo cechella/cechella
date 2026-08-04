@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Plus, Trash2, Send, CheckCircle, Phone, User, Briefcase, Heart, BookUser, Sparkles } from 'lucide-react'
+import { Plus, Trash2, Send, CheckCircle, Phone, User, Briefcase, Heart, BookUser, Sparkles, MessageCircle } from 'lucide-react'
 
 interface Contato {
   id: number
@@ -23,9 +23,43 @@ export default function PaginaIndicacao() {
   const [enviando, setEnviando] = useState(false)
   const [sucesso, setSucesso] = useState(false)
   const [temContacts, setTemContacts] = useState(false)
+  const [importandoWpp, setImportandoWpp] = useState(false)
   const [contatos, setContatos] = useState<Contato[]>(
     Array.from({ length: 20 }, (_, i) => ({ id: i + 1, nome: '', telefone: '', profissao: '', hobby: '' }))
   )
+
+  const abrirWhatsAppImport = () => {
+    const msg = encodeURIComponent(`REF-${token}`)
+    window.open(`https://wa.me/5547988507977?text=${msg}`, '_blank')
+    setImportandoWpp(true)
+  }
+
+  // Polling — verifica se chegaram contatos via WhatsApp
+  useEffect(() => {
+    if (!importandoWpp) return
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/indicar/sessao?token=${token}`)
+        const data = await res.json()
+        if (data.contatos?.length) {
+          const novos: Contato[] = data.contatos.map((c: any, i: number) => ({
+            id: Date.now() + i,
+            nome: c.nome || '',
+            telefone: c.telefone || '',
+            profissao: '',
+            hobby: '',
+          }))
+          setContatos(prev => {
+            const temVazio = prev.every(x => !x.nome && !x.telefone)
+            return temVazio ? novos : [...novos, ...prev]
+          })
+          setImportandoWpp(false)
+          clearInterval(interval)
+        }
+      } catch {}
+    }, 2500)
+    return () => clearInterval(interval)
+  }, [importandoWpp, token])
 
   useEffect(() => {
     setTemContacts(supportsContactsPicker())
@@ -190,20 +224,42 @@ export default function PaginaIndicacao() {
       {/* Formulário */}
       <div className="max-w-lg mx-auto px-4 space-y-3">
 
-        {/* Botão importar agenda — só aparece quando a API está disponível (Safari/Chrome nativos) */}
+        {/* Botão principal — importar via WhatsApp (funciona em qualquer browser) */}
+        <button
+          onClick={abrirWhatsAppImport}
+          className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
+          style={{ background: 'linear-gradient(135deg, #25D366, #1DA851)', boxShadow: '0 4px 20px rgba(37,211,102,0.35)' }}
+        >
+          <MessageCircle className="w-4 h-4" />
+          {importandoWpp ? 'Aguardando contatos...' : 'Importar amigas pelo WhatsApp'}
+        </button>
+
+        {importandoWpp && (
+          <div className="bg-[#1A1528] border border-[#25D366]/20 rounded-2xl px-4 py-3 text-center">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full bg-[#25D366] animate-pulse" />
+              <p className="text-white text-sm font-medium">Aguardando seus contatos...</p>
+            </div>
+            <p className="text-[#6B7280] text-xs">
+              No WhatsApp: toque em <strong className="text-white">Anexar → Contato</strong>, selecione suas amigas e envie
+            </p>
+          </div>
+        )}
+
+        {/* Botão agenda nativa — só no Safari/Chrome */}
         {temContacts && (
           <button
             onClick={importarMultiplos}
-            className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
-            style={{ background: 'linear-gradient(135deg, #7C3AED, #6D28D9)', boxShadow: '0 4px 20px rgba(124,58,237,0.35)' }}
+            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] border border-[#2D2040] text-[#A78BFA]"
+            style={{ background: 'rgba(124,58,237,0.1)' }}
           >
             <BookUser className="w-4 h-4" />
-            Importar amigas da agenda
+            Importar da agenda do celular
           </button>
         )}
 
         <p className="text-[#4B5563] text-xs text-center py-1">
-          {temContacts ? '— ou preencha manualmente abaixo —' : 'Tente preencher as 20 amigas — quanto mais, melhor!'}
+          — ou preencha manualmente abaixo —
         </p>
 
         {/* Cards de contato */}
