@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
-import { Plus, Trash2, Send, CheckCircle, Phone, User, Briefcase, Heart, BookUser } from 'lucide-react'
+import { Plus, Trash2, Send, CheckCircle, Phone, User, Briefcase, Heart, BookUser, Sparkles } from 'lucide-react'
 
 interface Contato {
   id: number
@@ -15,9 +15,6 @@ interface Contato {
 const supportsContactsPicker = () =>
   typeof window !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window
 
-const isMobile = () =>
-  typeof window !== 'undefined' && /android|iphone|ipad|ipod/i.test(navigator.userAgent)
-
 export default function PaginaIndicacao() {
   const { token } = useParams<{ token: string }>()
   const [indicador, setIndicador] = useState<{ nome: string | null } | null>(null)
@@ -26,16 +23,12 @@ export default function PaginaIndicacao() {
   const [enviando, setEnviando] = useState(false)
   const [sucesso, setSucesso] = useState(false)
   const [temContacts, setTemContacts] = useState(false)
-  const [mostraAbrirNavegador, setMostraAbrirNavegador] = useState(false)
   const [contatos, setContatos] = useState<Contato[]>([
     { id: 1, nome: '', telefone: '', profissao: '', hobby: '' }
   ])
 
   useEffect(() => {
-    const hasContacts = supportsContactsPicker()
-    setTemContacts(hasContacts)
-    // Mostra banner "abrir no navegador" em celulares que não suportam a Contacts API
-    setMostraAbrirNavegador(!hasContacts && isMobile())
+    setTemContacts(supportsContactsPicker())
     fetch(`/api/indicar?token=${token}`)
       .then(r => r.json())
       .then(d => {
@@ -53,10 +46,8 @@ export default function PaginaIndicacao() {
       const results = await navigator.contacts.select(['name', 'tel'], { multiple: false })
       if (!results?.length) return
       const c = results[0]
-      const nome = c.name?.[0] || ''
-      const tel = c.tel?.[0] || ''
       setContatos(prev => prev.map(x =>
-        x.id === contatoId ? { ...x, nome, telefone: tel } : x
+        x.id === contatoId ? { ...x, nome: c.name?.[0] || '', telefone: c.tel?.[0] || '' } : x
       ))
     } catch {}
   }
@@ -75,7 +66,6 @@ export default function PaginaIndicacao() {
         hobby: '',
       }))
       setContatos(prev => {
-        // substitui o primeiro vazio se existir, senão adiciona
         const temVazio = prev.length === 1 && !prev[0].nome && !prev[0].telefone
         return temVazio ? novos : [...prev, ...novos]
       })
@@ -116,173 +106,214 @@ export default function PaginaIndicacao() {
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-[#0A0A0B] flex items-center justify-center">
-      <div className="w-6 h-6 border-2 border-[#7B3FE4] border-t-transparent rounded-full animate-spin" />
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #0D0B14 0%, #120D1F 100%)' }}>
+      <div className="flex flex-col items-center gap-3">
+        <div className="w-8 h-8 border-2 border-[#8B5CF6] border-t-transparent rounded-full animate-spin" />
+        <p className="text-[#6B7280] text-sm">Carregando...</p>
+      </div>
     </div>
   )
 
   if (erro) return (
-    <div className="min-h-screen bg-[#0A0A0B] flex items-center justify-center p-4">
-      <div className="text-center">
-        <p className="text-2xl mb-2">😕</p>
-        <p className="text-white font-medium">Link inválido ou expirado</p>
-        <p className="text-[#71717A] text-sm mt-1">Peça um novo link para quem te enviou</p>
+    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'linear-gradient(135deg, #0D0B14 0%, #120D1F 100%)' }}>
+      <div className="text-center max-w-xs">
+        <div className="w-16 h-16 rounded-full bg-[#1C1528] border border-[#2D2040] flex items-center justify-center mx-auto mb-4">
+          <span className="text-2xl">🔗</span>
+        </div>
+        <h2 className="text-white font-semibold text-lg mb-1">Link inválido</h2>
+        <p className="text-[#6B7280] text-sm">Este link expirou ou não existe. Peça um novo para quem te enviou.</p>
       </div>
     </div>
   )
 
   if (sucesso) return (
-    <div className="min-h-screen bg-[#0A0A0B] flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'linear-gradient(135deg, #0D0B14 0%, #120D1F 100%)' }}>
       <div className="text-center max-w-sm">
-        <CheckCircle className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
-        <h2 className="text-white text-xl font-semibold mb-2">Indicações enviadas!</h2>
-        <p className="text-[#71717A] text-sm">
-          Nossa consultora Ana vai entrar em contato com cada uma das suas amigas em breve. 🌸
+        <div className="relative mx-auto mb-6 w-20 h-20">
+          <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping" />
+          <div className="relative w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+            <CheckCircle className="w-9 h-9 text-emerald-400" />
+          </div>
+        </div>
+        <h2 className="text-white text-2xl font-semibold mb-2">Indicações enviadas!</h2>
+        <p className="text-[#9CA3AF] text-sm leading-relaxed">
+          Nossa consultora <strong className="text-white">Ana</strong> vai entrar em contato com cada uma das suas amigas em breve. 🌸
         </p>
-        <p className="text-[#71717A] text-sm mt-3">
-          Enquanto isso, avisa elas que receberão uma ligação do número <strong className="text-white">+55 17 2786-2778</strong> — pode atender com tranquilidade!
-        </p>
+        <div className="mt-5 bg-[#1A1528] border border-[#2D2040] rounded-2xl px-4 py-3">
+          <p className="text-[#9CA3AF] text-xs leading-relaxed">
+            Avisa elas que vão receber uma ligação do número{' '}
+            <strong className="text-white font-medium">+55 17 2786-2778</strong>
+            {' '}— pode atender com tranquilidade! 📞
+          </p>
+        </div>
       </div>
     </div>
   )
 
   const nomeIndicador = indicador?.nome?.split(' ')[0] || 'você'
+  const totalValidos = contatos.filter(c => c.telefone.replace(/\D/g, '').length >= 8).length
 
   return (
-    <div className="min-h-screen bg-[#0A0A0B] pb-16">
-      {/* Header */}
-      <div className="bg-gradient-to-b from-[#7B3FE4]/20 to-transparent pt-12 pb-8 px-4 text-center">
-        <div className="w-16 h-16 rounded-2xl bg-[#7B3FE4]/20 border border-[#7B3FE4]/30 flex items-center justify-center mx-auto mb-4">
-          <span className="text-3xl">🌿</span>
+    <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(135deg, #0D0B14 0%, #120D1F 100%)' }}>
+
+      {/* Hero */}
+      <div className="relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] rounded-full opacity-30"
+            style={{ background: 'radial-gradient(ellipse, #7C3AED 0%, transparent 70%)' }} />
         </div>
-        <h1 className="text-white text-xl font-semibold">Hormone Ecosystem</h1>
-        <p className="text-[#A78BFA] text-sm mt-1">Portal de Indicações</p>
-        <div className="mt-4 bg-[#111113] border border-[#1C1C1E] rounded-2xl px-4 py-3 max-w-sm mx-auto">
-          <p className="text-[#A1A1AA] text-sm">
-            <strong className="text-white">{nomeIndicador}</strong> te convidou para indicar amigas que podem se beneficiar do implante hormonal. 💜
-          </p>
+        <div className="relative pt-14 pb-10 px-6 text-center">
+          <div className="inline-flex items-center gap-2 bg-[#1E1530] border border-[#3D2D6B] rounded-full px-3 py-1 mb-5">
+            <Sparkles className="w-3 h-3 text-[#A78BFA]" />
+            <span className="text-[#A78BFA] text-xs font-medium">Portal de Indicações</span>
+          </div>
+          <div className="w-18 h-18 mx-auto mb-4">
+            <div className="w-[72px] h-[72px] rounded-2xl border border-[#3D2D6B] flex items-center justify-center mx-auto"
+              style={{ background: 'linear-gradient(135deg, #1E1530, #2D1F4E)' }}>
+              <span className="text-3xl">🌿</span>
+            </div>
+          </div>
+          <h1 className="text-white text-2xl font-bold tracking-tight">Hormone Ecosystem</h1>
+          <p className="text-[#6B7280] text-sm mt-1 mb-5">Transformando saúde hormonal feminina</p>
+
+          <div className="max-w-sm mx-auto bg-[#1A1528]/80 backdrop-blur border border-[#2D2040] rounded-2xl px-4 py-3.5 text-left">
+            <p className="text-[#9CA3AF] text-sm leading-relaxed">
+              <strong className="text-white">{nomeIndicador}</strong> te convidou para indicar amigas que podem se beneficiar do implante hormonal. 💜
+            </p>
+            <p className="text-[#6B7280] text-xs mt-1.5">
+              Cada indicação é uma amiga cuidando da outra.
+            </p>
+          </div>
         </div>
       </div>
 
       {/* Formulário */}
-      <div className="max-w-lg mx-auto px-4 space-y-4">
-        {mostraAbrirNavegador && (
-          <div className="bg-[#111113] border border-[#7B3FE4]/30 rounded-2xl px-4 py-3 flex items-start gap-3">
-            <BookUser className="w-5 h-5 text-[#A78BFA] mt-0.5 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <p className="text-white text-sm font-medium">Importar contatos da agenda</p>
-              <p className="text-[#71717A] text-xs mt-0.5">Para importar direto da agenda, abra este link no Safari ou Chrome.</p>
-              <button
-                onClick={() => window.open(window.location.href, '_blank')}
-                className="mt-2 text-xs text-[#A78BFA] underline underline-offset-2"
-              >
-                Abrir no navegador
-              </button>
-            </div>
-          </div>
-        )}
+      <div className="max-w-lg mx-auto px-4 space-y-3">
 
+        {/* Botão importar agenda — só aparece quando a API está disponível (Safari/Chrome nativos) */}
         {temContacts && (
           <button
             onClick={importarMultiplos}
-            className="w-full flex items-center justify-center gap-2 py-3 bg-[#7B3FE4]/15 border border-[#7B3FE4]/40 hover:bg-[#7B3FE4]/25 text-[#A78BFA] rounded-2xl text-sm font-medium transition-colors"
+            className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, #7C3AED, #6D28D9)', boxShadow: '0 4px 20px rgba(124,58,237,0.35)' }}
           >
             <BookUser className="w-4 h-4" />
-            Importar amigas do celular
+            Importar amigas da agenda
           </button>
         )}
 
-        <p className="text-[#71717A] text-xs text-center">
-          {temContacts ? 'ou preencha manualmente abaixo' : 'Preencha os dados de cada amiga que você quer indicar'}
+        <p className="text-[#4B5563] text-xs text-center py-1">
+          {temContacts ? '— ou adicione manualmente —' : 'Preencha os dados de cada amiga que você quer indicar'}
         </p>
 
+        {/* Cards de contato */}
         {contatos.map((contato, idx) => (
-          <div key={contato.id} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4 space-y-3">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs text-[#71717A] font-medium">Amiga {idx + 1}</span>
+          <div key={contato.id}
+            className="rounded-2xl border border-[#1F1935] overflow-hidden"
+            style={{ background: 'linear-gradient(160deg, #131020 0%, #0F0D1A 100%)' }}>
+            {/* Card header */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1F1935]">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-[#7C3AED]/20 border border-[#7C3AED]/30 flex items-center justify-center">
+                  <span className="text-[10px] text-[#A78BFA] font-bold">{idx + 1}</span>
+                </div>
+                <span className="text-[#9CA3AF] text-xs font-medium">Amiga {idx + 1}</span>
+              </div>
               <div className="flex items-center gap-2">
                 {temContacts && (
                   <button
                     onClick={() => importarDoCelular(contato.id)}
-                    className="text-[#7B3FE4] hover:text-[#A78BFA] transition-colors"
-                    title="Importar contato do celular"
+                    className="flex items-center gap-1 text-[#7C3AED] hover:text-[#A78BFA] transition-colors text-xs"
                   >
                     <BookUser className="w-3.5 h-3.5" />
+                    <span>Agenda</span>
                   </button>
                 )}
                 {contatos.length > 1 && (
-                  <button onClick={() => removerContato(contato.id)} className="text-[#71717A] hover:text-red-400 transition-colors">
+                  <button onClick={() => removerContato(contato.id)}
+                    className="text-[#374151] hover:text-red-400 transition-colors ml-1">
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
             </div>
 
-            <div className="relative">
-              <User className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#52525B]" />
-              <input
-                type="text"
-                placeholder="Nome completo"
-                value={contato.nome}
-                onChange={e => atualizarContato(contato.id, 'nome', e.target.value)}
-                className="w-full bg-[#18181A] border border-[#2C2C2E] rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-[#52525B] focus:outline-none focus:border-[#7B3FE4]"
-              />
-            </div>
-
-            <div className="relative">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#52525B]" />
-              <input
-                type="tel"
-                placeholder="Telefone (WhatsApp) *"
-                value={contato.telefone}
-                onChange={e => atualizarContato(contato.id, 'telefone', e.target.value)}
-                className="w-full bg-[#18181A] border border-[#2C2C2E] rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-[#52525B] focus:outline-none focus:border-[#7B3FE4]"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
+            {/* Campos */}
+            <div className="p-4 space-y-2.5">
               <div className="relative">
-                <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#52525B]" />
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
                 <input
                   type="text"
-                  placeholder="Profissão"
-                  value={contato.profissao}
-                  onChange={e => atualizarContato(contato.id, 'profissao', e.target.value)}
-                  className="w-full bg-[#18181A] border border-[#2C2C2E] rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-[#52525B] focus:outline-none focus:border-[#7B3FE4]"
+                  placeholder="Nome completo"
+                  value={contato.nome}
+                  onChange={e => atualizarContato(contato.id, 'nome', e.target.value)}
+                  className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
                 />
               </div>
+
               <div className="relative">
-                <Heart className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#52525B]" />
+                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
                 <input
-                  type="text"
-                  placeholder="Hobby"
-                  value={contato.hobby}
-                  onChange={e => atualizarContato(contato.id, 'hobby', e.target.value)}
-                  className="w-full bg-[#18181A] border border-[#2C2C2E] rounded-xl pl-9 pr-3 py-2.5 text-sm text-white placeholder-[#52525B] focus:outline-none focus:border-[#7B3FE4]"
+                  type="tel"
+                  placeholder="WhatsApp *"
+                  value={contato.telefone}
+                  onChange={e => atualizarContato(contato.id, 'telefone', e.target.value)}
+                  className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="relative">
+                  <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
+                  <input
+                    type="text"
+                    placeholder="Profissão"
+                    value={contato.profissao}
+                    onChange={e => atualizarContato(contato.id, 'profissao', e.target.value)}
+                    className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
+                  />
+                </div>
+                <div className="relative">
+                  <Heart className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
+                  <input
+                    type="text"
+                    placeholder="Hobby"
+                    value={contato.hobby}
+                    onChange={e => atualizarContato(contato.id, 'hobby', e.target.value)}
+                    className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
+                  />
+                </div>
               </div>
             </div>
           </div>
         ))}
 
+        {/* Adicionar mais */}
         <button
           onClick={adicionarContato}
-          className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-[#2C2C2E] rounded-2xl text-sm text-[#71717A] hover:text-white hover:border-[#7B3FE4]/50 transition-colors"
+          className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-[#1F1935] rounded-2xl text-sm text-[#4B5563] hover:text-[#9CA3AF] hover:border-[#3D2D6B] transition-colors"
         >
-          <Plus className="w-4 h-4" /> Adicionar mais uma amiga
+          <Plus className="w-4 h-4" />
+          Adicionar mais uma amiga
         </button>
 
+        {/* Botão enviar */}
         <button
           onClick={enviar}
-          disabled={enviando}
-          className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#7B3FE4] hover:bg-[#6B2FD4] disabled:opacity-50 text-white rounded-2xl text-sm font-medium transition-colors"
+          disabled={enviando || totalValidos === 0}
+          className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold text-white transition-all active:scale-[0.98] disabled:opacity-40"
+          style={{ background: 'linear-gradient(135deg, #7C3AED, #6D28D9)', boxShadow: '0 4px 24px rgba(124,58,237,0.4)' }}
         >
           <Send className="w-4 h-4" />
-          {enviando ? 'Enviando...' : `Enviar ${contatos.length} indicação${contatos.length !== 1 ? 'ões' : ''}`}
+          {enviando
+            ? 'Enviando...'
+            : totalValidos > 0
+              ? `Enviar ${totalValidos} indicação${totalValidos !== 1 ? 'ões' : ''}`
+              : 'Preencha ao menos um telefone'}
         </button>
 
-        <p className="text-center text-[#52525B] text-xs pb-4">
-          Telefone é obrigatório • Profissão e hobby ajudam Ana a personalizar a abordagem
+        <p className="text-center text-[#374151] text-xs pb-6">
+          WhatsApp é obrigatório · Profissão e hobby ajudam Ana a personalizar
         </p>
       </div>
     </div>
