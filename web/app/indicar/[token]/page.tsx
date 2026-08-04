@@ -190,25 +190,41 @@ export default function PaginaIndicacao() {
       })
       const data = await res.json()
       if (data.ok) {
-        // Calcula novo jaEnviados após envio
-        setJaEnviados(prev => {
-          const telsExistentes = new Set(prev.map(x => x.telefone.replace(/\D/g, '')))
-          const novos = validos
-            .filter((v: Contato) => !telsExistentes.has(v.telefone.replace(/\D/g, '')))
-            .map((v: Contato) => ({ ...v, telefone: v.telefone.replace(/\D/g, '') }))
-          const atualizados = prev.map(p => {
-            const match = validos.find((v: Contato) => v.telefone.replace(/\D/g, '') === p.telefone.replace(/\D/g, ''))
-            return match ? { ...p, profissao: match.profissao, hobby: match.hobby } : p
+        // Atualiza jaEnviados com os enviados agora
+        const novoJaEnviados = await new Promise<Contato[]>(resolve => {
+          setJaEnviados(prev => {
+            const telsExistentes = new Set(prev.map(x => x.telefone.replace(/\D/g, '')))
+            const novos = validos
+              .filter((v: Contato) => !telsExistentes.has(v.telefone.replace(/\D/g, '')))
+              .map((v: Contato) => ({ ...v, telefone: v.telefone.replace(/\D/g, '') }))
+            const atualizados = prev.map(p => {
+              const match = validos.find((v: Contato) => v.telefone.replace(/\D/g, '') === p.telefone.replace(/\D/g, ''))
+              return match ? { ...p, profissao: match.profissao, hobby: match.hobby } : p
+            })
+            const resultado = [...atualizados, ...novos].slice(0, 20)
+            resolve(resultado)
+            return resultado
           })
-          const resultado = [...atualizados, ...novos].slice(0, 20)
-          if (resultado.length >= 20) {
-            // Usa setTimeout para não setar estado dentro de updater
-            setTimeout(() => setSucesso(true), 0)
-          }
-          return resultado
         })
-        // Limpa formulário para novos contatos
-        setContatos(Array.from({ length: 3 }, (_, i) => ({ id: Date.now() + i, nome: '', telefone: '', profissao: '', hobby: '' })))
+
+        if (novoJaEnviados.length >= 20) {
+          setSucesso(true)
+          return
+        }
+
+        // Monta próximo formulário: contatos sem profissão/hobby primeiro, depois slots vazios
+        const semDados = novoJaEnviados
+          .filter(c => !c.profissao && !c.hobby)
+          .map(c => ({ ...c, id: Date.now() + Math.random() }))
+        const faltamSlots = Math.max(0, 20 - novoJaEnviados.length)
+        const slots = Array.from({ length: Math.min(faltamSlots, 3) }, (_, i) => ({
+          id: Date.now() + i + 1000,
+          nome: '', telefone: '', profissao: '', hobby: '',
+        }))
+        setContatos([...semDados, ...slots])
+
+        // Sobe para o topo para mostrar o banner de progresso
+        window.scrollTo({ top: 0, behavior: 'smooth' })
       } else {
         alert(data.error || 'Erro ao enviar')
       }
@@ -268,6 +284,7 @@ export default function PaginaIndicacao() {
   const totalValidos = contatos.filter(c => c.telefone.replace(/\D/g, '').length >= 8).length
   const totalJaEnviados = jaEnviados.length
   const faltam = Math.max(0, 20 - totalJaEnviados)
+  const semProfHobby = jaEnviados.filter(c => !c.profissao || !c.hobby).length
 
   return (
     <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(135deg, #0D0B14 0%, #120D1F 100%)' }}>
@@ -308,15 +325,18 @@ export default function PaginaIndicacao() {
 
         {/* Banner de progresso */}
         {totalJaEnviados > 0 && (
-          <div className="bg-[#1A1528] border border-[#3D2D6B] rounded-2xl px-4 py-3">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-white text-sm font-medium">
-                {totalJaEnviados >= 20 ? '🎉 Meta atingida! 20 indicações enviadas' : `✅ ${totalJaEnviados} enviadas · faltam ${faltam} para completar 20`}
-              </p>
-            </div>
+          <div className="bg-[#1A1528] border border-[#3D2D6B] rounded-2xl px-4 py-3.5 space-y-2">
+            <p className="text-white text-sm font-semibold">
+              {totalJaEnviados >= 20 ? '🎉 Meta atingida! 20 indicações enviadas' : `✅ ${totalJaEnviados} enviadas · faltam ${faltam} para completar 20`}
+            </p>
             <div className="w-full bg-[#0D0B14] rounded-full h-1.5">
               <div className="bg-[#7C3AED] h-1.5 rounded-full transition-all" style={{ width: `${Math.min(100, (totalJaEnviados / 20) * 100)}%` }} />
             </div>
+            {semProfHobby > 0 && (
+              <p className="text-[#F59E0B] text-xs">
+                ⚠️ {semProfHobby} amiga{semProfHobby !== 1 ? 's' : ''} sem profissão/hobby — preencha abaixo para Ana personalizar o contato
+              </p>
+            )}
           </div>
         )}
 
@@ -359,9 +379,11 @@ export default function PaginaIndicacao() {
         </p>
 
         {/* Cards de contato */}
-        {contatos.map((contato, idx) => (
+        {contatos.map((contato, idx) => {
+          const precisaCompletar = !!contato.telefone && (!contato.profissao || !contato.hobby)
+          return (
           <div key={contato.id}
-            className="rounded-2xl border border-[#1F1935] overflow-hidden"
+            className={`rounded-2xl border overflow-hidden transition-all ${precisaCompletar ? 'border-[#F59E0B]/40' : 'border-[#1F1935]'}`}
             style={{ background: 'linear-gradient(160deg, #131020 0%, #0F0D1A 100%)' }}>
             {/* Card header */}
             <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1F1935]">
@@ -369,7 +391,12 @@ export default function PaginaIndicacao() {
                 <div className="w-5 h-5 rounded-full bg-[#7C3AED]/20 border border-[#7C3AED]/30 flex items-center justify-center">
                   <span className="text-[10px] text-[#A78BFA] font-bold">{idx + 1}</span>
                 </div>
-                <span className="text-[#9CA3AF] text-xs font-medium">Amiga {idx + 1}</span>
+                <span className="text-[#9CA3AF] text-xs font-medium">
+                  {contato.nome || `Amiga ${idx + 1}`}
+                </span>
+                {precisaCompletar && (
+                  <span className="text-[#F59E0B] text-[10px] font-medium">completar dados</span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {temContacts && (
@@ -440,7 +467,8 @@ export default function PaginaIndicacao() {
               </div>
             </div>
           </div>
-        ))}
+          )
+        })}
 
         {/* Adicionar mais */}
         <button
