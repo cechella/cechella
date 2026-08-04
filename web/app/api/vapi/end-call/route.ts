@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
           await supabase.from('leads').insert({
             telefone: tel,
             em_ligacao: true,
+            etapa: 'apresentacao',
             etapa_agente: 1,
             origem: 'vapi_voz',
             updated_at: new Date().toISOString(),
