@@ -52,7 +52,11 @@ export async function POST(req: NextRequest) {
       tipo_envio: 'link_indicacao',
     }))
 
-    const validos = registros.filter((r: any) => r.telefone && r.telefone.length >= 8)
+    const filtrados = registros.filter((r: any) => r.telefone && r.telefone.length >= 8)
+    // Deduplica por telefone (mantém o último) para evitar conflito no upsert
+    const validos = Object.values(
+      filtrados.reduce((acc: any, r: any) => ({ ...acc, [r.telefone]: r }), {})
+    )
     if (!validos.length) return NextResponse.json({ error: 'Nenhum contato válido' }, { status: 400 })
 
     const { error } = await supabase.from('contatos_referidos').upsert(validos, {
