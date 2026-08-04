@@ -15,8 +15,8 @@ interface Contato {
 const supportsContactsPicker = () =>
   typeof window !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window
 
-const isWhatsAppBrowser = () =>
-  typeof window !== 'undefined' && /whatsapp/i.test(navigator.userAgent)
+const isMobile = () =>
+  typeof window !== 'undefined' && /android|iphone|ipad|ipod/i.test(navigator.userAgent)
 
 export default function PaginaIndicacao() {
   const { token } = useParams<{ token: string }>()
@@ -26,14 +26,16 @@ export default function PaginaIndicacao() {
   const [enviando, setEnviando] = useState(false)
   const [sucesso, setSucesso] = useState(false)
   const [temContacts, setTemContacts] = useState(false)
-  const [noWhatsApp, setNoWhatsApp] = useState(false)
+  const [mostraAbrirNavegador, setMostraAbrirNavegador] = useState(false)
   const [contatos, setContatos] = useState<Contato[]>([
     { id: 1, nome: '', telefone: '', profissao: '', hobby: '' }
   ])
 
   useEffect(() => {
-    setTemContacts(supportsContactsPicker())
-    setNoWhatsApp(isWhatsAppBrowser())
+    const hasContacts = supportsContactsPicker()
+    setTemContacts(hasContacts)
+    // Mostra banner "abrir no navegador" em celulares que não suportam a Contacts API
+    setMostraAbrirNavegador(!hasContacts && isMobile())
     fetch(`/api/indicar?token=${token}`)
       .then(r => r.json())
       .then(d => {
@@ -164,7 +166,7 @@ export default function PaginaIndicacao() {
 
       {/* Formulário */}
       <div className="max-w-lg mx-auto px-4 space-y-4">
-        {noWhatsApp && (
+        {mostraAbrirNavegador && (
           <div className="bg-[#111113] border border-[#7B3FE4]/30 rounded-2xl px-4 py-3 flex items-start gap-3">
             <BookUser className="w-5 h-5 text-[#A78BFA] mt-0.5 shrink-0" />
             <div className="flex-1 min-w-0">
