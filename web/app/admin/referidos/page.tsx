@@ -280,6 +280,7 @@ export default function ReferidosPage() {
   const [ligandoVoz, setLigandoVoz] = useState<string | null>(null)
   const [ligandoVozLote, setLigandoVozLote] = useState(false)
   const [vozLoteProgresso, setVozLoteProgresso] = useState<{ atual: number; total: number } | null>(null)
+  const [confirmarVozLote, setConfirmarVozLote] = useState<{ alvos: typeof referidos } | null>(null)
 
   const ligarVoz = async (telefone: string, id: string) => {
     if (!telefone) return showToast('Sem telefone', 'err')
@@ -353,9 +354,16 @@ export default function ReferidosPage() {
     setAcionandoAna(null)
   }
 
-  const ligarVozLote = async () => {
+  const iniciarVozLote = () => {
     const alvos = referidos.filter(r => selecionados.has(r.id) && r.telefone)
     if (alvos.length === 0) return showToast('Nenhum referido com telefone selecionado', 'err')
+    setConfirmarVozLote({ alvos })
+  }
+
+  const ligarVozLote = async () => {
+    const alvos = confirmarVozLote?.alvos ?? []
+    setConfirmarVozLote(null)
+    if (alvos.length === 0) return
     setLigandoVozLote(true)
     setVozLoteProgresso({ atual: 0, total: alvos.length })
     let ok = 0
@@ -684,7 +692,7 @@ export default function ReferidosPage() {
                   {acionandoLote ? 'Acionando...' : 'Acionar Ana para selecionados'}
                 </button>
                 <button
-                  onClick={ligarVozLote}
+                  onClick={iniciarVozLote}
                   disabled={ligandoVozLote}
                   className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
                 >
@@ -1109,6 +1117,51 @@ export default function ReferidosPage() {
 
         </main>
       </div>
+
+      {/* Modal confirmação voz em lote */}
+      {confirmarVozLote && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center flex-shrink-0">
+                <PhoneCall className="w-5 h-5 text-green-400" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white">Confirmar ligações em lote</h3>
+                <p className="text-xs text-[#71717A] mt-0.5">Ana Voz vai ligar para {confirmarVozLote.alvos.length} contato{confirmarVozLote.alvos.length !== 1 ? 's' : ''}</p>
+              </div>
+            </div>
+
+            <div className="bg-[#18181A] rounded-xl p-3 space-y-1 max-h-40 overflow-y-auto">
+              {confirmarVozLote.alvos.map(ref => (
+                <div key={ref.id} className="flex items-center justify-between text-xs">
+                  <span className="text-white">{ref.nome || '—'}</span>
+                  <span className="text-[#71717A]">{ref.telefone}</span>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs text-[#71717A]">
+              Serão disparadas até 10 ligações simultâneas. Cada ligação consome créditos VAPI.
+            </p>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmarVozLote(null)}
+                className="flex-1 px-4 py-2.5 text-sm text-[#71717A] hover:text-white border border-[#1C1C1E] hover:border-[#3F3F46] rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={ligarVozLote}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-green-600 hover:bg-green-500 rounded-xl transition-colors"
+              >
+                Confirmar e ligar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
