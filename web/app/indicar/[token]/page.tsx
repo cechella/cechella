@@ -18,6 +18,7 @@ const supportsContactsPicker = () =>
 export default function PaginaIndicacao() {
   const { token } = useParams<{ token: string }>()
   const [indicador, setIndicador] = useState<{ nome: string | null } | null>(null)
+  const [jaEnviados, setJaEnviados] = useState<Contato[]>([])
   const [erro, setErro] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [enviando, setEnviando] = useState(false)
@@ -74,28 +75,61 @@ export default function PaginaIndicacao() {
       .then(r => r.json())
       .then(d => {
         if (d.error) setErro(d.error)
-        else setIndicador(d)
+        else {
+          setIndicador(d)
+          if (d.jaEnviados?.length) {
+            setJaEnviados(d.jaEnviados.map((c: any, i: number) => ({
+              id: Date.now() + i,
+              nome: c.nome || '',
+              telefone: c.telefone || '',
+              profissao: c.profissao || '',
+              hobby: c.hobby || '',
+            })))
+          }
+        }
       })
       .catch(() => setErro('Erro ao carregar'))
       .finally(() => setLoading(false))
 
     // Verifica imediatamente se já há contatos salvos (ex: usuário voltou à página)
-    fetch(`/api/indicar/sessao?token=${token}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.contatos?.length) {
-          const novos: Contato[] = data.contatos.map((c: any, i: number) => ({
+    // Busca sessao_wpp e jaEnviados em paralelo para mesclar profissao/hobby
+    Promise.all([
+      fetch(`/api/indicar/sessao?token=${token}`).then(r => r.json()).catch(() => ({ contatos: [] })),
+      fetch(`/api/indicar?token=${token}`).then(r => r.json()).catch(() => ({ jaEnviados: [] })),
+    ]).then(([sessaoData, indicarData]) => {
+      const sessaoContatos: any[] = sessaoData.contatos || []
+      const enviados: any[] = indicarData.jaEnviados || []
+      if (sessaoContatos.length || enviados.length) {
+        const profHobbyMap = new Map(enviados.map((e: any) => [String(e.telefone).replace(/\D/g, ''), e]))
+        const merged: Contato[] = sessaoContatos.map((c: any, i: number) => {
+          const tel = String(c.telefone || '').replace(/\D/g, '')
+          const db = profHobbyMap.get(tel)
+          return {
             id: Date.now() + i,
             nome: c.nome || '',
-            telefone: c.telefone || '',
-            profissao: c.profissao || '',
-            hobby: c.hobby || '',
+            telefone: tel,
+            profissao: db?.profissao || c.profissao || '',
+            hobby: db?.hobby || c.hobby || '',
+          }
+        })
+        // Adiciona contatos que só existem em jaEnviados (não estão em sessao_wpp)
+        const telsWpp = new Set(sessaoContatos.map((c: any) => String(c.telefone).replace(/\D/g, '')))
+        const soEnviados = enviados
+          .filter((e: any) => !telsWpp.has(String(e.telefone).replace(/\D/g, '')))
+          .map((e: any, i: number) => ({
+            id: Date.now() + sessaoContatos.length + i,
+            nome: e.nome || '',
+            telefone: String(e.telefone).replace(/\D/g, ''),
+            profissao: e.profissao || '',
+            hobby: e.hobby || '',
           }))
-          setContatos(novos)
+        const todos = [...merged, ...soEnviados].slice(0, 20)
+        if (todos.length) {
+          setContatos(todos)
           setImportandoWpp(false)
         }
-      })
-      .catch(() => {})
+      }
+    }).catch(() => {})
   }, [token])
 
   const importarDoCelular = async (contatoId: number) => {
@@ -211,6 +245,8 @@ export default function PaginaIndicacao() {
 
   const nomeIndicador = indicador?.nome?.split(' ')[0] || 'você'
   const totalValidos = contatos.filter(c => c.telefone.replace(/\D/g, '').length >= 8).length
+  const totalJaEnviados = jaEnviados.length
+  const faltam = Math.max(0, 20 - totalJaEnviados)
 
   return (
     <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(135deg, #0D0B14 0%, #120D1F 100%)' }}>
@@ -248,6 +284,20 @@ export default function PaginaIndicacao() {
 
       {/* Formulário */}
       <div className="max-w-lg mx-auto px-4 space-y-3">
+
+        {/* Banner de progresso */}
+        {totalJaEnviados > 0 && (
+          <div className="bg-[#1A1528] border border-[#3D2D6B] rounded-2xl px-4 py-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-white text-sm font-medium">
+                {totalJaEnviados >= 20 ? '🎉 Meta atingida! 20 indicações enviadas' : `✅ ${totalJaEnviados} enviadas · faltam ${faltam} para completar 20`}
+              </p>
+            </div>
+            <div className="w-full bg-[#0D0B14] rounded-full h-1.5">
+              <div className="bg-[#7C3AED] h-1.5 rounded-full transition-all" style={{ width: `${Math.min(100, (totalJaEnviados / 20) * 100)}%` }} />
+            </div>
+          </div>
+        )}
 
         {/* Botão principal — importar via WhatsApp (funciona em qualquer browser) */}
         <button

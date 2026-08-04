@@ -21,7 +21,15 @@ export async function GET(req: NextRequest) {
     .single()
 
   if (!lead) return NextResponse.json({ error: 'Link inválido' }, { status: 404 })
-  return NextResponse.json({ nome: lead.nome, telefone: lead.telefone })
+
+  // Busca contatos já enviados por este lead
+  const { data: jaEnviados } = await supabase
+    .from('contatos_referidos')
+    .select('nome, telefone, profissao, hobby')
+    .eq('indicado_por_telefone', lead.telefone)
+    .eq('tipo_envio', 'link_indicacao')
+
+  return NextResponse.json({ nome: lead.nome, telefone: lead.telefone, jaEnviados: jaEnviados || [] })
 }
 
 // POST — salva os referidos indicados
@@ -65,7 +73,25 @@ export async function POST(req: NextRequest) {
     })
     if (error) throw error
 
-    return NextResponse.json({ ok: true, salvos: validos.length })
+    // Atualiza sessao_wpp com profissao/hobby para persistir no reload
+    const { data: sessao } = await supabase
+      .from('sessao_wpp')
+      .select('contatos')
+      .eq('token', token)
+      .maybeSingle()
+
+    if (sessao?.contatos?.length) {
+      const profHobbyMap = new Map(
+        (validos as any[]).map((v: any) => [v.telefone, { profissao: v.profissao, hobby: v.hobby }])
+      )
+      const updated = sessao.contatos.map((c: any) => {
+        const ph = profHobbyMap.get(String(c.telefone).replace(/\D/g, ''))
+        return ph ? { ...c, profissao: ph.profissao, hobby: ph.hobby } : c
+      })
+      await supabase.from('sessao_wpp').update({ contatos: updated }).eq('token', token)
+    }
+
+    return NextResponse.json({ ok: true, salvos: (validos as any[]).length })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
