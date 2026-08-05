@@ -28,6 +28,28 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
+async function ensureLead(tel: string) {
+  if (!tel || tel.length < 10) return
+  const norm = tel.startsWith('55') ? tel : `55${tel}`
+  const { data: existing } = await supabase
+    .from('leads')
+    .select('id')
+    .or(`telefone.eq.${tel},telefone.eq.55${tel},telefone.eq.${tel.replace(/^55/, '')}`)
+    .limit(1)
+  if (existing && existing.length > 0) {
+    await supabase.from('leads').update({ em_ligacao: true, updated_at: new Date().toISOString() }).eq('id', existing[0].id)
+  } else {
+    await supabase.from('leads').insert({
+      telefone: norm,
+      em_ligacao: true,
+      etapa: 'apresentacao',
+      etapa_agente: 1,
+      origem: 'vapi_voz',
+      updated_at: new Date().toISOString(),
+    })
+  }
+}
+
 // Called by VAPI server URL webhook (call-start, end-of-call-report, etc.)
 export async function POST(req: NextRequest) {
   try {
@@ -41,30 +63,7 @@ export async function POST(req: NextRequest) {
       || ''
     const telefone = String(rawPhone).replace(/\D/g, '')
 
-    // Ensure lead exists in DB (called on every event that has phone)
-    async function ensureLead(tel: string) {
-      if (!tel || tel.length < 10) return
-      const norm = tel.startsWith('55') ? tel : `55${tel}`
-      const { data: existing } = await supabase
-        .from('leads')
-        .select('id')
-        .or(`telefone.eq.${tel},telefone.eq.55${tel},telefone.eq.${tel.replace(/^55/, '')}`)
-        .limit(1)
-      if (existing && existing.length > 0) {
-        await supabase.from('leads').update({ em_ligacao: true, updated_at: new Date().toISOString() }).eq('id', existing[0].id)
-      } else {
-        await supabase.from('leads').insert({
-          telefone: norm,
-          em_ligacao: true,
-          etapa: 'apresentacao',
-          etapa_agente: 1,
-          origem: 'vapi_voz',
-          updated_at: new Date().toISOString(),
-        })
-      }
-    }
-
-    // call-start / call.started / assistant-request / tool-calls → ensure lead exists
+    // call-start / assistant-request / tool-calls / transcript → ensure lead exists
     if (
       type === 'call-start' || type === 'call.started' ||
       type === 'assistant-request' || type === 'tool-calls' ||
@@ -72,7 +71,6 @@ export async function POST(req: NextRequest) {
       type === 'transcript'
     ) {
       await ensureLead(telefone)
-      // For tool-calls, forward to appropriate handler if needed; here just return ok
       return NextResponse.json({ ok: true })
     }
     const duracao = body.message?.durationSeconds
