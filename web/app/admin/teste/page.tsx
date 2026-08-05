@@ -1,15 +1,17 @@
 'use client'
 
 import { useState } from 'react'
-import { TestTube2, Search, RotateCcw, Trash2, RefreshCw, AlertTriangle, PhoneOff, Radio } from 'lucide-react'
+import { TestTube2, Search, RotateCcw, Trash2, RefreshCw, AlertTriangle, PhoneOff, Radio, Users, CheckSquare, Square } from 'lucide-react'
 
 interface Lead {
   id: string
   nome: string | null
   telefone: string
   etapa_agente: number
-  status?: string
+  status_pagamento: string | null
+  metodo_pagamento: string | null
   created_at?: string
+  referidos_count?: number
 }
 
 export default function TestePage() {
@@ -17,6 +19,12 @@ export default function TestePage() {
   const [loading, setLoading] = useState<string | null>(null)
   const [resultado, setResultado] = useState<any>(null)
   const [erro, setErro] = useState<string | null>(null)
+
+  // lead selector state
+  const [leads, setLeads] = useState<Lead[]>([])
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set())
+  const [loadingLeads, setLoadingLeads] = useState(false)
+  const [deletandoSelecionados, setDeletandoSelecionados] = useState(false)
 
   async function executar(action: string) {
     setLoading(action)
@@ -38,6 +46,64 @@ export default function TestePage() {
     }
   }
 
+  async function carregarLeads() {
+    setLoadingLeads(true)
+    setErro(null)
+    try {
+      const res = await fetch('/api/admin/dev-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'listar_todos_leads' }),
+      })
+      const json = await res.json()
+      if (json.error) setErro(json.error)
+      else { setLeads(json.data || []); setSelecionados(new Set()) }
+    } catch (e: any) {
+      setErro(e.message)
+    } finally {
+      setLoadingLeads(false)
+    }
+  }
+
+  async function deletarSelecionados() {
+    if (selecionados.size === 0) return
+    if (!confirm(`Apagar ${selecionados.size} lead(s) e todos os seus registros? Esta ação é irreversível.`)) return
+    setDeletandoSelecionados(true)
+    setErro(null)
+    try {
+      const res = await fetch('/api/admin/dev-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deletar_leads_selecionados', telefones: Array.from(selecionados) }),
+      })
+      const json = await res.json()
+      if (json.error) setErro(json.error)
+      else {
+        setResultado({ ...json, msg: `${json.apagados} lead(s) apagados com todos os registros` })
+        // reload list
+        await carregarLeads()
+      }
+    } catch (e: any) {
+      setErro(e.message)
+    } finally {
+      setDeletandoSelecionados(false)
+    }
+  }
+
+  function toggleLead(telefone: string) {
+    setSelecionados(prev => {
+      const next = new Set(prev)
+      if (next.has(telefone)) next.delete(telefone)
+      else next.add(telefone)
+      return next
+    })
+  }
+
+  function toggleTodos() {
+    if (selecionados.size === leads.length) setSelecionados(new Set())
+    else setSelecionados(new Set(leads.map(l => l.telefone)))
+  }
+
   const acoes = [
     {
       action: 'ver_estado_banco',
@@ -45,14 +111,6 @@ export default function TestePage() {
       desc: 'Conta registros em todas as tabelas antes de apagar',
       icon: <Search className="w-4 h-4" />,
       cor: 'from-green-500/20 to-green-600/10 border-green-500/30 text-green-400',
-      semTelefone: true,
-    },
-    {
-      action: 'listar_leads',
-      label: 'Ver últimos 10 leads',
-      desc: 'Lista os leads mais recentes do banco',
-      icon: <Search className="w-4 h-4" />,
-      cor: 'from-blue-500/20 to-blue-600/10 border-blue-500/30 text-blue-400',
       semTelefone: true,
     },
     {
@@ -65,8 +123,8 @@ export default function TestePage() {
     },
     {
       action: 'deletar_lead',
-      label: 'Deletar lead',
-      desc: 'Remove o lead completamente do banco',
+      label: 'Deletar lead (por telefone)',
+      desc: 'Remove o lead completamente do banco pelo telefone acima',
       icon: <Trash2 className="w-4 h-4" />,
       cor: 'from-red-500/20 to-red-600/10 border-red-500/30 text-red-400',
       semTelefone: false,
@@ -97,6 +155,9 @@ export default function TestePage() {
     },
   ]
 
+  const todosMarc = leads.length > 0 && selecionados.size === leads.length
+  const algumMarc = selecionados.size > 0 && selecionados.size < leads.length
+
   return (
     <div className="p-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -109,9 +170,113 @@ export default function TestePage() {
         </div>
       </div>
 
-      {/* Telefone input */}
+      {/* ── SELETOR DE LEADS ── */}
       <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5 mb-6">
-        <label className="block text-xs text-[#71717A] uppercase tracking-wider mb-2">Telefone do lead (para filtrar)</label>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-[#7B3FE4]" />
+            <p className="text-sm font-semibold text-white">Selecionar leads para apagar</p>
+          </div>
+          <button
+            onClick={carregarLeads}
+            disabled={loadingLeads}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#7B3FE4]/20 text-[#A78BFA] text-xs font-semibold hover:opacity-90 transition-all disabled:opacity-50"
+          >
+            {loadingLeads
+              ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              : <RefreshCw className="w-3.5 h-3.5" />}
+            {leads.length > 0 ? 'Recarregar' : 'Carregar leads'}
+          </button>
+        </div>
+
+        {leads.length > 0 && (
+          <>
+            {/* header row */}
+            <div className="flex items-center gap-3 px-3 py-2 mb-1">
+              <button onClick={toggleTodos} className="flex-shrink-0 text-[#7B3FE4]">
+                {todosMarc ? <CheckSquare className="w-4 h-4" /> : algumMarc ? <CheckSquare className="w-4 h-4 opacity-50" /> : <Square className="w-4 h-4" />}
+              </button>
+              <span className="text-xs text-[#71717A] uppercase tracking-wider flex-1">
+                {selecionados.size > 0 ? `${selecionados.size} de ${leads.length} selecionados` : `${leads.length} leads`}
+              </span>
+              {selecionados.size > 0 && (
+                <button
+                  onClick={() => setSelecionados(new Set())}
+                  className="text-xs text-[#71717A] hover:text-white transition-colors"
+                >
+                  Desmarcar todos
+                </button>
+              )}
+            </div>
+
+            {/* lead list */}
+            <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
+              {leads.map((lead) => {
+                const sel = selecionados.has(lead.telefone)
+                return (
+                  <div
+                    key={lead.id}
+                    onClick={() => toggleLead(lead.telefone)}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${sel ? 'bg-red-500/10 border border-red-500/30' : 'bg-[#0A0A0B] border border-transparent hover:border-[#2C2C2E]'}`}
+                  >
+                    <div className={`flex-shrink-0 ${sel ? 'text-red-400' : 'text-[#52525B]'}`}>
+                      {sel ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-white truncate">{lead.nome || <span className="text-[#52525B] font-normal italic">sem nome</span>}</span>
+                        {lead.status_pagamento && (
+                          <span className="text-xs bg-green-500/20 text-green-400 px-1.5 py-0.5 rounded">
+                            {lead.status_pagamento}
+                          </span>
+                        )}
+                        {(lead.referidos_count ?? 0) > 0 && (
+                          <span className="text-xs bg-[#7B3FE4]/20 text-[#A78BFA] px-1.5 py-0.5 rounded">
+                            {lead.referidos_count} referidos
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-xs text-[#71717A] font-mono">{lead.telefone}</span>
+                        <span className="text-xs text-[#52525B]">etapa {lead.etapa_agente}</span>
+                        {lead.created_at && (
+                          <span className="text-xs text-[#52525B]">
+                            {new Date(lead.created_at).toLocaleDateString('pt-BR')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* delete button */}
+            <div className="mt-3 pt-3 border-t border-[#1C1C1E]">
+              <button
+                onClick={deletarSelecionados}
+                disabled={selecionados.size === 0 || deletandoSelecionados}
+                className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-red-500/40 bg-red-500/15 text-red-400 hover:opacity-90 transition-all disabled:opacity-30 text-sm font-bold"
+              >
+                {deletandoSelecionados
+                  ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  : <Trash2 className="w-4 h-4" />}
+                {selecionados.size === 0
+                  ? 'Selecione leads para apagar'
+                  : `Apagar ${selecionados.size} lead${selecionados.size > 1 ? 's' : ''} selecionado${selecionados.size > 1 ? 's' : ''} + todos os registros`}
+              </button>
+            </div>
+          </>
+        )}
+
+        {leads.length === 0 && !loadingLeads && (
+          <p className="text-xs text-[#52525B] text-center py-4">Clique em "Carregar leads" para ver todos os leads do banco</p>
+        )}
+      </div>
+
+      {/* Telefone input (para ações individuais) */}
+      <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5 mb-6">
+        <label className="block text-xs text-[#71717A] uppercase tracking-wider mb-2">Telefone do lead (para ações abaixo)</label>
         <input
           type="text"
           value={telefone}
@@ -217,7 +382,10 @@ export default function TestePage() {
             )}
           </div>
 
-          {/* Estado do banco — tabela de contagens */}
+          {resultado.msg && (
+            <p className="text-sm text-green-400 mb-3">{resultado.msg}</p>
+          )}
+
           {resultado.contagens && (
             <div className="space-y-1">
               {Object.entries(resultado.contagens as Record<string, number>).map(([tabela, count]) => (
@@ -231,7 +399,6 @@ export default function TestePage() {
             </div>
           )}
 
-          {/* Detalhes do reset total */}
           {resultado.detalhes && (
             <div className="space-y-1">
               {Object.entries(resultado.detalhes as Record<string, number>).map(([tabela, count]) => (
@@ -256,14 +423,11 @@ export default function TestePage() {
                     {lead.etapa_agente !== undefined && (
                       <span className="bg-[#7B3FE4]/20 text-[#A78BFA] px-2 py-0.5 rounded">etapa {lead.etapa_agente}</span>
                     )}
-                    {lead.status !== undefined && (
-                      <span className="bg-green-500/20 text-green-400 px-2 py-0.5 rounded">{(lead as any).status}</span>
-                    )}
                   </div>
                 </div>
               ))}
             </div>
-          ) : !resultado.contagens && !resultado.detalhes && (
+          ) : !resultado.contagens && !resultado.detalhes && !resultado.msg && (
             <p className="text-[#52525B] text-sm">Nenhum registro encontrado / afetado.</p>
           )}
         </div>

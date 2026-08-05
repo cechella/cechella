@@ -15,7 +15,7 @@ function makeClient() {
 }
 
 export async function POST(req: NextRequest) {
-  const { action, telefone } = await req.json()
+  const { action, telefone, telefones } = await req.json()
   const supabase = makeClient()
 
   try {
@@ -27,6 +27,43 @@ export async function POST(req: NextRequest) {
         .limit(10)
       if (error) throw error
       return NextResponse.json({ data })
+    }
+
+    if (action === 'listar_todos_leads') {
+      const { data, error } = await supabase
+        .from('leads')
+        .select('id, nome, telefone, etapa_agente, status_pagamento, metodo_pagamento, created_at')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+
+      // count referidos per lead
+      const leadsComReferidos = await Promise.all((data || []).map(async (lead) => {
+        const { count } = await supabase
+          .from('contatos_referidos')
+          .select('*', { count: 'exact', head: true })
+          .like('indicado_por_telefone', `%${lead.telefone.slice(-8)}%`)
+        return { ...lead, referidos_count: count ?? 0 }
+      }))
+
+      return NextResponse.json({ data: leadsComReferidos })
+    }
+
+    if (action === 'deletar_leads_selecionados') {
+      if (!telefones || !Array.isArray(telefones) || telefones.length === 0) {
+        return NextResponse.json({ error: 'telefones[] obrigatório' }, { status: 400 })
+      }
+      let totalRows = 0
+      for (const tel of telefones) {
+        const suffix = String(tel).replace(/\D/g, '').slice(-8)
+        const { data } = await supabase.from('leads').delete().like('telefone', `%${suffix}%`).select('id')
+        totalRows += data?.length ?? 0
+        await supabase.from('mensagens_whatsapp').delete().like('phone', `%${suffix}%`)
+        await supabase.from('leads_m4_flag').delete().like('telefone', `%${suffix}%`)
+        await supabase.from('contatos_referidos').delete().like('indicado_por_telefone', `%${suffix}%`)
+        await supabase.from('historico_voz').delete().like('telefone', `%${suffix}%`)
+        await supabase.from('sessao_wpp').delete().like('phone', `%${suffix}%`)
+      }
+      return NextResponse.json({ rows: totalRows, apagados: telefones.length })
     }
 
     if (action === 'resetar_lead') {
