@@ -66,14 +66,17 @@ export async function POST(req: NextRequest) {
     // call-start / assistant-request / tool-calls / transcript → ensure lead exists
     if (
       type === 'call-start' || type === 'call.started' ||
+      type === 'status-update' ||
       type === 'assistant-request' || type === 'tool-calls' ||
       type === 'function-call' || type === 'speech-update' ||
       type === 'transcript'
     ) {
-      await ensureLead(telefone)
+      if (telefone.length >= 10) await ensureLead(telefone)
 
-      // On call-start, open a historico_voz entry so active-call lookup works in tool routes
-      if ((type === 'call-start' || type === 'call.started') && callId && telefone.length >= 10) {
+      // On call-start (or status-update in-progress), open a historico_voz entry
+      const isCallStart = type === 'call-start' || type === 'call.started'
+        || (type === 'status-update' && (body.message?.status === 'in-progress' || body.message?.status === 'queued'))
+      if (isCallStart && callId && telefone.length >= 10) {
         const norm = telefone.startsWith('55') ? telefone : `55${telefone}`
         const { data: existing } = await supabase
           .from('historico_voz')
