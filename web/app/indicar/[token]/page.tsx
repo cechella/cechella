@@ -25,6 +25,7 @@ export default function PaginaIndicacao() {
   const [sucesso, setSucesso] = useState(false)
   const [enviandoMsg, setEnviandoMsg] = useState<Record<string, boolean>>({})
   const [msgEnviada, setMsgEnviada] = useState<Record<string, boolean>>({})
+  const [enviandoTodas, setEnviandoTodas] = useState(false)
   const [temContacts, setTemContacts] = useState(false)
   const [importandoWpp, setImportandoWpp] = useState(false)
   const [contatos, setContatos] = useState<Contato[]>(
@@ -366,6 +367,17 @@ export default function PaginaIndicacao() {
     }
   }
 
+  const enviarParaTodas = async () => {
+    if (enviandoTodas) return
+    setEnviandoTodas(true)
+    const pendentes = jaEnviados.filter(c => {
+      const tel = c.telefone.replace(/\D/g, '')
+      return !msgEnviada[tel] && !enviandoMsg[tel]
+    })
+    await Promise.all(pendentes.map(c => enviarMensagemAuto(c)))
+    setEnviandoTodas(false)
+  }
+
   if (sucesso) {
     const contatosMissao = jaEnviados
     const totalEnviados = Object.values(msgEnviada).filter(Boolean).length
@@ -385,7 +397,7 @@ export default function PaginaIndicacao() {
             </div>
             <h1 className="text-white text-2xl font-bold tracking-tight mb-2">Missão completa! 🎉</h1>
             <p className="text-[#9CA3AF] text-sm leading-relaxed max-w-xs mx-auto">
-              Toque em <strong className="text-white">Enviar</strong> para cada amiga — a mensagem chega direto no WhatsApp dela em 1 clique!
+              Envie para todas de uma vez ou individualmente — 1 clique por amiga!
             </p>
             {totalEnviados > 0 && (
               <p className="text-emerald-400 text-sm font-semibold mt-2">
@@ -395,7 +407,35 @@ export default function PaginaIndicacao() {
           </div>
         </div>
 
-        <div className="max-w-lg mx-auto px-4 space-y-3">
+        <div className="max-w-lg mx-auto px-4 pb-2">
+          {totalEnviados < contatosMissao.length && (
+            <button
+              onClick={enviarParaTodas}
+              disabled={enviandoTodas}
+              className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-base transition-all active:scale-95 disabled:opacity-70"
+              style={{ background: 'linear-gradient(135deg, #7C3AED, #5B21B6)' }}
+            >
+              {enviandoTodas ? (
+                <>
+                  <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Enviando... {totalEnviados}/{contatosMissao.length}
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5" />
+                  Enviar para todas as {contatosMissao.length} amigas de uma vez
+                </>
+              )}
+            </button>
+          )}
+          {totalEnviados === contatosMissao.length && contatosMissao.length > 0 && (
+            <div className="w-full py-4 rounded-2xl text-center bg-emerald-900/30 border border-emerald-500/30">
+              <p className="text-emerald-400 font-bold">🎊 Todas as {contatosMissao.length} mensagens enviadas!</p>
+            </div>
+          )}
+        </div>
+
+        <div className="max-w-lg mx-auto px-4 space-y-3 mt-3">
           {contatosMissao.map((contato, idx) => {
             const tel = contato.telefone.replace(/\D/g, '')
             const enviando = enviandoMsg[tel]
@@ -434,13 +474,6 @@ export default function PaginaIndicacao() {
               </div>
             </div>
           )})}
-
-          {totalEnviados === contatosMissao.length && contatosMissao.length > 0 && (
-            <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-2xl px-4 py-4 text-center mt-2">
-              <p className="text-emerald-400 font-bold text-base mb-1">🎊 Todas as mensagens enviadas!</p>
-              <p className="text-[#9CA3AF] text-xs">Nossa equipe vai entrar em contato para agendar seu procedimento. 💜</p>
-            </div>
-          )}
 
           <div className="bg-[#1A1528] border border-[#2D2040] rounded-2xl px-4 py-3.5 mt-2">
             <p className="text-[#9CA3AF] text-xs leading-relaxed text-center">
