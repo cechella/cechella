@@ -50,11 +50,10 @@ export async function POST(req: NextRequest) {
     const telReferido = telefone_referido.replace(/\D/g, '')
 
     const mensagem =
-      `Oi! Tudo bem? 😊\n\n` +
-      `*${nomeFirst}* me pediu pra entrar em contato com você — ela é uma amiga especial nossa e falou muito bem de você! 🌸\n\n` +
-      `Ela acabou de transformar a saúde dela com o Hormone Ecosystem e ficou tão feliz que quis compartilhar com as pessoas que ela mais ama. 💜\n\n` +
-      `Sou a Ana, consultora do Hormone Ecosystem.\n` +
-      `Vou te ligar do *+55 17 2786-2778* — pode salvar e atender com tranquilidade! 📞`
+      `Oi! Tudo bem? 😊\n` +
+      `Acabei de fazer uma coisa incrível pela minha saúde e pensei em você! Uma consultora chamada Ana do Hormone Ecosystem vai entrar em contato com você — vale muito a pena ouvir! 🌸\n` +
+      `Ela vai te ligar do número *+55 17 2786-2778* — pode atender com tranquilidade! 📞\n\n` +
+      `_essa mensagem foi enviada a pedido de *${nomeLead}*_`
 
     await zapiText(telReferido, mensagem)
 
