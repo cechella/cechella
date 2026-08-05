@@ -64,7 +64,7 @@ export default function PaginaIndicacao() {
     if (!importandoWpp) return
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/indicar/sessao?token=${token}`)
+        const res = await fetch(`/api/indicar/sessao?token=${token}&_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
         const data = await res.json()
         if (data.contatos?.length) mergeSessaoContatos(data.contatos)
       } catch {}
@@ -77,7 +77,7 @@ export default function PaginaIndicacao() {
     const onVisible = async () => {
       if (document.visibilityState !== 'visible') return
       try {
-        const res = await fetch(`/api/indicar/sessao?token=${token}`)
+        const res = await fetch(`/api/indicar/sessao?token=${token}&_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
         const data = await res.json()
         if (data.contatos?.length) mergeSessaoContatos(data.contatos)
       } catch {}
@@ -86,9 +86,12 @@ export default function PaginaIndicacao() {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [token])
 
+  const fetchFresh = (url: string) =>
+    fetch(`${url}&_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
+
   useEffect(() => {
     setTemContacts(supportsContactsPicker())
-    fetch(`/api/indicar?token=${token}`)
+    fetchFresh(`/api/indicar?token=${token}`)
       .then(r => r.json())
       .then(d => {
         if (d.error) setErro(d.error)
@@ -113,8 +116,8 @@ export default function PaginaIndicacao() {
     // Verifica imediatamente se já há contatos salvos (ex: usuário voltou à página)
     // Busca sessao_wpp e jaEnviados em paralelo para mesclar profissao/hobby
     Promise.all([
-      fetch(`/api/indicar/sessao?token=${token}`).then(r => r.json()).catch(() => ({ contatos: [] })),
-      fetch(`/api/indicar?token=${token}`).then(r => r.json()).catch(() => ({ jaEnviados: [] })),
+      fetchFresh(`/api/indicar/sessao?token=${token}`).then(r => r.json()).catch(() => ({ contatos: [] })),
+      fetchFresh(`/api/indicar?token=${token}`).then(r => r.json()).catch(() => ({ jaEnviados: [] })),
     ]).then(([sessaoData, indicarData]) => {
       const sessaoContatos: any[] = sessaoData.contatos || []
       const enviados: any[] = indicarData.jaEnviados || []

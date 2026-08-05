@@ -29,7 +29,10 @@ export async function GET(req: NextRequest) {
     .eq('indicado_por_telefone', lead.telefone)
     .eq('tipo_envio', 'link_indicacao')
 
-  return NextResponse.json({ nome: lead.nome, telefone: lead.telefone, jaEnviados: jaEnviados || [] })
+  return NextResponse.json(
+    { nome: lead.nome, telefone: lead.telefone, jaEnviados: jaEnviados || [] },
+    { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' } }
+  )
 }
 
 // POST — salva os referidos indicados

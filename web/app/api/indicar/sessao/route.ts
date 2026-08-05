@@ -20,7 +20,10 @@ export async function GET(req: NextRequest) {
     .eq('token', token)
     .maybeSingle()
 
-  return NextResponse.json({ contatos: data?.contatos || [] })
+  return NextResponse.json(
+    { contatos: data?.contatos || [] },
+    { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate', 'Pragma': 'no-cache' } }
+  )
 }
 
 // POST — n8n chama quando recebe mensagem do WhatsApp
