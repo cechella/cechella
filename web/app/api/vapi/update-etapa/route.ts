@@ -53,6 +53,24 @@ export async function POST(req: NextRequest) {
       callId = body.call_id ?? body.callId
     }
 
+    // If telefone is empty (VAPI apiRequest doesn't inject call context),
+    // fall back to most recent active call in historico_voz
+    if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
+      const since = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+      const { data: activeCall } = await supabase
+        .from('historico_voz')
+        .select('telefone, call_id')
+        .is('duracao_segundos', null)
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (activeCall?.telefone) {
+        telefone = activeCall.telefone
+        if (!callId) callId = activeCall.call_id
+      }
+    }
+
     if (!telefone || etapa === undefined) {
       return NextResponse.json({ error: 'telefone e etapa são obrigatórios' }, { status: 400 })
     }

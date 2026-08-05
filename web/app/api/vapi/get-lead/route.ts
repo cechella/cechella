@@ -47,7 +47,25 @@ export async function POST(req: NextRequest) {
       callId = body.call?.id
     }
 
-    if (!telefone) {
+    // If telefone is empty (VAPI apiRequest doesn't inject call context),
+    // fall back to most recent active call in historico_voz (created by call-start serverUrl event)
+    if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
+      const since = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+      const { data: activeCall } = await supabase
+        .from('historico_voz')
+        .select('telefone, call_id')
+        .is('duracao_segundos', null)
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (activeCall?.telefone) {
+        telefone = activeCall.telefone
+        if (!callId) callId = activeCall.call_id
+      }
+    }
+
+    if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
       return NextResponse.json({ result: 'Telefone não informado. Trate como novo lead.' })
     }
 
@@ -87,6 +105,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         result: JSON.stringify({
           status: 'novo_lead',
+          telefone: telefoneNorm,
           etapa: 1,
           etapa_label: 'Apresentação',
           instrucao: 'Novo lead. Inicie pela apresentação do Hormone Ecosystem.',
@@ -111,6 +130,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       result: JSON.stringify({
         nome: lead.nome || null,
+        telefone: telefoneNorm,
         etapa,
         etapa_label: ETAPA_LABELS[etapa] || 'Apresentação',
         temperatura: lead.temperatura || 'frio',

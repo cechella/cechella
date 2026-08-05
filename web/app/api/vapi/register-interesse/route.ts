@@ -42,7 +42,25 @@ export async function POST(req: NextRequest) {
       callId = body.call_id ?? body.callId
     }
 
-    if (!telefone) {
+    // If telefone is empty (VAPI apiRequest doesn't inject call context),
+    // fall back to most recent active call in historico_voz
+    if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
+      const since = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+      const { data: activeCall } = await supabase
+        .from('historico_voz')
+        .select('telefone, call_id')
+        .is('duracao_segundos', null)
+        .gte('created_at', since)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (activeCall?.telefone) {
+        telefone = activeCall.telefone
+        if (!callId) callId = activeCall.call_id
+      }
+    }
+
+    if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
       return NextResponse.json({ result: 'Erro: telefone não encontrado.' })
     }
 
