@@ -255,6 +255,11 @@ export default function PaginaIndicacao() {
   const enviar = async () => {
     const validos = contatos.filter(c => c.telefone.replace(/\D/g, '').length >= 8)
     if (!validos.length) return alert('Adicione ao menos um contato com telefone válido')
+    const semDados = validos.filter(c => !c.profissao || !c.hobby)
+    if (semDados.length) {
+      alert(`Preencha profissão e hobby de ${semDados.length === 1 ? 'uma amiga' : `${semDados.length} amigas`} antes de enviar.`)
+      return
+    }
     setEnviando(true)
     try {
       const res = await fetch('/api/indicar', {
