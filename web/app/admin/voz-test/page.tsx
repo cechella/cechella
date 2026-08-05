@@ -83,17 +83,10 @@ export default function VozTestPage() {
     setErrorMsg('')
 
     try {
-      const res = await fetch('https://api.vapi.ai/call', {
+      const res = await fetch('/api/admin/vapi-call', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${VAPI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          assistantId: ASSISTANT_ID,
-          phoneNumberId: PHONE_NUMBER_ID,
-          customer: { number: telefone },
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ number: telefone }),
       })
       const data = await res.json()
       if (res.ok && data.id) {
