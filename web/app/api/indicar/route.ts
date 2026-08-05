@@ -22,12 +22,12 @@ export async function GET(req: NextRequest) {
 
   if (!lead) return NextResponse.json({ error: 'Link inválido' }, { status: 404 })
 
-  // Busca contatos já enviados por este lead
+  // Busca contatos já enviados por este lead (qualquer tipo_envio)
   const { data: jaEnviados } = await supabase
     .from('contatos_referidos')
-    .select('nome, telefone, profissao, hobby')
+    .select('nome, telefone, profissao, hobby, status, tipo_envio')
     .eq('indicado_por_telefone', lead.telefone)
-    .eq('tipo_envio', 'link_indicacao')
+    .in('tipo_envio', ['link_indicacao', 'contato_whatsapp'])
 
   return NextResponse.json(
     { nome: lead.nome, telefone: lead.telefone, jaEnviados: jaEnviados || [] },
