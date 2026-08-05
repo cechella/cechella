@@ -26,6 +26,7 @@ export default function PaginaIndicacao() {
   const [enviandoMsg, setEnviandoMsg] = useState<Record<string, boolean>>({})
   const [msgEnviada, setMsgEnviada] = useState<Record<string, boolean>>({})
   const [enviandoTodas, setEnviandoTodas] = useState(false)
+  const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [temContacts, setTemContacts] = useState(false)
   const [importandoWpp, setImportandoWpp] = useState(false)
   const [contatos, setContatos] = useState<Contato[]>(
@@ -367,6 +368,31 @@ export default function PaginaIndicacao() {
     }
   }
 
+  const toggleSelecionada = (tel: string) => {
+    setSelecionadas(prev => {
+      const next = new Set(prev)
+      next.has(tel) ? next.delete(tel) : next.add(tel)
+      return next
+    })
+  }
+
+  const toggleTodasSelecionadas = () => {
+    const pendentes = jaEnviados
+      .filter(c => !msgEnviada[c.telefone.replace(/\D/g, '')])
+      .map(c => c.telefone.replace(/\D/g, ''))
+    const todasMarcadas = pendentes.every(t => selecionadas.has(t))
+    setSelecionadas(todasMarcadas ? new Set() : new Set(pendentes))
+  }
+
+  const enviarSelecionadas = async () => {
+    if (enviandoTodas || selecionadas.size === 0) return
+    setEnviandoTodas(true)
+    const paraEnviar = jaEnviados.filter(c => selecionadas.has(c.telefone.replace(/\D/g, '')))
+    await Promise.all(paraEnviar.map(c => enviarMensagemAuto(c)))
+    setSelecionadas(new Set())
+    setEnviandoTodas(false)
+  }
+
   const enviarParaTodas = async () => {
     if (enviandoTodas) return
     setEnviandoTodas(true)
@@ -375,6 +401,7 @@ export default function PaginaIndicacao() {
       return !msgEnviada[tel] && !enviandoMsg[tel]
     })
     await Promise.all(pendentes.map(c => enviarMensagemAuto(c)))
+    setSelecionadas(new Set())
     setEnviandoTodas(false)
   }
 
@@ -407,26 +434,51 @@ export default function PaginaIndicacao() {
           </div>
         </div>
 
-        <div className="max-w-lg mx-auto px-4 pb-2">
+        <div className="max-w-lg mx-auto px-4 pb-2 space-y-2">
           {totalEnviados < contatosMissao.length && (
-            <button
-              onClick={enviarParaTodas}
-              disabled={enviandoTodas}
-              className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-base transition-all active:scale-95 disabled:opacity-70"
-              style={{ background: 'linear-gradient(135deg, #7C3AED, #5B21B6)' }}
-            >
-              {enviandoTodas ? (
-                <>
-                  <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Enviando... {totalEnviados}/{contatosMissao.length}
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5" />
-                  Enviar para todas as {contatosMissao.length} amigas de uma vez
-                </>
-              )}
-            </button>
+            <>
+              {/* Botão enviar todas */}
+              <button
+                onClick={enviarParaTodas}
+                disabled={enviandoTodas}
+                className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl text-white font-bold text-base transition-all active:scale-95 disabled:opacity-70"
+                style={{ background: 'linear-gradient(135deg, #7C3AED, #5B21B6)' }}
+              >
+                {enviandoTodas && selecionadas.size === 0 ? (
+                  <>
+                    <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Enviando... {totalEnviados}/{contatosMissao.length}
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-5 h-5" />
+                    Enviar para todas as {contatosMissao.length - totalEnviados} pendentes
+                  </>
+                )}
+              </button>
+
+              {/* Linha de seleção */}
+              <div className="flex items-center justify-between px-1">
+                <button onClick={toggleTodasSelecionadas} className="text-[#A78BFA] text-xs font-medium">
+                  {selecionadas.size > 0 ? 'Desmarcar todas' : 'Selecionar todas'}
+                </button>
+                {selecionadas.size > 0 && (
+                  <button
+                    onClick={enviarSelecionadas}
+                    disabled={enviandoTodas}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-bold transition-all active:scale-95 disabled:opacity-70"
+                    style={{ background: 'linear-gradient(135deg, #25D366, #1DA851)' }}
+                  >
+                    {enviandoTodas ? (
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <MessageCircle className="w-3.5 h-3.5" />
+                    )}
+                    Enviar para {selecionadas.size} selecionada{selecionadas.size !== 1 ? 's' : ''}
+                  </button>
+                )}
+              </div>
+            </>
           )}
           {totalEnviados === contatosMissao.length && contatosMissao.length > 0 && (
             <div className="w-full py-4 rounded-2xl text-center bg-emerald-900/30 border border-emerald-500/30">
@@ -441,10 +493,18 @@ export default function PaginaIndicacao() {
             const enviando = enviandoMsg[tel]
             const enviado = msgEnviada[tel]
             return (
-            <div key={contato.id} className={`rounded-2xl border overflow-hidden transition-all ${enviado ? 'border-emerald-500/40' : 'border-[#1F1935]'}`}
-              style={{ background: enviado ? 'linear-gradient(160deg, #0D1F16 0%, #0a1a12 100%)' : 'linear-gradient(160deg, #131020 0%, #0F0D1A 100%)' }}>
+            <div key={contato.id} className={`rounded-2xl border overflow-hidden transition-all ${enviado ? 'border-emerald-500/40' : selecionadas.has(tel) ? 'border-[#7C3AED]/60' : 'border-[#1F1935]'}`}
+              style={{ background: enviado ? 'linear-gradient(160deg, #0D1F16 0%, #0a1a12 100%)' : selecionadas.has(tel) ? 'linear-gradient(160deg, #1a1035 0%, #130d28 100%)' : 'linear-gradient(160deg, #131020 0%, #0F0D1A 100%)' }}>
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3">
+                  {/* Checkbox de seleção */}
+                  {!enviado && (
+                    <button onClick={() => toggleSelecionada(tel)} className="flex-shrink-0">
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${selecionadas.has(tel) ? 'bg-[#7C3AED] border-[#7C3AED]' : 'border-[#4B5563]'}`}>
+                        {selecionadas.has(tel) && <span className="text-white text-[10px] font-bold">✓</span>}
+                      </div>
+                    </button>
+                  )}
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${enviado ? 'bg-emerald-500/20 border border-emerald-500/40' : 'bg-[#7C3AED]/20 border border-[#7C3AED]/30'}`}>
                     {enviado
                       ? <span className="text-emerald-400 text-sm">✅</span>
