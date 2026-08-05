@@ -14,10 +14,11 @@ export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token')
   if (!token) return NextResponse.json({ contatos: [] })
 
+  // Suporta token salvo como string simples OU como URL completa (ex: https://.../indicar/TOKEN)
   const { data } = await supabase
     .from('sessao_wpp')
     .select('contatos')
-    .eq('token', token)
+    .or(`token.eq.${token},token.ilike.%/${token}`)
     .maybeSingle()
 
   return NextResponse.json(
