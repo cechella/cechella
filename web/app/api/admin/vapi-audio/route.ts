@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { VAPI_CONFIG } from '@/lib/vapi-config'
 
 export const dynamic = 'force-dynamic'
-
-const VAPI_API_KEY = 'e3bc519a-7466-4450-bcfc-2ae9566d9e2f'
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get('url')
@@ -10,7 +9,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${VAPI_API_KEY}` },
+      headers: { Authorization: `Bearer ${VAPI_CONFIG.apiKey}` },
     })
     if (!res.ok) return NextResponse.json({ error: 'Erro ao buscar áudio' }, { status: res.status })
 

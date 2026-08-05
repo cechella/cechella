@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { VAPI_CONFIG } from '@/lib/vapi-config'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,9 +10,6 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-const VAPI_API_KEY = 'e3bc519a-7466-4450-bcfc-2ae9566d9e2f'
-const ASSISTANT_ID = 'f2ab9277-dcf3-4fe5-9ac4-5cd0c45229c5'
-const PHONE_NUMBER_ID = '63fc45bb-23bb-439a-93a4-cf680eeda22e'
 const DEFAULT_NUMBER = '+5548988416899'
 
 export async function POST(req: NextRequest) {
@@ -35,15 +33,15 @@ export async function POST(req: NextRequest) {
     const res = await fetch('https://api.vapi.ai/call', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${VAPI_API_KEY}`,
+        Authorization: `Bearer ${VAPI_CONFIG.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        assistantId: ASSISTANT_ID,
-        phoneNumberId: PHONE_NUMBER_ID,
+        assistantId: VAPI_CONFIG.assistantId,
+        phoneNumberId: VAPI_CONFIG.phoneNumberId,
         customer: { number },
         assistantOverrides: {
-          serverUrl: 'https://www.hormoneecosystem.com/api/vapi/end-call',
+          serverUrl: VAPI_CONFIG.serverUrl,
         },
       }),
     })

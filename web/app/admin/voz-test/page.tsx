@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import {
@@ -8,9 +8,9 @@ import {
   FileText, Volume2, ChevronDown, ChevronUp, Search,
 } from 'lucide-react'
 
-const VAPI_API_KEY = 'e3bc519a-7466-4450-bcfc-2ae9566d9e2f'
-const ASSISTANT_ID = 'f2ab9277-dcf3-4fe5-9ac4-5cd0c45229c5'
-const PHONE_NUMBER_ID = '41636d14-3f1f-4343-8d1c-f16327403690'
+// Config carregada da API — não edite aqui, edite em /lib/vapi-config.ts ou via env vars
+let VAPI_API_KEY = ''
+let ASSISTANT_ID = ''
 
 interface TranscriptMessage {
   role: 'assistant' | 'user' | 'tool_call' | 'tool_result' | string
@@ -68,6 +68,7 @@ export default function VozTestPage() {
   const [callStatus, setCallStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
   const [callId, setCallId] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+  const [vapiConfig, setVapiConfig] = useState({ apiKey: '', assistantId: '', phoneNumberId: '', serverUrl: '' })
 
   // transcript
   const [manualCallId, setManualCallId] = useState('')
@@ -76,6 +77,14 @@ export default function VozTestPage() {
   const [transcriptError, setTranscriptError] = useState('')
   const [showRaw, setShowRaw] = useState(false)
   const [showMessages, setShowMessages] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/admin/vapi-config').then(r => r.json()).then(cfg => {
+      setVapiConfig(cfg)
+      VAPI_API_KEY = cfg.apiKey
+      ASSISTANT_ID = cfg.assistantId
+    })
+  }, [])
 
   const dispararLigacao = async () => {
     setCallStatus('loading')
@@ -425,7 +434,7 @@ export default function VozTestPage() {
             {/* Info */}
             <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4">
               <p className="text-[#3F3F46] text-xs font-mono">Assistente: Agente IA ana</p>
-              <p className="text-[#3F3F46] text-xs font-mono mt-1">ID: {ASSISTANT_ID}</p>
+              <p className="text-[#3F3F46] text-xs font-mono mt-1">ID: {vapiConfig.assistantId}</p>
               <p className="text-[#3F3F46] text-xs font-mono mt-1">Número Twilio: +17196742872</p>
             </div>
 
