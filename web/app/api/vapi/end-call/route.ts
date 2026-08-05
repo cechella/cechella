@@ -71,6 +71,25 @@ export async function POST(req: NextRequest) {
       type === 'transcript'
     ) {
       await ensureLead(telefone)
+
+      // On call-start, open a historico_voz entry so active-call lookup works in tool routes
+      if ((type === 'call-start' || type === 'call.started') && callId && telefone.length >= 10) {
+        const norm = telefone.startsWith('55') ? telefone : `55${telefone}`
+        const { data: existing } = await supabase
+          .from('historico_voz')
+          .select('id')
+          .eq('call_id', callId)
+          .maybeSingle()
+        if (!existing) {
+          await supabase.from('historico_voz').insert({
+            telefone: norm,
+            call_id: callId,
+            etapa_inicio: 1,
+            tentativas: 1,
+          })
+        }
+      }
+
       return NextResponse.json({ ok: true })
     }
     const duracao = body.message?.durationSeconds
