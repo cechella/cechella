@@ -37,7 +37,7 @@ export default function PaginaIndicacao() {
     setImportandoWpp(true)
   }
 
-  const mergeSessaoContatos = (apiContatos: any[]) => {
+  const mergeSessaoContatos = (apiContatos: any[], jaEnviadosAtual?: Contato[]) => {
     if (!apiContatos?.length) return
     setContatos(prev => {
       const existentes = prev.filter(x => x.nome || x.telefone)
@@ -54,9 +54,49 @@ export default function PaginaIndicacao() {
       })
       const telsApi = new Set(apiContatos.map((c: any) => c.telefone))
       const extras = existentes.filter(x => !telsApi.has(x.telefone))
-      return [...merged, ...extras].slice(0, 20)
+      const todos = [...merged, ...extras].slice(0, 20)
+
+      // Auto-submit se o total (já enviados + novos do WhatsApp) chega a 20
+      const enviados = jaEnviadosAtual ?? []
+      const telsEnviados = new Set(enviados.map(e => String(e.telefone).replace(/\D/g, '')))
+      const novosValidos = todos.filter(c => {
+        const tel = String(c.telefone).replace(/\D/g, '')
+        return tel.length >= 8 && !telsEnviados.has(tel)
+      })
+      const totalComNovos = enviados.length + novosValidos.length
+      if (totalComNovos >= 20 && novosValidos.length > 0) {
+        setTimeout(() => autoEnviar(todos), 300)
+      }
+
+      return todos
     })
     setImportandoWpp(false)
+  }
+
+  const autoEnviar = async (contatosParaEnviar: Contato[]) => {
+    const validos = contatosParaEnviar.filter(c => String(c.telefone).replace(/\D/g, '').length >= 8)
+    if (!validos.length) return
+    setEnviando(true)
+    try {
+      const res = await fetch('/api/indicar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, contatos: validos }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setJaEnviados(prev => {
+          const telsExistentes = new Set(prev.map(x => x.telefone.replace(/\D/g, '')))
+          const novos = validos
+            .filter((v: Contato) => !telsExistentes.has(v.telefone.replace(/\D/g, '')))
+            .map((v: Contato) => ({ ...v, telefone: v.telefone.replace(/\D/g, '') }))
+          const resultado = [...prev, ...novos].slice(0, 20)
+          if (resultado.length >= 20) setSucesso(true)
+          return resultado
+        })
+      }
+    } catch {}
+    finally { setEnviando(false) }
   }
 
   // Polling ativo quando importandoWpp=true (clicou botão verde)
@@ -66,11 +106,11 @@ export default function PaginaIndicacao() {
       try {
         const res = await fetch(`/api/indicar/sessao?token=${token}&_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
         const data = await res.json()
-        if (data.contatos?.length) mergeSessaoContatos(data.contatos)
+        if (data.contatos?.length) mergeSessaoContatos(data.contatos, jaEnviados)
       } catch {}
     }, 2500)
     return () => clearInterval(interval)
-  }, [importandoWpp, token])
+  }, [importandoWpp, token, jaEnviados])
 
   // Problema 3: quando página volta ao foco (saiu do WhatsApp e voltou), recarrega contatos
   useEffect(() => {
@@ -91,55 +131,56 @@ export default function PaginaIndicacao() {
 
   useEffect(() => {
     setTemContacts(supportsContactsPicker())
-    fetchFresh(`/api/indicar?token=${token}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.error) setErro(d.error)
-        else {
-          setIndicador(d)
-          if (d.jaEnviados?.length) {
-            const mapped = d.jaEnviados.map((c: any, i: number) => ({
-              id: Date.now() + i,
-              nome: c.nome || '',
-              telefone: c.telefone || '',
-              profissao: c.profissao || '',
-              hobby: c.hobby || '',
-            }))
-            setJaEnviados(mapped)
-            if (mapped.length >= 20) setSucesso(true)
-          }
-        }
-      })
-      .catch(() => setErro('Erro ao carregar'))
-      .finally(() => setLoading(false))
 
-    // Verifica imediatamente se já há contatos salvos (ex: usuário voltou à página)
-    // Busca sessao_wpp e jaEnviados em paralelo para mesclar profissao/hobby
+    // Carrega tudo em paralelo antes de mostrar a página
     Promise.all([
+      fetchFresh(`/api/indicar?token=${token}`).then(r => r.json()).catch(() => ({ error: 'Erro ao carregar' })),
       fetchFresh(`/api/indicar/sessao?token=${token}`).then(r => r.json()).catch(() => ({ contatos: [] })),
-      fetchFresh(`/api/indicar?token=${token}`).then(r => r.json()).catch(() => ({ jaEnviados: [] })),
-    ]).then(([sessaoData, indicarData]) => {
-      const sessaoContatos: any[] = sessaoData.contatos || []
+    ]).then(([indicarData, sessaoData]) => {
+      if (indicarData.error) {
+        setErro(indicarData.error)
+        return
+      }
+
+      setIndicador(indicarData)
+
       const enviados: any[] = indicarData.jaEnviados || []
+      const sessaoContatos: any[] = sessaoData.contatos || []
+
+      // Mapeia jaEnviados
+      const mappedEnviados: Contato[] = enviados.map((c: any, i: number) => ({
+        id: Date.now() + i,
+        nome: c.nome || '',
+        telefone: String(c.telefone || '').replace(/\D/g, ''),
+        profissao: c.profissao || '',
+        hobby: c.hobby || '',
+      }))
+      setJaEnviados(mappedEnviados)
+
+      if (mappedEnviados.length >= 20) {
+        setSucesso(true)
+        return
+      }
+
+      // Mescla sessao_wpp com jaEnviados para popular formulário
       if (sessaoContatos.length || enviados.length) {
         const profHobbyMap = new Map(enviados.map((e: any) => [String(e.telefone).replace(/\D/g, ''), e]))
         const merged: Contato[] = sessaoContatos.map((c: any, i: number) => {
           const tel = String(c.telefone || '').replace(/\D/g, '')
           const db = profHobbyMap.get(tel)
           return {
-            id: Date.now() + i,
+            id: Date.now() + i + 100,
             nome: c.nome || '',
             telefone: tel,
             profissao: db?.profissao || c.profissao || '',
             hobby: db?.hobby || c.hobby || '',
           }
         })
-        // Adiciona contatos que só existem em jaEnviados (não estão em sessao_wpp)
         const telsWpp = new Set(sessaoContatos.map((c: any) => String(c.telefone).replace(/\D/g, '')))
         const soEnviados = enviados
           .filter((e: any) => !telsWpp.has(String(e.telefone).replace(/\D/g, '')))
           .map((e: any, i: number) => ({
-            id: Date.now() + sessaoContatos.length + i,
+            id: Date.now() + sessaoContatos.length + i + 200,
             nome: e.nome || '',
             telefone: String(e.telefone).replace(/\D/g, ''),
             profissao: e.profissao || '',
@@ -148,10 +189,17 @@ export default function PaginaIndicacao() {
         const todos = [...merged, ...soEnviados].slice(0, 20)
         if (todos.length) {
           setContatos(todos)
-          setImportandoWpp(false)
+
+          // Se total de novos válidos + já enviados = 20, auto-submit
+          const telsEnviados = new Set(mappedEnviados.map(e => e.telefone))
+          const novosValidos = todos.filter(c => c.telefone.length >= 8 && !telsEnviados.has(c.telefone))
+          if (mappedEnviados.length + novosValidos.length >= 20 && novosValidos.length > 0) {
+            setTimeout(() => autoEnviar(todos), 500)
+          }
         }
       }
-    }).catch(() => {})
+    }).catch(() => setErro('Erro ao carregar'))
+      .finally(() => setLoading(false))
   }, [token])
 
   const importarDoCelular = async (contatoId: number) => {
