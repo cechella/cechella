@@ -95,13 +95,15 @@ export default function PaginaIndicacao() {
         else {
           setIndicador(d)
           if (d.jaEnviados?.length) {
-            setJaEnviados(d.jaEnviados.map((c: any, i: number) => ({
+            const mapped = d.jaEnviados.map((c: any, i: number) => ({
               id: Date.now() + i,
               nome: c.nome || '',
               telefone: c.telefone || '',
               profissao: c.profissao || '',
               hobby: c.hobby || '',
-            })))
+            }))
+            setJaEnviados(mapped)
+            if (mapped.length >= 20) setSucesso(true)
           }
         }
       })
@@ -291,29 +293,83 @@ export default function PaginaIndicacao() {
     </div>
   )
 
-  if (sucesso) return (
-    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'linear-gradient(135deg, #0D0B14 0%, #120D1F 100%)' }}>
-      <div className="text-center max-w-sm">
-        <div className="relative mx-auto mb-6 w-20 h-20">
-          <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping" />
-          <div className="relative w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
-            <CheckCircle className="w-9 h-9 text-emerald-400" />
+  const MSG_APRESENTACAO = `Oi! Tudo bem? 😊\nAcabei de fazer uma coisa incrível pela minha saúde e pensei em você! Uma consultora chamada Ana do Hormone Ecosystem vai entrar em contato com você — vale muito a pena ouvir! 🌸\n\nEla vai te ligar do número +55 17 2786-2778 — pode atender com tranquilidade! 📞`
+
+  const buildWhatsAppLink = (telefone: string) => {
+    const digits = telefone.replace(/\D/g, '')
+    const tel = digits.startsWith('55') ? digits : `55${digits}`
+    return `https://wa.me/${tel}?text=${encodeURIComponent(MSG_APRESENTACAO)}`
+  }
+
+  if (sucesso) {
+    const contatosMissao = jaEnviados.length >= 20 ? jaEnviados : jaEnviados
+    return (
+      <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(135deg, #0D0B14 0%, #120D1F 100%)' }}>
+        <div className="relative overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] rounded-full opacity-30"
+              style={{ background: 'radial-gradient(ellipse, #10B981 0%, transparent 70%)' }} />
+          </div>
+          <div className="relative pt-14 pb-8 px-6 text-center">
+            <div className="relative mx-auto mb-5 w-20 h-20">
+              <div className="absolute inset-0 rounded-full bg-emerald-500/20 animate-ping" />
+              <div className="relative w-20 h-20 rounded-full bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center">
+                <CheckCircle className="w-9 h-9 text-emerald-400" />
+              </div>
+            </div>
+            <h1 className="text-white text-2xl font-bold tracking-tight mb-2">Missão completa! 🎉</h1>
+            <p className="text-[#9CA3AF] text-sm leading-relaxed max-w-xs mx-auto">
+              Agora envie a mensagem abaixo para cada amiga — é só tocar no botão e apertar Enviar no WhatsApp.
+            </p>
           </div>
         </div>
-        <h2 className="text-white text-2xl font-semibold mb-2">Indicações enviadas!</h2>
-        <p className="text-[#9CA3AF] text-sm leading-relaxed">
-          Nossa consultora <strong className="text-white">Ana</strong> vai entrar em contato com cada uma das suas amigas em breve. 🌸
-        </p>
-        <div className="mt-5 bg-[#1A1528] border border-[#2D2040] rounded-2xl px-4 py-3">
-          <p className="text-[#9CA3AF] text-xs leading-relaxed">
-            Avisa elas que vão receber uma ligação do número{' '}
-            <strong className="text-white font-medium">+55 17 2786-2778</strong>
-            {' '}— pode atender com tranquilidade! 📞
-          </p>
+
+        <div className="max-w-lg mx-auto px-4 space-y-3">
+          <div className="bg-[#0D1F16] border border-emerald-500/20 rounded-2xl px-4 py-3.5">
+            <p className="text-emerald-300 text-xs font-medium mb-1">📋 Mensagem pronta para cada amiga:</p>
+            <p className="text-[#9CA3AF] text-xs leading-relaxed whitespace-pre-line">{MSG_APRESENTACAO}</p>
+          </div>
+
+          <p className="text-[#4B5563] text-xs text-center">Toque no botão verde → WhatsApp abre com a mensagem pronta → aperte Enviar</p>
+
+          {contatosMissao.map((contato, idx) => (
+            <div key={contato.id} className="rounded-2xl border border-[#1F1935] overflow-hidden"
+              style={{ background: 'linear-gradient(160deg, #131020 0%, #0F0D1A 100%)' }}>
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-7 h-7 rounded-full bg-[#7C3AED]/20 border border-[#7C3AED]/30 flex items-center justify-center flex-shrink-0">
+                    <span className="text-[11px] text-[#A78BFA] font-bold">{idx + 1}</span>
+                  </div>
+                  <div>
+                    <p className="text-white text-sm font-medium">{contato.nome || 'Amiga'}</p>
+                    <p className="text-[#4B5563] text-xs">{contato.telefone}</p>
+                  </div>
+                </div>
+                <a
+                  href={buildWhatsAppLink(contato.telefone)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white transition-all active:scale-95"
+                  style={{ background: 'linear-gradient(135deg, #25D366, #1DA851)' }}
+                >
+                  <MessageCircle className="w-3.5 h-3.5" />
+                  Enviar
+                </a>
+              </div>
+            </div>
+          ))}
+
+          <div className="bg-[#1A1528] border border-[#2D2040] rounded-2xl px-4 py-3.5 mt-2">
+            <p className="text-[#9CA3AF] text-xs leading-relaxed text-center">
+              Avisa suas amigas que vão receber uma ligação do número{' '}
+              <strong className="text-white">+55 17 2786-2778</strong>
+              {' '}— pode atender com tranquilidade! 📞
+            </p>
+          </div>
         </div>
       </div>
-    </div>
-  )
+    )
+  }
 
   const nomeIndicador = indicador?.nome?.split(' ')[0] || 'você'
   const totalValidos = contatos.filter(c => c.telefone.replace(/\D/g, '').length >= 8).length
