@@ -23,6 +23,8 @@ export default function PaginaIndicacao() {
   const [loading, setLoading] = useState(true)
   const [enviando, setEnviando] = useState(false)
   const [sucesso, setSucesso] = useState(false)
+  const [enviandoMsg, setEnviandoMsg] = useState<Record<string, boolean>>({})
+  const [msgEnviada, setMsgEnviada] = useState<Record<string, boolean>>({})
   const [temContacts, setTemContacts] = useState(false)
   const [importandoWpp, setImportandoWpp] = useState(false)
   const [contatos, setContatos] = useState<Contato[]>(
@@ -344,16 +346,29 @@ export default function PaginaIndicacao() {
     </div>
   )
 
-  const MSG_APRESENTACAO = `Oi! Tudo bem? 😊\nAcabei de fazer uma coisa incrível pela minha saúde e pensei em você! Uma consultora chamada Ana do Hormone Ecosystem vai entrar em contato com você — vale muito a pena ouvir! 🌸\n\nEla vai te ligar do número +55 17 2786-2778 — pode atender com tranquilidade! 📞`
-
-  const buildWhatsAppLink = (telefone: string) => {
-    const digits = telefone.replace(/\D/g, '')
-    const tel = digits.startsWith('55') ? digits : `55${digits}`
-    return `https://wa.me/${tel}?text=${encodeURIComponent(MSG_APRESENTACAO)}`
+  const enviarMensagemAuto = async (contato: Contato) => {
+    const tel = contato.telefone.replace(/\D/g, '')
+    if (enviandoMsg[tel] || msgEnviada[tel]) return
+    setEnviandoMsg(prev => ({ ...prev, [tel]: true }))
+    try {
+      const res = await fetch('/api/indicar/enviar-mensagem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, telefone_referido: tel }),
+      })
+      const data = await res.json()
+      if (data.ok) setMsgEnviada(prev => ({ ...prev, [tel]: true }))
+      else alert(data.error || 'Erro ao enviar')
+    } catch {
+      alert('Erro ao enviar mensagem')
+    } finally {
+      setEnviandoMsg(prev => ({ ...prev, [tel]: false }))
+    }
   }
 
   if (sucesso) {
-    const contatosMissao = jaEnviados.length >= 20 ? jaEnviados : jaEnviados
+    const contatosMissao = jaEnviados
+    const totalEnviados = Object.values(msgEnviada).filter(Boolean).length
     return (
       <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(135deg, #0D0B14 0%, #120D1F 100%)' }}>
         <div className="relative overflow-hidden">
@@ -370,45 +385,62 @@ export default function PaginaIndicacao() {
             </div>
             <h1 className="text-white text-2xl font-bold tracking-tight mb-2">Missão completa! 🎉</h1>
             <p className="text-[#9CA3AF] text-sm leading-relaxed max-w-xs mx-auto">
-              Agora envie a mensagem abaixo para cada amiga — é só tocar no botão e apertar Enviar no WhatsApp.
+              Toque em <strong className="text-white">Enviar</strong> para cada amiga — a mensagem chega direto no WhatsApp dela em 1 clique!
             </p>
+            {totalEnviados > 0 && (
+              <p className="text-emerald-400 text-sm font-semibold mt-2">
+                ✅ {totalEnviados} de {contatosMissao.length} enviadas
+              </p>
+            )}
           </div>
         </div>
 
         <div className="max-w-lg mx-auto px-4 space-y-3">
-          <div className="bg-[#0D1F16] border border-emerald-500/20 rounded-2xl px-4 py-3.5">
-            <p className="text-emerald-300 text-xs font-medium mb-1">📋 Mensagem pronta para cada amiga:</p>
-            <p className="text-[#9CA3AF] text-xs leading-relaxed whitespace-pre-line">{MSG_APRESENTACAO}</p>
-          </div>
-
-          <p className="text-[#4B5563] text-xs text-center">Toque no botão verde → WhatsApp abre com a mensagem pronta → aperte Enviar</p>
-
-          {contatosMissao.map((contato, idx) => (
-            <div key={contato.id} className="rounded-2xl border border-[#1F1935] overflow-hidden"
-              style={{ background: 'linear-gradient(160deg, #131020 0%, #0F0D1A 100%)' }}>
+          {contatosMissao.map((contato, idx) => {
+            const tel = contato.telefone.replace(/\D/g, '')
+            const enviando = enviandoMsg[tel]
+            const enviado = msgEnviada[tel]
+            return (
+            <div key={contato.id} className={`rounded-2xl border overflow-hidden transition-all ${enviado ? 'border-emerald-500/40' : 'border-[#1F1935]'}`}
+              style={{ background: enviado ? 'linear-gradient(160deg, #0D1F16 0%, #0a1a12 100%)' : 'linear-gradient(160deg, #131020 0%, #0F0D1A 100%)' }}>
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-7 h-7 rounded-full bg-[#7C3AED]/20 border border-[#7C3AED]/30 flex items-center justify-center flex-shrink-0">
-                    <span className="text-[11px] text-[#A78BFA] font-bold">{idx + 1}</span>
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 ${enviado ? 'bg-emerald-500/20 border border-emerald-500/40' : 'bg-[#7C3AED]/20 border border-[#7C3AED]/30'}`}>
+                    {enviado
+                      ? <span className="text-emerald-400 text-sm">✅</span>
+                      : <span className="text-[11px] text-[#A78BFA] font-bold">{idx + 1}</span>
+                    }
                   </div>
                   <div>
                     <p className="text-white text-sm font-medium">{contato.nome || 'Amiga'}</p>
-                    <p className="text-[#4B5563] text-xs">{contato.telefone}</p>
+                    <p className={`text-xs ${enviado ? 'text-emerald-500' : 'text-[#4B5563]'}`}>
+                      {enviado ? 'Mensagem enviada ✓' : contato.telefone}
+                    </p>
                   </div>
                 </div>
-                <a
-                  href={buildWhatsAppLink(contato.telefone)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white transition-all active:scale-95"
-                  style={{ background: 'linear-gradient(135deg, #25D366, #1DA851)' }}
+                <button
+                  onClick={() => enviarMensagemAuto(contato)}
+                  disabled={enviando || enviado}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white transition-all active:scale-95 disabled:opacity-60"
+                  style={{ background: enviado ? '#1a3d2b' : 'linear-gradient(135deg, #25D366, #1DA851)' }}
                 >
-                  <MessageCircle className="w-3.5 h-3.5" />
-                  Enviar
-                </a>
+                  {enviando
+                    ? <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : enviado
+                      ? <span>Enviado ✅</span>
+                      : <><MessageCircle className="w-3.5 h-3.5" />Enviar</>
+                  }
+                </button>
               </div>
             </div>
-          ))}
+          )})}
+
+          {totalEnviados === contatosMissao.length && contatosMissao.length > 0 && (
+            <div className="bg-emerald-900/20 border border-emerald-500/30 rounded-2xl px-4 py-4 text-center mt-2">
+              <p className="text-emerald-400 font-bold text-base mb-1">🎊 Todas as mensagens enviadas!</p>
+              <p className="text-[#9CA3AF] text-xs">Nossa equipe vai entrar em contato para agendar seu procedimento. 💜</p>
+            </div>
+          )}
 
           <div className="bg-[#1A1528] border border-[#2D2040] rounded-2xl px-4 py-3.5 mt-2">
             <p className="text-[#9CA3AF] text-xs leading-relaxed text-center">
