@@ -51,6 +51,16 @@ export async function POST(req: NextRequest) {
       telefone = body.telefone
       etapa = body.etapa ?? body.nova_etapa
       callId = body.call_id ?? body.callId
+      // Also try toolCallList when type is absent (some VAPI versions omit type)
+      if (etapa === undefined && body.message?.toolCallList?.length) {
+        const tool = body.message.toolCallList[0]
+        const args = typeof tool.function?.arguments === 'string'
+          ? JSON.parse(tool.function.arguments)
+          : (tool.function?.arguments || {})
+        if (!telefone) telefone = args.telefone
+        if (etapa === undefined) etapa = args.etapa ?? args.nova_etapa
+        if (!callId) callId = args.callId
+      }
     }
 
     // If telefone is empty (VAPI apiRequest doesn't inject call context),
