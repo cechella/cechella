@@ -46,11 +46,6 @@ Lead confirmou sintoma principal
 Lead avançou de etapa
 → PARE. CHAME: update_etapa(nova_etapa: N) → AGUARDE → aí continue
 
-Lead escolheu PIX ou cartão
-→ PARE. CHAME: register_interesse(metodo: "pix" ou "cartao", temperatura: "quente")
-→ AGUARDE retorno
-→ SÓ ENTÃO diga: "Perfeito, já enviei o código no seu WhatsApp."
-
 Início da coleta de referidos
 → PARE. CHAME: iniciar_coleta_referidos()
 → AGUARDE retorno
