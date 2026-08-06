@@ -64,11 +64,21 @@ export async function POST(req: NextRequest) {
       const normTel = (t: any) => String(t || '').replace(/\D/g, '').replace(/^0+/, '')
       const existentes: any[] = atual?.contatos || []
       const novos: any[] = body.contatos || []
-      // Normaliza telefones antes de deduplicar — evita duplicatas por formato diferente
+
+      // 1. Deduplica novos entre si (mesmo lote pode ter mesmo número com nomes diferentes)
+      const novosDedup: any[] = Object.values(
+        novos.reduce((acc: any, c: any) => {
+          const key = normTel(c.telefone)
+          if (key && key.length >= 8) acc[key] = c
+          return acc
+        }, {})
+      )
+
+      // 2. Deduplica novos contra existentes (normaliza formato antes de comparar)
       const telefonesExistentes = new Set(existentes.map((c: any) => normTel(c.telefone)))
       const merged = [
         ...existentes,
-        ...novos.filter((c: any) => !telefonesExistentes.has(normTel(c.telefone)))
+        ...novosDedup.filter((c: any) => !telefonesExistentes.has(normTel(c.telefone)))
       ].slice(0, 20)
 
       await supabase
