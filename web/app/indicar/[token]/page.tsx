@@ -280,9 +280,13 @@ export default function PaginaIndicacao() {
   const autoEnviar = async (contatosParaEnviar: Contato[]) => {
     const validos = contatosParaEnviar.filter(c => String(c.telefone).replace(/\D/g, '').length >= 8)
     if (!validos.length) return
-    const semDados = validos.filter(c => !c.profissao || !c.hobby)
+    // Checa APENAS os contatos novos (não confirmados ainda no banco)
+    const telsConfirmados = new Set(jaEnviados.map(c => String(c.telefone).replace(/\D/g, '')))
+    const novosParaEnviar = validos.filter(c => !telsConfirmados.has(String(c.telefone).replace(/\D/g, '')))
+    const semDados = novosParaEnviar.filter(c => !c.profissao || !c.hobby)
     if (semDados.length) {
       setContatos(validos)
+      setScrollToIncompleto(true)
       return
     }
     setEnviando(true)
