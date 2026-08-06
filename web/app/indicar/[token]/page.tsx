@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Plus, Trash2, Send, CheckCircle, Phone, User, Briefcase, Heart, BookUser, Sparkles, MessageCircle } from 'lucide-react'
+import { Plus, Trash2, Send, CheckCircle, Phone, User, Briefcase, Heart, Sparkles, MessageCircle } from 'lucide-react'
 
 interface Contato {
   id: number
@@ -12,17 +12,6 @@ interface Contato {
   hobby: string
 }
 
-const supportsContactsPicker = () =>
-  typeof window !== 'undefined' && 'contacts' in navigator && typeof (navigator as any).contacts?.select === 'function'
-
-const isIOSInAppBrowser = () => {
-  if (typeof window === 'undefined') return false
-  const ua = navigator.userAgent
-  const isIOS = /iPhone|iPad|iPod/.test(ua)
-  const isInApp = /FBAN|FBAV|Instagram|WhatsApp|Line|Twitter|MicroMessenger/.test(ua)
-    || (isIOS && !('safari' in window) && !/CriOS|FxiOS|OPiOS/.test(ua) && !supportsContactsPicker())
-  return isIOS && isInApp
-}
 
 function WppTutorial() {
   const steps = [
@@ -158,8 +147,6 @@ export default function PaginaIndicacao() {
   const [msgEnviada, setMsgEnviada] = useState<Record<string, boolean>>({})
   const [enviandoTodas, setEnviandoTodas] = useState(false)
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
-  const [temContacts, setTemContacts] = useState(false)
-  const [emInAppBrowser, setEmInAppBrowser] = useState(false)
   const [importandoWpp, setImportandoWpp] = useState(false)
   const [aguardandoContatos, setAguardandoContatos] = useState(false)
   const [timeoutContatos, setTimeoutContatos] = useState(false)
@@ -285,8 +272,6 @@ export default function PaginaIndicacao() {
     fetch(`${url}&_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
 
   useEffect(() => {
-    setTemContacts(supportsContactsPicker())
-    setEmInAppBrowser(isIOSInAppBrowser())
 
     // Carrega tudo em paralelo antes de mostrar a página
     Promise.all([
@@ -358,38 +343,6 @@ export default function PaginaIndicacao() {
       .finally(() => setLoading(false))
   }, [token])
 
-  const importarDoCelular = async (contatoId: number) => {
-    if (!supportsContactsPicker()) return
-    try {
-      // @ts-ignore
-      const results = await navigator.contacts.select(['name', 'tel'], { multiple: false })
-      if (!results?.length) return
-      const c = results[0]
-      setContatos(prev => prev.map(x =>
-        x.id === contatoId ? { ...x, nome: c.name?.[0] || '', telefone: c.tel?.[0] || '' } : x
-      ))
-    } catch {}
-  }
-
-  const importarMultiplos = async () => {
-    if (!supportsContactsPicker()) return
-    try {
-      // @ts-ignore
-      const results = await navigator.contacts.select(['name', 'tel'], { multiple: true })
-      if (!results?.length) return
-      const novos: Contato[] = results.map((c: any) => ({
-        id: Date.now() + Math.random(),
-        nome: c.name?.[0] || '',
-        telefone: c.tel?.[0] || '',
-        profissao: '',
-        hobby: '',
-      }))
-      setContatos(prev => {
-        const temVazio = prev.length === 1 && !prev[0].nome && !prev[0].telefone
-        return temVazio ? novos : [...prev, ...novos]
-      })
-    } catch {}
-  }
 
   const adicionarContato = () => {
     setContatos(prev => [...prev, { id: Date.now(), nome: '', telefone: '', profissao: '', hobby: '' }])
@@ -839,32 +792,16 @@ export default function PaginaIndicacao() {
           </div>
         )}
 
-        {/* CTA principal — uma opção só, sem ambiguidade */}
-        {temContacts ? (
-          // Safari/Chrome direto: agenda nativa, 2 passos
-          <button
-            onClick={importarMultiplos}
-            className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold text-white transition-all active:scale-[0.98]"
-            style={{ background: 'linear-gradient(135deg, #7C3AED, #6D28D9)', boxShadow: '0 4px 20px rgba(124,58,237,0.4)' }}
-          >
-            <BookUser className="w-4 h-4" />
-            Selecionar amigas da agenda
-          </button>
-        ) : (
-          // WKWebView ou browser sem suporte: WhatsApp direto
-          <>
-            <button
-              onClick={abrirWhatsAppImport}
-              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
-              style={{ background: 'linear-gradient(135deg, #25D366, #1DA851)', boxShadow: '0 4px 20px rgba(37,211,102,0.35)' }}
-            >
-              <MessageCircle className="w-4 h-4" />
-              {importandoWpp ? 'Aguardando contatos...' : 'Importar amigas pelo WhatsApp'}
-            </button>
+        <button
+          onClick={abrirWhatsAppImport}
+          className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold text-white transition-all active:scale-[0.98]"
+          style={{ background: importandoWpp ? 'linear-gradient(135deg,#1a3d2b,#1d4228)' : 'linear-gradient(135deg, #25D366, #1DA851)', boxShadow: '0 4px 20px rgba(37,211,102,0.35)' }}
+        >
+          <MessageCircle className="w-4 h-4" />
+          {importandoWpp ? 'Aguardando contatos...' : 'Importar amigas pelo WhatsApp'}
+        </button>
 
-            {importandoWpp && <WppTutorial />}
-          </>
-        )}
+        {importandoWpp && <WppTutorial />}
 
         <p className="text-[#4B5563] text-xs text-center py-1">
           — ou preencha manualmente abaixo —
@@ -891,15 +828,6 @@ export default function PaginaIndicacao() {
                 )}
               </div>
               <div className="flex items-center gap-2">
-                {temContacts && (
-                  <button
-                    onClick={() => importarDoCelular(contato.id)}
-                    className="flex items-center gap-1 text-[#7C3AED] hover:text-[#A78BFA] transition-colors text-xs"
-                  >
-                    <BookUser className="w-3.5 h-3.5" />
-                    <span>Agenda</span>
-                  </button>
-                )}
                 {contatos.length > 1 && (
                   <button onClick={() => removerContato(contato.id)}
                     className="text-[#374151] hover:text-red-400 transition-colors ml-1">
