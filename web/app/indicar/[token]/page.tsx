@@ -410,6 +410,20 @@ export default function PaginaIndicacao() {
       }))
       setJaEnviados(mappedEnviados)
 
+      // Restaura quais contatos já tiveram mensagem enviada
+      const jaEnviadosMap: Record<string, boolean> = {}
+      enviados.forEach((c: any) => {
+        if (c.status === 'mensagem_enviada') {
+          jaEnviadosMap[String(c.telefone).replace(/\D/g, '')] = true
+        }
+      })
+      if (Object.keys(jaEnviadosMap).length > 0) setMsgEnviada(jaEnviadosMap)
+
+      // Se todos já foram enviados, marca missão completa
+      if (mappedEnviados.length >= 20 && mappedEnviados.length === Object.keys(jaEnviadosMap).length) {
+        // não seta sucesso aqui pois sucesso é sobre indicações, não mensagens
+      }
+
       if (mappedEnviados.length >= 20) {
         setSucesso(true)
         return
