@@ -15,6 +15,123 @@ interface Contato {
 const supportsContactsPicker = () =>
   typeof window !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window
 
+function WppTutorial() {
+  return (
+    <div style={{ background: '#0b141a', borderRadius: 20, overflow: 'hidden', border: '1px solid #1f2c34' }}>
+      <style>{`
+        @keyframes wt-s1{0%,28%{opacity:1}33%,100%{opacity:0}}
+        @keyframes wt-s2{0%,28%{opacity:0}33%,61%{opacity:1}66%,100%{opacity:0}}
+        @keyframes wt-s3{0%,61%{opacity:0}66%,95%{opacity:1}100%{opacity:0}}
+        @keyframes wt-f1{0%{opacity:0;transform:translate(0,8px)}5%{opacity:1;transform:translate(0,0)}18%{transform:scale(.8)}22%{transform:scale(1)}28%{opacity:0}100%{opacity:0}}
+        @keyframes wt-r1{0%,13%{opacity:0;transform:scale(0)}14%{opacity:.4;transform:scale(0)}22%{opacity:0;transform:scale(2)}100%{opacity:0}}
+        @keyframes wt-f2{0%,33%{opacity:0;transform:translate(0,16px)}40%{opacity:1;transform:translate(0,0)}52%{transform:scale(.8)}56%{transform:scale(1)}62%,100%{opacity:0}}
+        @keyframes wt-r2{0%,48%{opacity:0;transform:scale(0)}50%{opacity:.4;transform:scale(0)}58%{opacity:0;transform:scale(2)}100%{opacity:0}}
+        @keyframes wt-f3a{0%,66%{opacity:0}72%{opacity:1;transform:translate(0,0)}76%{transform:scale(.8)}79%{transform:scale(1)}84%{transform:translate(0,42px)}87%{transform:translate(0,42px) scale(.8)}90%{opacity:0}100%{opacity:0}}
+        @keyframes wt-f3b{0%,89%{opacity:0}93%{opacity:1;transform:scale(1)}96%{transform:scale(.8)}99%,100%{opacity:0}}
+        @keyframes wt-hl{0%,3%{opacity:0;transform:scale(.7)}5%{opacity:1;transform:scale(1)}25%{opacity:1}30%,100%{opacity:0}}
+        @keyframes wt-d1{0%,28%{background:#25D366;width:18px}33%,100%{background:#2a3942;width:6px}}
+        @keyframes wt-d2{0%,33%{background:#2a3942;width:6px}36%,61%{background:#25D366;width:18px}66%,100%{background:#2a3942;width:6px}}
+        @keyframes wt-d3{0%,66%{background:#2a3942;width:6px}69%,95%{background:#25D366;width:18px}100%{background:#2a3942;width:6px}}
+        @keyframes wt-c1{0%,28%{opacity:1}33%,100%{opacity:0}}
+        @keyframes wt-c2{0%,33%{opacity:0}36%,61%{opacity:1}66%,100%{opacity:0}}
+        @keyframes wt-c3{0%,66%{opacity:0}69%,95%{opacity:1}100%{opacity:0}}
+      `}</style>
+
+      {/* WA Header */}
+      <div style={{ background: '#1f2c34', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#3D2D6B,#7C3AED)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>VC</div>
+        <div>
+          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fff' }}>Dr. Vinícius</div>
+          <div style={{ fontSize: '0.6rem', color: '#25D366' }}>online</div>
+        </div>
+      </div>
+
+      {/* Animated scenes */}
+      <div style={{ position: 'relative', height: 240, overflow: 'hidden' }}>
+
+        {/* Scene 1 — tap + */}
+        <div style={{ position: 'absolute', inset: 0, animation: 'wt-s1 9s infinite' }}>
+          <div style={{ padding: '8px 14px', background: 'rgba(37,211,102,0.08)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#25D366', color: '#000', fontSize: '0.6rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>1</div>
+            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#fff' }}>Toque no <strong>+</strong> no canto esquerdo</span>
+          </div>
+          <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ maxWidth: '75%', background: '#1f2c34', borderRadius: '10px 10px 10px 2px', padding: '8px 10px', fontSize: '0.68rem', color: '#9CA3AF' }}>Olá! Indique amigas 💜</div>
+            <div style={{ maxWidth: '75%', alignSelf: 'flex-end', background: '#1d4228', borderRadius: '10px 10px 2px 10px', padding: '8px 10px', fontSize: '0.68rem', color: '#c8e6d0' }}>Claro!</div>
+          </div>
+          {/* + highlight ring */}
+          <div style={{ position: 'absolute', bottom: 12, left: 4, width: 36, height: 36, borderRadius: '50%', border: '2px solid #25D366', animation: 'wt-hl 9s infinite' }} />
+          <div style={{ position: 'absolute', bottom: 16, left: 8, fontSize: 20, animation: 'wt-f1 9s infinite', pointerEvents: 'none' }}>👆</div>
+          <div style={{ position: 'absolute', bottom: 10, left: 2, width: 36, height: 36, borderRadius: '50%', background: 'rgba(37,211,102,0.25)', animation: 'wt-r1 9s infinite', pointerEvents: 'none' }} />
+          {/* input bar */}
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#1f2c34', padding: '8px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ fontSize: 20, color: '#8696a0' }}>+</div>
+            <div style={{ flex: 1, background: '#2a3942', borderRadius: 20, height: 30, display: 'flex', alignItems: 'center', padding: '0 12px', fontSize: '0.68rem', color: '#6B7280' }}>Mensagem</div>
+            <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>▶</div>
+          </div>
+        </div>
+
+        {/* Scene 2 — tap Contato */}
+        <div style={{ position: 'absolute', inset: 0, animation: 'wt-s2 9s infinite', opacity: 0 }}>
+          <div style={{ padding: '8px 14px', background: 'rgba(37,211,102,0.08)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#25D366', color: '#000', fontSize: '0.6rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>2</div>
+            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#fff' }}>Toque em <strong>Contato</strong></span>
+          </div>
+          <div style={{ margin: '8px 10px', background: '#1f2c34', borderRadius: 16, padding: 12, display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+            {([['📄','#BF59CF','Doc'],['📷','#E84393','Câmera'],['🖼️','#4781DE','Galeria'],['🎵','#E6711A','Áudio'],['👤','#25D366','Contato',true],['📍','#09A2DA','Local']] as any[]).map(([icon,color,label,hi]: any) => (
+              <div key={label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, fontSize: '0.58rem', color: hi ? '#25D366' : '#9CA3AF', fontWeight: hi ? 700 : 400 }}>
+                <div style={{ width: 34, height: 34, borderRadius: '50%', background: hi ? '#25D366' : color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, boxShadow: hi ? '0 0 0 3px rgba(37,211,102,0.3)' : 'none' }}>{icon}</div>
+                {label}
+              </div>
+            ))}
+          </div>
+          <div style={{ position: 'absolute', top: 100, left: 112, fontSize: 20, animation: 'wt-f2 9s infinite', pointerEvents: 'none' }}>👆</div>
+          <div style={{ position: 'absolute', top: 94, left: 106, width: 36, height: 36, borderRadius: '50%', background: 'rgba(37,211,102,0.25)', animation: 'wt-r2 9s infinite', pointerEvents: 'none' }} />
+        </div>
+
+        {/* Scene 3 — select + send */}
+        <div style={{ position: 'absolute', inset: 0, animation: 'wt-s3 9s infinite', opacity: 0 }}>
+          <div style={{ padding: '8px 14px', background: 'rgba(37,211,102,0.08)', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 18, height: 18, borderRadius: '50%', background: '#25D366', color: '#000', fontSize: '0.6rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>3</div>
+            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#fff' }}>Selecione as amigas → toque <strong>Enviar</strong></span>
+          </div>
+          {([['A','#7C3AED','Ana Silva',true],['B','#059669','Beatriz Santos',true],['C','#B45309','Camila Ferreira',false],['D','#0891B2','Daniela Costa',true]] as any[]).map(([ini,color,name,checked]: any) => (
+            <div key={name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 14px', borderBottom: '1px solid #1f2c34' }}>
+              <div style={{ width: 26, height: 26, borderRadius: '50%', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff', flexShrink: 0 }}>{ini}</div>
+              <div style={{ fontSize: '0.7rem', fontWeight: 500, color: '#fff' }}>{name}</div>
+              <div style={{ marginLeft: 'auto', width: 18, height: 18, borderRadius: '50%', background: checked ? '#25D366' : 'transparent', border: `2px solid ${checked ? '#25D366' : '#4B5563'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, color: '#fff', flexShrink: 0 }}>{checked ? '✓' : ''}</div>
+            </div>
+          ))}
+          <div style={{ position: 'absolute', top: 90, right: 20, fontSize: 18, animation: 'wt-f3a 9s infinite', pointerEvents: 'none' }}>👆</div>
+          <div style={{ position: 'absolute', bottom: 8, right: 12, fontSize: 18, animation: 'wt-f3b 9s infinite', pointerEvents: 'none' }}>👆</div>
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: '#1f2c34', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.65rem', color: '#9CA3AF' }}>3 selecionadas</span>
+            <div style={{ background: '#25D366', color: '#fff', fontSize: '0.65rem', fontWeight: 700, borderRadius: 20, padding: '5px 14px' }}>Enviar ▶</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Dots + caption + status */}
+      <div style={{ padding: '10px 14px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 5 }}>
+          <div style={{ height: 6, borderRadius: 3, animation: 'wt-d1 9s infinite' }} />
+          <div style={{ height: 6, borderRadius: 3, animation: 'wt-d2 9s infinite' }} />
+          <div style={{ height: 6, borderRadius: 3, animation: 'wt-d3 9s infinite' }} />
+        </div>
+        <div style={{ position: 'relative', height: 16, width: '100%', textAlign: 'center' }}>
+          <span style={{ position: 'absolute', inset: 0, fontSize: '0.68rem', color: '#6B7280', animation: 'wt-c1 9s infinite', opacity: 0 }}>Toque no + no canto esquerdo</span>
+          <span style={{ position: 'absolute', inset: 0, fontSize: '0.68rem', color: '#6B7280', animation: 'wt-c2 9s infinite', opacity: 0 }}>Toque em "Contato"</span>
+          <span style={{ position: 'absolute', inset: 0, fontSize: '0.68rem', color: '#6B7280', animation: 'wt-c3 9s infinite', opacity: 0 }}>Selecione as amigas e toque Enviar</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#25D366', animation: 'pulse 2s infinite' }} />
+          <span style={{ fontSize: '0.68rem', color: '#25D366', fontWeight: 600 }}>Aguardando seus contatos...</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function PaginaIndicacao() {
   const { token } = useParams<{ token: string }>()
   const [indicador, setIndicador] = useState<{ nome: string | null } | null>(null)
@@ -716,17 +833,7 @@ export default function PaginaIndicacao() {
           {importandoWpp ? 'Aguardando contatos...' : 'Importar amigas pelo WhatsApp'}
         </button>
 
-        {importandoWpp && (
-          <div className="bg-[#1A1528] border border-[#25D366]/20 rounded-2xl px-4 py-3 text-center">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <div className="w-2 h-2 rounded-full bg-[#25D366] animate-pulse" />
-              <p className="text-white text-sm font-medium">Aguardando seus contatos...</p>
-            </div>
-            <p className="text-[#6B7280] text-xs">
-              No WhatsApp: toque em <strong className="text-white">Anexar → Contato</strong>, selecione suas amigas e envie
-            </p>
-          </div>
-        )}
+        {importandoWpp && <WppTutorial />}
 
         {/* Botão agenda nativa — só no Safari/Chrome */}
         {temContacts && (
