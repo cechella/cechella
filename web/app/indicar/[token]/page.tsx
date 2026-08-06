@@ -717,8 +717,9 @@ export default function PaginaIndicacao() {
           </div>
         )}
 
-        {/* CTA principal */}
+        {/* CTA principal — uma opção só, sem ambiguidade */}
         {temContacts ? (
+          // Safari/Chrome direto: agenda nativa, 2 passos
           <button
             onClick={importarMultiplos}
             className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold text-white transition-all active:scale-[0.98]"
@@ -727,24 +728,8 @@ export default function PaginaIndicacao() {
             <BookUser className="w-4 h-4" />
             Selecionar amigas da agenda
           </button>
-        ) : emInAppBrowser ? (
-          <div className="bg-[#1A1528] border border-[#A78BFA]/30 rounded-2xl px-4 py-4 text-center space-y-3">
-            <p className="text-white text-sm font-semibold">📱 Abra no Safari para importar da agenda</p>
-            <p className="text-[#9CA3AF] text-xs leading-relaxed">
-              Este link está aberto dentro do WhatsApp. Para selecionar suas amigas direto da agenda, abra no Safari:
-            </p>
-            <div className="flex items-center justify-center gap-2 bg-[#0D0B14] rounded-xl px-3 py-2">
-              <span className="text-[#A78BFA] text-xs">Toque em</span>
-              <span className="text-white text-xs font-bold">⎋ compartilhar</span>
-              <span className="text-[#A78BFA] text-xs">→</span>
-              <span className="text-white text-xs font-bold">Abrir no Safari</span>
-            </div>
-            <p className="text-[#4B5563] text-xs">ou continue pelo WhatsApp abaixo</p>
-          </div>
-        ) : null}
-
-        {/* Fallback WhatsApp — sempre visível quando não tem Contact Picker */}
-        {!temContacts && (
+        ) : (
+          // WKWebView ou browser sem suporte: WhatsApp direto
           <>
             <button
               onClick={abrirWhatsAppImport}
