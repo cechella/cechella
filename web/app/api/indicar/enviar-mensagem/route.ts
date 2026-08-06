@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     await supabase
       .from('contatos_referidos')
-      .update({ status: 'mensagem_enviada', updated_at: new Date().toISOString() })
+      .update({ status: 'mensagem_enviada' })
       .eq('indicado_por_telefone', lead.telefone)
       .eq('telefone', telReferido)
 
