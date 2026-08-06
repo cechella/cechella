@@ -706,38 +706,39 @@ export default function PaginaIndicacao() {
           </div>
         )}
 
-        {/* Botão principal — importar via WhatsApp (funciona em qualquer browser) */}
-        <button
-          onClick={abrirWhatsAppImport}
-          className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg, #25D366, #1DA851)', boxShadow: '0 4px 20px rgba(37,211,102,0.35)' }}
-        >
-          <MessageCircle className="w-4 h-4" />
-          {importandoWpp ? 'Aguardando contatos...' : 'Importar amigas pelo WhatsApp'}
-        </button>
-
-        {importandoWpp && (
-          <div className="bg-[#1A1528] border border-[#25D366]/20 rounded-2xl px-4 py-3 text-center">
-            <div className="flex items-center justify-center gap-2 mb-1">
-              <div className="w-2 h-2 rounded-full bg-[#25D366] animate-pulse" />
-              <p className="text-white text-sm font-medium">Aguardando seus contatos...</p>
-            </div>
-            <p className="text-[#6B7280] text-xs">
-              No WhatsApp: toque em <strong className="text-white">Anexar → Contato</strong>, selecione suas amigas e envie
-            </p>
-          </div>
-        )}
-
-        {/* Botão agenda nativa — só no Safari/Chrome */}
-        {temContacts && (
+        {/* CTA principal: agenda nativa se disponível, WhatsApp como fallback */}
+        {temContacts ? (
           <button
             onClick={importarMultiplos}
-            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] border border-[#2D2040] text-[#A78BFA]"
-            style={{ background: 'rgba(124,58,237,0.1)' }}
+            className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold text-white transition-all active:scale-[0.98]"
+            style={{ background: 'linear-gradient(135deg, #7C3AED, #6D28D9)', boxShadow: '0 4px 20px rgba(124,58,237,0.4)' }}
           >
             <BookUser className="w-4 h-4" />
-            Importar da agenda do celular
+            Selecionar amigas da agenda
           </button>
+        ) : (
+          <>
+            <button
+              onClick={abrirWhatsAppImport}
+              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
+              style={{ background: 'linear-gradient(135deg, #25D366, #1DA851)', boxShadow: '0 4px 20px rgba(37,211,102,0.35)' }}
+            >
+              <MessageCircle className="w-4 h-4" />
+              {importandoWpp ? 'Aguardando contatos...' : 'Importar amigas pelo WhatsApp'}
+            </button>
+
+            {importandoWpp && (
+              <div className="bg-[#1A1528] border border-[#25D366]/20 rounded-2xl px-4 py-3 text-center">
+                <div className="flex items-center justify-center gap-2 mb-1">
+                  <div className="w-2 h-2 rounded-full bg-[#25D366] animate-pulse" />
+                  <p className="text-white text-sm font-medium">Aguardando seus contatos...</p>
+                </div>
+                <p className="text-[#6B7280] text-xs">
+                  No WhatsApp: toque em <strong className="text-white">Anexar → Contato</strong>, selecione suas amigas e envie
+                </p>
+              </div>
+            )}
+          </>
         )}
 
         <p className="text-[#4B5563] text-xs text-center py-1">
