@@ -146,6 +146,7 @@ export default function PaginaIndicacao() {
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [temContacts, setTemContacts] = useState(false)
   const [importandoWpp, setImportandoWpp] = useState(false)
+  const [showTutorial, setShowTutorial] = useState(false)
   const [aguardandoContatos, setAguardandoContatos] = useState(false)
   const [timeoutContatos, setTimeoutContatos] = useState(false)
   const [contatos, setContatos] = useState<Contato[]>(
@@ -155,8 +156,13 @@ export default function PaginaIndicacao() {
   const [toast, setToast] = useState<string | null>(null)
 
   const abrirWhatsAppImport = () => {
+    setShowTutorial(true)
+  }
+
+  const confirmarAbrirWhatsApp = () => {
     const msg = encodeURIComponent(`REF-${token}`)
     window.open(`https://wa.me/5547988507977?text=${msg}`, '_blank')
+    setShowTutorial(false)
     setImportandoWpp(true)
   }
 
@@ -833,7 +839,32 @@ export default function PaginaIndicacao() {
           {importandoWpp ? 'Aguardando contatos...' : 'Importar amigas pelo WhatsApp'}
         </button>
 
-        {importandoWpp && <WppTutorial />}
+        {/* Tutorial modal — shown before opening WhatsApp */}
+        {showTutorial && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '0 0 24px' }}>
+            <div style={{ width: '100%', maxWidth: 420, padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <WppTutorial />
+              <button
+                onClick={confirmarAbrirWhatsApp}
+                style={{ width: '100%', background: '#25D366', color: '#000', fontWeight: 700, fontSize: '1rem', borderRadius: 14, padding: '14px 0', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              >
+                ✅ Entendi! Abrir WhatsApp
+              </button>
+              <button
+                onClick={() => setShowTutorial(false)}
+                style={{ background: 'transparent', color: '#9CA3AF', fontSize: '0.8rem', border: 'none', cursor: 'pointer', padding: '4px 0' }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {importandoWpp && (
+          <div style={{ textAlign: 'center', padding: '8px 0', fontSize: '0.78rem', color: '#25D366' }}>
+            ⏳ Aguardando seus contatos do WhatsApp...
+          </div>
+        )}
 
         {/* Botão agenda nativa — só no Safari/Chrome */}
         {temContacts && (
