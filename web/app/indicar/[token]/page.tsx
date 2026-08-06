@@ -13,7 +13,7 @@ interface Contato {
 }
 
 const supportsContactsPicker = () =>
-  typeof window !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window
+  typeof window !== 'undefined' && 'contacts' in navigator && typeof (navigator as any).contacts?.select === 'function'
 
 export default function PaginaIndicacao() {
   const { token } = useParams<{ token: string }>()
