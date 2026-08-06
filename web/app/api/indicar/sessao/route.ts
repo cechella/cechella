@@ -75,24 +75,14 @@ export async function POST(req: NextRequest) {
       const tokenMudou = !existente || existente.token !== body.token
       if (tokenMudou) {
         const link = `https://www.hormoneecosystem.com/indicar/${body.token}`
-        const textoInstrucoes = `✅ Código recebido!\n\nAgora siga os passos para compartilhar suas amigas:\n\n1️⃣ Toque no *+* à esquerda\n2️⃣ Escolha *Contato*\n3️⃣ Busque e selecione suas amigas\n4️⃣ Toque em *Enviar*\n\nVocê pode selecionar várias de uma vez! 💜\n\nSe tiver dúvida, assista ao vídeo tutorial que vou te enviar agora 👇`
-
         try {
-          // 1. Envia texto com instruções
-          await fetch(ZAPI_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-            body: JSON.stringify({ phone, message: textoInstrucoes }),
-          })
-
-          // 2. Envia vídeo tutorial
           const videoRes = await fetch(ZAPI_VIDEO_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
             body: JSON.stringify({
               phone,
               video: TUTORIAL_VIDEO_URL,
-              caption: `Depois de assistir, volte para o link e seus contatos aparecerão automaticamente:\n👉 ${link}`,
+              caption: `✅ Código recebido!\n\nAssista ao tutorial acima e siga os passos:\n\n1️⃣ Toque no *+* à esquerda\n2️⃣ Escolha *Contato*\n3️⃣ Busque e selecione suas amigas\n4️⃣ Toque em *Enviar*\n\nVocê pode selecionar várias de uma vez! 💜\n\nDepois volte para o link e seus contatos aparecerão automaticamente:\n👉 ${link}`,
             }),
           })
           const videoBody = await videoRes.text()
