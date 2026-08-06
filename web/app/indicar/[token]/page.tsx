@@ -15,6 +15,15 @@ interface Contato {
 const supportsContactsPicker = () =>
   typeof window !== 'undefined' && 'contacts' in navigator && typeof (navigator as any).contacts?.select === 'function'
 
+const isIOSInAppBrowser = () => {
+  if (typeof window === 'undefined') return false
+  const ua = navigator.userAgent
+  const isIOS = /iPhone|iPad|iPod/.test(ua)
+  const isInApp = /FBAN|FBAV|Instagram|WhatsApp|Line|Twitter|MicroMessenger/.test(ua)
+    || (isIOS && !('safari' in window) && !/CriOS|FxiOS|OPiOS/.test(ua) && !supportsContactsPicker())
+  return isIOS && isInApp
+}
+
 export default function PaginaIndicacao() {
   const { token } = useParams<{ token: string }>()
   const [indicador, setIndicador] = useState<{ nome: string | null } | null>(null)
@@ -28,6 +37,7 @@ export default function PaginaIndicacao() {
   const [enviandoTodas, setEnviandoTodas] = useState(false)
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [temContacts, setTemContacts] = useState(false)
+  const [emInAppBrowser, setEmInAppBrowser] = useState(false)
   const [importandoWpp, setImportandoWpp] = useState(false)
   const [aguardandoContatos, setAguardandoContatos] = useState(false)
   const [timeoutContatos, setTimeoutContatos] = useState(false)
@@ -154,6 +164,7 @@ export default function PaginaIndicacao() {
 
   useEffect(() => {
     setTemContacts(supportsContactsPicker())
+    setEmInAppBrowser(isIOSInAppBrowser())
 
     // Carrega tudo em paralelo antes de mostrar a página
     Promise.all([
@@ -706,7 +717,7 @@ export default function PaginaIndicacao() {
           </div>
         )}
 
-        {/* CTA principal: agenda nativa se disponível, WhatsApp como fallback */}
+        {/* CTA principal */}
         {temContacts ? (
           <button
             onClick={importarMultiplos}
@@ -716,7 +727,24 @@ export default function PaginaIndicacao() {
             <BookUser className="w-4 h-4" />
             Selecionar amigas da agenda
           </button>
-        ) : (
+        ) : emInAppBrowser ? (
+          <div className="bg-[#1A1528] border border-[#A78BFA]/30 rounded-2xl px-4 py-4 text-center space-y-3">
+            <p className="text-white text-sm font-semibold">📱 Abra no Safari para importar da agenda</p>
+            <p className="text-[#9CA3AF] text-xs leading-relaxed">
+              Este link está aberto dentro do WhatsApp. Para selecionar suas amigas direto da agenda, abra no Safari:
+            </p>
+            <div className="flex items-center justify-center gap-2 bg-[#0D0B14] rounded-xl px-3 py-2">
+              <span className="text-[#A78BFA] text-xs">Toque em</span>
+              <span className="text-white text-xs font-bold">⎋ compartilhar</span>
+              <span className="text-[#A78BFA] text-xs">→</span>
+              <span className="text-white text-xs font-bold">Abrir no Safari</span>
+            </div>
+            <p className="text-[#4B5563] text-xs">ou continue pelo WhatsApp abaixo</p>
+          </div>
+        ) : null}
+
+        {/* Fallback WhatsApp — sempre visível quando não tem Contact Picker */}
+        {!temContacts && (
           <>
             <button
               onClick={abrirWhatsAppImport}
