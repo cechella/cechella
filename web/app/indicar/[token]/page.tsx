@@ -110,34 +110,21 @@ export default function PaginaIndicacao() {
     finally { setEnviando(false) }
   }
 
-  // Polling quando página abre sem contatos (aguarda Z-API processar)
+  // Polling ativo quando importandoWpp=true (clicou botão verde)
   useEffect(() => {
-    if (loading) return
-    const temDados = jaEnviados.length > 0 || contatos.some(c => c.telefone)
-    if (temDados || timeoutContatos || importandoWpp) return
-
+    if (!importandoWpp) return
     setAguardandoContatos(true)
 
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/indicar?token=${token}&_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
+        const res = await fetch(`/api/indicar/sessao?token=${token}&_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
         const data = await res.json()
-        if (data.jaEnviados?.length > 0) {
-          clearInterval(interval)
-          clearTimeout(timer)
-          const mapped: Contato[] = data.jaEnviados.map((c: any, i: number) => ({
-            id: Date.now() + i,
-            nome: c.nome || '',
-            telefone: String(c.telefone || '').replace(/\D/g, ''),
-            profissao: c.profissao || '',
-            hobby: c.hobby || '',
-          }))
-          setJaEnviados(mapped)
-          setContatos(mapped)
+        if (data.contatos?.length) {
           setAguardandoContatos(false)
+          mergeSessaoContatos(data.contatos, jaEnviados)
         }
       } catch {}
-    }, 3000)
+    }, 2500)
 
     const timer = setTimeout(() => {
       clearInterval(interval)
@@ -146,19 +133,6 @@ export default function PaginaIndicacao() {
     }, 30000)
 
     return () => { clearInterval(interval); clearTimeout(timer) }
-  }, [loading])
-
-  // Polling ativo quando importandoWpp=true (clicou botão verde)
-  useEffect(() => {
-    if (!importandoWpp) return
-    const interval = setInterval(async () => {
-      try {
-        const res = await fetch(`/api/indicar/sessao?token=${token}&_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
-        const data = await res.json()
-        if (data.contatos?.length) mergeSessaoContatos(data.contatos, jaEnviados)
-      } catch {}
-    }, 2500)
-    return () => clearInterval(interval)
   }, [importandoWpp, token, jaEnviados])
 
   // Problema 3: quando página volta ao foco (saiu do WhatsApp e voltou), recarrega contatos
