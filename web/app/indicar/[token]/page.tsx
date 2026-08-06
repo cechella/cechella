@@ -206,7 +206,10 @@ export default function PaginaIndicacao() {
   const [enviandoTodas, setEnviandoTodas] = useState(false)
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [temContacts, setTemContacts] = useState(false)
-  const [importandoWpp, setImportandoWpp] = useState(false)
+  const [importandoWpp, setImportandoWpp] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return sessionStorage.getItem('wpp_importing') !== null
+  })
   const [showPopup, setShowPopup] = useState(false)
   const [showTutorial, setShowTutorial] = useState(false)
   const [tutorialStep, setTutorialStep] = useState(1)
@@ -227,6 +230,8 @@ export default function PaginaIndicacao() {
     window.open(`https://wa.me/5547988507977?text=${msg}`, '_blank')
     setShowPopup(false)
     setShowTutorial(false)
+    // Persiste flag no sessionStorage para sobreviver reload do iOS
+    sessionStorage.setItem('wpp_importing', token)
     setImportandoWpp(true)
   }
 
@@ -322,19 +327,30 @@ export default function PaginaIndicacao() {
     return () => { clearInterval(interval); clearTimeout(timer) }
   }, [importandoWpp, token, jaEnviados])
 
-  // Problema 3: quando página volta ao foco (saiu do WhatsApp e voltou), recarrega contatos
+  // Quando contatos chegam via polling, limpa o sessionStorage
+  const finalizarImportacao = (contatos: any[]) => {
+    sessionStorage.removeItem('wpp_importing')
+    setAguardandoContatos(false)
+    mergeSessaoContatos(contatos, jaEnviados)
+  }
+
+  // Sempre que voltar à aba (independente do estado), verifica sessao_wpp
   useEffect(() => {
     const onVisible = async () => {
       if (document.visibilityState !== 'visible') return
+      // Se tinha flag de importação no sessionStorage, ativa polling
+      if (sessionStorage.getItem('wpp_importing') === token) {
+        setImportandoWpp(true)
+      }
       try {
         const res = await fetch(`/api/indicar/sessao?token=${token}&_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
         const data = await res.json()
-        if (data.contatos?.length) mergeSessaoContatos(data.contatos)
+        if (data.contatos?.length) finalizarImportacao(data.contatos)
       } catch {}
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [token])
+  }, [token, jaEnviados])
 
   const fetchFresh = (url: string) =>
     fetch(`${url}&_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })

@@ -61,10 +61,15 @@ export async function POST(req: NextRequest) {
         .eq('phone', phone)
         .maybeSingle()
 
+      const normTel = (t: any) => String(t || '').replace(/\D/g, '').replace(/^0+/, '')
       const existentes: any[] = atual?.contatos || []
       const novos: any[] = body.contatos || []
-      const telefonesExistentes = new Set(existentes.map((c: any) => c.telefone))
-      const merged = [...existentes, ...novos.filter((c: any) => !telefonesExistentes.has(c.telefone))].slice(0, 20)
+      // Normaliza telefones antes de deduplicar — evita duplicatas por formato diferente
+      const telefonesExistentes = new Set(existentes.map((c: any) => normTel(c.telefone)))
+      const merged = [
+        ...existentes,
+        ...novos.filter((c: any) => !telefonesExistentes.has(normTel(c.telefone)))
+      ].slice(0, 20)
 
       await supabase
         .from('sessao_wpp')
