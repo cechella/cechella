@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useParams } from 'next/navigation'
-import { Plus, Trash2, Send, CheckCircle, Phone, User, Briefcase, Heart, Sparkles, MessageCircle } from 'lucide-react'
+import { Plus, Trash2, Send, CheckCircle, Phone, User, Briefcase, Heart, BookUser, Sparkles, MessageCircle } from 'lucide-react'
 
 interface Contato {
   id: number
@@ -12,128 +12,8 @@ interface Contato {
   hobby: string
 }
 
-
-function WppTutorial() {
-  const steps = [
-    { num: 1, text: <>Toque no <strong>+</strong> no canto esquerdo</> },
-    { num: 2, text: <>Toque em <strong>Contato</strong></> },
-    { num: 3, text: <>Selecione as amigas → toque <strong>Enviar</strong></> },
-  ]
-  return (
-    <div style={{ background: '#0b141a', borderRadius: 20, overflow: 'hidden', border: '1px solid #1f2c34' }}>
-      {/* Header */}
-      <div style={{ background: '#1f2c34', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
-        <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#3D2D6B,#7C3AED)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0 }}>VC</div>
-        <div>
-          <div style={{ fontSize: '0.8rem', fontWeight: 600, color: '#fff' }}>Dr. Vinícius</div>
-          <div style={{ fontSize: '0.6rem', color: '#25D366' }}>online</div>
-        </div>
-      </div>
-
-      {/* Animated steps */}
-      <div style={{ position: 'relative', height: 260, overflow: 'hidden' }}>
-        <style>{`
-          @keyframes s1{0%,28%{opacity:1}33%,100%{opacity:0}}
-          @keyframes s2{0%,28%{opacity:0}33%,61%{opacity:1}66%,100%{opacity:0}}
-          @keyframes s3{0%,61%{opacity:0}66%,95%{opacity:1}100%{opacity:0}}
-          @keyframes f1{0%{opacity:0;transform:translate(0,8px)}5%{opacity:1;transform:translate(0,0)}18%{transform:translate(0,0) scale(.8)}22%{transform:translate(0,0) scale(1)}28%{opacity:0}100%{opacity:0}}
-          @keyframes r1{0%,13%{opacity:0;transform:scale(0)}14%{opacity:.5;transform:scale(0)}22%{opacity:0;transform:scale(1.8)}100%{opacity:0}}
-          @keyframes f2{0%,33%{opacity:0;transform:translate(0,16px)}40%{opacity:1;transform:translate(0,0)}52%{transform:scale(.8)}56%{transform:scale(1)}62%,100%{opacity:0}}
-          @keyframes r2{0%,48%{opacity:0;transform:scale(0)}50%{opacity:.5;transform:scale(0)}58%{opacity:0;transform:scale(1.8)}100%{opacity:0}}
-          @keyframes f3a{0%,66%{opacity:0}72%{opacity:1;transform:translate(0,0) scale(1)}76%{transform:scale(.8)}79%{transform:scale(1)}83%{transform:translate(0,44px)}86%{transform:translate(0,44px) scale(.8)}89%{transform:translate(0,44px)}91%{opacity:0}100%{opacity:0}}
-          @keyframes f3b{0%,89%{opacity:0}93%{opacity:1;transform:scale(1)}96%{transform:scale(.8)}99%{opacity:0;transform:scale(1)}100%{opacity:0}}
-          @keyframes hl{0%,3%{opacity:0;transform:scale(.7)}5%{opacity:1;transform:scale(1)}26%{opacity:1}30%,100%{opacity:0}}
-          @keyframes dot1{0%,28%{background:#25D366;width:18px}33%,100%{background:#2a3942;width:6px}}
-          @keyframes dot2{0%,33%{background:#2a3942;width:6px}36%,61%{background:#25D366;width:18px}66%,100%{background:#2a3942;width:6px}}
-          @keyframes dot3{0%,66%{background:#2a3942;width:6px}69%,95%{background:#25D366;width:18px}100%{background:#2a3942;width:6px}}
-          @keyframes cap1{0%,28%{opacity:1}33%,100%{opacity:0}}
-          @keyframes cap2{0%,33%{opacity:0}36%,61%{opacity:1}66%,100%{opacity:0}}
-          @keyframes cap3{0%,66%{opacity:0}69%,95%{opacity:1}100%{opacity:0}}
-        `}</style>
-
-        {/* Scene 1 — tap + */}
-        <div style={{ position:'absolute', inset:0, animation:'s1 9s infinite' }}>
-          <div style={{ padding:'8px 14px', background:'rgba(37,211,102,0.08)', display:'flex', alignItems:'center', gap:8 }}>
-            <div style={{ width:18, height:18, borderRadius:'50%', background:'#25D366', color:'#000', fontSize:'0.6rem', fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>1</div>
-            <span style={{ fontSize:'0.72rem', fontWeight:600, color:'#fff' }}>Toque no <strong>+</strong> no canto esquerdo</span>
-          </div>
-          <div style={{ padding:'12px 14px', display:'flex', flexDirection:'column', gap:8 }}>
-            <div style={{ maxWidth:'75%', background:'#1f2c34', borderRadius:'10px 10px 10px 2px', padding:'8px 10px', fontSize:'0.7rem', color:'#9CA3AF' }}>Olá! Indique amigas 💜</div>
-            <div style={{ maxWidth:'75%', alignSelf:'flex-end', background:'#1d4228', borderRadius:'10px 10px 2px 10px', padding:'8px 10px', fontSize:'0.7rem', color:'#c8e6d0' }}>Claro!</div>
-          </div>
-          {/* + highlight ring */}
-          <div style={{ position:'absolute', bottom:14, left:4, width:36, height:36, borderRadius:'50%', border:'2px solid #25D366', animation:'hl 9s infinite' }} />
-          {/* finger */}
-          <div style={{ position:'absolute', bottom:18, left:8, fontSize:20, animation:'f1 9s infinite', pointerEvents:'none' }}>👆</div>
-          <div style={{ position:'absolute', bottom:12, left:2, width:36, height:36, borderRadius:'50%', background:'rgba(37,211,102,0.3)', animation:'r1 9s infinite', pointerEvents:'none' }} />
-        </div>
-
-        {/* Scene 2 — tap Contato */}
-        <div style={{ position:'absolute', inset:0, animation:'s2 9s infinite', opacity:0 }}>
-          <div style={{ padding:'8px 14px', background:'rgba(37,211,102,0.08)', display:'flex', alignItems:'center', gap:8 }}>
-            <div style={{ width:18, height:18, borderRadius:'50%', background:'#25D366', color:'#000', fontSize:'0.6rem', fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>2</div>
-            <span style={{ fontSize:'0.72rem', fontWeight:600, color:'#fff' }}>Toque em <strong>Contato</strong></span>
-          </div>
-          {/* attachment menu */}
-          <div style={{ margin:'8px 14px', background:'#1f2c34', borderRadius:16, padding:14, display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
-            {[['📄','#BF59CF','Doc'],['📷','#E84393','Câmera'],['🖼️','#4781DE','Galeria'],['🎵','#E6711A','Áudio'],['👤','#25D366','Contato',true],['📍','#09A2DA','Local']].map(([icon,color,label,hi])=>(
-              <div key={label as string} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4, fontSize:'0.58rem', color: hi ? '#25D366' : '#9CA3AF', fontWeight: hi ? 700 : 400 }}>
-                <div style={{ width:36, height:36, borderRadius:'50%', background: hi ? '#25D366' : color as string, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, boxShadow: hi ? '0 0 0 3px rgba(37,211,102,0.3)' : 'none' }}>{icon}</div>
-                {label}
-              </div>
-            ))}
-          </div>
-          {/* finger on Contato (middle row, 2nd col) */}
-          <div style={{ position:'absolute', top:108, left:116, fontSize:20, animation:'f2 9s infinite', pointerEvents:'none' }}>👆</div>
-          <div style={{ position:'absolute', top:102, left:110, width:36, height:36, borderRadius:'50%', background:'rgba(37,211,102,0.3)', animation:'r2 9s infinite', pointerEvents:'none' }} />
-        </div>
-
-        {/* Scene 3 — select contacts */}
-        <div style={{ position:'absolute', inset:0, animation:'s3 9s infinite', opacity:0 }}>
-          <div style={{ padding:'8px 14px', background:'rgba(37,211,102,0.08)', display:'flex', alignItems:'center', gap:8 }}>
-            <div style={{ width:18, height:18, borderRadius:'50%', background:'#25D366', color:'#000', fontSize:'0.6rem', fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>3</div>
-            <span style={{ fontSize:'0.72rem', fontWeight:600, color:'#fff' }}>Selecione → toque <strong>Enviar</strong></span>
-          </div>
-          {[['A','#7C3AED','Ana Silva',true],['B','#059669','Beatriz Santos',true],['C','#B45309','Camila Ferreira',false],['D','#0891B2','Daniela Costa',true]].map(([ini,color,name,checked])=>(
-            <div key={name as string} style={{ display:'flex', alignItems:'center', gap:10, padding:'7px 14px', borderBottom:'1px solid #1f2c34' }}>
-              <div style={{ width:28, height:28, borderRadius:'50%', background:color as string, display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:700, color:'#fff', flexShrink:0 }}>{ini}</div>
-              <div>
-                <div style={{ fontSize:'0.72rem', fontWeight:500, color:'#fff' }}>{name as string}</div>
-              </div>
-              <div style={{ marginLeft:'auto', width:18, height:18, borderRadius:'50%', background: checked ? '#25D366' : 'transparent', border:`2px solid ${checked ? '#25D366' : '#4B5563'}`, display:'flex', alignItems:'center', justifyContent:'center', fontSize:10, color:'#fff', flexShrink:0 }}>{checked ? '✓' : ''}</div>
-            </div>
-          ))}
-          {/* fingers */}
-          <div style={{ position:'absolute', top:96, right:22, fontSize:18, animation:'f3a 9s infinite', pointerEvents:'none' }}>👆</div>
-          <div style={{ position:'absolute', bottom:4, right:14, fontSize:18, animation:'f3b 9s infinite', pointerEvents:'none' }}>👆</div>
-          {/* send bar */}
-          <div style={{ position:'absolute', bottom:0, left:0, right:0, background:'#1f2c34', padding:'8px 14px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-            <span style={{ fontSize:'0.65rem', color:'#9CA3AF' }}>3 selecionadas</span>
-            <div style={{ background:'#25D366', color:'#fff', fontSize:'0.65rem', fontWeight:700, borderRadius:20, padding:'5px 14px' }}>Enviar ▶</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Dots + caption */}
-      <div style={{ padding:'10px 14px', display:'flex', flexDirection:'column', alignItems:'center', gap:6, background:'#0b141a' }}>
-        <div style={{ display:'flex', gap:5 }}>
-          {[['dot1','s1'],['dot2','s2'],['dot3','s3']].map(([da])=>(
-            <div key={da} style={{ height:6, borderRadius:3, animation:`${da} 9s infinite` }} />
-          ))}
-        </div>
-        <div style={{ position:'relative', height:16, width:'100%', textAlign:'center' }}>
-          {[['cap1','Toque no + no canto esquerdo'],['cap2','Toque em "Contato"'],['cap3','Selecione as amigas e toque Enviar']].map(([ca,txt])=>(
-            <span key={ca} style={{ position:'absolute', left:0, right:0, fontSize:'0.68rem', color:'#6B7280', animation:`${ca} 9s infinite`, opacity:0 }}>{txt as string}</span>
-          ))}
-        </div>
-        <div style={{ display:'flex', alignItems:'center', gap:6, marginTop:2 }}>
-          <div style={{ width:6, height:6, borderRadius:'50%', background:'#25D366', animation:'pulse 2s infinite' }} />
-          <span style={{ fontSize:'0.68rem', color:'#25D366', fontWeight:600 }}>Aguardando seus contatos...</span>
-        </div>
-      </div>
-    </div>
-  )
-}
+const supportsContactsPicker = () =>
+  typeof window !== 'undefined' && 'contacts' in navigator && 'ContactsManager' in window
 
 export default function PaginaIndicacao() {
   const { token } = useParams<{ token: string }>()
@@ -147,6 +27,7 @@ export default function PaginaIndicacao() {
   const [msgEnviada, setMsgEnviada] = useState<Record<string, boolean>>({})
   const [enviandoTodas, setEnviandoTodas] = useState(false)
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
+  const [temContacts, setTemContacts] = useState(false)
   const [importandoWpp, setImportandoWpp] = useState(false)
   const [aguardandoContatos, setAguardandoContatos] = useState(false)
   const [timeoutContatos, setTimeoutContatos] = useState(false)
@@ -272,6 +153,7 @@ export default function PaginaIndicacao() {
     fetch(`${url}&_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
 
   useEffect(() => {
+    setTemContacts(supportsContactsPicker())
 
     // Carrega tudo em paralelo antes de mostrar a página
     Promise.all([
@@ -343,6 +225,38 @@ export default function PaginaIndicacao() {
       .finally(() => setLoading(false))
   }, [token])
 
+  const importarDoCelular = async (contatoId: number) => {
+    if (!supportsContactsPicker()) return
+    try {
+      // @ts-ignore
+      const results = await navigator.contacts.select(['name', 'tel'], { multiple: false })
+      if (!results?.length) return
+      const c = results[0]
+      setContatos(prev => prev.map(x =>
+        x.id === contatoId ? { ...x, nome: c.name?.[0] || '', telefone: c.tel?.[0] || '' } : x
+      ))
+    } catch {}
+  }
+
+  const importarMultiplos = async () => {
+    if (!supportsContactsPicker()) return
+    try {
+      // @ts-ignore
+      const results = await navigator.contacts.select(['name', 'tel'], { multiple: true })
+      if (!results?.length) return
+      const novos: Contato[] = results.map((c: any) => ({
+        id: Date.now() + Math.random(),
+        nome: c.name?.[0] || '',
+        telefone: c.tel?.[0] || '',
+        profissao: '',
+        hobby: '',
+      }))
+      setContatos(prev => {
+        const temVazio = prev.length === 1 && !prev[0].nome && !prev[0].telefone
+        return temVazio ? novos : [...prev, ...novos]
+      })
+    } catch {}
+  }
 
   const adicionarContato = () => {
     setContatos(prev => [...prev, { id: Date.now(), nome: '', telefone: '', profissao: '', hobby: '' }])
@@ -792,79 +706,164 @@ export default function PaginaIndicacao() {
           </div>
         )}
 
+        {/* Botão principal — importar via WhatsApp (funciona em qualquer browser) */}
         <button
           onClick={abrirWhatsAppImport}
-          className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold text-white transition-all active:scale-[0.98]"
-          style={{ background: importandoWpp ? 'linear-gradient(135deg,#1a3d2b,#1d4228)' : 'linear-gradient(135deg, #25D366, #1DA851)', boxShadow: '0 4px 20px rgba(37,211,102,0.35)' }}
+          className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold transition-all active:scale-[0.98]"
+          style={{ background: 'linear-gradient(135deg, #25D366, #1DA851)', boxShadow: '0 4px 20px rgba(37,211,102,0.35)' }}
         >
           <MessageCircle className="w-4 h-4" />
           {importandoWpp ? 'Aguardando contatos...' : 'Importar amigas pelo WhatsApp'}
         </button>
 
-        {importandoWpp && <WppTutorial />}
-
-        {/* Cards de profissão/hobby — só aparecem quando chegam contatos do WhatsApp */}
-        {contatos.some(c => c.telefone) && (
-          <>
-            {contatos.filter(c => c.telefone).map((contato, idx) => {
-              const precisaCompletar = !contato.profissao || !contato.hobby
-              return (
-                <div key={contato.id}
-                  className={`rounded-2xl border overflow-hidden transition-all ${precisaCompletar ? 'border-[#F59E0B]/40' : 'border-[#1F1935]'}`}
-                  style={{ background: 'linear-gradient(160deg, #131020 0%, #0F0D1A 100%)' }}>
-                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1F1935]">
-                    <div className="flex items-center gap-2">
-                      <div className="w-5 h-5 rounded-full bg-[#7C3AED]/20 border border-[#7C3AED]/30 flex items-center justify-center">
-                        <span className="text-[10px] text-[#A78BFA] font-bold">{idx + 1}</span>
-                      </div>
-                      <span className="text-[#9CA3AF] text-xs font-medium">{contato.nome || `Amiga ${idx + 1}`}</span>
-                      {precisaCompletar && <span className="text-[#F59E0B] text-[10px] font-medium">completar dados</span>}
-                    </div>
-                  </div>
-                  <div className="p-4 space-y-2.5">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="relative">
-                        <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
-                        <input
-                          type="text"
-                          placeholder="Profissão"
-                          value={contato.profissao}
-                          onChange={e => atualizarContato(contato.id, 'profissao', e.target.value)}
-                          ref={precisaCompletar && idx === contatos.filter(c => c.telefone).findIndex(c => !c.profissao || !c.hobby) ? primeiroVazioRef : undefined}
-                          className={`w-full bg-[#0D0B14] border rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors ${precisaCompletar ? 'border-[#F59E0B]/50' : 'border-[#1F1935]'}`}
-                        />
-                      </div>
-                      <div className="relative">
-                        <Heart className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
-                        <input
-                          type="text"
-                          placeholder="Hobby"
-                          value={contato.hobby}
-                          onChange={e => atualizarContato(contato.id, 'hobby', e.target.value)}
-                          className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-
-            <button
-              onClick={enviar}
-              disabled={enviando}
-              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold text-white transition-all active:scale-[0.98] disabled:opacity-40"
-              style={{ background: 'linear-gradient(135deg, #7C3AED, #6D28D9)', boxShadow: '0 4px 24px rgba(124,58,237,0.4)' }}
-            >
-              <Send className="w-4 h-4" />
-              {enviando ? 'Enviando...' : 'Confirmar indicações'}
-            </button>
-
-            <p className="text-center text-[#374151] text-xs pb-6">
-              Profissão e hobby ajudam Ana a personalizar o contato
+        {importandoWpp && (
+          <div className="bg-[#1A1528] border border-[#25D366]/20 rounded-2xl px-4 py-3 text-center">
+            <div className="flex items-center justify-center gap-2 mb-1">
+              <div className="w-2 h-2 rounded-full bg-[#25D366] animate-pulse" />
+              <p className="text-white text-sm font-medium">Aguardando seus contatos...</p>
+            </div>
+            <p className="text-[#6B7280] text-xs">
+              No WhatsApp: toque em <strong className="text-white">Anexar → Contato</strong>, selecione suas amigas e envie
             </p>
-          </>
+          </div>
         )}
+
+        {/* Botão agenda nativa — só no Safari/Chrome */}
+        {temContacts && (
+          <button
+            onClick={importarMultiplos}
+            className="w-full flex items-center justify-center gap-2.5 py-3 rounded-2xl text-sm font-medium transition-all active:scale-[0.98] border border-[#2D2040] text-[#A78BFA]"
+            style={{ background: 'rgba(124,58,237,0.1)' }}
+          >
+            <BookUser className="w-4 h-4" />
+            Importar da agenda do celular
+          </button>
+        )}
+
+        <p className="text-[#4B5563] text-xs text-center py-1">
+          — ou preencha manualmente abaixo —
+        </p>
+
+        {/* Cards de contato */}
+        {contatos.map((contato, idx) => {
+          const precisaCompletar = !!contato.telefone && (!contato.profissao || !contato.hobby)
+          return (
+          <div key={contato.id}
+            className={`rounded-2xl border overflow-hidden transition-all ${precisaCompletar ? 'border-[#F59E0B]/40' : 'border-[#1F1935]'}`}
+            style={{ background: 'linear-gradient(160deg, #131020 0%, #0F0D1A 100%)' }}>
+            {/* Card header */}
+            <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1F1935]">
+              <div className="flex items-center gap-2">
+                <div className="w-5 h-5 rounded-full bg-[#7C3AED]/20 border border-[#7C3AED]/30 flex items-center justify-center">
+                  <span className="text-[10px] text-[#A78BFA] font-bold">{idx + 1}</span>
+                </div>
+                <span className="text-[#9CA3AF] text-xs font-medium">
+                  {contato.nome || `Amiga ${idx + 1}`}
+                </span>
+                {precisaCompletar && (
+                  <span className="text-[#F59E0B] text-[10px] font-medium">completar dados</span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {temContacts && (
+                  <button
+                    onClick={() => importarDoCelular(contato.id)}
+                    className="flex items-center gap-1 text-[#7C3AED] hover:text-[#A78BFA] transition-colors text-xs"
+                  >
+                    <BookUser className="w-3.5 h-3.5" />
+                    <span>Agenda</span>
+                  </button>
+                )}
+                {contatos.length > 1 && (
+                  <button onClick={() => removerContato(contato.id)}
+                    className="text-[#374151] hover:text-red-400 transition-colors ml-1">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Campos */}
+            <div className="p-4 space-y-2.5">
+              <div className="relative">
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
+                <input
+                  type="text"
+                  placeholder="Nome completo"
+                  autoComplete="name"
+                  value={contato.nome}
+                  onChange={e => atualizarContato(contato.id, 'nome', e.target.value)}
+                  className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
+                />
+              </div>
+
+              <div className="relative">
+                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
+                <input
+                  type="tel"
+                  placeholder="WhatsApp *"
+                  autoComplete="tel"
+                  value={contato.telefone}
+                  onChange={e => atualizarContato(contato.id, 'telefone', e.target.value)}
+                  className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="relative">
+                  <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
+                  <input
+                    type="text"
+                    placeholder="Profissão"
+                    value={contato.profissao}
+                    onChange={e => atualizarContato(contato.id, 'profissao', e.target.value)}
+                    ref={precisaCompletar && idx === contatos.findIndex(c => !!c.telefone && (!c.profissao || !c.hobby)) ? primeiroVazioRef : undefined}
+                    className={`w-full bg-[#0D0B14] border rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors ${precisaCompletar ? 'border-[#F59E0B]/50' : 'border-[#1F1935]'}`}
+                  />
+                </div>
+                <div className="relative">
+                  <Heart className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
+                  <input
+                    type="text"
+                    placeholder="Hobby"
+                    value={contato.hobby}
+                    onChange={e => atualizarContato(contato.id, 'hobby', e.target.value)}
+                    className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          )
+        })}
+
+        {/* Adicionar mais */}
+        <button
+          onClick={adicionarContato}
+          className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-[#1F1935] rounded-2xl text-sm text-[#4B5563] hover:text-[#9CA3AF] hover:border-[#3D2D6B] transition-colors"
+        >
+          <Plus className="w-4 h-4" />
+          Adicionar mais uma amiga
+        </button>
+
+        {/* Botão enviar */}
+        <button
+          onClick={enviar}
+          disabled={enviando || totalValidos === 0}
+          className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold text-white transition-all active:scale-[0.98] disabled:opacity-40"
+          style={{ background: 'linear-gradient(135deg, #7C3AED, #6D28D9)', boxShadow: '0 4px 24px rgba(124,58,237,0.4)' }}
+        >
+          <Send className="w-4 h-4" />
+          {enviando
+            ? 'Enviando...'
+            : totalValidos > 0
+              ? `Enviar ${totalConhecidos} indicaç${totalConhecidos !== 1 ? 'ões' : 'ão'}`
+              : 'Preencha ao menos um telefone'}
+        </button>
+
+        <p className="text-center text-[#374151] text-xs pb-6">
+          WhatsApp é obrigatório · Profissão e hobby ajudam Ana a personalizar
+        </p>
       </div>
     </div>
   )
