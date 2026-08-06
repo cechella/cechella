@@ -58,9 +58,28 @@ export async function POST(req: NextRequest) {
     // Passo 1: paciente enviou "REF-TOKEN" → salva mapeamento phone→token
     if (body.phone && body.token) {
       const phone = String(body.phone).replace(/\D/g, '')
+      const { data: existente } = await supabase
+        .from('sessao_wpp')
+        .select('phone')
+        .eq('phone', phone)
+        .maybeSingle()
+
       await supabase
         .from('sessao_wpp')
         .upsert({ phone, token: body.token }, { onConflict: 'phone' })
+
+      // Envia instruções apenas na primeira vez que esta paciente registra
+      if (!existente) {
+        try {
+          const instrucoes = `✅ Código recebido!\n\nAgora siga os passos para compartilhar suas amigas:\n\n1️⃣ Toque no *+* à esquerda\n2️⃣ Escolha *Contato*\n3️⃣ Busque e selecione suas amigas\n4️⃣ Toque em *Enviar*\n\nVocê pode selecionar várias de uma vez! 💜\n\nDepois volte para o link e seus contatos aparecerão automaticamente.`
+          await fetch(ZAPI_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+            body: JSON.stringify({ phone, message: instrucoes }),
+          })
+        } catch {}
+      }
+
       return NextResponse.json({ ok: true, step: 'registered' })
     }
 

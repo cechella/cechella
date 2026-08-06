@@ -215,6 +215,7 @@ export default function PaginaIndicacao() {
   const [tutorialStep, setTutorialStep] = useState(1)
   const [aguardandoContatos, setAguardandoContatos] = useState(false)
   const [timeoutContatos, setTimeoutContatos] = useState(false)
+  const hiddenAtRef = useRef<number | null>(null)
   const [contatos, setContatos] = useState<Contato[]>(
     Array.from({ length: 20 }, (_, i) => ({ id: i + 1, nome: '', telefone: '', profissao: '', hobby: '' }))
   )
@@ -334,12 +335,19 @@ export default function PaginaIndicacao() {
     mergeSessaoContatos(contatos, jaEnviados)
   }
 
-  // Sempre que voltar à aba (independente do estado), verifica sessao_wpp
+  // Sempre que voltar à aba, verifica sessao_wpp e ativa polling se ficou >3s fora
   useEffect(() => {
-    const onVisible = async () => {
-      if (document.visibilityState !== 'visible') return
-      // Se tinha flag de importação no sessionStorage, ativa polling
-      if (sessionStorage.getItem('wpp_importing') === token) {
+    const onVisChange = async () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAtRef.current = Date.now()
+        return
+      }
+      // Voltou à aba
+      const wasHiddenMs = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0
+      hiddenAtRef.current = null
+
+      // Ativa polling se veio do sessionStorage OU ficou >3s fora (provavelmente foi ao WhatsApp)
+      if (sessionStorage.getItem('wpp_importing') === token || wasHiddenMs > 3000) {
         setImportandoWpp(true)
       }
       try {
@@ -348,8 +356,8 @@ export default function PaginaIndicacao() {
         if (data.contatos?.length) finalizarImportacao(data.contatos)
       } catch {}
     }
-    document.addEventListener('visibilitychange', onVisible)
-    return () => document.removeEventListener('visibilitychange', onVisible)
+    document.addEventListener('visibilitychange', onVisChange)
+    return () => document.removeEventListener('visibilitychange', onVisChange)
   }, [token, jaEnviados])
 
   const fetchFresh = (url: string) =>
@@ -918,6 +926,17 @@ export default function PaginaIndicacao() {
           <MessageCircle className="w-4 h-4" />
           {importandoWpp ? 'Aguardando contatos...' : 'Importar amigas pelo WhatsApp'}
         </button>
+
+        {/* Botão secundário — verificar se chegaram contatos */}
+        {!importandoWpp && jaEnviados.length < 20 && (
+          <button
+            onClick={() => setImportandoWpp(true)}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl text-xs font-medium transition-all active:scale-[0.98]"
+            style={{ background: 'rgba(124,58,237,0.12)', border: '1px solid rgba(124,58,237,0.25)', color: '#a78bfa' }}
+          >
+            🔄 Já compartilhei os contatos — verificar agora
+          </button>
+        )}
 
         {/* Popup — 2 opções ao clicar no botão */}
         {showPopup && !showTutorial && (
