@@ -417,12 +417,7 @@ export default function PaginaIndicacao() {
           jaEnviadosMap[String(c.telefone).replace(/\D/g, '')] = true
         }
       })
-      if (Object.keys(jaEnviadosMap).length > 0) setMsgEnviada(jaEnviadosMap)
-
-      // Se todos já foram enviados, marca missão completa
-      if (mappedEnviados.length >= 20 && mappedEnviados.length === Object.keys(jaEnviadosMap).length) {
-        // não seta sucesso aqui pois sucesso é sobre indicações, não mensagens
-      }
+      setMsgEnviada(jaEnviadosMap)
 
       if (mappedEnviados.length >= 20) {
         setSucesso(true)
