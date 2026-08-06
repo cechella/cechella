@@ -76,16 +76,20 @@ export async function POST(req: NextRequest) {
       if (tokenMudou) {
         const link = `https://www.hormoneecosystem.com/indicar/${body.token}`
         try {
-          await fetch(ZAPI_VIDEO_URL, {
+          const videoRes = await fetch(ZAPI_VIDEO_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
             body: JSON.stringify({
               phone,
               video: TUTORIAL_VIDEO_URL,
-              caption: `✅ Código recebido! Assista ao tutorial acima e siga os passos.\n\n Depois volte para o link e seus contatos aparecerão automaticamente:\n👉 ${link}`,
+              caption: `✅ Código recebido! Assista ao tutorial acima e siga os passos.\n\nDepois volte para o link e seus contatos aparecerão automaticamente:\n👉 ${link}`,
             }),
           })
-        } catch {}
+          const videoBody = await videoRes.text()
+          console.log('[Z-API video]', videoRes.status, videoBody)
+        } catch (e) {
+          console.error('[Z-API video error]', e)
+        }
       }
 
       return NextResponse.json({ ok: true, step: 'registered' })
