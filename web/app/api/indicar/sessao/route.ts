@@ -9,8 +9,11 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text'
+const ZAPI_BASE = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5'
+const ZAPI_URL = `${ZAPI_BASE}/send-text`
+const ZAPI_VIDEO_BTN_URL = `${ZAPI_BASE}/send-button-video`
 const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
+const TUTORIAL_VIDEO_URL = 'https://pub-7091151189544b0980e12e81533a5213.r2.dev/tutorialwpp.mp4'
 
 async function enviarMensagemFollowUp(phone: string, token: string, totalAtual: number) {
   const faltam = Math.max(0, 20 - totalAtual)
@@ -68,15 +71,20 @@ export async function POST(req: NextRequest) {
         .from('sessao_wpp')
         .upsert({ phone, token: body.token }, { onConflict: 'phone' })
 
-      // Envia instruções se for a primeira vez OU se o token mudou (novo link)
+      // Envia tutorial em vídeo se for a primeira vez OU se o token mudou (novo link)
       const tokenMudou = !existente || existente.token !== body.token
       if (tokenMudou) {
+        const link = `https://www.hormoneecosystem.com/indicar/${body.token}`
         try {
-          const instrucoes = `✅ Código recebido!\n\nAgora siga os passos para compartilhar suas amigas:\n\n1️⃣ Toque no *+* à esquerda\n2️⃣ Escolha *Contato*\n3️⃣ Busque e selecione suas amigas\n4️⃣ Toque em *Enviar*\n\nVocê pode selecionar várias de uma vez! 💜\n\nDepois volte para o link e seus contatos aparecerão automaticamente.`
-          await fetch(ZAPI_URL, {
+          await fetch(ZAPI_VIDEO_BTN_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-            body: JSON.stringify({ phone, message: instrucoes }),
+            body: JSON.stringify({
+              phone,
+              caption: '✅ Código recebido! Assista ao tutorial e siga os passos para compartilhar suas amigas 💜',
+              video: TUTORIAL_VIDEO_URL,
+              buttons: [{ label: '📲 Abrir meu link de indicação', id: link }],
+            }),
           })
         } catch {}
       }
