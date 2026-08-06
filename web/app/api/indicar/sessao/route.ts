@@ -9,6 +9,29 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
+const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text'
+const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
+
+async function enviarMensagemFollowUp(phone: string, token: string, totalAtual: number) {
+  const faltam = Math.max(0, 20 - totalAtual)
+  if (faltam === 0) return // já completou, não precisa
+
+  const link = `https://www.hormoneecosystem.com/indicar/${token}`
+  const mensagem = faltam === 1
+    ? `💜 Quase lá! Você enviou ${totalAtual} contatos — falta só *1* para completar!\n\nAcesse seu link e envie mais uma amiga:\n👉 ${link}`
+    : `💜 Ótimo progresso! Você enviou *${totalAtual} contatos* — faltam *${faltam}* para completar as 20.\n\nAcesse seu link e envie mais:\n👉 ${link}`
+
+  try {
+    await fetch(ZAPI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+      body: JSON.stringify({ phone, message: mensagem }),
+    })
+  } catch {
+    // Não bloqueia o fluxo se falhar
+  }
+}
+
 // GET — página faz polling para ver se chegaram contatos
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token')
@@ -86,7 +109,10 @@ export async function POST(req: NextRequest) {
         .update({ contatos: merged })
         .eq('phone', phone)
 
-      return NextResponse.json({ ok: true, step: 'contacts_saved', token: sessao.token })
+      // Envia follow-up automático se ainda faltam contatos
+      await enviarMensagemFollowUp(phone, sessao.token, merged.length)
+
+      return NextResponse.json({ ok: true, step: 'contacts_saved', token: sessao.token, total: merged.length })
     }
 
     return NextResponse.json({ error: 'Payload inválido' }, { status: 400 })
