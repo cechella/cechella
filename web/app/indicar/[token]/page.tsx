@@ -803,121 +803,68 @@ export default function PaginaIndicacao() {
 
         {importandoWpp && <WppTutorial />}
 
-        <p className="text-[#4B5563] text-xs text-center py-1">
-          — ou preencha manualmente abaixo —
-        </p>
-
-        {/* Cards de contato */}
-        {contatos.map((contato, idx) => {
-          const precisaCompletar = !!contato.telefone && (!contato.profissao || !contato.hobby)
-          return (
-          <div key={contato.id}
-            className={`rounded-2xl border overflow-hidden transition-all ${precisaCompletar ? 'border-[#F59E0B]/40' : 'border-[#1F1935]'}`}
-            style={{ background: 'linear-gradient(160deg, #131020 0%, #0F0D1A 100%)' }}>
-            {/* Card header */}
-            <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1F1935]">
-              <div className="flex items-center gap-2">
-                <div className="w-5 h-5 rounded-full bg-[#7C3AED]/20 border border-[#7C3AED]/30 flex items-center justify-center">
-                  <span className="text-[10px] text-[#A78BFA] font-bold">{idx + 1}</span>
+        {/* Cards de profissão/hobby — só aparecem quando chegam contatos do WhatsApp */}
+        {contatos.some(c => c.telefone) && (
+          <>
+            {contatos.filter(c => c.telefone).map((contato, idx) => {
+              const precisaCompletar = !contato.profissao || !contato.hobby
+              return (
+                <div key={contato.id}
+                  className={`rounded-2xl border overflow-hidden transition-all ${precisaCompletar ? 'border-[#F59E0B]/40' : 'border-[#1F1935]'}`}
+                  style={{ background: 'linear-gradient(160deg, #131020 0%, #0F0D1A 100%)' }}>
+                  <div className="flex items-center justify-between px-4 py-2.5 border-b border-[#1F1935]">
+                    <div className="flex items-center gap-2">
+                      <div className="w-5 h-5 rounded-full bg-[#7C3AED]/20 border border-[#7C3AED]/30 flex items-center justify-center">
+                        <span className="text-[10px] text-[#A78BFA] font-bold">{idx + 1}</span>
+                      </div>
+                      <span className="text-[#9CA3AF] text-xs font-medium">{contato.nome || `Amiga ${idx + 1}`}</span>
+                      {precisaCompletar && <span className="text-[#F59E0B] text-[10px] font-medium">completar dados</span>}
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-2.5">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="relative">
+                        <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
+                        <input
+                          type="text"
+                          placeholder="Profissão"
+                          value={contato.profissao}
+                          onChange={e => atualizarContato(contato.id, 'profissao', e.target.value)}
+                          ref={precisaCompletar && idx === contatos.filter(c => c.telefone).findIndex(c => !c.profissao || !c.hobby) ? primeiroVazioRef : undefined}
+                          className={`w-full bg-[#0D0B14] border rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors ${precisaCompletar ? 'border-[#F59E0B]/50' : 'border-[#1F1935]'}`}
+                        />
+                      </div>
+                      <div className="relative">
+                        <Heart className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
+                        <input
+                          type="text"
+                          placeholder="Hobby"
+                          value={contato.hobby}
+                          onChange={e => atualizarContato(contato.id, 'hobby', e.target.value)}
+                          className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <span className="text-[#9CA3AF] text-xs font-medium">
-                  {contato.nome || `Amiga ${idx + 1}`}
-                </span>
-                {precisaCompletar && (
-                  <span className="text-[#F59E0B] text-[10px] font-medium">completar dados</span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {contatos.length > 1 && (
-                  <button onClick={() => removerContato(contato.id)}
-                    className="text-[#374151] hover:text-red-400 transition-colors ml-1">
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-            </div>
+              )
+            })}
 
-            {/* Campos */}
-            <div className="p-4 space-y-2.5">
-              <div className="relative">
-                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
-                <input
-                  type="text"
-                  placeholder="Nome completo"
-                  autoComplete="name"
-                  value={contato.nome}
-                  onChange={e => atualizarContato(contato.id, 'nome', e.target.value)}
-                  className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
-                />
-              </div>
+            <button
+              onClick={enviar}
+              disabled={enviando}
+              className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold text-white transition-all active:scale-[0.98] disabled:opacity-40"
+              style={{ background: 'linear-gradient(135deg, #7C3AED, #6D28D9)', boxShadow: '0 4px 24px rgba(124,58,237,0.4)' }}
+            >
+              <Send className="w-4 h-4" />
+              {enviando ? 'Enviando...' : 'Confirmar indicações'}
+            </button>
 
-              <div className="relative">
-                <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
-                <input
-                  type="tel"
-                  placeholder="WhatsApp *"
-                  autoComplete="tel"
-                  value={contato.telefone}
-                  onChange={e => atualizarContato(contato.id, 'telefone', e.target.value)}
-                  className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className="relative">
-                  <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
-                  <input
-                    type="text"
-                    placeholder="Profissão"
-                    value={contato.profissao}
-                    onChange={e => atualizarContato(contato.id, 'profissao', e.target.value)}
-                    ref={precisaCompletar && idx === contatos.findIndex(c => !!c.telefone && (!c.profissao || !c.hobby)) ? primeiroVazioRef : undefined}
-                    className={`w-full bg-[#0D0B14] border rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors ${precisaCompletar ? 'border-[#F59E0B]/50' : 'border-[#1F1935]'}`}
-                  />
-                </div>
-                <div className="relative">
-                  <Heart className="absolute left-3.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#374151]" />
-                  <input
-                    type="text"
-                    placeholder="Hobby"
-                    value={contato.hobby}
-                    onChange={e => atualizarContato(contato.id, 'hobby', e.target.value)}
-                    className="w-full bg-[#0D0B14] border border-[#1F1935] rounded-xl pl-10 pr-3 py-2.5 text-sm text-white placeholder-[#374151] focus:outline-none focus:border-[#7C3AED] transition-colors"
-                  />
-                </div>
-              </div>
-            </div>
-          </div>
-          )
-        })}
-
-        {/* Adicionar mais */}
-        <button
-          onClick={adicionarContato}
-          className="w-full flex items-center justify-center gap-2 py-3 border border-dashed border-[#1F1935] rounded-2xl text-sm text-[#4B5563] hover:text-[#9CA3AF] hover:border-[#3D2D6B] transition-colors"
-        >
-          <Plus className="w-4 h-4" />
-          Adicionar mais uma amiga
-        </button>
-
-        {/* Botão enviar */}
-        <button
-          onClick={enviar}
-          disabled={enviando || totalValidos === 0}
-          className="w-full flex items-center justify-center gap-2.5 py-4 rounded-2xl text-sm font-semibold text-white transition-all active:scale-[0.98] disabled:opacity-40"
-          style={{ background: 'linear-gradient(135deg, #7C3AED, #6D28D9)', boxShadow: '0 4px 24px rgba(124,58,237,0.4)' }}
-        >
-          <Send className="w-4 h-4" />
-          {enviando
-            ? 'Enviando...'
-            : totalValidos > 0
-              ? `Enviar ${totalConhecidos} indicaç${totalConhecidos !== 1 ? 'ões' : 'ão'}`
-              : 'Preencha ao menos um telefone'}
-        </button>
-
-        <p className="text-center text-[#374151] text-xs pb-6">
-          WhatsApp é obrigatório · Profissão e hobby ajudam Ana a personalizar
-        </p>
+            <p className="text-center text-[#374151] text-xs pb-6">
+              Profissão e hobby ajudam Ana a personalizar o contato
+            </p>
+          </>
+        )}
       </div>
     </div>
   )
