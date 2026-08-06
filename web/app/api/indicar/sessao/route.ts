@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       const phone = String(body.phone).replace(/\D/g, '')
       const { data: existente } = await supabase
         .from('sessao_wpp')
-        .select('phone')
+        .select('token')
         .eq('phone', phone)
         .maybeSingle()
 
@@ -68,8 +68,9 @@ export async function POST(req: NextRequest) {
         .from('sessao_wpp')
         .upsert({ phone, token: body.token }, { onConflict: 'phone' })
 
-      // Envia instruções apenas na primeira vez que esta paciente registra
-      if (!existente) {
+      // Envia instruções se for a primeira vez OU se o token mudou (novo link)
+      const tokenMudou = !existente || existente.token !== body.token
+      if (tokenMudou) {
         try {
           const instrucoes = `✅ Código recebido!\n\nAgora siga os passos para compartilhar suas amigas:\n\n1️⃣ Toque no *+* à esquerda\n2️⃣ Escolha *Contato*\n3️⃣ Busque e selecione suas amigas\n4️⃣ Toque em *Enviar*\n\nVocê pode selecionar várias de uma vez! 💜\n\nDepois volte para o link e seus contatos aparecerão automaticamente.`
           await fetch(ZAPI_URL, {
