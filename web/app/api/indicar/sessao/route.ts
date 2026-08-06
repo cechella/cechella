@@ -110,10 +110,10 @@ export async function POST(req: NextRequest) {
               ? `💜 Quase lá! Você já enviou *${total} contatos* — falta só *1* para completar!\n\nToque no *+*, escolha *Contato* e envie mais uma amiga:\n👉 ${link}`
               : `💜 Bom progresso! Você já enviou *${total} contatos* — faltam *${faltam}* para completar as 20.\n\nToque no *+*, escolha *Contato* e envie mais:\n👉 ${link}`
           }
-          await fetch(ZAPI_URL, {
+          await fetch(ZAPI_VIDEO_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-            body: JSON.stringify({ phone, message: mensagem }),
+            body: JSON.stringify({ phone, video: TUTORIAL_VIDEO_URL, caption: mensagem }),
           })
         } catch (e) {
           console.error('[Z-API progress error]', e)
