@@ -29,6 +29,8 @@ export default function PaginaIndicacao() {
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [temContacts, setTemContacts] = useState(false)
   const [importandoWpp, setImportandoWpp] = useState(false)
+  const [aguardandoContatos, setAguardandoContatos] = useState(false)
+  const [timeoutContatos, setTimeoutContatos] = useState(false)
   const [contatos, setContatos] = useState<Contato[]>(
     Array.from({ length: 20 }, (_, i) => ({ id: i + 1, nome: '', telefone: '', profissao: '', hobby: '' }))
   )
@@ -107,6 +109,44 @@ export default function PaginaIndicacao() {
     } catch {}
     finally { setEnviando(false) }
   }
+
+  // Polling quando página abre sem contatos (aguarda Z-API processar)
+  useEffect(() => {
+    if (loading) return
+    const temDados = jaEnviados.length > 0 || contatos.some(c => c.telefone)
+    if (temDados || timeoutContatos || importandoWpp) return
+
+    setAguardandoContatos(true)
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/indicar?token=${token}&_t=${Date.now()}`, { cache: 'no-store', headers: { 'Cache-Control': 'no-cache' } })
+        const data = await res.json()
+        if (data.jaEnviados?.length > 0) {
+          clearInterval(interval)
+          clearTimeout(timer)
+          const mapped: Contato[] = data.jaEnviados.map((c: any, i: number) => ({
+            id: Date.now() + i,
+            nome: c.nome || '',
+            telefone: String(c.telefone || '').replace(/\D/g, ''),
+            profissao: c.profissao || '',
+            hobby: c.hobby || '',
+          }))
+          setJaEnviados(mapped)
+          setContatos(mapped)
+          setAguardandoContatos(false)
+        }
+      } catch {}
+    }, 3000)
+
+    const timer = setTimeout(() => {
+      clearInterval(interval)
+      setAguardandoContatos(false)
+      setTimeoutContatos(true)
+    }, 30000)
+
+    return () => { clearInterval(interval); clearTimeout(timer) }
+  }, [loading])
 
   // Polling ativo quando importandoWpp=true (clicou botão verde)
   useEffect(() => {
@@ -354,6 +394,40 @@ export default function PaginaIndicacao() {
         </div>
         <h2 className="text-white font-semibold text-lg mb-1">Link inválido</h2>
         <p className="text-[#6B7280] text-sm">Este link expirou ou não existe. Peça um novo para quem te enviou.</p>
+      </div>
+    </div>
+  )
+
+  if (aguardandoContatos) return (
+    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'linear-gradient(135deg, #0D0B14 0%, #120D1F 100%)' }}>
+      <div className="text-center max-w-xs w-full">
+        <div className="w-16 h-16 rounded-full bg-[#1C1528] border border-[#2D2040] flex items-center justify-center mx-auto mb-5">
+          <span className="text-2xl">🌿</span>
+        </div>
+        <h2 className="text-white font-semibold text-lg mb-2">Aguarde, seus contatos estão sendo carregados...</h2>
+        <p className="text-[#6B7280] text-sm mb-6">Isso leva alguns segundos.</p>
+        <div className="w-full bg-[#1C1528] rounded-full h-2 overflow-hidden">
+          <div className="h-full rounded-full bg-[#7C3AED] animate-pulse" style={{ width: '60%' }} />
+        </div>
+      </div>
+    </div>
+  )
+
+  if (timeoutContatos) return (
+    <div className="min-h-screen flex items-center justify-center p-6" style={{ background: 'linear-gradient(135deg, #0D0B14 0%, #120D1F 100%)' }}>
+      <div className="text-center max-w-xs">
+        <div className="w-16 h-16 rounded-full bg-[#1C1528] border border-[#2D2040] flex items-center justify-center mx-auto mb-4">
+          <span className="text-2xl">🔍</span>
+        </div>
+        <h2 className="text-white font-semibold text-lg mb-2">Não encontramos seus contatos ainda.</h2>
+        <p className="text-[#6B7280] text-sm mb-6">Se você já enviou seus contatos pelo WhatsApp, tente atualizar a página.</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="w-full py-3.5 rounded-2xl text-white font-semibold text-sm transition-all active:scale-95"
+          style={{ background: 'linear-gradient(135deg, #7C3AED, #6D28D9)' }}
+        >
+          Atualizar página
+        </button>
       </div>
     </div>
   )
