@@ -146,6 +146,7 @@ export default function PaginaIndicacao() {
   const [selecionadas, setSelecionadas] = useState<Set<string>>(new Set())
   const [temContacts, setTemContacts] = useState(false)
   const [importandoWpp, setImportandoWpp] = useState(false)
+  const [showPopup, setShowPopup] = useState(false)
   const [showTutorial, setShowTutorial] = useState(false)
   const [aguardandoContatos, setAguardandoContatos] = useState(false)
   const [timeoutContatos, setTimeoutContatos] = useState(false)
@@ -156,12 +157,13 @@ export default function PaginaIndicacao() {
   const [toast, setToast] = useState<string | null>(null)
 
   const abrirWhatsAppImport = () => {
-    setShowTutorial(true)
+    setShowPopup(true)
   }
 
   const confirmarAbrirWhatsApp = () => {
     const msg = encodeURIComponent(`REF-${token}`)
     window.open(`https://wa.me/5547988507977?text=${msg}`, '_blank')
+    setShowPopup(false)
     setShowTutorial(false)
     setImportandoWpp(true)
   }
@@ -839,10 +841,40 @@ export default function PaginaIndicacao() {
           {importandoWpp ? 'Aguardando contatos...' : 'Importar amigas pelo WhatsApp'}
         </button>
 
-        {/* Tutorial modal — shown before opening WhatsApp */}
-        {showTutorial && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: '0 0 24px' }}>
-            <div style={{ width: '100%', maxWidth: 420, padding: '0 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {/* Popup — 2 opções ao clicar no botão */}
+        {showPopup && !showTutorial && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 9999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+            <div style={{ width: '100%', maxWidth: 420, background: '#1a1a2e', borderRadius: '20px 20px 0 0', padding: '24px 20px 36px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ textAlign: 'center', marginBottom: 4 }}>
+                <div style={{ width: 36, height: 4, borderRadius: 2, background: '#3a3a5c', margin: '0 auto 16px' }} />
+                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>Como você quer começar?</div>
+              </div>
+              <button
+                onClick={() => setShowTutorial(true)}
+                style={{ width: '100%', background: '#1f2c34', color: '#fff', fontWeight: 600, fontSize: '0.95rem', borderRadius: 14, padding: '14px 0', border: '1px solid #2a3942', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+              >
+                <span style={{ fontSize: '1.2rem' }}>📖</span> Ver tutorial (como importar)
+              </button>
+              <button
+                onClick={confirmarAbrirWhatsApp}
+                style={{ width: '100%', background: '#25D366', color: '#000', fontWeight: 700, fontSize: '0.95rem', borderRadius: 14, padding: '14px 0', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}
+              >
+                <span style={{ fontSize: '1.2rem' }}>💬</span> Abrir WhatsApp agora
+              </button>
+              <button
+                onClick={() => setShowPopup(false)}
+                style={{ background: 'transparent', color: '#6B7280', fontSize: '0.8rem', border: 'none', cursor: 'pointer', padding: '4px 0', textAlign: 'center' }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tutorial completo — abre ao clicar "Ver tutorial" */}
+        {showPopup && showTutorial && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+            <div style={{ width: '100%', maxWidth: 420, padding: '0 16px 32px', display: 'flex', flexDirection: 'column', gap: 12 }}>
               <WppTutorial />
               <button
                 onClick={confirmarAbrirWhatsApp}
@@ -852,9 +884,9 @@ export default function PaginaIndicacao() {
               </button>
               <button
                 onClick={() => setShowTutorial(false)}
-                style={{ background: 'transparent', color: '#9CA3AF', fontSize: '0.8rem', border: 'none', cursor: 'pointer', padding: '4px 0' }}
+                style={{ background: 'transparent', color: '#9CA3AF', fontSize: '0.8rem', border: 'none', cursor: 'pointer', padding: '4px 0', textAlign: 'center' }}
               >
-                Cancelar
+                ← Voltar
               </button>
             </div>
           </div>
