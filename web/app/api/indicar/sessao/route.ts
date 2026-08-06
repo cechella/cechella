@@ -73,8 +73,8 @@ export async function POST(req: NextRequest) {
 
       // Envia tutorial em vídeo se for a primeira vez OU se o token mudou (novo link)
       const tokenMudou = !existente || existente.token !== body.token
+      const link = `https://www.hormoneecosystem.com/indicar/${body.token}`
       if (tokenMudou) {
-        const link = `https://www.hormoneecosystem.com/indicar/${body.token}`
         try {
           const videoRes = await fetch(ZAPI_VIDEO_URL, {
             method: 'POST',
@@ -89,6 +89,34 @@ export async function POST(req: NextRequest) {
           console.log('[Z-API video]', videoRes.status, videoBody)
         } catch (e) {
           console.error('[Z-API video error]', e)
+        }
+      } else {
+        // Mesmo token — manda mensagem de progresso
+        const { data: sessaoAtual } = await supabase
+          .from('sessao_wpp')
+          .select('contatos')
+          .eq('phone', phone)
+          .maybeSingle()
+        const total = sessaoAtual?.contatos?.length || 0
+        const faltam = Math.max(0, 20 - total)
+        try {
+          let mensagem = ''
+          if (faltam === 0) {
+            mensagem = `🎉 Você já completou as 20 indicações! Obrigada pela participação! 💜\n\n👉 ${link}`
+          } else if (total === 0) {
+            mensagem = `📋 Código já registrado! Agora compartilhe seus contatos:\n\n1️⃣ Toque no *+* à esquerda\n2️⃣ Escolha *Contato*\n3️⃣ Selecione suas amigas e toque em *Enviar*\n\n👉 ${link}`
+          } else {
+            mensagem = faltam === 1
+              ? `💜 Quase lá! Você já enviou *${total} contatos* — falta só *1* para completar!\n\nToque no *+*, escolha *Contato* e envie mais uma amiga:\n👉 ${link}`
+              : `💜 Bom progresso! Você já enviou *${total} contatos* — faltam *${faltam}* para completar as 20.\n\nToque no *+*, escolha *Contato* e envie mais:\n👉 ${link}`
+          }
+          await fetch(ZAPI_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+            body: JSON.stringify({ phone, message: mensagem }),
+          })
+        } catch (e) {
+          console.error('[Z-API progress error]', e)
         }
       }
 
