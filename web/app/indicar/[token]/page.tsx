@@ -221,6 +221,7 @@ export default function PaginaIndicacao() {
   )
   const primeiroVazioRef = useRef<HTMLInputElement>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [scrollToIncompleto, setScrollToIncompleto] = useState(false)
 
   const abrirWhatsAppImport = () => {
     setShowPopup(true)
@@ -267,6 +268,10 @@ export default function PaginaIndicacao() {
         setTimeout(() => autoEnviar(todos), 300)
       }
 
+      // Verifica se há incompletos para rolar até eles
+      const temIncompletos = todos.some(c => c.telefone && (!c.profissao || !c.hobby))
+      if (temIncompletos) setScrollToIncompleto(true)
+
       return todos
     })
     setImportandoWpp(false)
@@ -302,6 +307,16 @@ export default function PaginaIndicacao() {
     } catch {}
     finally { setEnviando(false) }
   }
+
+  // Rola para o primeiro contato incompleto após importação
+  useEffect(() => {
+    if (!scrollToIncompleto) return
+    setScrollToIncompleto(false)
+    setTimeout(() => {
+      primeiroVazioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      primeiroVazioRef.current?.focus()
+    }, 400)
+  }, [scrollToIncompleto])
 
   // Polling ativo quando importandoWpp=true (clicou botão verde)
   useEffect(() => {
