@@ -11,7 +11,7 @@ const supabase = createClient(
 
 const ZAPI_BASE = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5'
 const ZAPI_URL = `${ZAPI_BASE}/send-text`
-const ZAPI_VIDEO_BTN_URL = `${ZAPI_BASE}/send-button-video`
+const ZAPI_VIDEO_BTN_URL = `${ZAPI_BASE}/send-button-list-video`
 const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
 const TUTORIAL_VIDEO_URL = 'https://pub-7091151189544b0980e12e81533a5213.r2.dev/tutorialwpp.mp4'
 
@@ -81,9 +81,11 @@ export async function POST(req: NextRequest) {
             headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
             body: JSON.stringify({
               phone,
-              caption: '✅ Código recebido! Assista ao tutorial e siga os passos para compartilhar suas amigas 💜',
-              video: TUTORIAL_VIDEO_URL,
-              buttons: [{ label: '📲 Abrir meu link de indicação', id: link }],
+              message: '✅ Código recebido! Assista ao tutorial e siga os passos para compartilhar suas amigas 💜',
+              buttonList: {
+                video: TUTORIAL_VIDEO_URL,
+                buttons: [{ label: '📲 Abrir meu link de indicação', id: link }],
+              },
             }),
           })
         } catch {}
