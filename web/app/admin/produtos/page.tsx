@@ -634,14 +634,28 @@ function ProdutoCard({
         <div className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl" style={{ background: (pad?.color ?? '#7B3FE4') + '20' }}>
           {emoji}
         </div>
-        <div className="flex items-center gap-1.5">
-          <span
-            className="text-[10px] font-bold px-2 py-0.5 rounded-full border font-mono"
-            style={{ color: pad?.color, background: (pad?.color ?? '#7B3FE4') + '15', borderColor: (pad?.color ?? '#7B3FE4') + '40' }}
-          >
-            {pad?.sigla} — {pad?.label}
-          </span>
+        <div className="flex items-center gap-2">
+          {prod.ativo ? (
+            <span className="flex items-center gap-1.5 bg-[#22c55e]/10 border border-[#22c55e]/25 text-[#22c55e] text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
+              Ativo
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 bg-[#3F3F46]/20 border border-[#3F3F46]/30 text-[#52525B] text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#3F3F46]" />
+              Inativo
+            </span>
+          )}
         </div>
+      </div>
+      {/* funil badge */}
+      <div className="mb-2">
+        <span
+          className="text-[10px] font-bold px-2 py-0.5 rounded-full border font-mono"
+          style={{ color: pad?.color, background: (pad?.color ?? '#7B3FE4') + '15', borderColor: (pad?.color ?? '#7B3FE4') + '40' }}
+        >
+          {pad?.sigla} — {pad?.label}
+        </span>
       </div>
 
       {/* name */}
