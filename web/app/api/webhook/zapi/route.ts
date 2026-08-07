@@ -200,7 +200,24 @@ export async function POST(req: NextRequest) {
         // Only intercept when still collecting referidos (< 20)
         // When total >= 20, let n8n handle the transition (forwarding confirmation → profissao/hobby)
         if (leadEtapa?.etapa_agente === 7 && (leadEtapa?.total_referidos || 0) < 20) {
-          // Save message but don't forward to n8n — respond with vCard reminder
+          const msg = body.text.message || ''
+
+          // REF token — registra sessão e envia vídeo tutorial
+          if (msg.startsWith('REF-')) {
+            const token = msg.replace('REF-', '').trim()
+            try {
+              await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'https://www.hormoneecosystem.com'}/api/indicar/sessao`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ phone, token }),
+              })
+            } catch (e) {
+              console.error('[indicar/sessao error]', e)
+            }
+            return NextResponse.json({ ok: true, handled: 'etapa7_ref_token' })
+          }
+
+          // Mensagem de texto comum — manda instruções de como enviar contatos
           const tsE7 = body.momentoMensagem ? new Date(body.momentoMensagem * 1000).toISOString() : new Date().toISOString()
           await supabase.from('mensagens_whatsapp').insert({ phone, role: 'user', content: body.text.message, type: 'text', ts: tsE7, raw: body })
           await zapiSend(phoneRaw,
