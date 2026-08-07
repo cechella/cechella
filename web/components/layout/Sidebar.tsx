@@ -32,6 +32,8 @@ import {
   Eye,
   Wrench,
   PhoneCall,
+  Cpu,
+  ServerCog,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -89,6 +91,8 @@ const adminNav: NavSection[] = [
       { label: 'Pacientes',    href: '/admin/pacientes',   icon: <HeartPulse className="w-5 h-5" /> },
       { label: 'Assinaturas',  href: '/admin/assinaturas', icon: <BadgeCheck className="w-5 h-5" /> },
       { label: 'Usuários',     href: '/admin/users',       icon: <Users className="w-5 h-5" /> },
+      { label: 'Agentes',       href: '/admin/agentes',     icon: <Cpu className="w-5 h-5" /> },
+      { label: 'Infraestrutura',href: '/admin/infraestrutura', icon: <ServerCog className="w-5 h-5" /> },
     ],
   },
   {
