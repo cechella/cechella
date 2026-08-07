@@ -304,7 +304,8 @@ export default function PaginaIndicacao() {
             .filter((v: Contato) => !telsExistentes.has(v.telefone.replace(/\D/g, '')))
             .map((v: Contato) => ({ ...v, telefone: v.telefone.replace(/\D/g, '') }))
           const resultado = [...prev, ...novos].slice(0, 20)
-          if (resultado.length >= 20) setSucesso(true)
+          const todosCompletos = resultado.filter(c => c.profissao && c.hobby)
+          if (resultado.length >= 20 && todosCompletos.length >= 20) setSucesso(true)
           return resultado
         })
       }
