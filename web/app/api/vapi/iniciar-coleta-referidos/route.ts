@@ -82,35 +82,38 @@ export async function POST(req: NextRequest) {
     const nome = lead.nome || 'você'
     const phone = digits.startsWith('55') ? digits : `55${digits}`
 
-    // Envia vídeo tutorial com o link
+    // Tenta enviar vídeo tutorial; cai para texto se falhar por qualquer motivo
+    let enviou = false
     try {
-      await fetch(ZAPI_VIDEO_URL, {
+      const r = await fetch(ZAPI_VIDEO_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
         body: JSON.stringify({
           phone,
           video: TUTORIAL_VIDEO_URL,
           caption:
-            `✨ Oi você! 😊 Aqui é a Ana — estamos em ligação agora mesmo!\n\n` +
-            `Vou te passar seu link especial de indicações. 💜\n\n` +
+            `✨ Seu link especial de indicações chegou! 💜\n\n` +
             `👉 ${link}\n\n` +
-            `Nele você indica suas amigas, preenche profissão e hobby de cada uma e acompanha seu progresso até as 20. Guarda esse link! 💜`,
+            `Assista o tutorial e siga os passos para indicar suas amigas. Guarda esse link! 💜`,
         }),
       })
-    } catch {
-      // Se vídeo falhar, envia texto simples
-      await fetch(ZAPI_TEXT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-        body: JSON.stringify({
-          phone,
-          message:
-            `✨ Oi você! 😊 Aqui é a Ana — estamos em ligação agora mesmo!\n\n` +
-            `Vou te passar seu link especial de indicações. 💜\n\n` +
-            `👉 ${link}\n\n` +
-            `Nossa meta são 20 amigas — o sistema avisa quando chegar lá. Pode começar! 💜`,
-        }),
-      })
+      enviou = r.ok
+    } catch { /* segue para fallback */ }
+
+    if (!enviou) {
+      try {
+        await fetch(ZAPI_TEXT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+          body: JSON.stringify({
+            phone,
+            message:
+              `✨ Seu link especial de indicações chegou! 💜\n\n` +
+              `👉 ${link}\n\n` +
+              `Nossa meta são 20 amigas — o sistema avisa quando chegar lá. Pode começar! 💜`,
+          }),
+        })
+      } catch { /* ignora — retorna sucesso mesmo assim para não travar Ana */ }
     }
 
     return NextResponse.json({
