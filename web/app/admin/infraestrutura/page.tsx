@@ -112,10 +112,10 @@ interface Pulse {
 }
 
 function buildNodes(W: number, H: number): Node[] {
-  const cx = W / 2, cy = H / 2
+  const cx = W / 2, cy = H * 0.47
   const outer = SERVICES
   const angleStep = (2 * Math.PI) / outer.length
-  const rad = Math.min(W, H) * 0.38
+  const rad = Math.min(W, H) * 0.32
   return [
     { id: 'center', x: cx, y: cy, r: 36, service: { id: 'center', name: 'Hormone Ecosystem', icon: '🧬', color: '#7c5cfc', status: 'online', alertLevel: null, description: 'Core', cost: '', balance: '', renewal: '', renewalDays: 999 } },
     ...outer.map((s, i) => ({
