@@ -349,7 +349,7 @@ export default function InfraPage() {
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
       <Sidebar role="admin" />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar role="admin" />
+        <TopBar />
         <main className="flex-1 overflow-hidden flex flex-col p-6 gap-4">
 
           {/* Header */}

@@ -83,7 +83,7 @@ export default function AgentesPage() {
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
       <Sidebar role="admin" />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar role="admin" />
+        <TopBar />
         <main className="flex-1 overflow-y-auto p-6">
 
           <div className="flex items-start justify-between mb-6">
