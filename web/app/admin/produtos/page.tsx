@@ -10,11 +10,19 @@ import {
 
 type PadraoFunil = 'consultivo' | 'digital' | 'recrutamento'
 type TomVoz = 'acolhedor' | 'formal' | 'informal' | 'direto'
+type StatusProduto = 'ativo' | 'pausado' | 'inativo'
+
+const STATUS_CONFIG: Record<StatusProduto, { label: string; dot: string; bg: string; border: string; text: string; pulse: boolean }> = {
+  ativo:   { label: 'Ativo',   dot: '#22c55e', bg: 'rgba(34,197,94,.1)',   border: 'rgba(34,197,94,.25)',   text: '#22c55e', pulse: true  },
+  pausado: { label: 'Pausado', dot: '#f97316', bg: 'rgba(249,115,22,.1)',  border: 'rgba(249,115,22,.25)',  text: '#f97316', pulse: false },
+  inativo: { label: 'Inativo', dot: '#52525B', bg: 'rgba(82,82,91,.1)',    border: 'rgba(82,82,91,.25)',    text: '#52525B', pulse: false },
+}
 
 interface Produto {
   slug: string
   nome: string
   ativo: boolean
+  status: StatusProduto | null
   padrao_funil: PadraoFunil
   prompt_contexto: string | null
   dores: string | null
@@ -49,7 +57,7 @@ const EMOJI_MAP: Record<string, string> = {
 }
 
 const EMPTY: Produto = {
-  slug: '', nome: '', ativo: true, padrao_funil: 'consultivo',
+  slug: '', nome: '', ativo: true, status: 'ativo', padrao_funil: 'consultivo',
   prompt_contexto: '', dores: '', valor_pix: 0, valor_cartao: 0,
   parcelas_max: 6, desconto_pix_pct: 0, parcelamento_texto: 'até 6x sem juros',
   nome_responsavel: '', script_abertura: '', objecoes: '', tom_voz: 'acolhedor',
@@ -380,11 +388,7 @@ export default function ProdutosPage() {
               </div>
               <div className="flex items-center gap-2">
                 {!modal.isNew && (
-                  <button onClick={() => setField('ativo', !p.ativo)} className="flex-shrink-0">
-                    {p.ativo
-                      ? <ToggleRight className="w-7 h-7 text-[#7B3FE4]" />
-                      : <ToggleLeft className="w-7 h-7 text-[#3F3F46]" />}
-                  </button>
+                  <StatusBadge status={p.status ?? (p.ativo ? 'ativo' : 'inativo')} />
                 )}
                 <button onClick={() => setModal(m => ({ ...m, open: false }))} className="p-2 rounded-lg text-[#52525B] hover:text-white hover:bg-[#18181A] transition-all">
                   <X className="w-4 h-4" />
@@ -423,12 +427,29 @@ export default function ProdutosPage() {
                       className={`${inputCls} font-mono ${!modal.isNew ? 'opacity-40' : ''}`}
                     />
                   </FieldGroup>
-                  <label className="flex items-center gap-3 cursor-pointer">
-                    <button onClick={() => setField('ativo', !p.ativo)} className="flex-shrink-0">
-                      {p.ativo ? <ToggleRight className="w-7 h-7 text-[#7B3FE4]" /> : <ToggleLeft className="w-7 h-7 text-[#3F3F46]" />}
-                    </button>
-                    <span className="text-sm text-[#71717A]">{p.ativo ? 'Produto ativo — ANA pode vender' : 'Produto inativo'}</span>
-                  </label>
+                  <div>
+                    <p className="text-[10px] font-bold tracking-widest text-[#52525B] uppercase mb-2">Status</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(Object.entries(STATUS_CONFIG) as [StatusProduto, typeof STATUS_CONFIG[StatusProduto]][]).map(([key, cfg]) => {
+                        const current = p.status ?? (p.ativo ? 'ativo' : 'inativo')
+                        const sel = current === key
+                        return (
+                          <button
+                            key={key}
+                            onClick={() => {
+                              setField('status', key)
+                              setField('ativo', key === 'ativo')
+                            }}
+                            className="flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl border text-xs font-semibold transition-all"
+                            style={sel ? { borderColor: cfg.border, background: cfg.bg, color: cfg.text } : { borderColor: '#1C1C1E', color: '#52525B' }}
+                          >
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sel && cfg.pulse ? 'animate-pulse' : ''}`} style={{ background: sel ? cfg.dot : '#3F3F46' }} />
+                            {cfg.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                   <NextBtn onClick={() => setActiveTab('preco')} label="Preços" />
                 </>
               )}
@@ -634,19 +655,7 @@ function ProdutoCard({
         <div className="w-11 h-11 rounded-xl flex items-center justify-center text-2xl" style={{ background: (pad?.color ?? '#7B3FE4') + '20' }}>
           {emoji}
         </div>
-        <div className="flex items-center gap-2">
-          {prod.ativo ? (
-            <span className="flex items-center gap-1.5 bg-[#22c55e]/10 border border-[#22c55e]/25 text-[#22c55e] text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
-              Ativo
-            </span>
-          ) : (
-            <span className="flex items-center gap-1.5 bg-[#3F3F46]/20 border border-[#3F3F46]/30 text-[#52525B] text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#3F3F46]" />
-              Inativo
-            </span>
-          )}
-        </div>
+        <StatusBadge status={prod.status ?? (prod.ativo ? 'ativo' : 'inativo')} />
       </div>
       {/* funil badge */}
       <div className="mb-2">
@@ -725,6 +734,20 @@ function ProdutoCard({
         )}
       </div>
     </div>
+  )
+}
+
+/* ── STATUS BADGE ── */
+function StatusBadge({ status }: { status: StatusProduto }) {
+  const cfg = STATUS_CONFIG[status]
+  return (
+    <span
+      className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border"
+      style={{ color: cfg.text, background: cfg.bg, borderColor: cfg.border }}
+    >
+      <span className={`w-1.5 h-1.5 rounded-full ${cfg.pulse ? 'animate-pulse' : ''}`} style={{ background: cfg.dot }} />
+      {cfg.label}
+    </span>
   )
 }
 
