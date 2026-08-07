@@ -139,6 +139,47 @@ export async function POST(req: NextRequest) {
     const totalReferidos = Number(lead.total_referidos) || 0
     const referidosFaltam = Math.max(0, 20 - totalReferidos)
 
+    // Busca detalhes dos referidos quando na etapa 7
+    let referidosDetalhe: any[] | null = null
+    if (etapa === 7) {
+      const { data: refs } = await supabase
+        .from('contatos_referidos')
+        .select('nome, profissao, hobby, status, mensagem_enviada')
+        .eq('indicado_por_telefone', telefoneNorm.replace(/^55/, '') )
+        .order('created_at', { ascending: true })
+
+      // tenta também com 55 prefix se não achou
+      const lista = refs?.length ? refs : (await supabase
+        .from('contatos_referidos')
+        .select('nome, profissao, hobby, status, mensagem_enviada')
+        .eq('indicado_por_telefone', telefoneNorm)
+        .order('created_at', { ascending: true })
+      ).data
+
+      if (lista?.length) {
+        referidosDetalhe = lista.map(r => ({
+          nome: r.nome,
+          profissao: r.profissao || null,
+          hobby: r.hobby || null,
+          mensagem_enviada: r.mensagem_enviada ?? r.status === 'mensagem_enviada',
+        }))
+      }
+    }
+
+    const semProfissao = referidosDetalhe?.filter(r => !r.profissao || !r.hobby).length ?? 0
+    const semMensagem = referidosDetalhe?.filter(r => !r.mensagem_enviada).length ?? 0
+
+    let instrucao = etapa >= 3
+      ? `Lead já está na etapa ${etapa} (${ETAPA_LABELS[etapa]}). Continue de onde parou, não repita apresentação.`
+      : 'Inicie pelo rapport e apresentação do Hormone Ecosystem.'
+
+    if (etapa === 7) {
+      instrucao += ` Já indicou ${totalReferidos} contatos, faltam ${referidosFaltam} para completar 20.`
+      if (semProfissao > 0) instrucao += ` ${semProfissao} referidos ainda sem profissão/hobby — colete essas informações.`
+      if (semMensagem > 0) instrucao += ` ${semMensagem} referidos ainda não receberam a mensagem — certifique o envio.`
+      if (referidosFaltam === 0 && semProfissao === 0 && semMensagem === 0) instrucao += ' Todos os 20 referidos completos com profissão, hobby e mensagem enviada. Avance para etapa 8 (ganho).'
+    }
+
     return NextResponse.json({
       result: JSON.stringify({
         nome: lead.nome || null,
@@ -150,9 +191,10 @@ export async function POST(req: NextRequest) {
         origem: lead.origem || null,
         total_referidos: totalReferidos,
         referidos_faltam: referidosFaltam,
-        instrucao: etapa >= 3
-          ? `Lead já está na etapa ${etapa} (${ETAPA_LABELS[etapa]}). Continue de onde parou, não repita apresentação.${etapa === 7 ? ` Já indicou ${totalReferidos} contatos, faltam ${referidosFaltam} para completar 20.` : ''}`
-          : 'Inicie pelo rapport e apresentação do Hormone Ecosystem.',
+        referidos_sem_profissao_hobby: semProfissao,
+        referidos_sem_mensagem: semMensagem,
+        referidos: referidosDetalhe,
+        instrucao,
       }),
     })
   } catch (err: any) {
