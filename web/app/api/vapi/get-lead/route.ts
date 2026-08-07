@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
 
     const { data: leads } = await supabase
       .from('leads')
-      .select('id, nome, etapa_agente, temperatura, dor_principal, origem')
+      .select('id, nome, etapa_agente, temperatura, dor_principal, origem, total_referidos')
       .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${digits.replace(/^55/, '')}`)
       .limit(1)
 
@@ -136,6 +136,9 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    const totalReferidos = Number(lead.total_referidos) || 0
+    const referidosFaltam = Math.max(0, 20 - totalReferidos)
+
     return NextResponse.json({
       result: JSON.stringify({
         nome: lead.nome || null,
@@ -145,8 +148,10 @@ export async function POST(req: NextRequest) {
         temperatura: lead.temperatura || 'frio',
         dor_principal: lead.dor_principal || null,
         origem: lead.origem || null,
+        total_referidos: totalReferidos,
+        referidos_faltam: referidosFaltam,
         instrucao: etapa >= 3
-          ? `Lead já está na etapa ${etapa} (${ETAPA_LABELS[etapa]}). Continue de onde parou, não repita apresentação.`
+          ? `Lead já está na etapa ${etapa} (${ETAPA_LABELS[etapa]}). Continue de onde parou, não repita apresentação.${etapa === 7 ? ` Já indicou ${totalReferidos} contatos, faltam ${referidosFaltam} para completar 20.` : ''}`
           : 'Inicie pelo rapport e apresentação do Hormone Ecosystem.',
       }),
     })
