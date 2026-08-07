@@ -419,7 +419,8 @@ export default function PaginaIndicacao() {
       })
       setMsgEnviada(jaEnviadosMap)
 
-      if (mappedEnviados.length >= 20) {
+      const completos = mappedEnviados.filter(c => c.profissao && c.hobby)
+      if (mappedEnviados.length >= 20 && completos.length >= 20) {
         setSucesso(true)
         return
       }
@@ -544,7 +545,8 @@ export default function PaginaIndicacao() {
           })
         })
 
-        if (novoJaEnviados.length >= 20) {
+        const completosNovos = novoJaEnviados.filter(c => c.profissao && c.hobby)
+        if (novoJaEnviados.length >= 20 && completosNovos.length >= 20) {
           setSucesso(true)
           return
         }
