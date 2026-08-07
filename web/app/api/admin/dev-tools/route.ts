@@ -162,7 +162,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'ver_estado_banco') {
-      const tabelas = ['leads', 'contatos_referidos', 'leads_m4_flag', 'ana_memoria', 'ana_padroes', 'pagamentos', 'pagamentos_recorrentes', 'mensagens_whatsapp', 'historico_voz'] as const
+      const tabelas = ['leads', 'contatos_referidos', 'sessao_wpp', 'leads_m4_flag', 'ana_memoria', 'ana_padroes', 'pagamentos', 'pagamentos_recorrentes', 'mensagens_whatsapp', 'historico_voz'] as const
       const contagens: Record<string, number> = {}
       for (const tabela of tabelas) {
         const { count } = await supabase.from(tabela).select('*', { count: 'exact', head: true })
