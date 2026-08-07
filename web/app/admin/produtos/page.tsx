@@ -1,26 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import {
-  Package,
-  Plus,
-  Pencil,
-  Trash2,
-  ToggleLeft,
-  ToggleRight,
-  X,
-  Save,
-  ChevronDown,
-  ChevronUp,
-  DollarSign,
-  Bot,
-  AlertCircle,
-  CheckCircle2,
-  MessageSquare,
-  Radio,
-} from 'lucide-react'
+import { Plus, Pencil, Trash2, X, Save, ChevronRight, Zap, AlertTriangle } from 'lucide-react'
 
 type PadraoFunil = 'consultivo' | 'digital' | 'recrutamento'
+type TomVoz = 'acolhedor' | 'formal' | 'informal' | 'direto'
 
 interface Produto {
   slug: string
@@ -34,48 +18,31 @@ interface Produto {
   parcelas_max: number
   desconto_pix_pct: number
   parcelamento_texto: string | null
+  nome_responsavel: string | null
+  script_abertura: string | null
+  objecoes: string | null
+  tom_voz: TomVoz | null
   created_at?: string
 }
 
-const PADROES: { value: PadraoFunil; label: string; sigla: string; desc: string; etapas: string; cor: string }[] = [
-  {
-    value: 'consultivo',
-    label: 'Consultivo High Ticket',
-    sigla: 'A',
-    desc: 'Funil completo com qualificação aprofundada, construção de dor e fechamento consultivo.',
-    etapas: 'Qualificação → Dor → Educação → Fechamento → Pagamento',
-    cor: '#7B3FE4',
-  },
-  {
-    value: 'digital',
-    label: 'Evento / Digital Simples',
-    sigla: 'B',
-    desc: 'Funil curto para produtos de baixo atrito. ANA apresenta, responde dúvidas e envia o link.',
-    etapas: 'Interesse → Preço → Pagamento',
-    cor: '#3B82F6',
-  },
-  {
-    value: 'recrutamento',
-    label: 'Recrutamento / MLM',
-    sigla: 'C',
-    desc: 'ANA atua como recrutadora: apresenta a oportunidade, qualifica o perfil e convida.',
-    etapas: 'Oportunidade → Qualificação → Convite',
-    cor: '#F59E0B',
-  },
+const PADROES: { value: PadraoFunil; sigla: string; label: string; etapas: string }[] = [
+  { value: 'consultivo',   sigla: 'A', label: 'Consultivo High Ticket',  etapas: 'Qualificação → Dor → Educação → Fechamento → Pagamento' },
+  { value: 'digital',      sigla: 'B', label: 'Evento / Digital Simples', etapas: 'Interesse → Preço → Pagamento' },
+  { value: 'recrutamento', sigla: 'C', label: 'Recrutamento / MLM',       etapas: 'Oportunidade → Qualificação → Convite' },
+]
+
+const TONS: { value: TomVoz; label: string }[] = [
+  { value: 'acolhedor', label: 'Acolhedor' },
+  { value: 'formal',    label: 'Formal' },
+  { value: 'informal',  label: 'Informal' },
+  { value: 'direto',    label: 'Direto' },
 ]
 
 const EMPTY: Produto = {
-  slug: '',
-  nome: '',
-  ativo: true,
-  padrao_funil: 'consultivo',
-  prompt_contexto: '',
-  dores: '',
-  valor_pix: 0,
-  valor_cartao: 0,
-  parcelas_max: 6,
-  desconto_pix_pct: 0,
-  parcelamento_texto: 'até 6x sem juros',
+  slug: '', nome: '', ativo: true, padrao_funil: 'consultivo',
+  prompt_contexto: '', dores: '', valor_pix: 0, valor_cartao: 0,
+  parcelas_max: 6, desconto_pix_pct: 0, parcelamento_texto: 'até 6x sem juros',
+  nome_responsavel: '', script_abertura: '', objecoes: '', tom_voz: 'acolhedor',
 }
 
 const SUGESTOES = [
@@ -90,20 +57,16 @@ export default function ProdutosPage() {
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [loading, setLoading] = useState(true)
   const [modal, setModal] = useState<{ open: boolean; produto: Produto; isNew: boolean }>({
-    open: false,
-    produto: EMPTY,
-    isNew: true,
+    open: false, produto: EMPTY, isNew: true,
   })
-  const [expandido, setExpandido] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
-
-  // Configuração do modo de atendimento da ANA
   const [modoAna, setModoAna] = useState<'perguntar' | 'fixo'>('perguntar')
   const [produtoFixo, setProdutoFixo] = useState<string>('implante')
   const [produtosSelecionados, setProdutosSelecionados] = useState<string[]>([])
   const [savingModo, setSavingModo] = useState(false)
+  const [activeSection, setActiveSection] = useState<'basico' | 'preco' | 'funil' | 'ana_texto' | 'ana_voz'>('basico')
 
   const showToast = (msg: string, ok = true) => {
     setToast({ msg, ok })
@@ -118,45 +81,36 @@ export default function ProdutosPage() {
     ])
     const jsonP = await resProdutos.json()
     const jsonC = await resCfg.json()
-    setProdutos(jsonP.produtos ?? [])
     const prods: Produto[] = jsonP.produtos ?? []
+    setProdutos(prods)
     const ana = jsonC.config?.atendimento_ana
     if (ana) {
       setModoAna(ana.modo ?? 'perguntar')
       setProdutoFixo(ana.produto_fixo ?? 'implante')
-      setProdutosSelecionados(
-        ana.produtos_selecionados ?? prods.filter((p: Produto) => p.ativo).map((p: Produto) => p.slug)
-      )
+      setProdutosSelecionados(ana.produtos_selecionados ?? prods.filter(p => p.ativo).map(p => p.slug))
     } else {
-      setProdutosSelecionados(prods.filter((p: Produto) => p.ativo).map((p: Produto) => p.slug))
+      setProdutosSelecionados(prods.filter(p => p.ativo).map(p => p.slug))
     }
     setLoading(false)
   }, [])
 
   useEffect(() => { fetchProdutos() }, [fetchProdutos])
 
-  const salvarModoAna = async (
-    novoModo?: 'perguntar' | 'fixo',
-    novoFixo?: string,
-    novosSelecionados?: string[]
-  ) => {
+  const salvarModoAna = async (novoModo?: 'perguntar' | 'fixo', novoFixo?: string, novosSel?: string[]) => {
     setSavingModo(true)
     const modo = novoModo ?? modoAna
     const fixo = novoFixo ?? produtoFixo
-    const selecionados = novosSelecionados ?? produtosSelecionados
+    const selecionados = novosSel ?? produtosSelecionados
     await fetch('/api/admin/configuracoes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chave: 'atendimento_ana',
-        valor: { modo, produto_fixo: fixo, produtos_selecionados: selecionados },
-      }),
+      body: JSON.stringify({ chave: 'atendimento_ana', valor: { modo, produto_fixo: fixo, produtos_selecionados: selecionados } }),
     })
     if (novoModo) setModoAna(novoModo)
     if (novoFixo) setProdutoFixo(novoFixo)
-    if (novosSelecionados) setProdutosSelecionados(novosSelecionados)
+    if (novosSel) setProdutosSelecionados(novosSel)
     setSavingModo(false)
-    showToast('Modo de atendimento salvo!')
+    showToast('Modo salvo')
   }
 
   const toggleProdutoSelecionado = (slug: string) => {
@@ -167,26 +121,9 @@ export default function ProdutosPage() {
     salvarModoAna(undefined, undefined, novo)
   }
 
-  const abrirNovo = (sugestao?: { slug: string; nome: string }) => {
-    setModal({
-      open: true,
-      isNew: true,
-      produto: { ...EMPTY, ...(sugestao ?? {}) },
-    })
-  }
-
-  const abrirEditar = (p: Produto) => {
-    setModal({ open: true, isNew: false, produto: { ...p } })
-  }
-
-  const fecharModal = () => setModal(m => ({ ...m, open: false }))
-
   const salvar = async () => {
     const p = modal.produto
-    if (!p.slug.trim() || !p.nome.trim()) {
-      showToast('Preencha slug e nome', false)
-      return
-    }
+    if (!p.slug.trim() || !p.nome.trim()) { showToast('Slug e nome obrigatórios', false); return }
     setSaving(true)
     const res = await fetch('/api/admin/produtos', {
       method: 'POST',
@@ -195,13 +132,8 @@ export default function ProdutosPage() {
     })
     const json = await res.json()
     setSaving(false)
-    if (json.ok) {
-      showToast(modal.isNew ? 'Produto criado!' : 'Produto salvo!')
-      fecharModal()
-      fetchProdutos()
-    } else {
-      showToast(json.error ?? 'Erro ao salvar', false)
-    }
+    if (json.ok) { showToast(modal.isNew ? 'Produto criado' : 'Produto salvo'); setModal(m => ({ ...m, open: false })); fetchProdutos() }
+    else showToast(json.error ?? 'Erro ao salvar', false)
   }
 
   const toggleAtivo = async (slug: string, ativo: boolean) => {
@@ -220,184 +152,143 @@ export default function ProdutosPage() {
       body: JSON.stringify({ action: 'delete', slug }),
     })
     setConfirmDelete(null)
-    showToast('Produto removido')
+    showToast('Removido')
     fetchProdutos()
   }
 
-  const setField = (key: keyof Produto, value: unknown) => {
+  const setField = (key: keyof Produto, value: unknown) =>
     setModal(m => ({ ...m, produto: { ...m.produto, [key]: value } }))
-  }
 
   const p = modal.produto
-  const valorPixFinal = Math.round(p.valor_pix * (1 - (p.desconto_pix_pct || 0) / 100))
-  const parcelaCartao = p.parcelas_max > 0 ? Math.round(p.valor_cartao / p.parcelas_max) : 0
-
+  const pixFinal = Math.round(p.valor_pix * (1 - (p.desconto_pix_pct || 0) / 100))
+  const parcela  = p.parcelas_max > 0 ? Math.round(p.valor_cartao / p.parcelas_max) : 0
   const jaExiste = (slug: string) => produtos.some(p => p.slug === slug)
 
+  const SECTIONS = [
+    { id: 'basico',    label: 'Identificação' },
+    { id: 'preco',     label: 'Preços' },
+    { id: 'funil',     label: 'Funil' },
+    { id: 'ana_texto', label: 'Contexto' },
+    { id: 'ana_voz',   label: 'ANA Voz' },
+  ] as const
+
   return (
-    <div className="flex flex-col h-screen bg-[#080809] text-white">
+    <div style={{ minHeight: '100vh', background: '#000', color: '#fff', fontFamily: '-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif' }}>
       <style>{`
+        *{box-sizing:border-box;margin:0;padding:0}
+        input,textarea,select{outline:none;font-family:inherit}
         input[type=number]::-webkit-inner-spin-button,
-        input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
-        input[type=number] { -moz-appearance: textfield; }
+        input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
+        input[type=number]{-moz-appearance:textfield}
+        ::-webkit-scrollbar{width:4px;height:4px}
+        ::-webkit-scrollbar-track{background:#000}
+        ::-webkit-scrollbar-thumb{background:#222}
+        .row-hover:hover{background:#0a0a0a}
+        .btn-ghost:hover{background:#111;color:#fff}
+        .btn-ghost:focus{outline:1px solid #333}
+        .tab-btn:hover{color:#fff}
+        .check-row:hover{background:#0d0d0d}
       `}</style>
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-8 py-5 border-b border-[#1C1C1E]">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#7B3FE4] to-[#3B82F6] flex items-center justify-center">
-            <Package className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-lg font-bold text-white">Produtos</h1>
-            <p className="text-xs text-[#52525B]">Gerencie os produtos que ANA vende</p>
-          </div>
+      {/* ── TOP BAR ── */}
+      <div style={{ borderBottom: '1px solid #1a1a1a', padding: '0 32px', height: 56, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontFamily: 'monospace', fontSize: 11, letterSpacing: 3, color: '#444', textTransform: 'uppercase' }}>PRODUTOS</span>
+          <span style={{ width: 1, height: 16, background: '#1a1a1a' }} />
+          <span style={{ fontSize: 11, color: '#444', fontFamily: 'monospace' }}>
+            {loading ? '...' : `${produtos.filter(p => p.ativo).length} ativos / ${produtos.length} total`}
+          </span>
         </div>
         <button
-          onClick={() => abrirNovo()}
-          className="flex items-center gap-2 bg-[#7B3FE4] hover:bg-[#6D35CC] text-white text-sm font-semibold px-4 py-2 rounded-xl transition-colors"
+          onClick={() => { setModal({ open: true, isNew: true, produto: EMPTY }); setActiveSection('basico') }}
+          style={{ display: 'flex', alignItems: 'center', gap: 6, background: '#fff', color: '#000', border: 'none', padding: '0 16px', height: 32, cursor: 'pointer', fontSize: 12, fontWeight: 700, letterSpacing: 0.5 }}
         >
-          <Plus className="w-4 h-4" />
-          Novo produto
+          <Plus size={13} />
+          NOVO PRODUTO
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-8">
+      <div style={{ padding: '0 32px', maxWidth: 1100, margin: '0 auto' }}>
 
-        {/* Modo de atendimento da ANA */}
-        <div className="mb-8 bg-[#0E0E10] border border-[#222228] rounded-2xl overflow-hidden">
-          <div className="flex items-center gap-3 px-5 py-4 border-b border-[#1C1C1E]">
-            <div className="w-8 h-8 rounded-lg bg-[#7B3FE4]/15 flex items-center justify-center">
-              <MessageSquare className="w-4 h-4 text-[#7B3FE4]" />
+        {/* ── MODO ANA ── */}
+        <div style={{ borderBottom: '1px solid #111', padding: '24px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Zap size={12} color="#e8ff00" />
+              <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, color: '#555', textTransform: 'uppercase' }}>Modo de Atendimento — ANA</span>
             </div>
-            <div>
-              <p className="text-sm font-semibold text-white">Modo de atendimento da ANA</p>
-              <p className="text-xs text-[#52525B]">Como ANA identifica qual produto atender quando um lead entra</p>
-            </div>
+            {savingModo && <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#444' }}>salvando...</span>}
           </div>
 
-          <div className="p-5 flex flex-col gap-3">
-            {/* Opção: Perguntar */}
-            <div
-              className={`rounded-xl border transition-all ${
-                modoAna === 'perguntar' ? 'border-[#7B3FE4]/50 bg-[#7B3FE4]/8' : 'border-[#222228]'
-              }`}
-            >
+          <div style={{ display: 'flex', gap: 2 }}>
+            {/* opção: perguntar */}
+            <div style={{ flex: 1, border: `1px solid ${modoAna === 'perguntar' ? '#e8ff00' : '#1a1a1a'}`, background: modoAna === 'perguntar' ? '#0d0d00' : 'transparent', transition: 'all .15s' }}>
               <button
                 onClick={() => salvarModoAna('perguntar')}
-                disabled={savingModo}
-                className="flex items-start gap-4 p-4 w-full text-left"
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', color: modoAna === 'perguntar' ? '#e8ff00' : '#555', textAlign: 'left' }}
               >
-                <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5 flex items-center justify-center ${
-                  modoAna === 'perguntar' ? 'border-[#7B3FE4]' : 'border-[#3F3F46]'
-                }`}>
-                  {modoAna === 'perguntar' && <div className="w-1.5 h-1.5 rounded-full bg-[#7B3FE4]" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white mb-1">ANA pergunta ao lead</p>
-                  <p className="text-xs text-[#71717A] leading-relaxed">
-                    ANA apresenta um menu e deixa o lead escolher o programa de interesse.
-                  </p>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: modoAna === 'perguntar' ? '#e8ff00' : '#222', flexShrink: 0, transition: 'background .15s' }} />
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: modoAna === 'perguntar' ? '#e8ff00' : '#888', marginBottom: 2 }}>ANA PERGUNTA AO LEAD</div>
+                  <div style={{ fontSize: 11, color: '#444', fontFamily: 'monospace' }}>Apresenta menu → lead escolhe o programa</div>
                 </div>
               </button>
 
               {modoAna === 'perguntar' && (
-                <div className="px-4 pb-4 border-t border-[#1C1C1E] pt-3">
-                  <p className="text-[10px] font-semibold text-[#52525B] uppercase tracking-widest mb-3">Quais produtos ANA apresenta no menu</p>
-                  <div className="flex flex-col gap-2 mb-3">
-                    {produtos.filter(p => p.ativo).map(prod => {
-                      const sel = produtosSelecionados.includes(prod.slug)
-                      return (
-                        <button
-                          key={prod.slug}
-                          onClick={() => toggleProdutoSelecionado(prod.slug)}
-                          disabled={savingModo}
-                          className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-left transition-all ${
-                            sel ? 'border-[#7B3FE4]/40 bg-[#7B3FE4]/8' : 'border-[#222228] hover:border-[#333338]'
-                          }`}
-                        >
-                          <div className={`w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-all ${
-                            sel ? 'bg-[#7B3FE4] border-[#7B3FE4]' : 'border-[#3F3F46]'
-                          }`}>
-                            {sel && <svg className="w-2.5 h-2.5 text-white" viewBox="0 0 10 8" fill="none"><path d="M1 4l2.5 2.5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                          </div>
-                          <span className="text-sm text-white flex-1">{prod.nome}</span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold ${
-                            prod.padrao_funil === 'consultivo' ? 'bg-[#7B3FE4]/15 text-[#A78BFA]' :
-                            prod.padrao_funil === 'digital' ? 'bg-blue-500/15 text-blue-400' :
-                            'bg-amber-500/15 text-amber-400'
-                          }`}>
-                            {prod.padrao_funil === 'consultivo' ? 'A' : prod.padrao_funil === 'digital' ? 'B' : 'C'}
-                          </span>
-                        </button>
-                      )
-                    })}
-                    {produtos.filter(p => p.ativo).length === 0 && (
-                      <p className="text-xs text-[#52525B] italic">Nenhum produto ativo.</p>
-                    )}
-                  </div>
-                  {produtosSelecionados.length > 0 && (
-                    <div className="bg-[#18181A] rounded-lg px-3 py-2.5 border border-[#2A2A2E]">
-                      <p className="text-[10px] text-[#52525B] mb-1">Preview da mensagem da ANA</p>
-                      <p className="text-[11px] text-[#A1A1AA] italic leading-relaxed whitespace-pre-line">
-                        {`💜 Para te ajudar melhor, você tem interesse em qual programa?\n${
-                          produtos
-                            .filter(p => produtosSelecionados.includes(p.slug))
-                            .map((p, i) => `${i + 1}. ${p.nome}`)
-                            .join('\n')
-                        }`}
-                      </p>
-                    </div>
+                <div style={{ padding: '0 16px 16px', borderTop: '1px solid #1a1a1a', marginTop: 0, paddingTop: 12 }}>
+                  <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#333', marginBottom: 10, textTransform: 'uppercase' }}>Produtos no menu</div>
+                  {produtos.filter(pp => pp.ativo).map(prod => {
+                    const sel = produtosSelecionados.includes(prod.slug)
+                    return (
+                      <button
+                        key={prod.slug}
+                        onClick={() => toggleProdutoSelecionado(prod.slug)}
+                        className="check-row"
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 8px', background: 'none', border: 'none', cursor: 'pointer', marginBottom: 2, transition: 'background .1s' }}
+                      >
+                        <div style={{ width: 12, height: 12, border: `1px solid ${sel ? '#e8ff00' : '#333'}`, background: sel ? '#e8ff00' : 'transparent', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all .1s' }}>
+                          {sel && <div style={{ width: 6, height: 6, background: '#000' }} />}
+                        </div>
+                        <span style={{ fontSize: 12, color: sel ? '#fff' : '#555' }}>{prod.nome}</span>
+                        <span style={{ marginLeft: 'auto', fontFamily: 'monospace', fontSize: 10, color: '#333' }}>
+                          {PADROES.find(pp => pp.value === prod.padrao_funil)?.sigla}
+                        </span>
+                      </button>
+                    )
+                  })}
+                  {produtos.filter(pp => pp.ativo).length === 0 && (
+                    <span style={{ fontSize: 11, color: '#333', fontFamily: 'monospace' }}>nenhum produto ativo</span>
                   )}
                 </div>
               )}
             </div>
 
-            {/* Opção: Produto fixo */}
-            <div
-              className={`rounded-xl border transition-all ${
-                modoAna === 'fixo' ? 'border-[#7B3FE4]/50 bg-[#7B3FE4]/8' : 'border-[#222228]'
-              }`}
-            >
+            {/* opção: fixo */}
+            <div style={{ flex: 1, border: `1px solid ${modoAna === 'fixo' ? '#e8ff00' : '#1a1a1a'}`, background: modoAna === 'fixo' ? '#0d0d00' : 'transparent', transition: 'all .15s' }}>
               <button
                 onClick={() => salvarModoAna('fixo')}
-                disabled={savingModo}
-                className="flex items-start gap-4 p-4 w-full text-left"
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', width: '100%', background: 'none', border: 'none', cursor: 'pointer', color: modoAna === 'fixo' ? '#e8ff00' : '#555', textAlign: 'left' }}
               >
-                <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5 flex items-center justify-center ${
-                  modoAna === 'fixo' ? 'border-[#7B3FE4]' : 'border-[#3F3F46]'
-                }`}>
-                  {modoAna === 'fixo' && <div className="w-1.5 h-1.5 rounded-full bg-[#7B3FE4]" />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white mb-1">Atender produto fixo</p>
-                  <p className="text-xs text-[#71717A] leading-relaxed">
-                    ANA vai direto ao funil do produto selecionado, sem perguntar ao lead.
-                  </p>
+                <div style={{ width: 8, height: 8, borderRadius: '50%', background: modoAna === 'fixo' ? '#e8ff00' : '#222', flexShrink: 0, transition: 'background .15s' }} />
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: modoAna === 'fixo' ? '#e8ff00' : '#888', marginBottom: 2 }}>PRODUTO FIXO</div>
+                  <div style={{ fontSize: 11, color: '#444', fontFamily: 'monospace' }}>ANA vai direto para o funil selecionado</div>
                 </div>
               </button>
 
               {modoAna === 'fixo' && (
-                <div className="px-4 pb-4 border-t border-[#1C1C1E] pt-3">
-                  <p className="text-[10px] font-semibold text-[#52525B] uppercase tracking-widest mb-2">Produto que ANA atende</p>
-                  <div className="flex flex-wrap gap-2">
-                    {produtos.filter(p => p.ativo).map(prod => (
+                <div style={{ padding: '0 16px 16px', borderTop: '1px solid #1a1a1a', paddingTop: 12 }}>
+                  <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#333', marginBottom: 10, textTransform: 'uppercase' }}>Produto ativo</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {produtos.filter(pp => pp.ativo).map(prod => (
                       <button
                         key={prod.slug}
                         onClick={e => { e.stopPropagation(); salvarModoAna('fixo', prod.slug) }}
-                        disabled={savingModo}
-                        className={`text-xs px-3 py-1.5 rounded-lg border font-medium transition-all ${
-                          produtoFixo === prod.slug
-                            ? 'bg-[#7B3FE4] border-[#7B3FE4] text-white'
-                            : 'border-[#2A2A2E] text-[#71717A] hover:text-white hover:border-[#7B3FE4]/40'
-                        }`}
+                        style={{ padding: '5px 12px', border: `1px solid ${produtoFixo === prod.slug ? '#e8ff00' : '#222'}`, background: produtoFixo === prod.slug ? '#e8ff00' : 'transparent', color: produtoFixo === prod.slug ? '#000' : '#555', fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all .1s' }}
                       >
                         {prod.nome}
                       </button>
                     ))}
-                    {produtos.filter(p => p.ativo).length === 0 && (
-                      <p className="text-xs text-[#52525B] italic">Nenhum produto ativo. Ative um produto acima.</p>
-                    )}
                   </div>
                 </div>
               )}
@@ -405,18 +296,19 @@ export default function ProdutosPage() {
           </div>
         </div>
 
-        {/* Sugestões rápidas */}
+        {/* ── SUGESTÕES ── */}
         {SUGESTOES.some(s => !jaExiste(s.slug)) && (
-          <div className="mb-8">
-            <p className="text-xs font-semibold text-[#52525B] uppercase tracking-widest mb-3">Adicionar rápido</p>
-            <div className="flex flex-wrap gap-2">
+          <div style={{ padding: '20px 0', borderBottom: '1px solid #111', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#333', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Adicionar</span>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {SUGESTOES.filter(s => !jaExiste(s.slug)).map(s => (
                 <button
                   key={s.slug}
-                  onClick={() => abrirNovo(s)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-[#222228] text-[#71717A] hover:text-white hover:border-[#7B3FE4]/50 transition-all"
+                  onClick={() => { setModal({ open: true, isNew: true, produto: { ...EMPTY, ...s } }); setActiveSection('basico') }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', border: '1px solid #1a1a1a', background: 'none', color: '#444', fontSize: 11, cursor: 'pointer', transition: 'all .1s' }}
+                  className="btn-ghost"
                 >
-                  <Plus className="w-3 h-3" />
+                  <Plus size={10} />
                   {s.nome}
                 </button>
               ))}
@@ -424,118 +316,83 @@ export default function ProdutosPage() {
           </div>
         )}
 
-        {/* Lista */}
+        {/* ── LISTA ── */}
         {loading ? (
-          <div className="flex items-center justify-center h-40 text-[#52525B] text-sm">Carregando...</div>
+          <div style={{ padding: '80px 0', textAlign: 'center', fontFamily: 'monospace', fontSize: 11, color: '#333', letterSpacing: 2 }}>CARREGANDO...</div>
         ) : produtos.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-40 gap-2 text-[#52525B]">
-            <Package className="w-8 h-8 opacity-30" />
-            <p className="text-sm">Nenhum produto cadastrado</p>
+          <div style={{ padding: '80px 0', textAlign: 'center' }}>
+            <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#333', letterSpacing: 2 }}>NENHUM PRODUTO</div>
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div>
+            {/* cabeçalho tabela */}
+            <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 80px 140px 100px 80px', gap: 0, padding: '12px 16px', borderBottom: '1px solid #111' }}>
+              {['', 'PRODUTO', 'FUNIL', 'PREÇO PIX', 'CARTÃO', ''].map((h, i) => (
+                <span key={i} style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#333', textTransform: 'uppercase' }}>{h}</span>
+              ))}
+            </div>
+
             {produtos.map(prod => {
-              const aberto = expandido === prod.slug
-              const pixFinal = Math.round(prod.valor_pix * (1 - (prod.desconto_pix_pct || 0) / 100))
-              const parcela = prod.parcelas_max > 0 ? Math.round(prod.valor_cartao / prod.parcelas_max) : 0
+              const pxFin = Math.round(prod.valor_pix * (1 - (prod.desconto_pix_pct || 0) / 100))
+              const parc  = prod.parcelas_max > 0 ? Math.round(prod.valor_cartao / prod.parcelas_max) : 0
+              const pad   = PADROES.find(pp => pp.value === prod.padrao_funil)
+
               return (
-                <div key={prod.slug} className={`rounded-2xl border transition-all ${prod.ativo ? 'border-[#222228] bg-[#0E0E10]' : 'border-[#1A1A1C] bg-[#0A0A0C] opacity-60'}`}>
-                  <div className="flex items-center gap-4 px-5 py-4">
-                    {/* Toggle */}
-                    <button onClick={() => toggleAtivo(prod.slug, !prod.ativo)} className="flex-shrink-0">
-                      {prod.ativo
-                        ? <ToggleRight className="w-7 h-7 text-[#7B3FE4]" />
-                        : <ToggleLeft className="w-7 h-7 text-[#3F3F46]" />}
-                    </button>
-
-                    {/* Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-semibold text-white truncate">{prod.nome}</span>
-                        {prod.ativo && (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 font-medium">Ativo</span>
-                        )}
-                        {(() => {
-                          const pad = PADROES.find(p => p.value === (prod.padrao_funil ?? 'consultivo'))
-                          if (!pad) return null
-                          return (
-                            <span className="text-[10px] px-2 py-0.5 rounded font-mono font-bold border"
-                              style={{ color: pad.cor, backgroundColor: pad.cor + '20', borderColor: pad.cor + '40' }}>
-                              {pad.sigla} — {pad.label}
-                            </span>
-                          )
-                        })()}
-                      </div>
-                      <div className="flex items-center gap-4 mt-0.5">
-                        <span className="text-[11px] text-[#52525B] font-mono">{prod.slug}</span>
-                        {prod.valor_pix > 0 && (
-                          <span className="text-[11px] text-[#52525B]">
-                            PIX R$ {pixFinal.toLocaleString('pt-BR')}
-                            {prod.desconto_pix_pct > 0 && <span className="text-emerald-500 ml-1">(-{prod.desconto_pix_pct}%)</span>}
-                            {prod.valor_cartao > 0 && ` · ${prod.parcelas_max}x R$ ${parcela.toLocaleString('pt-BR')}`}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={() => setExpandido(aberto ? null : prod.slug)}
-                        className="p-2 rounded-lg text-[#52525B] hover:text-white hover:bg-[#18181A] transition-all"
-                        title="Ver detalhes"
-                      >
-                        {aberto ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                      </button>
-                      <button
-                        onClick={() => abrirEditar(prod)}
-                        className="p-2 rounded-lg text-[#52525B] hover:text-white hover:bg-[#18181A] transition-all"
-                        title="Editar"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      {prod.slug !== 'implante' && (
-                        <button
-                          onClick={() => setConfirmDelete(prod.slug)}
-                          className="p-2 rounded-lg text-[#52525B] hover:text-red-400 hover:bg-red-500/10 transition-all"
-                          title="Remover"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
+                <div
+                  key={prod.slug}
+                  className="row-hover"
+                  style={{ display: 'grid', gridTemplateColumns: '24px 1fr 80px 140px 100px 80px', gap: 0, padding: '14px 16px', borderBottom: '1px solid #0d0d0d', alignItems: 'center', transition: 'background .1s', opacity: prod.ativo ? 1 : 0.35 }}
+                >
+                  {/* status dot */}
+                  <div>
+                    <button
+                      onClick={() => toggleAtivo(prod.slug, !prod.ativo)}
+                      title={prod.ativo ? 'Desativar' : 'Ativar'}
+                      style={{ width: 8, height: 8, borderRadius: '50%', background: prod.ativo ? '#00ff88' : '#222', border: 'none', cursor: 'pointer', padding: 0, display: 'block', transition: 'background .15s' }}
+                    />
                   </div>
 
-                  {/* Expandido */}
-                  {aberto && (
-                    <div className="px-5 pb-5 border-t border-[#1C1C1E] pt-4 grid grid-cols-2 gap-6">
-                      <div>
-                        <p className="text-[10px] font-semibold text-[#52525B] uppercase tracking-widest mb-2 flex items-center gap-1.5">
-                          <Bot className="w-3 h-3" /> Contexto da ANA
-                        </p>
-                        <p className="text-xs text-[#A1A1AA] leading-relaxed whitespace-pre-wrap">
-                          {prod.prompt_contexto || <span className="italic text-[#3F3F46]">Não configurado</span>}
-                        </p>
-                        {prod.dores && (
-                          <>
-                            <p className="text-[10px] font-semibold text-[#52525B] uppercase tracking-widest mb-2 mt-4">Dores do público</p>
-                            <p className="text-xs text-[#A1A1AA] leading-relaxed whitespace-pre-wrap">{prod.dores}</p>
-                          </>
-                        )}
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-semibold text-[#52525B] uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                          <DollarSign className="w-3 h-3" /> Preços
-                        </p>
-                        <div className="space-y-2 text-xs">
-                          <div className="flex justify-between text-[#71717A]"><span>PIX à vista</span><span className="text-white font-semibold">R$ {pixFinal.toLocaleString('pt-BR')}</span></div>
-                          {prod.desconto_pix_pct > 0 && <div className="flex justify-between text-[#71717A]"><span>Desconto PIX</span><span className="text-emerald-400 font-semibold">{prod.desconto_pix_pct}%</span></div>}
-                          <div className="flex justify-between text-[#71717A]"><span>Cartão ({prod.parcelas_max}x)</span><span className="text-white font-semibold">R$ {parcela.toLocaleString('pt-BR')}/mês</span></div>
-                          <div className="flex justify-between text-[#71717A]"><span>Parcelamento</span><span className="text-[#A1A1AA]">{prod.parcelamento_texto}</span></div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  {/* nome + slug */}
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#e8e8e8', marginBottom: 2 }}>{prod.nome}</div>
+                    <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#333' }}>{prod.slug}</div>
+                  </div>
+
+                  {/* funil */}
+                  <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#555' }}>
+                    <span style={{ background: '#111', padding: '2px 6px', fontSize: 10, fontWeight: 700 }}>{pad?.sigla}</span>
+                  </div>
+
+                  {/* pix */}
+                  <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#888', fontVariantNumeric: 'tabular-nums' }}>
+                    {prod.valor_pix > 0 ? `R$ ${pxFin.toLocaleString('pt-BR')}` : '—'}
+                    {prod.desconto_pix_pct > 0 && <span style={{ marginLeft: 6, fontSize: 9, color: '#00ff88' }}>-{prod.desconto_pix_pct}%</span>}
+                  </div>
+
+                  {/* cartão */}
+                  <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#555', fontVariantNumeric: 'tabular-nums' }}>
+                    {prod.valor_cartao > 0 ? `${prod.parcelas_max}x ${parc.toLocaleString('pt-BR')}` : '—'}
+                  </div>
+
+                  {/* ações */}
+                  <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
+                    <button
+                      onClick={() => { setModal({ open: true, isNew: false, produto: { ...prod } }); setActiveSection('basico') }}
+                      className="btn-ghost"
+                      style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid #1a1a1a', color: '#444', cursor: 'pointer', transition: 'all .1s' }}
+                    >
+                      <Pencil size={11} />
+                    </button>
+                    {prod.slug !== 'implante' && (
+                      <button
+                        onClick={() => setConfirmDelete(prod.slug)}
+                        className="btn-ghost"
+                        style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid #1a1a1a', color: '#444', cursor: 'pointer', transition: 'all .1s' }}
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               )
             })}
@@ -543,252 +400,332 @@ export default function ProdutosPage() {
         )}
       </div>
 
-      {/* Modal */}
+      {/* ── MODAL ── */}
       {modal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-          <div className="bg-[#0E0E10] border border-[#222228] rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            {/* Modal header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-[#1C1C1E]">
-              <h2 className="text-base font-semibold text-white">
-                {modal.isNew ? 'Novo produto' : `Editar — ${p.nome}`}
-              </h2>
-              <button onClick={fecharModal} className="p-1.5 rounded-lg text-[#52525B] hover:text-white hover:bg-[#18181A] transition-all">
-                <X className="w-4 h-4" />
+        <div style={{ position: 'fixed', inset: 0, zIndex: 50, display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end', background: 'rgba(0,0,0,0.85)' }}>
+          <div style={{ width: '100%', maxWidth: 640, background: '#000', borderLeft: '1px solid #1a1a1a', display: 'flex', flexDirection: 'column', height: '100vh' }}>
+
+            {/* modal header */}
+            <div style={{ padding: '0 24px', height: 56, borderBottom: '1px solid #1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 3, color: '#444', textTransform: 'uppercase' }}>
+                  {modal.isNew ? 'NOVO PRODUTO' : p.slug}
+                </span>
+                {!modal.isNew && (
+                  <button
+                    onClick={() => toggleAtivo(p.slug, !p.ativo)}
+                    style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '3px 8px', border: `1px solid ${p.ativo ? '#00ff88' : '#222'}`, background: 'none', color: p.ativo ? '#00ff88' : '#333', fontSize: 10, fontFamily: 'monospace', cursor: 'pointer', letterSpacing: 1 }}
+                  >
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: p.ativo ? '#00ff88' : '#333' }} />
+                    {p.ativo ? 'ATIVO' : 'INATIVO'}
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setModal(m => ({ ...m, open: false }))}
+                className="btn-ghost"
+                style={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: '1px solid #1a1a1a', color: '#444', cursor: 'pointer' }}
+              >
+                <X size={14} />
               </button>
             </div>
 
-            <div className="p-6 space-y-6">
-              {/* Identificação */}
-              <section>
-                <p className="text-[10px] font-semibold text-[#52525B] uppercase tracking-widest mb-3">Identificação</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs text-[#71717A] mb-1 block">Nome do produto</label>
+            {/* section tabs */}
+            <div style={{ display: 'flex', borderBottom: '1px solid #111', flexShrink: 0 }}>
+              {SECTIONS.map(s => (
+                <button
+                  key={s.id}
+                  onClick={() => setActiveSection(s.id)}
+                  className="tab-btn"
+                  style={{ flex: 1, padding: '10px 4px', background: 'none', border: 'none', borderBottom: `2px solid ${activeSection === s.id ? '#e8ff00' : 'transparent'}`, color: activeSection === s.id ? '#e8ff00' : '#333', fontSize: 9, fontFamily: 'monospace', letterSpacing: 1.5, textTransform: 'uppercase', cursor: 'pointer', transition: 'color .1s' }}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
+
+            {/* modal body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+
+              {/* ─ IDENTIFICAÇÃO ─ */}
+              {activeSection === 'basico' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <Field label="Nome do produto">
                     <input
                       value={p.nome}
                       onChange={e => setField('nome', e.target.value)}
-                      placeholder="Ex: Mentoria Médica"
-                      className="w-full bg-[#18181A] border border-[#222228] rounded-xl px-3 py-2.5 text-sm text-white placeholder-[#3F3F46] focus:outline-none focus:border-[#7B3FE4]/50"
+                      placeholder="Ex: Implante Hormonal Bioidêntico"
+                      style={inputStyle}
                     />
-                  </div>
-                  <div>
-                    <label className="text-xs text-[#71717A] mb-1 block">Slug (identificador único)</label>
+                  </Field>
+                  <Field label="Slug — identificador único (sem espaços)">
                     <input
                       value={p.slug}
                       onChange={e => setField('slug', e.target.value.toLowerCase().replace(/\s/g, '_').replace(/[^a-z0-9_]/g, ''))}
-                      placeholder="Ex: mentoria_medica"
+                      placeholder="implante_hormonal"
                       disabled={!modal.isNew}
-                      className="w-full bg-[#18181A] border border-[#222228] rounded-xl px-3 py-2.5 text-sm text-white placeholder-[#3F3F46] focus:outline-none focus:border-[#7B3FE4]/50 disabled:opacity-40 font-mono"
+                      style={{ ...inputStyle, fontFamily: 'monospace', opacity: modal.isNew ? 1 : 0.4 }}
                     />
+                  </Field>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '10px 14px', border: '1px solid #1a1a1a', marginTop: 4 }}>
+                    <button
+                      onClick={() => setField('ativo', !p.ativo)}
+                      style={{ width: 32, height: 18, background: p.ativo ? '#e8ff00' : '#111', border: 'none', cursor: 'pointer', position: 'relative', transition: 'background .15s', flexShrink: 0 }}
+                    >
+                      <div style={{ position: 'absolute', top: 3, left: p.ativo ? 16 : 3, width: 12, height: 12, background: p.ativo ? '#000' : '#333', transition: 'left .15s' }} />
+                    </button>
+                    <span style={{ fontSize: 12, color: p.ativo ? '#888' : '#333' }}>{p.ativo ? 'Produto ativo — ANA pode vender' : 'Produto inativo'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                    <button onClick={() => setActiveSection('preco')} style={{ ...nextBtnStyle }}>
+                      PREÇOS <ChevronRight size={12} />
+                    </button>
                   </div>
                 </div>
-              </section>
+              )}
 
-              {/* Preços */}
-              <section>
-                <p className="text-[10px] font-semibold text-[#52525B] uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                  <DollarSign className="w-3 h-3" /> Preços
-                </p>
-                <div className="grid grid-cols-2 gap-3 mb-3">
-                  <div>
-                    <label className="text-xs text-[#71717A] mb-1 block">Valor PIX (R$)</label>
-                    <input
-                      type="number"
-                      value={p.valor_pix || ''}
-                      onChange={e => setField('valor_pix', Number(e.target.value))}
-                      placeholder="5000"
-                      className="w-full bg-[#18181A] border border-[#222228] rounded-xl px-3 py-2.5 text-sm text-white placeholder-[#3F3F46] focus:outline-none focus:border-[#7B3FE4]/50"
-                    />
+              {/* ─ PREÇOS ─ */}
+              {activeSection === 'preco' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <Field label="Valor PIX (R$)">
+                      <input type="number" value={p.valor_pix || ''} onChange={e => setField('valor_pix', Number(e.target.value))} placeholder="5000" style={{ ...inputStyle, fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }} />
+                    </Field>
+                    <Field label="Desconto PIX (%)">
+                      <input type="number" value={p.desconto_pix_pct || ''} onChange={e => setField('desconto_pix_pct', Number(e.target.value))} placeholder="0" style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                    </Field>
+                    <Field label="Valor cartão (R$)">
+                      <input type="number" value={p.valor_cartao || ''} onChange={e => setField('valor_cartao', Number(e.target.value))} placeholder="5500" style={{ ...inputStyle, fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }} />
+                    </Field>
+                    <Field label="Máx. parcelas">
+                      <input type="number" value={p.parcelas_max || ''} onChange={e => setField('parcelas_max', Number(e.target.value))} placeholder="6" style={{ ...inputStyle, fontFamily: 'monospace' }} />
+                    </Field>
                   </div>
-                  <div>
-                    <label className="text-xs text-[#71717A] mb-1 block">Desconto PIX (%)</label>
-                    <input
-                      type="number"
-                      value={p.desconto_pix_pct || ''}
-                      onChange={e => setField('desconto_pix_pct', Number(e.target.value))}
-                      placeholder="0"
-                      className="w-full bg-[#18181A] border border-[#222228] rounded-xl px-3 py-2.5 text-sm text-white placeholder-[#3F3F46] focus:outline-none focus:border-[#7B3FE4]/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-[#71717A] mb-1 block">Valor cartão (R$)</label>
-                    <input
-                      type="number"
-                      value={p.valor_cartao || ''}
-                      onChange={e => setField('valor_cartao', Number(e.target.value))}
-                      placeholder="5000"
-                      className="w-full bg-[#18181A] border border-[#222228] rounded-xl px-3 py-2.5 text-sm text-white placeholder-[#3F3F46] focus:outline-none focus:border-[#7B3FE4]/50"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-[#71717A] mb-1 block">Máx. parcelas</label>
-                    <input
-                      type="number"
-                      value={p.parcelas_max || ''}
-                      onChange={e => setField('parcelas_max', Number(e.target.value))}
-                      placeholder="6"
-                      className="w-full bg-[#18181A] border border-[#222228] rounded-xl px-3 py-2.5 text-sm text-white placeholder-[#3F3F46] focus:outline-none focus:border-[#7B3FE4]/50"
-                    />
+                  <Field label="Texto parcelamento">
+                    <input value={p.parcelamento_texto ?? ''} onChange={e => setField('parcelamento_texto', e.target.value)} placeholder="até 6x sem juros" style={inputStyle} />
+                  </Field>
+                  {(p.valor_pix > 0 || p.valor_cartao > 0) && (
+                    <div style={{ padding: '12px 16px', border: '1px solid #1a1a00', background: '#0a0a00' }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#555', marginBottom: 8, textTransform: 'uppercase' }}>Preview — o que ANA diz</div>
+                      <div style={{ fontSize: 12, color: '#888', fontFamily: 'monospace', fontVariantNumeric: 'tabular-nums' }}>
+                        PIX R$ {pixFinal.toLocaleString('pt-BR')}{p.desconto_pix_pct > 0 ? ` (${p.desconto_pix_pct}% off)` : ''} · {p.parcelas_max}x R$ {parcela.toLocaleString('pt-BR')} {p.parcelamento_texto}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                    <button onClick={() => setActiveSection('funil')} style={{ ...nextBtnStyle }}>
+                      FUNIL <ChevronRight size={12} />
+                    </button>
                   </div>
                 </div>
-                <div>
-                  <label className="text-xs text-[#71717A] mb-1 block">Texto parcelamento</label>
-                  <input
-                    value={p.parcelamento_texto ?? ''}
-                    onChange={e => setField('parcelamento_texto', e.target.value)}
-                    placeholder="até 6x sem juros"
-                    className="w-full bg-[#18181A] border border-[#222228] rounded-xl px-3 py-2.5 text-sm text-white placeholder-[#3F3F46] focus:outline-none focus:border-[#7B3FE4]/50"
-                  />
-                </div>
+              )}
 
-                {/* Preview preço */}
-                {(p.valor_pix > 0 || p.valor_cartao > 0) && (
-                  <div className="mt-3 bg-[#7B3FE4]/8 border border-[#7B3FE4]/20 rounded-xl px-4 py-3">
-                    <p className="text-[10px] font-semibold text-[#7B3FE4] uppercase tracking-widest mb-2">Preview — o que ANA vai dizer</p>
-                    <p className="text-xs text-[#C4B5FD] leading-relaxed">
-                      {p.desconto_pix_pct > 0
-                        ? `💜 PIX à vista: R$ ${valorPixFinal.toLocaleString('pt-BR')} (${p.desconto_pix_pct}% de desconto) · Cartão: ${p.parcelas_max}x de R$ ${parcelaCartao.toLocaleString('pt-BR')} (${p.parcelamento_texto})`
-                        : `💜 PIX à vista: R$ ${valorPixFinal.toLocaleString('pt-BR')} · Cartão: ${p.parcelas_max}x de R$ ${parcelaCartao.toLocaleString('pt-BR')} (${p.parcelamento_texto})`
-                      }
-                    </p>
-                  </div>
-                )}
-              </section>
-
-              {/* Padrão de Funil */}
-              <section>
-                <p className="text-[10px] font-semibold text-[#52525B] uppercase tracking-widest mb-3">Padrão de funil</p>
-                <div className="flex flex-col gap-2">
+              {/* ─ FUNIL ─ */}
+              {activeSection === 'funil' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {PADROES.map(pad => {
                     const ativo = p.padrao_funil === pad.value
                     return (
                       <button
                         key={pad.value}
                         onClick={() => setField('padrao_funil', pad.value)}
-                        className={`flex items-start gap-3 p-3 rounded-xl border text-left transition-all ${
-                          ativo ? 'border-opacity-50 bg-opacity-8' : 'border-[#222228] hover:border-[#333338]'
-                        }`}
-                        style={ativo ? { borderColor: pad.cor + '80', backgroundColor: pad.cor + '14' } : {}}
+                        style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '16px', border: `1px solid ${ativo ? '#e8ff00' : '#1a1a1a'}`, background: ativo ? '#0d0d00' : 'none', cursor: 'pointer', textAlign: 'left', transition: 'all .1s' }}
                       >
-                        <div
-                          className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 text-xs font-black text-white"
-                          style={{ backgroundColor: ativo ? pad.cor : '#222228' }}
-                        >
+                        <div style={{ width: 28, height: 28, background: ativo ? '#e8ff00' : '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontFamily: 'monospace', fontSize: 13, fontWeight: 900, color: ativo ? '#000' : '#333' }}>
                           {pad.sigla}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-white">{pad.label}</p>
-                          <p className="text-[11px] text-[#71717A] mt-0.5 leading-relaxed">{pad.desc}</p>
-                          <p className="text-[10px] font-mono mt-1.5" style={{ color: ativo ? pad.cor : '#3F3F46' }}>
-                            {pad.etapas}
-                          </p>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: ativo ? '#e8ff00' : '#666', marginBottom: 4 }}>{pad.label}</div>
+                          <div style={{ fontFamily: 'monospace', fontSize: 10, color: '#333', letterSpacing: 0.5 }}>{pad.etapas}</div>
                         </div>
-                        <div className={`w-4 h-4 rounded-full border-2 flex-shrink-0 mt-0.5 flex items-center justify-center`}
-                          style={ativo ? { borderColor: pad.cor } : { borderColor: '#3F3F46' }}>
-                          {ativo && <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: pad.cor }} />}
-                        </div>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: ativo ? '#e8ff00' : '#222', flexShrink: 0, marginTop: 4, transition: 'background .1s' }} />
                       </button>
                     )
                   })}
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                    <button onClick={() => setActiveSection('ana_texto')} style={{ ...nextBtnStyle }}>
+                      CONTEXTO <ChevronRight size={12} />
+                    </button>
+                  </div>
                 </div>
-              </section>
+              )}
 
-              {/* Contexto ANA */}
-              <section>
-                <p className="text-[10px] font-semibold text-[#52525B] uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                  <Bot className="w-3 h-3" /> Contexto para ANA
-                </p>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs text-[#71717A] mb-1 block">O que ANA sabe sobre este produto</label>
+              {/* ─ CONTEXTO ANA ─ */}
+              {activeSection === 'ana_texto' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <Field label="O que ANA sabe sobre este produto">
                     <textarea
                       value={p.prompt_contexto ?? ''}
                       onChange={e => setField('prompt_contexto', e.target.value)}
-                      rows={4}
-                      placeholder={`Ex: Este é um programa de acompanhamento de emagrecimento com duração de 3 meses. Inclui consultas semanais, plano alimentar personalizado e suporte via WhatsApp. Público-alvo: mulheres 35-60 anos...`}
-                      className="w-full bg-[#18181A] border border-[#222228] rounded-xl px-3 py-2.5 text-sm text-white placeholder-[#3F3F46] focus:outline-none focus:border-[#7B3FE4]/50 resize-none leading-relaxed"
+                      rows={5}
+                      placeholder="Descreva o produto: o que é, como funciona, duração, público-alvo, diferenciais..."
+                      style={{ ...inputStyle, resize: 'vertical', minHeight: 100 }}
                     />
-                  </div>
-                  <div>
-                    <label className="text-xs text-[#71717A] mb-1 block">Dores do público (ANA usa para criar conexão)</label>
+                  </Field>
+                  <Field label="Dores do público — ANA usa para criar conexão emocional">
                     <textarea
                       value={p.dores ?? ''}
                       onChange={e => setField('dores', e.target.value)}
-                      rows={3}
-                      placeholder={`Ex: cansaço crônico, dificuldade de perder peso mesmo fazendo dieta, metabolismo lento, falta de energia no dia a dia...`}
-                      className="w-full bg-[#18181A] border border-[#222228] rounded-xl px-3 py-2.5 text-sm text-white placeholder-[#3F3F46] focus:outline-none focus:border-[#7B3FE4]/50 resize-none leading-relaxed"
+                      rows={4}
+                      placeholder="cansaço crônico, ganho de peso, falta de energia, metabolismo lento..."
+                      style={{ ...inputStyle, resize: 'vertical', minHeight: 80 }}
                     />
+                  </Field>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
+                    <button onClick={() => setActiveSection('ana_voz')} style={{ ...nextBtnStyle }}>
+                      ANA VOZ <ChevronRight size={12} />
+                    </button>
                   </div>
                 </div>
-              </section>
+              )}
+
+              {/* ─ ANA VOZ ─ */}
+              {activeSection === 'ana_voz' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  <div style={{ padding: '10px 14px', border: '1px solid #1a1a00', background: '#0a0a00' }}>
+                    <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#555', marginBottom: 4, textTransform: 'uppercase' }}>Configuração da ligação</div>
+                    <div style={{ fontSize: 11, color: '#444' }}>Esses campos serão injetados automaticamente no prompt da ANA quando ela ligar para leads deste produto.</div>
+                  </div>
+
+                  <Field label="Médico / empresa responsável">
+                    <input
+                      value={p.nome_responsavel ?? ''}
+                      onChange={e => setField('nome_responsavel', e.target.value)}
+                      placeholder="Dr. Vinícius · Clínica Hormone Ecosystem"
+                      style={inputStyle}
+                    />
+                  </Field>
+
+                  <div>
+                    <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#444', marginBottom: 10, textTransform: 'uppercase' }}>Tom de voz</div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                      {TONS.map(t => {
+                        const ativo = (p.tom_voz ?? 'acolhedor') === t.value
+                        return (
+                          <button
+                            key={t.value}
+                            onClick={() => setField('tom_voz', t.value)}
+                            style={{ padding: '10px 14px', border: `1px solid ${ativo ? '#e8ff00' : '#1a1a1a'}`, background: ativo ? '#0d0d00' : 'none', color: ativo ? '#e8ff00' : '#444', fontSize: 11, fontWeight: ativo ? 700 : 400, cursor: 'pointer', textAlign: 'left', transition: 'all .1s', fontFamily: 'monospace', letterSpacing: 1 }}
+                          >
+                            {t.label.toUpperCase()}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <Field label="Script de abertura da ligação">
+                    <textarea
+                      value={p.script_abertura ?? ''}
+                      onChange={e => setField('script_abertura', e.target.value)}
+                      rows={4}
+                      placeholder={`"Oi! Aqui é a ANA, assistente do Dr. Vinícius. Você entrou em contato sobre o implante hormonal bioidêntico..."`}
+                      style={{ ...inputStyle, resize: 'vertical', minHeight: 80, fontSize: 12 }}
+                    />
+                    <div style={{ fontFamily: 'monospace', fontSize: 9, color: '#333', marginTop: 4 }}>Deixe em branco para usar o padrão do funil</div>
+                  </Field>
+
+                  <Field label="Objeções e respostas">
+                    <textarea
+                      value={p.objecoes ?? ''}
+                      onChange={e => setField('objecoes', e.target.value)}
+                      rows={5}
+                      placeholder={`"Está caro" → Explique o custo de não tratar\n"Vou pensar" → Pergunte o que falta para se sentir segura\n"Tenho medo" → Explique que é bioidêntico, seguro e monitorado`}
+                      style={{ ...inputStyle, resize: 'vertical', minHeight: 100, fontFamily: 'monospace', fontSize: 11 }}
+                    />
+                    <div style={{ fontFamily: 'monospace', fontSize: 9, color: '#333', marginTop: 4 }}>Uma objeção por linha. ANA lê durante a ligação.</div>
+                  </Field>
+                </div>
+              )}
             </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-[#1C1C1E]">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <button
-                  onClick={() => setField('ativo', !p.ativo)}
-                  className="flex-shrink-0"
-                >
-                  {p.ativo
-                    ? <ToggleRight className="w-7 h-7 text-[#7B3FE4]" />
-                    : <ToggleLeft className="w-7 h-7 text-[#3F3F46]" />}
-                </button>
-                <span className="text-sm text-[#71717A]">{p.ativo ? 'Produto ativo' : 'Produto inativo'}</span>
-              </label>
-              <div className="flex items-center gap-2">
-                <button onClick={fecharModal} className="px-4 py-2 rounded-xl text-sm text-[#71717A] hover:text-white hover:bg-[#18181A] transition-all">
-                  Cancelar
-                </button>
-                <button
-                  onClick={salvar}
-                  disabled={saving}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#7B3FE4] hover:bg-[#6D35CC] text-white text-sm font-semibold transition-colors disabled:opacity-50"
-                >
-                  <Save className="w-4 h-4" />
-                  {saving ? 'Salvando...' : 'Salvar produto'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Confirm delete */}
-      {confirmDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-          <div className="bg-[#0E0E10] border border-red-500/20 rounded-2xl p-6 max-w-sm w-full mx-4">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-9 h-9 rounded-xl bg-red-500/15 flex items-center justify-center">
-                <Trash2 className="w-4 h-4 text-red-400" />
-              </div>
-              <div>
-                <p className="text-sm font-semibold text-white">Remover produto</p>
-                <p className="text-xs text-[#52525B]">Esta ação não pode ser desfeita</p>
-              </div>
-            </div>
-            <p className="text-sm text-[#71717A] mb-5">
-              Deseja remover <span className="font-mono text-white">{confirmDelete}</span>? Os leads associados não serão afetados.
-            </p>
-            <div className="flex gap-2">
-              <button onClick={() => setConfirmDelete(null)} className="flex-1 py-2 rounded-xl text-sm text-[#71717A] hover:text-white hover:bg-[#18181A] transition-all border border-[#222228]">
+            {/* modal footer */}
+            <div style={{ padding: '16px 24px', borderTop: '1px solid #1a1a1a', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, flexShrink: 0 }}>
+              <button
+                onClick={() => setModal(m => ({ ...m, open: false }))}
+                className="btn-ghost"
+                style={{ padding: '0 16px', height: 36, background: 'none', border: '1px solid #1a1a1a', color: '#444', fontSize: 12, cursor: 'pointer' }}
+              >
                 Cancelar
               </button>
-              <button onClick={() => deletar(confirmDelete)} className="flex-1 py-2 rounded-xl text-sm text-white font-semibold bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 transition-all">
-                Remover
+              <button
+                onClick={salvar}
+                disabled={saving}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 20px', height: 36, background: '#fff', border: 'none', color: '#000', fontSize: 12, fontWeight: 700, cursor: saving ? 'default' : 'pointer', opacity: saving ? 0.5 : 1, letterSpacing: 0.5 }}
+              >
+                <Save size={13} />
+                {saving ? 'SALVANDO...' : 'SALVAR'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Toast */}
+      {/* ── CONFIRM DELETE ── */}
+      {confirmDelete && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.9)' }}>
+          <div style={{ width: 380, background: '#000', border: '1px solid #ff3333', padding: 28 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <AlertTriangle size={14} color="#ff3333" />
+              <span style={{ fontFamily: 'monospace', fontSize: 10, letterSpacing: 2, color: '#ff3333', textTransform: 'uppercase' }}>Confirmar remoção</span>
+            </div>
+            <div style={{ fontFamily: 'monospace', fontSize: 12, color: '#555', marginBottom: 24, lineHeight: 1.6 }}>
+              Remover <span style={{ color: '#888' }}>{confirmDelete}</span>? Os leads associados não são afetados.
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setConfirmDelete(null)} className="btn-ghost" style={{ flex: 1, height: 36, background: 'none', border: '1px solid #1a1a1a', color: '#444', fontSize: 11, cursor: 'pointer' }}>
+                CANCELAR
+              </button>
+              <button onClick={() => deletar(confirmDelete)} style={{ flex: 1, height: 36, background: '#ff3333', border: 'none', color: '#fff', fontSize: 11, fontWeight: 700, cursor: 'pointer', letterSpacing: 1 }}>
+                REMOVER
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TOAST ── */}
       {toast && (
-        <div className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-xl text-sm font-medium shadow-xl border transition-all ${toast.ok ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' : 'bg-red-500/15 border-red-500/30 text-red-400'}`}>
-          {toast.ok ? <CheckCircle2 className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+        <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 70, padding: '10px 18px', background: '#000', border: `1px solid ${toast.ok ? '#00ff88' : '#ff3333'}`, color: toast.ok ? '#00ff88' : '#ff3333', fontSize: 11, fontFamily: 'monospace', letterSpacing: 1.5, textTransform: 'uppercase' }}>
           {toast.msg}
         </div>
       )}
     </div>
   )
+}
+
+/* ─ helpers ─ */
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div style={{ fontFamily: 'monospace', fontSize: 9, letterSpacing: 2, color: '#444', marginBottom: 6, textTransform: 'uppercase' }}>{label}</div>
+      {children}
+    </div>
+  )
+}
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  background: '#080808',
+  border: '1px solid #1a1a1a',
+  padding: '10px 12px',
+  fontSize: 13,
+  color: '#e8e8e8',
+  transition: 'border-color .1s',
+}
+
+const nextBtnStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  padding: '0 16px',
+  height: 32,
+  background: 'none',
+  border: '1px solid #1a1a1a',
+  color: '#444',
+  fontSize: 10,
+  fontFamily: 'monospace',
+  letterSpacing: 2,
+  cursor: 'pointer',
+  textTransform: 'uppercase' as const,
 }
