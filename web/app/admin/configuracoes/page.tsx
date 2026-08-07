@@ -251,14 +251,19 @@ export default function ConfiguracoesPage() {
       const newCampMap: Record<string, ConfigCampanha> = {}
       const newRenovMap: Record<string, ConfigRenovacao> = {}
 
+      // configuracoes.pagamento é o fallback de preços (editado pela UI)
+      const cfgPag = dCfg.config?.pagamento as ConfigPagamento | undefined
+
       for (const p of lista) {
+        // Usa preço do produto se válido (> 1), senão usa configuracoes, senão default
+        const temPreco = p.valor_pix != null && p.valor_pix > 1
         newPagMap[p.slug] = {
-          valor_pix:          p.valor_pix          ?? PAG_DEFAULT.valor_pix,
-          valor_cartao:       p.valor_cartao       ?? PAG_DEFAULT.valor_cartao,
-          desconto_pix_pct:   p.desconto_pix_pct   ?? PAG_DEFAULT.desconto_pix_pct,
-          parcelas_max:       p.parcelas_max        ?? PAG_DEFAULT.parcelas_max,
-          juros_cartao_pct:   p.juros_cartao_pct   ?? PAG_DEFAULT.juros_cartao_pct,
-          parcelamento_texto: p.parcelamento_texto  ?? PAG_DEFAULT.parcelamento_texto,
+          valor_pix:          temPreco ? p.valor_pix!          : (cfgPag?.valor_pix          ?? PAG_DEFAULT.valor_pix),
+          valor_cartao:       temPreco ? p.valor_cartao!       : (cfgPag?.valor_cartao       ?? PAG_DEFAULT.valor_cartao),
+          desconto_pix_pct:   p.desconto_pix_pct   != null ? p.desconto_pix_pct   : (cfgPag?.desconto_pix_pct   ?? PAG_DEFAULT.desconto_pix_pct),
+          parcelas_max:       p.parcelas_max        != null && p.parcelas_max > 0 ? p.parcelas_max : (cfgPag?.parcelas_max ?? PAG_DEFAULT.parcelas_max),
+          juros_cartao_pct:   p.juros_cartao_pct   != null ? p.juros_cartao_pct   : (cfgPag?.juros_cartao_pct   ?? PAG_DEFAULT.juros_cartao_pct),
+          parcelamento_texto: p.parcelamento_texto  ?? cfgPag?.parcelamento_texto  ?? PAG_DEFAULT.parcelamento_texto,
         }
         newCampMap[p.slug] = p.campanha ?? CAMP_DEFAULT
         newRenovMap[p.slug] = p.renovacao ?? RENOV_DEFAULT
