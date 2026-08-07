@@ -80,14 +80,17 @@ export async function POST(req: NextRequest) {
           metodo_pagamento: null,
           tentativas_pagamento: 0,
           atendimento_humano: false,
+          token_indicacao: null,
+          total_referidos: 0,
         })
         .like('telefone', `%${suffix}%`)
         .select('id, nome, telefone, etapa_agente, status_pagamento, metodo_pagamento')
       if (error) throw error
-      // limpa M4: flag + contatos referidos pós-NÃO
+      // limpa M4, referidos e sessao_wpp
       await supabase.from('leads_m4_flag').delete().like('telefone', `%${suffix}%`)
       await supabase.from('contatos_referidos').delete().like('indicado_por_telefone', `%${suffix}%`)
-      return NextResponse.json({ data, rows: data?.length ?? 0, m4_limpo: true })
+      await supabase.from('sessao_wpp').delete().like('phone', `%${suffix}%`)
+      return NextResponse.json({ data, rows: data?.length ?? 0, m4_limpo: true, sessao_wpp_limpo: true })
     }
 
     if (action === 'deletar_lead') {
