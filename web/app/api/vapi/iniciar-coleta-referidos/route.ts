@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     // ── GUARDA CRÍTICA: pagamento DEVE estar confirmado ──────────────────────
     const { data: lead } = await supabase
       .from('leads')
-      .select('pagamento_confirmado, token_indicacao, nome')
+      .select('id, status_pagamento, token_indicacao, nome')
       .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${digits.replace(/^55/, '')}`)
       .maybeSingle()
 
@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ result: 'Lead não encontrado.' })
     }
 
-    if (!lead.pagamento_confirmado) {
+    if (lead.status_pagamento !== 'pago') {
       // Pagamento não confirmado — BLOQUEIA o envio do link
       return NextResponse.json({
         result: 'PAGAMENTO NÃO CONFIRMADO. Não envie o link de indicações ainda. Aguarde a confirmação do pagamento e tente novamente.',
@@ -70,10 +70,12 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // ── Pagamento confirmado — envia link de indicações ──────────────────────
-    const token = lead.token_indicacao
+    // ── Pagamento confirmado — garante token e envia link ────────────────────
+    let token = lead.token_indicacao
     if (!token) {
-      return NextResponse.json({ result: 'Token de indicação não encontrado para este lead.' })
+      const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+      token = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+      await supabase.from('leads').update({ token_indicacao: token }).eq('id', lead.id)
     }
 
     const link = `${APP_URL}/indicar/${token}`

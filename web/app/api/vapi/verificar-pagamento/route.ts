@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
 
     const { data: lead } = await supabase
       .from('leads')
-      .select('pagamento_confirmado, pagamento_gerado, metodo_pagamento')
+      .select('status_pagamento, metodo_pagamento')
       .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${digits.replace(/^55/, '')}`)
       .maybeSingle()
 
@@ -40,25 +40,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ result: 'Lead não encontrado.' })
     }
 
-    if (lead.pagamento_confirmado) {
+    if (lead.status_pagamento === 'pago') {
       return NextResponse.json({
         result: 'Pagamento confirmado! O sistema registrou o pagamento com sucesso.',
         confirmado: true,
       })
     }
 
-    if (lead.pagamento_gerado) {
-      return NextResponse.json({
-        result: 'Pagamento ainda não confirmado. O código já foi enviado no WhatsApp. Aguarde alguns instantes.',
-        confirmado: false,
-        gerado: true,
-      })
-    }
-
     return NextResponse.json({
-      result: 'Pagamento ainda não gerado.',
+      result: 'Pagamento ainda não confirmado. O código já foi enviado no WhatsApp. Aguarde alguns instantes e me avise quando aparecer a confirmação no seu banco.',
       confirmado: false,
-      gerado: false,
     })
   } catch (err: any) {
     console.error('verificar-pagamento error:', err)
