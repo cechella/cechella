@@ -457,6 +457,13 @@ export default function ProdutosPage() {
               {/* PREÇOS */}
               {activeTab === 'preco' && (
                 <>
+                  <div className="bg-[#18181A] border border-[#2C2C2E] rounded-xl px-4 py-3 flex items-start gap-3">
+                    <DollarSign className="w-4 h-4 text-[#71717A] flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-semibold text-[#A1A1AA] mb-0.5">Sincronizado com Configurações</p>
+                      <p className="text-xs text-[#52525B]">Salvar em <span className="text-[#A1A1AA]">Configurações → Pagamento</span> atualiza automaticamente o produto fixo ativo. Edite aqui para sobrescrever individualmente.</p>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 gap-3">
                     <FieldGroup label="Valor PIX (R$)">
                       <input type="number" value={p.valor_pix || ''} onChange={e => setField('valor_pix', Number(e.target.value))} placeholder="5000" className={`${inputCls} font-mono`} />

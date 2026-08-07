@@ -62,5 +62,31 @@ export async function POST(req: NextRequest) {
     .upsert({ chave, valor, updated_at: new Date().toISOString() }, { onConflict: 'chave' })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Quando preços são salvos, sincroniza com o produto fixo ativo
+  if (chave === 'pagamento') {
+    const pag = valor as Record<string, unknown>
+
+    // Descobre qual produto está como fixo (ou usa 'implante' como padrão)
+    const { data: cfgAna } = await supabase
+      .from('configuracoes')
+      .select('valor')
+      .eq('chave', 'atendimento_ana')
+      .maybeSingle()
+
+    const slugAlvo: string = (cfgAna?.valor as any)?.produto_fixo ?? 'implante'
+
+    await supabase
+      .from('produtos')
+      .update({
+        valor_pix:          pag.valor_pix,
+        valor_cartao:       pag.valor_cartao,
+        desconto_pix_pct:   pag.desconto_pix_pct,
+        parcelas_max:       pag.parcelas_max,
+        parcelamento_texto: pag.parcelamento_texto,
+      })
+      .eq('slug', slugAlvo)
+  }
+
   return NextResponse.json({ ok: true })
 }
