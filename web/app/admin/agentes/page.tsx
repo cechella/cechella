@@ -53,23 +53,6 @@ const agents: AgentCard[] = [
       { label: 'Logs Z-API', href: 'https://app.z-api.io' },
     ],
   },
-  {
-    icon: '🔗',
-    name: 'Ana Referidos',
-    role: 'Agente de Indicações — Web',
-    status: 'online',
-    color: '#f59e0b',
-    description: 'Gerencia o fluxo de indicações pós-compra. Envia link personalizado, tutorial em vídeo, recebe contatos via WhatsApp e rastreia progresso.',
-    metrics: [
-      { label: 'Indicações hoje', value: '—', color: '#f59e0b' },
-      { label: 'Sessões ativas', value: '—', color: '#7c5cfc' },
-      { label: 'Meta 20 atingida', value: '—' },
-    ],
-    tools: ['Z-API', 'Supabase', 'R2 Storage', 'n8n'],
-    links: [
-      { label: 'Página /indicar', href: 'https://www.hormoneecosystem.com/indicar' },
-    ],
-  },
 ]
 
 const coming: { icon: string; name: string; desc: string }[] = [
@@ -93,7 +76,7 @@ export default function AgentesPage() {
             </div>
             <div className="flex items-center gap-2 bg-[#131720] border border-[#252d42] rounded-full px-3 py-1.5 text-xs font-semibold text-[#22c55e]">
               <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
-              3 agentes online
+              2 agentes online
             </div>
           </div>
 
