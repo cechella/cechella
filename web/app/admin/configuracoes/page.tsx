@@ -5,10 +5,22 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import {
   DollarSign, Megaphone, RefreshCw, Save, Check, AlertTriangle,
-  Tag, CreditCard, Percent, Calendar, Bell, MessageSquare, Zap
+  Tag, CreditCard, Percent, Calendar, Bell, MessageSquare, Zap, ChevronDown
 } from 'lucide-react'
 
 /* ─── Types ─── */
+interface Produto {
+  slug: string
+  nome: string
+  status: string
+  valor_pix: number | null
+  valor_cartao: number | null
+  desconto_pix_pct: number | null
+  parcelas_max: number | null
+  juros_cartao_pct: number | null
+  parcelamento_texto: string | null
+}
+
 interface ConfigPagamento {
   valor_pix: number
   valor_cartao: number
@@ -111,6 +123,9 @@ export default function ConfiguracoesPage() {
   const [saved, setSaved] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
+  const [produtos, setProdutos] = useState<Produto[]>([])
+  const [slugSelecionado, setSlugSelecionado] = useState<string>('')
+
   const [pag, setPag] = useState<ConfigPagamento>({
     valor_pix: 5000, valor_cartao: 5000, desconto_pix_pct: 0,
     parcelas_max: 6, juros_cartao_pct: 0, parcelamento_texto: 'até 6x sem juros',
@@ -123,18 +138,65 @@ export default function ConfiguracoesPage() {
     mensagem: 'Olá! 💜 Seu implante hormonal está próximo do vencimento. Vamos agendar sua renovação?',
   })
 
+  const carregarProdutos = useCallback(async () => {
+    try {
+      const r = await fetch('/api/admin/produtos', { cache: 'no-store' })
+      const d = await r.json()
+      if (d.produtos) {
+        setProdutos(d.produtos)
+        if (d.produtos.length > 0 && !slugSelecionado) {
+          const ativo = d.produtos.find((p: Produto) => p.status === 'ativo') ?? d.produtos[0]
+          setSlugSelecionado(ativo.slug)
+          carregarPrecosFromProduto(ativo)
+        }
+      }
+    } catch { /* silently fail */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function carregarPrecosFromProduto(p: Produto) {
+    setPag(prev => ({
+      valor_pix:          p.valor_pix          ?? prev.valor_pix,
+      valor_cartao:       p.valor_cartao       ?? prev.valor_cartao,
+      desconto_pix_pct:   p.desconto_pix_pct   ?? prev.desconto_pix_pct,
+      parcelas_max:       p.parcelas_max        ?? prev.parcelas_max,
+      juros_cartao_pct:   p.juros_cartao_pct   ?? prev.juros_cartao_pct,
+      parcelamento_texto: p.parcelamento_texto  ?? prev.parcelamento_texto,
+    }))
+  }
+
+  function selecionarProduto(slug: string) {
+    setSlugSelecionado(slug)
+    const p = produtos.find(x => x.slug === slug)
+    if (p) carregarPrecosFromProduto(p)
+  }
+
   const carregar = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await fetch('/api/admin/configuracoes', { cache: 'no-store' })
-      const d = await r.json()
-      if (d.config) {
-        if (d.config.pagamento) setPag(d.config.pagamento as ConfigPagamento)
-        if (d.config.campanha) setCamp(d.config.campanha as ConfigCampanha)
-        if (d.config.renovacao) setRenov(d.config.renovacao as ConfigRenovacao)
+      const [rCfg, rProd] = await Promise.all([
+        fetch('/api/admin/configuracoes', { cache: 'no-store' }),
+        fetch('/api/admin/produtos', { cache: 'no-store' }),
+      ])
+      const dCfg = await rCfg.json()
+      const dProd = await rProd.json()
+
+      if (dCfg.config) {
+        if (dCfg.config.campanha) setCamp(dCfg.config.campanha as ConfigCampanha)
+        if (dCfg.config.renovacao) setRenov(dCfg.config.renovacao as ConfigRenovacao)
+      }
+
+      if (dProd.produtos?.length) {
+        setProdutos(dProd.produtos)
+        const ativo = dProd.produtos.find((p: Produto) => p.status === 'ativo') ?? dProd.produtos[0]
+        setSlugSelecionado(ativo.slug)
+        carregarPrecosFromProduto(ativo)
+      } else if (dCfg.config?.pagamento) {
+        setPag(dCfg.config.pagamento as ConfigPagamento)
       }
     } catch { setErro('Erro ao carregar configurações') }
     setLoading(false)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
@@ -143,17 +205,52 @@ export default function ConfiguracoesPage() {
     setSaving(true)
     setErro(null)
     try {
-      const items = [
-        { chave: 'pagamento', valor: pag },
-        { chave: 'campanha', valor: camp },
-        { chave: 'renovacao', valor: renov },
-      ]
-      await Promise.all(items.map(i =>
+      const promises: Promise<Response>[] = [
         fetch('/api/admin/configuracoes', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(i),
-        })
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chave: 'campanha', valor: camp }),
+        }),
+        fetch('/api/admin/configuracoes', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chave: 'renovacao', valor: renov }),
+        }),
+      ]
+
+      // Salva preços diretamente no produto selecionado
+      if (slugSelecionado) {
+        const produtoAtual = produtos.find(p => p.slug === slugSelecionado)
+        if (produtoAtual) {
+          promises.push(
+            fetch('/api/admin/produtos', {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'upsert',
+                produto: {
+                  ...produtoAtual,
+                  valor_pix:          pag.valor_pix,
+                  valor_cartao:       pag.valor_cartao,
+                  desconto_pix_pct:   pag.desconto_pix_pct,
+                  parcelas_max:       pag.parcelas_max,
+                  juros_cartao_pct:   pag.juros_cartao_pct,
+                  parcelamento_texto: pag.parcelamento_texto,
+                },
+              }),
+            })
+          )
+        }
+        // Também salva em configuracoes para manter compatibilidade com ANA
+        promises.push(
+          fetch('/api/admin/configuracoes', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chave: 'pagamento', valor: pag }),
+          })
+        )
+      }
+
+      await Promise.all(promises)
+      // Atualiza lista de produtos localmente
+      setProdutos(prev => prev.map(p =>
+        p.slug === slugSelecionado ? { ...p, ...pag } : p
       ))
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
@@ -235,10 +332,53 @@ export default function ConfiguracoesPage() {
             <>
               {/* ── ABA: PAGAMENTO ── */}
               {aba === 'pagamento' && (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
+                  {/* Seletor de produto */}
+                  {produtos.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: '#0E0E12', border: '1px solid #1E1E28', borderRadius: 10, padding: '12px 16px' }}>
+                      <DollarSign className="w-4 h-4" style={{ color: '#7B3FE4', flexShrink: 0 }} />
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#5A5A70', textTransform: 'uppercase', letterSpacing: '0.07em', flexShrink: 0 }}>Produto</span>
+                      <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
+                        <select
+                          value={slugSelecionado}
+                          onChange={e => selecionarProduto(e.target.value)}
+                          style={{
+                            width: '100%', appearance: 'none', background: '#111116', border: '1px solid #2C2C38',
+                            borderRadius: 8, padding: '8px 36px 8px 12px', fontSize: 13, fontWeight: 600,
+                            color: '#F0F0F5', outline: 'none', cursor: 'pointer',
+                          }}
+                        >
+                          {produtos.map(p => (
+                            <option key={p.slug} value={p.slug}>
+                              {p.nome}{p.status === 'ativo' ? ' ✓' : p.status === 'pausado' ? ' ⏸' : ' ○'}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: '#5A5A70', pointerEvents: 'none' }} />
+                      </div>
+                      {slugSelecionado && (() => {
+                        const p = produtos.find(x => x.slug === slugSelecionado)
+                        if (!p) return null
+                        const cfg: Record<string, { label: string; color: string }> = {
+                          ativo:   { label: 'Ativo',   color: '#22c55e' },
+                          pausado: { label: 'Pausado', color: '#f97316' },
+                          inativo: { label: 'Inativo', color: '#52525B' },
+                        }
+                        const s = cfg[p.status] ?? cfg.inativo
+                        return (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 700, color: s.color, background: `${s.color}18`, border: `1px solid ${s.color}30`, borderRadius: 20, padding: '3px 10px' }}>
+                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color }} />
+                            {s.label}
+                          </span>
+                        )
+                      })()}
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                   {/* Valores base */}
-                  <Card title="Valores do Implante" icon={<DollarSign className="w-4 h-4" />}>
+                  <Card title={`Valores — ${produtos.find(p => p.slug === slugSelecionado)?.nome ?? 'Produto'}`} icon={<DollarSign className="w-4 h-4" />}>
                     <InputField label="Valor PIX (à vista)" hint="Valor padrão quando lead escolhe PIX">
                       <TextInput value={pag.valor_pix} type="number" prefix="R$" onChange={v => setPag(p => ({ ...p, valor_pix: Number(v) }))} />
                     </InputField>
@@ -292,6 +432,7 @@ export default function ConfiguracoesPage() {
                     </div>
                   </Card>
 
+                  </div>
                 </div>
               )}
 
