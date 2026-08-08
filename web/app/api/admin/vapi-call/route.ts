@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { VAPI_CONFIG } from '@/lib/vapi-config'
-import { getAbExperimento, sortearVariant, registrarAbTest } from '@/lib/ab-config'
 
 export const dynamic = 'force-dynamic'
 
@@ -30,13 +29,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Lead bloqueado (opt_out)' }, { status: 403 })
   }
 
-  // A/B: busca experimento ativo e sorteia variant para este lead
-  const abExp = await getAbExperimento()
-  const variant = abExp ? sortearVariant(digits) : 'A'
-  const abOverrides = abExp && variant === 'B' ? abExp.variant_b : {}
-
-  if (abExp) {
-    await registrarAbTest({ lead_telefone: digits, experimento: abExp.experimento, variant })
+  // Fase de validação: params V2 aplicados em 100% das ligações
+  const voiceOverrides = {
+    responseDelaySeconds: 0.4,
+    backgroundSound: 'off',
+    stopSpeakingPlan: {
+      numWords: 4,
+      onNoPunctuationSeconds: 1.6,
+    },
   }
 
   try {
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
         customer: { number },
         assistantOverrides: {
           serverUrl: VAPI_CONFIG.serverUrl,
-          ...abOverrides,
+          ...voiceOverrides,
         },
       }),
     })
