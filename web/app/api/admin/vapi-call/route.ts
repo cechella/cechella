@@ -35,7 +35,6 @@ export async function POST(req: NextRequest) {
     backgroundSound: 'off',
     stopSpeakingPlan: {
       numWords: 4,
-      onNoPunctuationSeconds: 1.6,
     },
   }
 
