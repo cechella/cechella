@@ -45,7 +45,21 @@ export async function POST(req: NextRequest) {
         assistantOverrides: {
           serverUrl: SERVER_URL,
           backgroundSound: 'off',
-          stopSpeakingPlan: { numWords: 3 },
+          startSpeakingPlan: {
+            waitSeconds: 0.4,
+            transcriptionEndpointingPlan: {
+              onPunctuationSeconds: 0.2,
+              onNoPunctuationSeconds: 1.5,
+              onNumberSeconds: 0.5,
+            },
+          },
+          stopSpeakingPlan: {
+            numWords: 2,
+            voiceSeconds: 0.2,
+            backoffSeconds: 1.0,
+          },
+          silenceTimeoutSeconds: 45,
+          maxDurationSeconds: 1800,
         },
       }),
     })
