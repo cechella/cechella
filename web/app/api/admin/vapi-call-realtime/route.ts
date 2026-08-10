@@ -1,0 +1,57 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+
+export const dynamic = 'force-dynamic'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+)
+
+const VAPI_KEY = process.env.VAPI_API_KEY || 'e3bc519a-7466-4450-bcfc-2ae9566d9e2f'
+const REALTIME_ASSISTANT_ID = process.env.VAPI_REALTIME_ASSISTANT_ID || 'f6460055-a69b-49c8-ae0b-4edc9dca9668'
+const PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || ''
+const SERVER_URL = 'https://www.hormoneecosystem.com/api/vapi/end-call'
+const DEFAULT_NUMBER = '+5548988416899'
+
+export async function POST(req: NextRequest) {
+  const body = await req.json().catch(() => ({}))
+  const number = body.number || DEFAULT_NUMBER
+  const digits = String(number).replace(/\D/g, '')
+
+  const { data: lead } = await supabase
+    .from('leads')
+    .select('status')
+    .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${digits.replace(/^55/, '')}`)
+    .limit(1)
+    .maybeSingle()
+
+  if (lead?.status === 'opt_out') {
+    return NextResponse.json({ error: 'Lead bloqueado (opt_out)' }, { status: 403 })
+  }
+
+  try {
+    const res = await fetch('https://api.vapi.ai/call', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${VAPI_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        assistantId: REALTIME_ASSISTANT_ID,
+        ...(PHONE_NUMBER_ID ? { phoneNumberId: PHONE_NUMBER_ID } : {}),
+        customer: { number },
+        assistantOverrides: {
+          serverUrl: SERVER_URL,
+          backgroundSound: 'off',
+          stopSpeakingPlan: { numWords: 3 },
+        },
+      }),
+    })
+    const data = await res.json()
+    return NextResponse.json(data, { status: res.status })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+}
