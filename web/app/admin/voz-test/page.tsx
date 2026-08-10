@@ -315,6 +315,13 @@ function RealtimePanel() {
           </div>
         </div>
       )}
+
+      {/* Info sempre visível */}
+      <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4">
+        <p className="text-[#3F3F46] text-xs font-mono">Assistente: Ana Real Time Test</p>
+        <p className="text-[#3F3F46] text-xs font-mono mt-1">ID: {REALTIME_ASSISTANT_ID}</p>
+        <p className="text-[#3F3F46] text-xs font-mono mt-1">Número Twilio: +17196742872</p>
+      </div>
     </div>
   )
 }
