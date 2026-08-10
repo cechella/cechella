@@ -1,219 +1,195 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import {
   Brain, Star, XCircle, BarChart3, Grid3X3, Clock,
   Plus, Trash2, ChevronDown, ChevronUp, CheckCircle,
-  AlertTriangle, Sparkles, Target, BookOpen, Zap,
-  Copy, Check, RefreshCw, TrendingUp, Award
+  Sparkles, Copy, Check, RefreshCw, Award, Zap,
+  BookOpen, Target, TrendingUp, AlertTriangle, Filter,
 } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Simulacao {
-  id: string
-  created_at: string
-  titulo: string
-  descricao?: string
-  etapa: string
-  score_geral: number
-  score_conexao: number
-  score_objecao: number
-  score_fechamento: number
+  id: string; created_at: string; updated_at?: string
+  titulo: string; descricao?: string; etapa: string; transcript?: string; observacoes?: string
+  score_geral: number; score_conexao: number; score_objecao: number; score_fechamento: number
   aprovada: boolean
-  transcript?: string
-  observacoes?: string
-  updated_at?: string
 }
-
 interface GoldItem {
-  id: string
-  created_at: string
-  etapa: string
-  categoria: string
-  titulo: string
-  exemplo: string
-  motivo: string
-  sim_id?: string
-  updated_at?: string
+  id: string; created_at: string; updated_at?: string
+  etapa: string; categoria: string; titulo: string; exemplo: string; motivo: string; sim_id?: string
 }
-
 interface AntiGoldItem {
-  id: string
-  created_at: string
-  etapa: string
-  categoria: string
-  titulo: string
-  exemplo: string
-  problema: string
-  alternativa?: string
-  sim_id?: string
-  updated_at?: string
+  id: string; created_at: string; updated_at?: string
+  etapa: string; categoria: string; titulo: string; exemplo: string; problema: string; alternativa?: string; sim_id?: string
 }
-
 interface ScorecardEntry {
-  id: string
-  created_at: string
-  sim_id?: string
-  etapa: string
-  criterio: string
-  score: number
-  max_score: number
-  nota?: string
-  updated_at?: string
+  id: string; created_at: string; updated_at?: string
+  sim_id?: string; etapa: string; criterio: string; score: number; max_score: number; nota?: string
 }
-
 interface MatrizItem {
-  id: string
-  created_at: string
-  habilidade: string
-  descricao: string
-  nivel: 'nao_definido' | 'raso' | 'adequado' | 'ouro'
-  evidencias?: string
-  proximos_passos?: string
-  updated_at?: string
+  id: string; created_at: string; updated_at?: string
+  habilidade: string; descricao: string; nivel: 'nao_definido' | 'raso' | 'adequado' | 'ouro'
+  evidencias?: string; proximos_passos?: string
 }
-
 interface ChangelogEntry {
-  id: string
-  created_at: string
+  id: string; created_at: string; updated_at?: string
   tipo: 'decisao' | 'aprendizado' | 'diretriz' | 'restricao'
-  titulo: string
-  descricao: string
-  impacto?: string
-  autor?: string
-  updated_at?: string
+  titulo: string; descricao: string; impacto?: string; autor?: string
 }
 
 type Tab = 'central' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog'
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function fmtDate(ts: string) {
-  return new Date(ts).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
-}
-
-function ScoreBadge({ score, max = 10 }: { score: number; max?: number }) {
-  const pct = score / max
-  const color = pct >= 0.8 ? '#22c55e' : pct >= 0.6 ? '#f59e0b' : '#ef4444'
-  return (
-    <span style={{ fontSize: 11, fontWeight: 800, color, background: color + '20', border: `1px solid ${color}40`, borderRadius: 6, padding: '2px 7px', fontVariantNumeric: 'tabular-nums' }}>
-      {score}/{max}
-    </span>
-  )
-}
-
-function NivelBadge({ nivel }: { nivel: MatrizItem['nivel'] }) {
-  const map: Record<MatrizItem['nivel'], { label: string; color: string }> = {
-    nao_definido: { label: 'Não definido', color: '#555' },
-    raso: { label: 'Raso', color: '#ef4444' },
-    adequado: { label: 'Adequado', color: '#f59e0b' },
-    ouro: { label: 'Ouro ✦', color: '#f59e0b' },
-  }
-  const { label, color } = map[nivel]
-  return (
-    <span style={{ fontSize: 11, fontWeight: 700, color, background: color + '20', border: `1px solid ${color}40`, borderRadius: 6, padding: '2px 8px' }}>
-      {label}
-    </span>
-  )
-}
-
-function TipoBadge({ tipo }: { tipo: ChangelogEntry['tipo'] }) {
-  const map: Record<ChangelogEntry['tipo'], { label: string; color: string }> = {
-    decisao: { label: 'Decisão', color: '#7B3FE4' },
-    aprendizado: { label: 'Aprendizado', color: '#22c55e' },
-    diretriz: { label: 'Diretriz', color: '#3B82F6' },
-    restricao: { label: 'Restrição', color: '#ef4444' },
-  }
-  const { label, color } = map[tipo]
-  return (
-    <span style={{ fontSize: 11, fontWeight: 700, color, background: color + '20', border: `1px solid ${color}40`, borderRadius: 6, padding: '2px 8px' }}>
-      {label}
-    </span>
-  )
-}
-
-// ─── API helpers ──────────────────────────────────────────────────────────────
-
-async function fetchTable<T>(table: string): Promise<T[]> {
-  const res = await fetch(`/api/admin/ana-master?table=${table}&limit=200`)
-  const json = await res.json()
-  return json.data || []
-}
-
-async function createRecord(table: string, record: Record<string, unknown>) {
-  const res = await fetch('/api/admin/ana-master', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ table, record }),
-  })
-  return res.json()
-}
-
-async function deleteRecord(table: string, id: string) {
-  await fetch(`/api/admin/ana-master?table=${table}&id=${id}`, { method: 'DELETE' })
-}
-
-async function patchRecord(table: string, id: string, updates: Record<string, unknown>) {
-  const res = await fetch('/api/admin/ana-master', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ table, id, updates }),
-  })
-  return res.json()
-}
-
-// ─── Shared modal container ────────────────────────────────────────────────────
-
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  return (
-    <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div style={{ background: '#111113', border: '1px solid #2a2a2a', borderRadius: 16, width: '100%', maxWidth: 600, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 24px 80px rgba(0,0,0,0.8)' }}>
-        <div style={{ padding: '18px 20px', borderBottom: '1px solid #1C1C1E', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#F0F0F5' }}>{title}</h3>
-          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#555', fontSize: 18, lineHeight: 1 }}>×</button>
-        </div>
-        <div style={{ padding: 20 }}>{children}</div>
-      </div>
-    </div>
-  )
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div style={{ marginBottom: 14 }}>
-      <label style={{ display: 'block', fontSize: 11, fontWeight: 600, color: '#A1A1AA', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</label>
-      {children}
-    </div>
-  )
-}
-
-const inputStyle: React.CSSProperties = {
-  width: '100%', background: '#0A0A0B', border: '1px solid #2a2a2a', borderRadius: 8,
-  padding: '8px 10px', fontSize: 13, color: '#E4E4E7', outline: 'none', boxSizing: 'border-box',
-}
-
-const textareaStyle: React.CSSProperties = {
-  ...inputStyle, minHeight: 80, resize: 'vertical', fontFamily: 'inherit',
-}
-
-const selectStyle: React.CSSProperties = {
-  ...inputStyle, cursor: 'pointer',
-}
+// ─── Constants ────────────────────────────────────────────────────────────────
 
 const ETAPAS = ['apresentacao', 'conexao', 'di', 'speech', 'fechamento', 'referidos', 'validacao', 'geral']
 const ETAPA_LABELS: Record<string, string> = {
   apresentacao: 'Apresentação', conexao: 'Conexão', di: 'D.I.', speech: 'Speech',
   fechamento: 'Fechamento', referidos: 'Referidos', validacao: 'Validação', geral: 'Geral',
 }
-
 const GOLD_CATS = ['abertura', 'conexao', 'di', 'speech', 'objecao', 'fechamento', 'referidos', 'transicao', 'escuta', 'outro']
-const SCORECARD_CRITERIOS = ['Abertura natural', 'Nome cedo', 'Conexão pessoal', 'D.I. completa', 'Speech fluido', 'Objeção tratada', 'Fechamento direto', 'Sem filler', 'Tom adequado', 'Lógica sequencial']
+const SCORECARD_CRITERIOS = [
+  'Abertura natural', 'Nome cedo', 'Conexão pessoal', 'D.I. completa',
+  'Speech fluido', 'Objeção tratada', 'Fechamento direto', 'Sem filler',
+  'Tom adequado', 'Lógica sequencial',
+]
+
+// ─── API ──────────────────────────────────────────────────────────────────────
+
+async function fetchTable<T>(table: string): Promise<T[]> {
+  const r = await fetch(`/api/admin/ana-master?table=${table}&limit=200`)
+  return (await r.json()).data || []
+}
+async function createRecord(table: string, record: Record<string, unknown>) {
+  return fetch('/api/admin/ana-master', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ table, record }),
+  }).then(r => r.json())
+}
+async function patchRecord(table: string, id: string, updates: Record<string, unknown>) {
+  return fetch('/api/admin/ana-master', {
+    method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ table, id, updates }),
+  }).then(r => r.json())
+}
+async function deleteRecord(table: string, id: string) {
+  return fetch(`/api/admin/ana-master?table=${table}&id=${id}`, { method: 'DELETE' })
+}
+
+// ─── Design tokens ────────────────────────────────────────────────────────────
+
+const C = {
+  bg: '#09090B',
+  surface: '#101012',
+  surfaceHover: '#141418',
+  border: '#1E1E24',
+  borderHover: '#2A2A34',
+  text: '#F4F4F5',
+  textMuted: '#71717A',
+  textFaint: '#3F3F46',
+  purple: '#8B5CF6',
+  purpleDim: '#8B5CF620',
+  purpleBorder: '#8B5CF630',
+  gold: '#F59E0B',
+  goldDim: '#F59E0B18',
+  goldBorder: '#F59E0B35',
+  red: '#EF4444',
+  redDim: '#EF444418',
+  redBorder: '#EF444435',
+  blue: '#3B82F6',
+  blueDim: '#3B82F618',
+  blueBorder: '#3B82F635',
+  green: '#22C55E',
+  greenDim: '#22C55E18',
+  greenBorder: '#22C55E35',
+}
+
+// ─── Shared primitives ────────────────────────────────────────────────────────
+
+function scoreColor(score: number, max = 10) {
+  const p = score / max
+  return p >= 0.8 ? C.green : p >= 0.6 ? C.gold : C.red
+}
+
+function ScorePill({ score, max = 10 }: { score: number; max?: number }) {
+  const c = scoreColor(score, max)
+  return (
+    <span style={{ fontSize: 12, fontWeight: 800, color: c, background: c + '22', border: `1px solid ${c}40`, borderRadius: 7, padding: '3px 9px', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+      {score}<span style={{ opacity: 0.5, fontWeight: 500 }}>/{max}</span>
+    </span>
+  )
+}
+
+function Badge({ label, color, dim, border }: { label: string; color: string; dim: string; border: string }) {
+  return (
+    <span style={{ fontSize: 10, fontWeight: 700, color, background: dim, border: `1px solid ${border}`, borderRadius: 6, padding: '2px 8px', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+      {label}
+    </span>
+  )
+}
+
+function EtapaBadge({ etapa }: { etapa: string }) {
+  return <Badge label={ETAPA_LABELS[etapa] || etapa} color={C.textMuted} dim="#ffffff08" border={C.border} />
+}
+
+function fmtDate(ts: string) {
+  return new Date(ts).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' +
+    new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+}
+
+// ─── Modal ────────────────────────────────────────────────────────────────────
+
+function Modal({ title, accent = C.purple, onClose, children }: {
+  title: string; accent?: string; onClose: () => void; children: React.ReactNode
+}) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, backdropFilter: 'blur(4px)' }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderTop: `2px solid ${accent}`, borderRadius: 18, width: '100%', maxWidth: 580, maxHeight: '90vh', overflow: 'auto', boxShadow: '0 32px 100px rgba(0,0,0,0.9)' }}>
+        <div style={{ padding: '18px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: C.text }}>{title}</h3>
+          <button onClick={onClose} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: C.textMuted, fontSize: 20, lineHeight: 1, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 6 }}>×</button>
+        </div>
+        <div style={{ padding: '20px 22px' }}>{children}</div>
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, fontWeight: 600, color: C.textMuted, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.07em' }}>
+        {label}
+        {hint && <span style={{ fontWeight: 400, textTransform: 'none', fontSize: 10, color: C.textFaint }}>{hint}</span>}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+const inp: React.CSSProperties = { width: '100%', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 9, padding: '9px 12px', fontSize: 13, color: C.text, outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.15s' }
+const ta: React.CSSProperties = { ...inp, minHeight: 80, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }
+const sel: React.CSSProperties = { ...inp, cursor: 'pointer' }
+
+function Btn({ onClick, disabled, color = C.purple, textColor = '#fff', children, full }: {
+  onClick?: () => void; disabled?: boolean; color?: string; textColor?: string; children: React.ReactNode; full?: boolean
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      style={{ width: full ? '100%' : undefined, padding: '10px 18px', background: disabled ? '#2A2A2A' : color, border: 'none', borderRadius: 9, cursor: disabled ? 'not-allowed' : 'pointer', color: disabled ? '#555' : textColor, fontSize: 13, fontWeight: 700, transition: 'opacity 0.15s', opacity: disabled ? 0.6 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}
+    >
+      {children}
+    </button>
+  )
+}
 
 // ─── CENTRAL TAB ─────────────────────────────────────────────────────────────
 
@@ -221,105 +197,166 @@ function CentralTab({ sims, gold, antiGold, scorecard, matriz, changelog }: {
   sims: Simulacao[]; gold: GoldItem[]; antiGold: AntiGoldItem[]
   scorecard: ScorecardEntry[]; matriz: MatrizItem[]; changelog: ChangelogEntry[]
 }) {
-  const avgScore = sims.length > 0 ? Math.round(sims.reduce((s, sim) => s + sim.score_geral, 0) / sims.length * 10) / 10 : 0
+  const avgScore = sims.length > 0 ? sims.reduce((s, x) => s + x.score_geral, 0) / sims.length : 0
   const aprovadas = sims.filter(s => s.aprovada).length
-  const ourosCount = matriz.filter(m => m.nivel === 'ouro').length
-  const totalHabilidades = matriz.length
+  const ouros = matriz.filter(m => m.nivel === 'ouro').length
 
-  const phase1Items = [
-    { label: 'Rodar ≥ 5 simulações', done: sims.length >= 5, value: `${sims.length}/5` },
-    { label: 'Gold Standard ≥ 10 exemplos', done: gold.length >= 10, value: `${gold.length}/10` },
-    { label: 'Anti-Gold ≥ 5 exemplos', done: antiGold.length >= 5, value: `${antiGold.length}/5` },
-    { label: 'Scorecard ≥ 10 entradas', done: scorecard.length >= 10, value: `${scorecard.length}/10` },
-    { label: 'Matriz populada', done: matriz.length >= 5, value: `${totalHabilidades} habilidades` },
-    { label: 'Score médio ≥ 7.0', done: avgScore >= 7.0, value: avgScore > 0 ? avgScore.toFixed(1) : '—' },
+  const phase1 = [
+    { label: '≥ 5 simulações rodadas', done: sims.length >= 5, val: `${sims.length}/5` },
+    { label: '≥ 10 exemplos Gold', done: gold.length >= 10, val: `${gold.length}/10` },
+    { label: '≥ 5 Anti-Gold mapeados', done: antiGold.length >= 5, val: `${antiGold.length}/5` },
+    { label: '≥ 10 avaliações no Scorecard', done: scorecard.length >= 10, val: `${scorecard.length}/10` },
+    { label: 'Matriz populada', done: matriz.length >= 5, val: `${matriz.length} hab.` },
+    { label: 'Score médio ≥ 7.0', done: avgScore >= 7, val: avgScore > 0 ? avgScore.toFixed(1) : '—' },
   ]
+  const pct = Math.round(phase1.filter(i => i.done).length / phase1.length * 100)
 
-  const phasePct = Math.round((phase1Items.filter(i => i.done).length / phase1Items.length) * 100)
+  // SVG ring
+  const R = 54, SW = 8, circ = 2 * Math.PI * R
+  const offset = circ - (pct / 100) * circ
 
   return (
-    <div style={{ maxWidth: 960, margin: '0 auto' }}>
-      {/* Phase Progress */}
-      <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 14, padding: 24, marginBottom: 20 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#F0F0F5' }}>Fase 1 — Simulação & Documentação</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: '#555' }}>Design sem engenharia. Resultados aprovados viram diretivas da Ana.</p>
+    <div style={{ maxWidth: 1020, margin: '0 auto' }}>
+
+      {/* Hero banner */}
+      <div style={{ background: `linear-gradient(135deg, #1a0a3e 0%, #0f172a 50%, #0a1a2e 100%)`, border: `1px solid ${C.purpleBorder}`, borderRadius: 20, padding: '28px 32px', marginBottom: 24, position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: -60, right: -60, width: 240, height: 240, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,0.15) 0%, transparent 70%)' }} />
+        <div style={{ position: 'absolute', bottom: -40, left: '40%', width: 180, height: 180, borderRadius: '50%', background: 'radial-gradient(circle, rgba(59,130,246,0.1) 0%, transparent 70%)' }} />
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 32 }}>
+          {/* Ring */}
+          <div style={{ flexShrink: 0, position: 'relative', width: 128, height: 128 }}>
+            <svg width={128} height={128} style={{ transform: 'rotate(-90deg)' }}>
+              <circle cx={64} cy={64} r={R} fill="none" stroke="#ffffff08" strokeWidth={SW} />
+              <circle cx={64} cy={64} r={R} fill="none" stroke={pct >= 100 ? C.green : C.purple} strokeWidth={SW}
+                strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+                style={{ transition: 'stroke-dashoffset 1s ease', filter: `drop-shadow(0 0 8px ${pct >= 100 ? C.green : C.purple})` }}
+              />
+            </svg>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: 24, fontWeight: 900, color: C.text, lineHeight: 1 }}>{pct}%</span>
+              <span style={{ fontSize: 9, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 2 }}>Fase 1</span>
+            </div>
           </div>
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 28, fontWeight: 900, color: phasePct >= 100 ? '#22c55e' : '#7B3FE4' }}>{phasePct}%</div>
-            <div style={{ fontSize: 10, color: '#555' }}>completo</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+              <Brain style={{ width: 20, height: 20, color: C.purple }} />
+              <span style={{ fontSize: 11, fontWeight: 700, color: C.purple, textTransform: 'uppercase', letterSpacing: '0.1em' }}>Ana DNA Nuclear — Fase 1 ativa</span>
+            </div>
+            <h2 style={{ margin: '0 0 8px', fontSize: 22, fontWeight: 900, color: C.text, lineHeight: 1.2 }}>Simulação & Documentação</h2>
+            <p style={{ margin: '0 0 20px', fontSize: 13, color: C.textMuted, lineHeight: 1.6, maxWidth: 480 }}>
+              Design sem engenharia. Cada simulação aprovada constrói o DNA da Ana. Os padrões validados aqui se tornam o comportamento de produção da Fase 2.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {[
+                { n: sims.length, label: 'Simulações', color: C.purple },
+                { n: aprovadas, label: 'Aprovadas', color: C.green },
+                { n: gold.length, label: 'Gold', color: C.gold },
+                { n: antiGold.length, label: 'Anti-Gold', color: C.red },
+                { n: ouros, label: 'Ouros na Matriz', color: C.gold },
+              ].map(({ n, label, color }) => (
+                <div key={label} style={{ background: '#ffffff08', border: `1px solid ${C.border}`, borderRadius: 10, padding: '8px 14px', textAlign: 'center', minWidth: 64 }}>
+                  <div style={{ fontSize: 20, fontWeight: 900, color, lineHeight: 1 }}>{n}</div>
+                  <div style={{ fontSize: 10, color: C.textMuted, marginTop: 3 }}>{label}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-        <div style={{ height: 6, background: '#1C1C1E', borderRadius: 99, overflow: 'hidden', marginBottom: 20 }}>
-          <div style={{ height: '100%', width: `${phasePct}%`, background: 'linear-gradient(90deg, #7B3FE4, #3B82F6)', borderRadius: 99, transition: 'width 0.5s' }} />
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-          {phase1Items.map((item, i) => (
-            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', background: item.done ? '#22c55e10' : '#1A1A20', borderRadius: 8, border: `1px solid ${item.done ? '#22c55e30' : '#2a2a2a'}` }}>
-              {item.done
-                ? <CheckCircle style={{ width: 14, height: 14, color: '#22c55e', flexShrink: 0 }} />
-                : <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px solid #333', flexShrink: 0 }} />
-              }
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, color: item.done ? '#A1A1AA' : '#666', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</div>
+      </div>
+
+      {/* Phase checklist + last sims */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+
+        {/* Checklist */}
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+            <Target style={{ width: 15, height: 15, color: C.purple }} />
+            <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Checklist Fase 1</h3>
+          </div>
+          {phase1.map((item, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', borderBottom: i < phase1.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: item.done ? C.greenDim : '#ffffff06', border: `1.5px solid ${item.done ? C.green : C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {item.done && <CheckCircle style={{ width: 13, height: 13, color: C.green }} />}
               </div>
-              <span style={{ fontSize: 11, fontWeight: 700, color: item.done ? '#22c55e' : '#555', flexShrink: 0 }}>{item.value}</span>
+              <span style={{ flex: 1, fontSize: 12, color: item.done ? C.textMuted : '#555' }}>{item.label}</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: item.done ? C.green : C.textFaint, fontVariantNumeric: 'tabular-nums' }}>{item.val}</span>
             </div>
           ))}
         </div>
-      </div>
 
-      {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 20 }}>
-        {[
-          { icon: <Brain style={{ width: 18, height: 18 }} />, label: 'Simulações', value: sims.length, sub: `${aprovadas} aprovadas`, color: '#7B3FE4' },
-          { icon: <Star style={{ width: 18, height: 18 }} />, label: 'Gold Standard', value: gold.length, sub: 'exemplos ouro', color: '#f59e0b' },
-          { icon: <XCircle style={{ width: 18, height: 18 }} />, label: 'Anti-Gold', value: antiGold.length, sub: 'padrões proibidos', color: '#ef4444' },
-          { icon: <Award style={{ width: 18, height: 18 }} />, label: 'Score médio', value: avgScore > 0 ? avgScore.toFixed(1) : '—', sub: 'última simulação', color: avgScore >= 7 ? '#22c55e' : '#f59e0b' },
-        ].map((kpi, i) => (
-          <div key={i} style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 12, padding: 18 }}>
-            <div style={{ color: kpi.color, marginBottom: 10 }}>{kpi.icon}</div>
-            <div style={{ fontSize: 26, fontWeight: 900, color: '#F0F0F5', lineHeight: 1 }}>{kpi.value}</div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: '#A1A1AA', marginTop: 4 }}>{kpi.label}</div>
-            <div style={{ fontSize: 10, color: '#555', marginTop: 2 }}>{kpi.sub}</div>
+        {/* Last 5 sims */}
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+            <Brain style={{ width: 15, height: 15, color: C.purple }} />
+            <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Últimas simulações</h3>
           </div>
-        ))}
-      </div>
-
-      {/* Recent activity */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        {/* Last sims */}
-        <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 12, padding: 18 }}>
-          <h3 style={{ margin: '0 0 14px', fontSize: 12, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Últimas simulações</h3>
           {sims.length === 0 ? (
-            <p style={{ fontSize: 12, color: '#444', textAlign: 'center', padding: '16px 0' }}>Nenhuma simulação ainda</p>
-          ) : sims.slice(0, 5).map(sim => (
-            <div key={sim.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #1A1A20' }}>
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#D4D4D8' }}>{sim.titulo}</div>
-                <div style={{ fontSize: 10, color: '#555' }}>{ETAPA_LABELS[sim.etapa] || sim.etapa} · {fmtDate(sim.created_at)}</div>
+            <div style={{ textAlign: 'center', padding: '28px 0', color: '#333' }}>
+              <Brain style={{ width: 28, height: 28, margin: '0 auto 8px', opacity: 0.2 }} />
+              <p style={{ margin: 0, fontSize: 12 }}>Nenhuma simulação ainda</p>
+            </div>
+          ) : sims.slice(0, 5).map((sim, i) => (
+            <div key={sim.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderBottom: i < Math.min(sims.length, 5) - 1 ? `1px solid ${C.border}` : 'none' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 2 }}>{sim.titulo}</div>
+                <div style={{ fontSize: 10, color: C.textFaint }}>{ETAPA_LABELS[sim.etapa] || sim.etapa} · {fmtDate(sim.created_at)}</div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <ScoreBadge score={sim.score_geral} />
-                {sim.aprovada && <CheckCircle style={{ width: 13, height: 13, color: '#22c55e' }} />}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <ScorePill score={sim.score_geral} />
+                {sim.aprovada && <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.green, boxShadow: `0 0 6px ${C.green}` }} />}
               </div>
             </div>
           ))}
         </div>
+      </div>
 
-        {/* Last changelog */}
-        <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 12, padding: 18 }}>
-          <h3 style={{ margin: '0 0 14px', fontSize: 12, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Changelog recente</h3>
+      {/* Score breakdown + changelog */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+
+        {/* Score breakdown */}
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+            <BarChart3 style={{ width: 15, height: 15, color: C.green }} />
+            <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Score médio por dimensão</h3>
+          </div>
+          {sims.length === 0 ? (
+            <p style={{ fontSize: 12, color: '#333', textAlign: 'center', padding: '16px 0' }}>—</p>
+          ) : (
+            ['score_geral', 'score_conexao', 'score_objecao', 'score_fechamento'].map(key => {
+              const avg = sims.reduce((s, sim) => s + (sim as any)[key], 0) / sims.length
+              const pct = Math.round(avg * 10)
+              const label = key === 'score_geral' ? 'Geral' : key === 'score_conexao' ? 'Conexão' : key === 'score_objecao' ? 'Objeção' : 'Fechamento'
+              const c = scoreColor(avg)
+              return (
+                <div key={key} style={{ marginBottom: 14 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <span style={{ fontSize: 12, color: C.textMuted }}>{label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: c, fontVariantNumeric: 'tabular-nums' }}>{avg.toFixed(1)}</span>
+                  </div>
+                  <div style={{ height: 5, background: C.border, borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: c, borderRadius: 99, transition: 'width 0.6s ease', boxShadow: `0 0 8px ${c}60` }} />
+                  </div>
+                </div>
+              )
+            })
+          )}
+        </div>
+
+        {/* Changelog */}
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+            <Clock style={{ width: 15, height: 15, color: C.textMuted }} />
+            <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Changelog recente</h3>
+          </div>
           {changelog.length === 0 ? (
-            <p style={{ fontSize: 12, color: '#444', textAlign: 'center', padding: '16px 0' }}>Nenhuma entrada ainda</p>
-          ) : changelog.slice(0, 5).map(entry => (
-            <div key={entry.id} style={{ padding: '8px 0', borderBottom: '1px solid #1A1A20' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                <TipoBadge tipo={entry.tipo} />
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#D4D4D8' }}>{entry.titulo}</span>
+            <p style={{ fontSize: 12, color: '#333', textAlign: 'center', padding: '16px 0' }}>Nenhuma entrada ainda</p>
+          ) : changelog.slice(0, 5).map((entry, i) => (
+            <div key={entry.id} style={{ padding: '8px 0', borderBottom: i < 4 ? `1px solid ${C.border}` : 'none' }}>
+              <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap', marginBottom: 2 }}>
+                <ChangelogBadge tipo={entry.tipo} />
+                <span style={{ fontSize: 12, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>{entry.titulo}</span>
               </div>
-              <div style={{ fontSize: 10, color: '#555' }}>{fmtDate(entry.created_at)}</div>
+              <span style={{ fontSize: 10, color: C.textFaint }}>{fmtDate(entry.created_at)}</span>
             </div>
           ))}
         </div>
@@ -339,19 +376,15 @@ function SimulacoesTab({ sims, onRefresh }: { sims: Simulacao[]; onRefresh: () =
     score_geral: 7, score_conexao: 7, score_objecao: 7, score_fechamento: 7, aprovada: false,
   })
 
+  const F = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    setForm(f => ({ ...f, [k]: e.target.value }))
+
   const save = async () => {
     if (!form.titulo.trim()) return
     setSaving(true)
     await createRecord('ana_simulacoes', form)
-    setSaving(false)
-    setShowForm(false)
+    setSaving(false); setShowForm(false)
     setForm({ titulo: '', descricao: '', etapa: 'geral', transcript: '', observacoes: '', score_geral: 7, score_conexao: 7, score_objecao: 7, score_fechamento: 7, aprovada: false })
-    onRefresh()
-  }
-
-  const remove = async (id: string) => {
-    if (!confirm('Remover simulação?')) return
-    await deleteRecord('ana_simulacoes', id)
     onRefresh()
   }
 
@@ -360,114 +393,95 @@ function SimulacoesTab({ sims, onRefresh }: { sims: Simulacao[]; onRefresh: () =
     onRefresh()
   }
 
+  const remove = async (id: string) => {
+    if (!confirm('Remover simulação?')) return
+    await deleteRecord('ana_simulacoes', id); onRefresh()
+  }
+
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#F0F0F5' }}>Simulações</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: '#555' }}>Cole transcrições de simulações OpenAI e avalie cada uma.</p>
-        </div>
-        <button onClick={() => setShowForm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#7B3FE4', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#fff', fontSize: 12, fontWeight: 700 }}>
-          <Plus style={{ width: 14, height: 14 }} /> Nova simulação
-        </button>
+    <div style={{ maxWidth: 920, margin: '0 auto' }}>
+      <PageHeader title="Simulações" subtitle="Cole transcripts de simulações OpenAI. Avalie e aprove os que viram Gold." count={sims.length}>
+        <Btn onClick={() => setShowForm(true)} color={C.purple}><Plus style={{ width: 14, height: 14 }} />Nova simulação</Btn>
+      </PageHeader>
+
+      {sims.length === 0 && <EmptyState icon={<Brain />} text="Nenhuma simulação ainda. Rode uma conversa com Ana no OpenAI Playground e cole o transcript aqui." />}
+
+      <div style={{ display: 'grid', gap: 10 }}>
+        {sims.map(sim => (
+          <div key={sim.id} style={{ background: C.surface, border: `1px solid ${expanded === sim.id ? C.purpleBorder : C.border}`, borderRadius: 14, overflow: 'hidden', transition: 'border-color 0.2s' }}>
+            <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
+              {/* Score ring mini */}
+              <div style={{ width: 44, height: 44, borderRadius: '50%', border: `2.5px solid ${scoreColor(sim.score_geral)}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: scoreColor(sim.score_geral) + '12' }}>
+                <span style={{ fontSize: 13, fontWeight: 900, color: scoreColor(sim.score_geral) }}>{sim.score_geral}</span>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{sim.titulo}</span>
+                  <EtapaBadge etapa={sim.etapa} />
+                  {sim.aprovada && <Badge label="Aprovada" color={C.green} dim={C.greenDim} border={C.greenBorder} />}
+                </div>
+                <div style={{ display: 'flex', gap: 14, fontSize: 11, color: C.textFaint, flexWrap: 'wrap' }}>
+                  <span>Conexão <strong style={{ color: scoreColor(sim.score_conexao) }}>{sim.score_conexao}</strong></span>
+                  <span>Objeção <strong style={{ color: scoreColor(sim.score_objecao) }}>{sim.score_objecao}</strong></span>
+                  <span>Fechamento <strong style={{ color: scoreColor(sim.score_fechamento) }}>{sim.score_fechamento}</strong></span>
+                  <span>{fmtDate(sim.created_at)}</span>
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                <ActionBtn icon={<CheckCircle style={{ width: 13, height: 13 }} />} onClick={() => toggleAprovada(sim)} active={sim.aprovada} activeColor={C.green} title={sim.aprovada ? 'Desaprovar' : 'Aprovar'} />
+                <ActionBtn icon={expanded === sim.id ? <ChevronUp style={{ width: 13, height: 13 }} /> : <ChevronDown style={{ width: 13, height: 13 }} />} onClick={() => setExpanded(expanded === sim.id ? null : sim.id)} title="Expandir" />
+                <ActionBtn icon={<Trash2 style={{ width: 13, height: 13 }} />} onClick={() => remove(sim.id)} danger title="Remover" />
+              </div>
+            </div>
+
+            {expanded === sim.id && (
+              <div style={{ borderTop: `1px solid ${C.border}`, padding: '16px 18px' }}>
+                {sim.descricao && <p style={{ margin: '0 0 14px', fontSize: 13, color: C.textMuted, lineHeight: 1.6 }}>{sim.descricao}</p>}
+                {sim.observacoes && (
+                  <div style={{ background: C.purpleDim, border: `1px solid ${C.purpleBorder}`, borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
+                    <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 700, color: C.purple, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Observações</p>
+                    <p style={{ margin: 0, fontSize: 13, color: C.textMuted, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{sim.observacoes}</p>
+                  </div>
+                )}
+                {sim.transcript && (
+                  <>
+                    <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Transcript</p>
+                    <pre style={{ margin: 0, fontSize: 11, color: '#888', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, maxHeight: 320, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'monospace', lineHeight: 1.6 }}>
+                      {sim.transcript}
+                    </pre>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
-      {sims.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: '#444' }}>
-          <Brain style={{ width: 36, height: 36, margin: '0 auto 12px', opacity: 0.3 }} />
-          <p style={{ margin: 0, fontSize: 13 }}>Nenhuma simulação. Rode uma conversa com a Ana no OpenAI e cole o transcript aqui.</p>
-        </div>
-      )}
-
-      {sims.map(sim => (
-        <div key={sim.id} style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
-          <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: '#F0F0F5' }}>{sim.titulo}</span>
-                <span style={{ fontSize: 10, color: '#555', background: '#1C1C1E', padding: '2px 6px', borderRadius: 5 }}>{ETAPA_LABELS[sim.etapa] || sim.etapa}</span>
-                {sim.aprovada && <span style={{ fontSize: 10, color: '#22c55e', background: '#22c55e20', border: '1px solid #22c55e30', padding: '2px 6px', borderRadius: 5 }}>✓ Aprovada</span>}
-              </div>
-              <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#555' }}>
-                <span>Score: <strong style={{ color: '#D4D4D8' }}>{sim.score_geral}/10</strong></span>
-                <span>Conexão: {sim.score_conexao}/10</span>
-                <span>Objeção: {sim.score_objecao}/10</span>
-                <span>Fechamento: {sim.score_fechamento}/10</span>
-                <span>{fmtDate(sim.created_at)}</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <button
-                onClick={() => toggleAprovada(sim)}
-                title={sim.aprovada ? 'Desaprovar' : 'Aprovar'}
-                style={{ padding: '6px 10px', background: sim.aprovada ? '#22c55e20' : '#1C1C1E', border: `1px solid ${sim.aprovada ? '#22c55e40' : '#2a2a2a'}`, borderRadius: 7, cursor: 'pointer', color: sim.aprovada ? '#22c55e' : '#555' }}
-              >
-                <CheckCircle style={{ width: 13, height: 13 }} />
-              </button>
-              <button onClick={() => setExpanded(expanded === sim.id ? null : sim.id)} style={{ padding: '6px 10px', background: '#1C1C1E', border: '1px solid #2a2a2a', borderRadius: 7, cursor: 'pointer', color: '#A1A1AA' }}>
-                {expanded === sim.id ? <ChevronUp style={{ width: 13, height: 13 }} /> : <ChevronDown style={{ width: 13, height: 13 }} />}
-              </button>
-              <button onClick={() => remove(sim.id)} style={{ padding: '6px 10px', background: '#ef444410', border: '1px solid #ef444430', borderRadius: 7, cursor: 'pointer', color: '#ef4444' }}>
-                <Trash2 style={{ width: 13, height: 13 }} />
-              </button>
-            </div>
-          </div>
-
-          {expanded === sim.id && (
-            <div style={{ borderTop: '1px solid #1A1A20', padding: 16 }}>
-              {sim.descricao && <p style={{ margin: '0 0 12px', fontSize: 13, color: '#A1A1AA', lineHeight: 1.6 }}>{sim.descricao}</p>}
-              {sim.observacoes && (
-                <div style={{ background: '#7B3FE410', border: '1px solid #7B3FE430', borderRadius: 8, padding: 12, marginBottom: 12 }}>
-                  <p style={{ margin: 0, fontSize: 11, color: '#7B3FE4', fontWeight: 700, marginBottom: 4, textTransform: 'uppercase' }}>Observações</p>
-                  <p style={{ margin: 0, fontSize: 13, color: '#A1A1AA', whiteSpace: 'pre-wrap' }}>{sim.observacoes}</p>
-                </div>
-              )}
-              {sim.transcript && (
-                <div>
-                  <p style={{ margin: '0 0 6px', fontSize: 11, fontWeight: 700, color: '#555', textTransform: 'uppercase' }}>Transcript</p>
-                  <pre style={{ margin: 0, fontSize: 11, color: '#888', background: '#0A0A0B', border: '1px solid #1C1C1E', borderRadius: 8, padding: 12, maxHeight: 300, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'monospace', lineHeight: 1.5 }}>
-                    {sim.transcript}
-                  </pre>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      ))}
-
       {showForm && (
-        <Modal title="Nova Simulação" onClose={() => setShowForm(false)}>
-          <Field label="Título *">
-            <input style={inputStyle} value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} placeholder="Ex: Simulação 003 — objeção de preço" />
-          </Field>
+        <Modal title="Nova simulação" accent={C.purple} onClose={() => setShowForm(false)}>
+          <Field label="Título *"><input style={inp} value={form.titulo} onChange={F('titulo')} placeholder="Ex: Simulação 003 — objeção de preço" /></Field>
           <Field label="Etapa foco">
-            <select style={selectStyle} value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))}>
+            <select style={sel} value={form.etapa} onChange={F('etapa')}>
               {ETAPAS.map(e => <option key={e} value={e}>{ETAPA_LABELS[e]}</option>)}
             </select>
           </Field>
-          <Field label="Descrição">
-            <textarea style={textareaStyle} value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Contexto e objetivo desta simulação..." />
-          </Field>
+          <Field label="Descrição"><textarea style={ta} value={form.descricao} onChange={F('descricao')} placeholder="Contexto da simulação..." /></Field>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            {(['score_geral', 'score_conexao', 'score_objecao', 'score_fechamento'] as const).map(key => (
-              <Field key={key} label={key.replace('score_', '').replace('_', ' ') + ' (0–10)'}>
-                <input type="number" min={0} max={10} style={inputStyle} value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: Number(e.target.value) }))} />
+            {(['score_geral', 'score_conexao', 'score_objecao', 'score_fechamento'] as const).map(k => (
+              <Field key={k} label={k.replace('score_', '').replace('_', ' ')} hint="0–10">
+                <input type="number" min={0} max={10} step={0.5} style={inp} value={(form as any)[k]} onChange={e => setForm(f => ({ ...f, [k]: Number(e.target.value) }))} />
               </Field>
             ))}
           </div>
-          <Field label="Observações">
-            <textarea style={textareaStyle} value={form.observacoes} onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} placeholder="O que funcionou? O que falhou?" />
+          <Field label="Observações"><textarea style={ta} value={form.observacoes} onChange={F('observacoes')} placeholder="O que funcionou? O que falhou?" /></Field>
+          <Field label="Transcript" hint="cole aqui">
+            <textarea style={{ ...ta, minHeight: 140, fontFamily: 'monospace', fontSize: 11 }} value={form.transcript} onChange={F('transcript')} placeholder="Transcrição completa da simulação..." />
           </Field>
-          <Field label="Transcript (cole aqui)">
-            <textarea style={{ ...textareaStyle, minHeight: 140, fontFamily: 'monospace', fontSize: 11 }} value={form.transcript} onChange={e => setForm(f => ({ ...f, transcript: e.target.value }))} placeholder="Cole o transcript da simulação aqui..." />
-          </Field>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <input type="checkbox" id="aprovada" checked={form.aprovada} onChange={e => setForm(f => ({ ...f, aprovada: e.target.checked }))} />
-            <label htmlFor="aprovada" style={{ fontSize: 13, color: '#A1A1AA', cursor: 'pointer' }}>Marcar como aprovada</label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+            <input type="checkbox" id="ap" checked={form.aprovada} onChange={e => setForm(f => ({ ...f, aprovada: e.target.checked }))} style={{ accentColor: C.green }} />
+            <label htmlFor="ap" style={{ fontSize: 13, color: C.textMuted, cursor: 'pointer' }}>Marcar como aprovada</label>
           </div>
-          <button onClick={save} disabled={saving || !form.titulo.trim()} style={{ width: '100%', padding: '10px', background: saving ? '#444' : '#7B3FE4', border: 'none', borderRadius: 8, cursor: saving ? 'not-allowed' : 'pointer', color: '#fff', fontSize: 13, fontWeight: 700 }}>
-            {saving ? 'Salvando...' : 'Salvar simulação'}
-          </button>
+          <Btn onClick={save} disabled={saving || !form.titulo.trim()} full>{saving ? 'Salvando...' : 'Salvar simulação'}</Btn>
         </Modal>
       )}
     </div>
@@ -488,89 +502,67 @@ function GoldTab({ items, onRefresh }: { items: GoldItem[]; onRefresh: () => voi
     if (!form.titulo.trim() || !form.exemplo.trim()) return
     setSaving(true)
     await createRecord('ana_gold', form)
-    setSaving(false)
-    setShowForm(false)
+    setSaving(false); setShowForm(false)
     setForm({ etapa: 'geral', categoria: 'abertura', titulo: '', exemplo: '', motivo: '' })
-    onRefresh()
-  }
-
-  const remove = async (id: string) => {
-    if (!confirm('Remover exemplo Gold?')) return
-    await deleteRecord('ana_gold', id)
     onRefresh()
   }
 
   const copy = (id: string, text: string) => {
     navigator.clipboard.writeText(text)
-    setCopiedId(id)
-    setTimeout(() => setCopiedId(null), 1500)
+    setCopiedId(id); setTimeout(() => setCopiedId(null), 1500)
   }
 
-  const filtered = items.filter(item => {
-    if (filterEtapa !== 'todos' && item.etapa !== filterEtapa) return false
-    if (filterCat !== 'todos' && item.categoria !== filterCat) return false
-    return true
-  })
+  const filtered = items.filter(i =>
+    (filterEtapa === 'todos' || i.etapa === filterEtapa) &&
+    (filterCat === 'todos' || i.categoria === filterCat)
+  )
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#F0F0F5' }}>Gold Standard ✦</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: '#555' }}>Exemplos aprovados. Estes são os padrões que a Ana deve alcançar.</p>
-        </div>
-        <button onClick={() => setShowForm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#f59e0b', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#000', fontSize: 12, fontWeight: 700 }}>
-          <Plus style={{ width: 14, height: 14 }} /> Novo exemplo
-        </button>
+    <div style={{ maxWidth: 920, margin: '0 auto' }}>
+      <PageHeader title="Gold Standard ✦" subtitle="Exemplos aprovados — o patamar que a Ana deve alcançar." count={filtered.length}>
+        <Btn onClick={() => setShowForm(true)} color={C.gold} textColor="#000"><Plus style={{ width: 14, height: 14 }} />Novo exemplo</Btn>
+      </PageHeader>
+
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+        <Filter style={{ width: 13, height: 13, color: C.textFaint }} />
+        {[
+          { label: 'Todas etapas', value: 'todos', options: ETAPAS.map(e => ({ v: e, l: ETAPA_LABELS[e] })), state: filterEtapa, set: setFilterEtapa },
+          { label: 'Todas categorias', value: 'todos', options: GOLD_CATS.map(c => ({ v: c, l: c })), state: filterCat, set: setFilterCat },
+        ].map(({ label, value, options, state, set }, i) => (
+          <select key={i} style={{ ...sel, width: 'auto', fontSize: 12, padding: '6px 10px' }} value={state} onChange={e => set(e.target.value)}>
+            <option value={value}>{label}</option>
+            {options.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+          </select>
+        ))}
+        <span style={{ fontSize: 12, color: C.textFaint }}>{filtered.length} exemplo{filtered.length !== 1 ? 's' : ''}</span>
       </div>
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-        <select style={{ ...selectStyle, width: 'auto', fontSize: 12 }} value={filterEtapa} onChange={e => setFilterEtapa(e.target.value)}>
-          <option value="todos">Todas etapas</option>
-          {ETAPAS.map(e => <option key={e} value={e}>{ETAPA_LABELS[e]}</option>)}
-        </select>
-        <select style={{ ...selectStyle, width: 'auto', fontSize: 12 }} value={filterCat} onChange={e => setFilterCat(e.target.value)}>
-          <option value="todos">Todas categorias</option>
-          {GOLD_CATS.map(c => <option key={c} value={c}>{c}</option>)}
-        </select>
-        <span style={{ fontSize: 12, color: '#555', padding: '8px 0' }}>{filtered.length} exemplos</span>
-      </div>
+      {filtered.length === 0 && <EmptyState icon={<Star />} text="Nenhum exemplo Gold ainda. Adicione falas aprovadas para construir o padrão da Ana." />}
 
-      {filtered.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: '#444' }}>
-          <Star style={{ width: 36, height: 36, margin: '0 auto 12px', opacity: 0.3 }} />
-          <p style={{ margin: 0, fontSize: 13 }}>Nenhum exemplo Gold Standard ainda. Adicione transcrições aprovadas aqui.</p>
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gap: 10 }}>
+      <div style={{ display: 'grid', gap: 12 }}>
         {filtered.map(item => (
-          <div key={item.id} style={{ background: '#111113', border: '1px solid #f59e0b30', borderLeft: '3px solid #f59e0b', borderRadius: 10, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+          <div key={item.id} style={{ background: C.surface, border: `1px solid ${C.goldBorder}`, borderRadius: 14, padding: 20, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${C.gold}, ${C.gold}80)` }} />
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
               <div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: '#F0F0F5' }}>{item.titulo}</span>
-                  <span style={{ fontSize: 10, background: '#f59e0b20', color: '#f59e0b', border: '1px solid #f59e0b30', borderRadius: 5, padding: '1px 6px' }}>{item.categoria}</span>
-                  <span style={{ fontSize: 10, background: '#1C1C1E', color: '#555', borderRadius: 5, padding: '1px 6px' }}>{ETAPA_LABELS[item.etapa] || item.etapa}</span>
+                <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap', marginBottom: 5 }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{item.titulo}</span>
+                  <Badge label={item.categoria} color={C.gold} dim={C.goldDim} border={C.goldBorder} />
+                  <EtapaBadge etapa={item.etapa} />
                 </div>
-                <div style={{ fontSize: 10, color: '#444' }}>{fmtDate(item.created_at)}</div>
+                <span style={{ fontSize: 10, color: C.textFaint }}>{fmtDate(item.created_at)}</span>
               </div>
               <div style={{ display: 'flex', gap: 5, flexShrink: 0 }}>
-                <button onClick={() => copy(item.id, item.exemplo)} title="Copiar exemplo" style={{ padding: '5px 8px', background: '#1C1C1E', border: '1px solid #2a2a2a', borderRadius: 6, cursor: 'pointer', color: copiedId === item.id ? '#22c55e' : '#555' }}>
-                  {copiedId === item.id ? <Check style={{ width: 12, height: 12 }} /> : <Copy style={{ width: 12, height: 12 }} />}
-                </button>
-                <button onClick={() => remove(item.id)} style={{ padding: '5px 8px', background: '#ef444410', border: '1px solid #ef444430', borderRadius: 6, cursor: 'pointer', color: '#ef4444' }}>
-                  <Trash2 style={{ width: 12, height: 12 }} />
-                </button>
+                <ActionBtn icon={copiedId === item.id ? <Check style={{ width: 12, height: 12 }} /> : <Copy style={{ width: 12, height: 12 }} />} onClick={() => copy(item.id, item.exemplo)} active={copiedId === item.id} activeColor={C.green} title="Copiar" />
+                <ActionBtn icon={<Trash2 style={{ width: 12, height: 12 }} />} onClick={async () => { if (confirm('Remover?')) { await deleteRecord('ana_gold', item.id); onRefresh() } }} danger title="Remover" />
               </div>
             </div>
-            <div style={{ background: '#0A0A0B', border: '1px solid #1C1C1E', borderRadius: 8, padding: 12, marginBottom: 8 }}>
-              <p style={{ margin: 0, fontSize: 13, color: '#D4D4D8', fontStyle: 'italic', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>"{item.exemplo}"</p>
+            <div style={{ background: `linear-gradient(135deg, ${C.goldDim}, transparent)`, border: `1px solid ${C.goldBorder}`, borderRadius: 10, padding: '12px 16px', marginBottom: 10 }}>
+              <p style={{ margin: 0, fontSize: 13, color: '#FDE68A', fontStyle: 'italic', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>"{item.exemplo}"</p>
             </div>
             {item.motivo && (
-              <p style={{ margin: 0, fontSize: 12, color: '#A1A1AA', lineHeight: 1.5 }}>
-                <span style={{ color: '#f59e0b', fontWeight: 700 }}>✦ Por que é ouro: </span>{item.motivo}
+              <p style={{ margin: 0, fontSize: 12, color: C.textMuted, lineHeight: 1.6 }}>
+                <span style={{ color: C.gold, fontWeight: 700 }}>✦ Por que é ouro: </span>{item.motivo}
               </p>
             )}
           </div>
@@ -578,31 +570,27 @@ function GoldTab({ items, onRefresh }: { items: GoldItem[]; onRefresh: () => voi
       </div>
 
       {showForm && (
-        <Modal title="Novo exemplo Gold Standard" onClose={() => setShowForm(false)}>
+        <Modal title="Novo exemplo Gold Standard" accent={C.gold} onClose={() => setShowForm(false)}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="Etapa">
-              <select style={selectStyle} value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))}>
+              <select style={sel} value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))}>
                 {ETAPAS.map(e => <option key={e} value={e}>{ETAPA_LABELS[e]}</option>)}
               </select>
             </Field>
             <Field label="Categoria">
-              <select style={selectStyle} value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
+              <select style={sel} value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
                 {GOLD_CATS.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </Field>
           </div>
-          <Field label="Título *">
-            <input style={inputStyle} value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} placeholder="Ex: Abertura com nome cedo e pergunta aberta" />
-          </Field>
-          <Field label="Exemplo (fala da Ana) *">
-            <textarea style={textareaStyle} value={form.exemplo} onChange={e => setForm(f => ({ ...f, exemplo: e.target.value }))} placeholder="Cole aqui a fala exata que é considerada Gold..." />
+          <Field label="Título *"><input style={inp} value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} placeholder="Ex: Abertura com nome cedo e pergunta aberta" /></Field>
+          <Field label="Fala da Ana *" hint="exatamente como deve ser dito">
+            <textarea style={ta} value={form.exemplo} onChange={e => setForm(f => ({ ...f, exemplo: e.target.value }))} placeholder="Cole aqui a fala exata que é considerada Gold..." />
           </Field>
           <Field label="Por que é Gold?">
-            <textarea style={{ ...textareaStyle, minHeight: 60 }} value={form.motivo} onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))} placeholder="O que torna esta fala exemplar?" />
+            <textarea style={{ ...ta, minHeight: 60 }} value={form.motivo} onChange={e => setForm(f => ({ ...f, motivo: e.target.value }))} placeholder="O que torna esta fala exemplar?" />
           </Field>
-          <button onClick={save} disabled={saving || !form.titulo.trim() || !form.exemplo.trim()} style={{ width: '100%', padding: '10px', background: saving ? '#444' : '#f59e0b', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#000', fontSize: 13, fontWeight: 700 }}>
-            {saving ? 'Salvando...' : 'Salvar exemplo Gold'}
-          </button>
+          <Btn onClick={save} disabled={saving || !form.titulo.trim() || !form.exemplo.trim()} color={C.gold} textColor="#000" full>{saving ? 'Salvando...' : 'Salvar Gold'}</Btn>
         </Modal>
       )}
     </div>
@@ -620,62 +608,46 @@ function AntiGoldTab({ items, onRefresh }: { items: AntiGoldItem[]; onRefresh: (
     if (!form.titulo.trim() || !form.exemplo.trim()) return
     setSaving(true)
     await createRecord('ana_anti_gold', form)
-    setSaving(false)
-    setShowForm(false)
+    setSaving(false); setShowForm(false)
     setForm({ etapa: 'geral', categoria: 'outro', titulo: '', exemplo: '', problema: '', alternativa: '' })
     onRefresh()
   }
 
-  const remove = async (id: string) => {
-    if (!confirm('Remover Anti-Gold?')) return
-    await deleteRecord('ana_anti_gold', id)
-    onRefresh()
-  }
-
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#F0F0F5' }}>Anti-Gold ✕</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: '#555' }}>Padrões proibidos. A Ana nunca deve repetir estes comportamentos.</p>
-        </div>
-        <button onClick={() => setShowForm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#ef4444', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#fff', fontSize: 12, fontWeight: 700 }}>
-          <Plus style={{ width: 14, height: 14 }} /> Novo Anti-Gold
-        </button>
-      </div>
+    <div style={{ maxWidth: 920, margin: '0 auto' }}>
+      <PageHeader title="Anti-Gold ✕" subtitle="Padrões proibidos. A Ana não replica estes comportamentos em nenhuma circunstância." count={items.length}>
+        <Btn onClick={() => setShowForm(true)} color={C.red}><Plus style={{ width: 14, height: 14 }} />Novo Anti-Gold</Btn>
+      </PageHeader>
 
-      {items.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: '#444' }}>
-          <XCircle style={{ width: 36, height: 36, margin: '0 auto 12px', opacity: 0.3 }} />
-          <p style={{ margin: 0, fontSize: 13 }}>Nenhum padrão proibido registrado ainda.</p>
-        </div>
-      )}
+      {items.length === 0 && <EmptyState icon={<XCircle />} text="Nenhum padrão proibido registrado ainda." />}
 
-      <div style={{ display: 'grid', gap: 10 }}>
+      <div style={{ display: 'grid', gap: 12 }}>
         {items.map(item => (
-          <div key={item.id} style={{ background: '#111113', border: '1px solid #ef444430', borderLeft: '3px solid #ef4444', borderRadius: 10, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+          <div key={item.id} style={{ background: C.surface, border: `1px solid ${C.redBorder}`, borderRadius: 14, padding: 20, position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${C.red}, ${C.red}60)` }} />
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
               <div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: '#F0F0F5' }}>{item.titulo}</span>
-                  <span style={{ fontSize: 10, background: '#ef444420', color: '#ef4444', border: '1px solid #ef444430', borderRadius: 5, padding: '1px 6px' }}>{item.categoria}</span>
-                  <span style={{ fontSize: 10, background: '#1C1C1E', color: '#555', borderRadius: 5, padding: '1px 6px' }}>{ETAPA_LABELS[item.etapa] || item.etapa}</span>
+                <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap', marginBottom: 5 }}>
+                  <AlertTriangle style={{ width: 14, height: 14, color: C.red }} />
+                  <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{item.titulo}</span>
+                  <Badge label={item.categoria} color={C.red} dim={C.redDim} border={C.redBorder} />
+                  <EtapaBadge etapa={item.etapa} />
                 </div>
-                <div style={{ fontSize: 10, color: '#444' }}>{fmtDate(item.created_at)}</div>
+                <span style={{ fontSize: 10, color: C.textFaint }}>{fmtDate(item.created_at)}</span>
               </div>
-              <button onClick={() => remove(item.id)} style={{ padding: '5px 8px', background: '#ef444410', border: '1px solid #ef444430', borderRadius: 6, cursor: 'pointer', color: '#ef4444', flexShrink: 0 }}>
-                <Trash2 style={{ width: 12, height: 12 }} />
-              </button>
+              <ActionBtn icon={<Trash2 style={{ width: 12, height: 12 }} />} onClick={async () => { if (confirm('Remover?')) { await deleteRecord('ana_anti_gold', item.id); onRefresh() } }} danger title="Remover" />
             </div>
-            <div style={{ background: '#ef444410', border: '1px solid #ef444430', borderRadius: 8, padding: 12, marginBottom: 8 }}>
-              <p style={{ margin: 0, fontSize: 13, color: '#fca5a5', fontStyle: 'italic', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>"{item.exemplo}"</p>
+            <div style={{ background: C.redDim, border: `1px solid ${C.redBorder}`, borderRadius: 10, padding: '12px 16px', marginBottom: 10 }}>
+              <p style={{ margin: 0, fontSize: 13, color: '#FCA5A5', fontStyle: 'italic', lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>"{item.exemplo}"</p>
             </div>
-            <p style={{ margin: '0 0 6px', fontSize: 12, color: '#A1A1AA', lineHeight: 1.5 }}>
-              <span style={{ color: '#ef4444', fontWeight: 700 }}>✕ Problema: </span>{item.problema}
-            </p>
+            {item.problema && (
+              <p style={{ margin: '0 0 6px', fontSize: 12, color: C.textMuted, lineHeight: 1.6 }}>
+                <span style={{ color: C.red, fontWeight: 700 }}>✕ Problema: </span>{item.problema}
+              </p>
+            )}
             {item.alternativa && (
-              <p style={{ margin: 0, fontSize: 12, color: '#A1A1AA', lineHeight: 1.5 }}>
-                <span style={{ color: '#22c55e', fontWeight: 700 }}>→ Alternativa: </span>{item.alternativa}
+              <p style={{ margin: 0, fontSize: 12, color: C.textMuted, lineHeight: 1.6 }}>
+                <span style={{ color: C.green, fontWeight: 700 }}>→ Alternativa: </span>{item.alternativa}
               </p>
             )}
           </div>
@@ -683,34 +655,153 @@ function AntiGoldTab({ items, onRefresh }: { items: AntiGoldItem[]; onRefresh: (
       </div>
 
       {showForm && (
-        <Modal title="Novo Anti-Gold" onClose={() => setShowForm(false)}>
+        <Modal title="Novo Anti-Gold" accent={C.red} onClose={() => setShowForm(false)}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <Field label="Etapa">
-              <select style={selectStyle} value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))}>
+              <select style={sel} value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))}>
                 {ETAPAS.map(e => <option key={e} value={e}>{ETAPA_LABELS[e]}</option>)}
               </select>
             </Field>
             <Field label="Categoria">
-              <select style={selectStyle} value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
+              <select style={sel} value={form.categoria} onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
                 {GOLD_CATS.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </Field>
           </div>
-          <Field label="Título *">
-            <input style={inputStyle} value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} placeholder="Ex: Filler 'certo, certo' repetido" />
-          </Field>
-          <Field label="Exemplo proibido *">
-            <textarea style={textareaStyle} value={form.exemplo} onChange={e => setForm(f => ({ ...f, exemplo: e.target.value }))} placeholder="Cole aqui a fala que NÃO deve ser replicada..." />
+          <Field label="Título *"><input style={inp} value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} placeholder="Ex: Filler 'certo, certo' repetido" /></Field>
+          <Field label="Exemplo proibido *" hint="fala exata">
+            <textarea style={ta} value={form.exemplo} onChange={e => setForm(f => ({ ...f, exemplo: e.target.value }))} placeholder="Cole aqui a fala que NÃO deve acontecer..." />
           </Field>
           <Field label="Qual é o problema?">
-            <textarea style={{ ...textareaStyle, minHeight: 60 }} value={form.problema} onChange={e => setForm(f => ({ ...f, problema: e.target.value }))} placeholder="Por que é ruim?" />
+            <textarea style={{ ...ta, minHeight: 60 }} value={form.problema} onChange={e => setForm(f => ({ ...f, problema: e.target.value }))} placeholder="Por que é ruim?" />
           </Field>
           <Field label="Alternativa sugerida">
-            <textarea style={{ ...textareaStyle, minHeight: 60 }} value={form.alternativa} onChange={e => setForm(f => ({ ...f, alternativa: e.target.value }))} placeholder="Como deveria ser?" />
+            <textarea style={{ ...ta, minHeight: 60 }} value={form.alternativa} onChange={e => setForm(f => ({ ...f, alternativa: e.target.value }))} placeholder="Como deveria ser?" />
           </Field>
-          <button onClick={save} disabled={saving || !form.titulo.trim() || !form.exemplo.trim()} style={{ width: '100%', padding: '10px', background: saving ? '#444' : '#ef4444', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700 }}>
-            {saving ? 'Salvando...' : 'Salvar Anti-Gold'}
-          </button>
+          <Btn onClick={save} disabled={saving || !form.titulo.trim() || !form.exemplo.trim()} color={C.red} full>{saving ? 'Salvando...' : 'Salvar Anti-Gold'}</Btn>
+        </Modal>
+      )}
+    </div>
+  )
+}
+
+// ─── SCORECARD TAB ────────────────────────────────────────────────────────────
+
+function ScorecardTab({ entries, sims, onRefresh }: { entries: ScorecardEntry[]; sims: Simulacao[]; onRefresh: () => void }) {
+  const [showForm, setShowForm] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ sim_id: '', etapa: 'geral', criterio: SCORECARD_CRITERIOS[0], score: 7, max_score: 10, nota: '', customCriterio: '' })
+
+  const save = async () => {
+    setSaving(true)
+    const criterio = form.criterio === 'outro' ? form.customCriterio : form.criterio
+    await createRecord('ana_scorecard', { sim_id: form.sim_id || null, etapa: form.etapa, criterio, score: form.score, max_score: form.max_score, nota: form.nota })
+    setSaving(false); setShowForm(false)
+    setForm({ sim_id: '', etapa: 'geral', criterio: SCORECARD_CRITERIOS[0], score: 7, max_score: 10, nota: '', customCriterio: '' })
+    onRefresh()
+  }
+
+  const byCriterio: Record<string, ScorecardEntry[]> = {}
+  for (const e of entries) {
+    if (!byCriterio[e.criterio]) byCriterio[e.criterio] = []
+    byCriterio[e.criterio].push(e)
+  }
+  const sorted = Object.entries(byCriterio).sort((a, b) => {
+    const avgA = a[1].reduce((s, e) => s + e.score / e.max_score, 0) / a[1].length
+    const avgB = b[1].reduce((s, e) => s + e.score / e.max_score, 0) / b[1].length
+    return avgA - avgB
+  })
+
+  return (
+    <div style={{ maxWidth: 920, margin: '0 auto' }}>
+      <PageHeader title="Scorecard" subtitle="Avaliação por critério através das simulações." count={entries.length}>
+        <Btn onClick={() => setShowForm(true)} color={C.green} textColor="#000"><Plus style={{ width: 14, height: 14 }} />Nova avaliação</Btn>
+      </PageHeader>
+
+      {/* Averages */}
+      {sorted.length > 0 && (
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22, marginBottom: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18 }}>
+            <TrendingUp style={{ width: 14, height: 14, color: C.green }} />
+            <h3 style={{ margin: 0, fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Médias por critério</h3>
+          </div>
+          <div style={{ display: 'grid', gap: 10 }}>
+            {sorted.map(([crit, list]) => {
+              const avg = list.reduce((s, e) => s + e.score / e.max_score, 0) / list.length
+              const pct = Math.round(avg * 100)
+              const c = pct >= 80 ? C.green : pct >= 60 ? C.gold : C.red
+              return (
+                <div key={crit} style={{ display: 'grid', gridTemplateColumns: '180px 1fr 44px 24px', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 12, color: C.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{crit}</span>
+                  <div style={{ height: 6, background: C.border, borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: c, borderRadius: 99, boxShadow: `0 0 6px ${c}60` }} />
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: c, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pct}%</span>
+                  <span style={{ fontSize: 10, color: C.textFaint, textAlign: 'right' }}>n={list.length}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {entries.length === 0 && <EmptyState icon={<BarChart3 />} text="Nenhuma avaliação ainda. Avalie critérios após cada simulação." />}
+
+      <div style={{ display: 'grid', gap: 6 }}>
+        {entries.map(entry => {
+          const pct = Math.round(entry.score / entry.max_score * 100)
+          const c = pct >= 80 ? C.green : pct >= 60 ? C.gold : C.red
+          const sim = sims.find(s => s.id === entry.sim_id)
+          return (
+            <div key={entry.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 4, height: 32, borderRadius: 99, background: c, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{entry.criterio}</div>
+                <div style={{ fontSize: 10, color: C.textFaint }}>{ETAPA_LABELS[entry.etapa] || entry.etapa}{sim ? ` · ${sim.titulo}` : ''}{entry.nota ? ` — ${entry.nota}` : ''}</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <ScorePill score={entry.score} max={entry.max_score} />
+                <ActionBtn icon={<Trash2 style={{ width: 11, height: 11 }} />} onClick={async () => { if (confirm('Remover?')) { await deleteRecord('ana_scorecard', entry.id); onRefresh() } }} danger title="Remover" />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {showForm && (
+        <Modal title="Nova avaliação" accent={C.green} onClose={() => setShowForm(false)}>
+          <Field label="Simulação (opcional)">
+            <select style={sel} value={form.sim_id} onChange={e => setForm(f => ({ ...f, sim_id: e.target.value }))}>
+              <option value="">— sem vínculo —</option>
+              {sims.map(s => <option key={s.id} value={s.id}>{s.titulo}</option>)}
+            </select>
+          </Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="Etapa">
+              <select style={sel} value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))}>
+                {ETAPAS.map(e => <option key={e} value={e}>{ETAPA_LABELS[e]}</option>)}
+              </select>
+            </Field>
+            <Field label="Critério">
+              <select style={sel} value={form.criterio} onChange={e => setForm(f => ({ ...f, criterio: e.target.value }))}>
+                {SCORECARD_CRITERIOS.map(c => <option key={c} value={c}>{c}</option>)}
+                <option value="outro">Outro...</option>
+              </select>
+            </Field>
+          </div>
+          {form.criterio === 'outro' && (
+            <Field label="Critério personalizado">
+              <input style={inp} value={form.customCriterio} onChange={e => setForm(f => ({ ...f, customCriterio: e.target.value }))} placeholder="Ex: Timing de pausa" />
+            </Field>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="Score"><input type="number" min={0} max={form.max_score} step={0.5} style={inp} value={form.score} onChange={e => setForm(f => ({ ...f, score: Number(e.target.value) }))} /></Field>
+            <Field label="Máximo"><input type="number" min={1} max={100} style={inp} value={form.max_score} onChange={e => setForm(f => ({ ...f, max_score: Number(e.target.value) }))} /></Field>
+          </div>
+          <Field label="Nota">
+            <input style={inp} value={form.nota} onChange={e => setForm(f => ({ ...f, nota: e.target.value }))} placeholder="Ex: Ana repetiu pergunta fechada 2×" />
+          </Field>
+          <Btn onClick={save} disabled={saving} color={C.green} textColor="#000" full>{saving ? 'Salvando...' : 'Salvar avaliação'}</Btn>
         </Modal>
       )}
     </div>
@@ -718,6 +809,14 @@ function AntiGoldTab({ items, onRefresh }: { items: AntiGoldItem[]; onRefresh: (
 }
 
 // ─── MATRIZ TAB ───────────────────────────────────────────────────────────────
+
+const NIVEL_META: Record<MatrizItem['nivel'], { label: string; color: string; dim: string; border: string }> = {
+  nao_definido: { label: 'Não definido', color: C.textFaint, dim: '#ffffff05', border: C.border },
+  raso: { label: 'Raso', color: C.red, dim: C.redDim, border: C.redBorder },
+  adequado: { label: 'Adequado', color: C.gold, dim: C.goldDim, border: C.goldBorder },
+  ouro: { label: 'Ouro ✦', color: C.gold, dim: '#F59E0B28', border: '#F59E0B50' },
+}
+const NIVELS: MatrizItem['nivel'][] = ['nao_definido', 'raso', 'adequado', 'ouro']
 
 function MatrizTab({ items, onRefresh }: { items: MatrizItem[]; onRefresh: () => void }) {
   const [showForm, setShowForm] = useState(false)
@@ -730,130 +829,91 @@ function MatrizTab({ items, onRefresh }: { items: MatrizItem[]; onRefresh: () =>
     if (!form.habilidade.trim()) return
     setSaving(true)
     await createRecord('ana_matriz', form)
-    setSaving(false)
-    setShowForm(false)
+    setSaving(false); setShowForm(false)
     setForm({ habilidade: '', descricao: '', nivel: 'nao_definido', evidencias: '', proximos_passos: '' })
     onRefresh()
   }
 
   const updateNivel = async (id: string, nivel: MatrizItem['nivel']) => {
-    await patchRecord('ana_matriz', id, { nivel })
-    onRefresh()
+    await patchRecord('ana_matriz', id, { nivel }); onRefresh()
   }
 
-  const remove = async (id: string) => {
-    if (!confirm('Remover habilidade?')) return
-    await deleteRecord('ana_matriz', id)
-    onRefresh()
-  }
-
-  const nivelOrder: MatrizItem['nivel'][] = ['nao_definido', 'raso', 'adequado', 'ouro']
-  const nivelColors: Record<MatrizItem['nivel'], string> = {
-    nao_definido: '#555',
-    raso: '#ef4444',
-    adequado: '#f59e0b',
-    ouro: '#f59e0b',
-  }
+  const byNivel = NIVELS.reduce((acc, n) => { acc[n] = items.filter(i => i.nivel === n); return acc }, {} as Record<string, MatrizItem[]>)
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#F0F0F5' }}>Matriz de Habilidades</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: '#555' }}>Mapa de capacidades da Ana. Atualize conforme as simulações evoluem.</p>
-        </div>
-        <button onClick={() => setShowForm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#3B82F6', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#fff', fontSize: 12, fontWeight: 700 }}>
-          <Plus style={{ width: 14, height: 14 }} /> Nova habilidade
-        </button>
-      </div>
+    <div style={{ maxWidth: 920, margin: '0 auto' }}>
+      <PageHeader title="Matriz de Habilidades" subtitle="Mapa de capacidades da Ana. Avance cada habilidade conforme as simulações evoluem." count={items.length}>
+        <Btn onClick={() => setShowForm(true)} color={C.blue}><Plus style={{ width: 14, height: 14 }} />Nova habilidade</Btn>
+      </PageHeader>
 
-      {/* Summary row */}
+      {/* Summary */}
       {items.length > 0 && (
-        <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-          {nivelOrder.map(n => {
-            const count = items.filter(i => i.nivel === n).length
-            const pct = Math.round(count / items.length * 100)
-            const color = nivelColors[n]
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 24 }}>
+          {NIVELS.map(n => {
+            const { label, color, dim, border } = NIVEL_META[n]
+            const count = byNivel[n]?.length || 0
+            const pct = items.length > 0 ? Math.round(count / items.length * 100) : 0
             return (
-              <div key={n} style={{ background: '#111113', border: `1px solid ${color}30`, borderRadius: 10, padding: '10px 16px', flex: 1, minWidth: 100 }}>
-                <div style={{ fontSize: 18, fontWeight: 900, color }}>{count}</div>
-                <div style={{ fontSize: 11, color: '#555' }}><NivelBadge nivel={n} /></div>
-                <div style={{ fontSize: 10, color: '#444', marginTop: 4 }}>{pct}%</div>
+              <div key={n} style={{ background: dim, border: `1px solid ${border}`, borderRadius: 12, padding: '14px 16px' }}>
+                <div style={{ fontSize: 24, fontWeight: 900, color, lineHeight: 1 }}>{count}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, color, marginTop: 4 }}>{label}</div>
+                <div style={{ fontSize: 10, color: color + '99', marginTop: 2 }}>{pct}% do total</div>
               </div>
             )
           })}
         </div>
       )}
 
-      {items.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: '#444' }}>
-          <Grid3X3 style={{ width: 36, height: 36, margin: '0 auto 12px', opacity: 0.3 }} />
-          <p style={{ margin: 0, fontSize: 13 }}>Nenhuma habilidade mapeada ainda.</p>
-        </div>
-      )}
+      {items.length === 0 && <EmptyState icon={<Grid3X3 />} text="Nenhuma habilidade mapeada ainda." />}
 
       <div style={{ display: 'grid', gap: 8 }}>
-        {items.map(item => (
-          <div key={item.id} style={{ background: '#111113', border: '1px solid #1C1C1E', borderLeft: `3px solid ${nivelColors[item.nivel]}`, borderRadius: 10, padding: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: '#F0F0F5' }}>{item.habilidade}</span>
-                  <NivelBadge nivel={item.nivel} />
+        {items.map(item => {
+          const { color, dim, border } = NIVEL_META[item.nivel]
+          return (
+            <div key={item.id} style={{ background: C.surface, border: `1px solid ${border}`, borderRadius: 12, padding: 16, borderLeft: `3px solid ${color}` }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 5 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{item.habilidade}</span>
+                    <Badge label={NIVEL_META[item.nivel].label} color={color} dim={dim} border={border} />
+                  </div>
+                  {item.descricao && <p style={{ margin: '0 0 6px', fontSize: 12, color: C.textMuted, lineHeight: 1.5 }}>{item.descricao}</p>}
+                  <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                    {item.evidencias && <span style={{ fontSize: 11, color: C.textFaint }}><span style={{ color: C.blue }}>Evidências: </span>{item.evidencias}</span>}
+                    {item.proximos_passos && <span style={{ fontSize: 11, color: C.textFaint }}><span style={{ color: C.purple }}>Próximos passos: </span>{item.proximos_passos}</span>}
+                  </div>
                 </div>
-                {item.descricao && <p style={{ margin: '0 0 8px', fontSize: 12, color: '#A1A1AA', lineHeight: 1.5 }}>{item.descricao}</p>}
-                {item.evidencias && <p style={{ margin: 0, fontSize: 11, color: '#555' }}><span style={{ color: '#3B82F6' }}>Evidências: </span>{item.evidencias}</p>}
-                {item.proximos_passos && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#555' }}><span style={{ color: '#7B3FE4' }}>Próximos passos: </span>{item.proximos_passos}</p>}
-              </div>
-              <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
-                {nivelOrder.map(n => (
-                  <button
-                    key={n}
-                    onClick={() => updateNivel(item.id, n)}
-                    title={n}
-                    style={{
-                      width: 24, height: 24, borderRadius: 6, border: `1px solid ${nivelColors[n]}${item.nivel === n ? 'ff' : '40'}`,
-                      background: item.nivel === n ? nivelColors[n] + '30' : 'transparent',
-                      cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}
-                  >
-                    <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.nivel === n ? nivelColors[n] : nivelColors[n] + '60' }} />
-                  </button>
-                ))}
-                <button onClick={() => remove(item.id)} style={{ padding: '4px 6px', background: '#ef444410', border: '1px solid #ef444430', borderRadius: 6, cursor: 'pointer', color: '#ef4444', marginLeft: 4 }}>
-                  <Trash2 style={{ width: 11, height: 11 }} />
-                </button>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 }}>
+                  {NIVELS.map(n => {
+                    const m = NIVEL_META[n]
+                    const active = item.nivel === n
+                    return (
+                      <button key={n} onClick={() => updateNivel(item.id, n)} title={m.label}
+                        style={{ width: 28, height: 28, borderRadius: 7, border: `1.5px solid ${active ? m.color : C.border}`, background: active ? m.dim : 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s' }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: active ? m.color : C.border, transition: 'all 0.15s', boxShadow: active ? `0 0 6px ${m.color}` : 'none' }} />
+                      </button>
+                    )
+                  })}
+                  <ActionBtn icon={<Trash2 style={{ width: 11, height: 11 }} />} onClick={async () => { if (confirm('Remover?')) { await deleteRecord('ana_matriz', item.id); onRefresh() } }} danger title="Remover" />
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {showForm && (
-        <Modal title="Nova Habilidade" onClose={() => setShowForm(false)}>
-          <Field label="Habilidade *">
-            <input style={inputStyle} value={form.habilidade} onChange={e => setForm(f => ({ ...f, habilidade: e.target.value }))} placeholder="Ex: Conexão emocional no D.I." />
-          </Field>
-          <Field label="Descrição">
-            <textarea style={textareaStyle} value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="O que significa dominar esta habilidade?" />
-          </Field>
+        <Modal title="Nova habilidade" accent={C.blue} onClose={() => setShowForm(false)}>
+          <Field label="Habilidade *"><input style={inp} value={form.habilidade} onChange={e => setForm(f => ({ ...f, habilidade: e.target.value }))} placeholder="Ex: Conexão emocional no D.I." /></Field>
+          <Field label="Descrição"><textarea style={ta} value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="O que significa dominar esta habilidade?" /></Field>
           <Field label="Nível atual">
-            <select style={selectStyle} value={form.nivel} onChange={e => setForm(f => ({ ...f, nivel: e.target.value as MatrizItem['nivel'] }))}>
-              <option value="nao_definido">Não definido</option>
-              <option value="raso">Raso</option>
-              <option value="adequado">Adequado</option>
-              <option value="ouro">Ouro</option>
+            <select style={sel} value={form.nivel} onChange={e => setForm(f => ({ ...f, nivel: e.target.value as MatrizItem['nivel'] }))}>
+              {NIVELS.map(n => <option key={n} value={n}>{NIVEL_META[n].label}</option>)}
             </select>
           </Field>
-          <Field label="Evidências observadas">
-            <textarea style={{ ...textareaStyle, minHeight: 60 }} value={form.evidencias} onChange={e => setForm(f => ({ ...f, evidencias: e.target.value }))} placeholder="O que foi observado nas simulações?" />
-          </Field>
-          <Field label="Próximos passos">
-            <textarea style={{ ...textareaStyle, minHeight: 60 }} value={form.proximos_passos} onChange={e => setForm(f => ({ ...f, proximos_passos: e.target.value }))} placeholder="O que precisa ser trabalhado?" />
-          </Field>
-          <button onClick={save} disabled={saving || !form.habilidade.trim()} style={{ width: '100%', padding: '10px', background: saving ? '#444' : '#3B82F6', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700 }}>
-            {saving ? 'Salvando...' : 'Salvar habilidade'}
-          </button>
+          <Field label="Evidências observadas"><textarea style={{ ...ta, minHeight: 60 }} value={form.evidencias} onChange={e => setForm(f => ({ ...f, evidencias: e.target.value }))} placeholder="O que foi observado nas simulações?" /></Field>
+          <Field label="Próximos passos"><textarea style={{ ...ta, minHeight: 60 }} value={form.proximos_passos} onChange={e => setForm(f => ({ ...f, proximos_passos: e.target.value }))} placeholder="O que precisa ser trabalhado?" /></Field>
+          <Btn onClick={save} disabled={saving || !form.habilidade.trim()} color={C.blue} full>{saving ? 'Salvando...' : 'Salvar habilidade'}</Btn>
         </Modal>
       )}
     </div>
@@ -861,6 +921,18 @@ function MatrizTab({ items, onRefresh }: { items: MatrizItem[]; onRefresh: () =>
 }
 
 // ─── CHANGELOG TAB ────────────────────────────────────────────────────────────
+
+const TIPO_META: Record<ChangelogEntry['tipo'], { label: string; color: string; dim: string; border: string; icon: string }> = {
+  decisao: { label: 'Decisão', color: C.purple, dim: C.purpleDim, border: C.purpleBorder, icon: '⚡' },
+  aprendizado: { label: 'Aprendizado', color: C.green, dim: C.greenDim, border: C.greenBorder, icon: '💡' },
+  diretriz: { label: 'Diretriz', color: C.blue, dim: C.blueDim, border: C.blueBorder, icon: '📐' },
+  restricao: { label: 'Restrição', color: C.red, dim: C.redDim, border: C.redBorder, icon: '🚫' },
+}
+
+function ChangelogBadge({ tipo }: { tipo: ChangelogEntry['tipo'] }) {
+  const { label, color, dim, border } = TIPO_META[tipo]
+  return <Badge label={label} color={color} dim={dim} border={border} />
+}
 
 function ChangelogTab({ entries, onRefresh }: { entries: ChangelogEntry[]; onRefresh: () => void }) {
   const [showForm, setShowForm] = useState(false)
@@ -873,246 +945,149 @@ function ChangelogTab({ entries, onRefresh }: { entries: ChangelogEntry[]; onRef
     if (!form.titulo.trim()) return
     setSaving(true)
     await createRecord('ana_changelog', form)
-    setSaving(false)
-    setShowForm(false)
+    setSaving(false); setShowForm(false)
     setForm({ tipo: 'decisao', titulo: '', descricao: '', impacto: '', autor: '' })
     onRefresh()
   }
 
-  const remove = async (id: string) => {
-    if (!confirm('Remover entrada?')) return
-    await deleteRecord('ana_changelog', id)
-    onRefresh()
-  }
+  const tipoCount = (t: ChangelogEntry['tipo']) => entries.filter(e => e.tipo === t).length
 
   return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#F0F0F5' }}>Changelog de Decisões</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: '#555' }}>Registro imutável de decisões, aprendizados e diretrizes da Ana.</p>
-        </div>
-        <button onClick={() => setShowForm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#7B3FE4', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#fff', fontSize: 12, fontWeight: 700 }}>
-          <Plus style={{ width: 14, height: 14 }} /> Nova entrada
-        </button>
-      </div>
+    <div style={{ maxWidth: 920, margin: '0 auto' }}>
+      <PageHeader title="Changelog" subtitle="Registro imutável de decisões, aprendizados, diretrizes e restrições da Ana." count={entries.length}>
+        <Btn onClick={() => setShowForm(true)} color={C.purple}><Plus style={{ width: 14, height: 14 }} />Registrar</Btn>
+      </PageHeader>
 
-      {entries.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: '#444' }}>
-          <Clock style={{ width: 36, height: 36, margin: '0 auto 12px', opacity: 0.3 }} />
-          <p style={{ margin: 0, fontSize: 13 }}>Nenhuma entrada no changelog ainda. Registre decisões e aprendizados aqui.</p>
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gap: 10 }}>
-        {entries.map(entry => (
-          <div key={entry.id} style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 10, padding: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
-              <div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
-                  <TipoBadge tipo={entry.tipo} />
-                  <span style={{ fontSize: 14, fontWeight: 700, color: '#F0F0F5' }}>{entry.titulo}</span>
-                </div>
-                <div style={{ fontSize: 10, color: '#444' }}>{fmtDate(entry.created_at)}{entry.autor ? ` · por ${entry.autor}` : ''}</div>
+      {/* Type summary */}
+      {entries.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+          {(['decisao', 'aprendizado', 'diretriz', 'restricao'] as const).map(t => {
+            const { label, color, dim, border, icon } = TIPO_META[t]
+            return (
+              <div key={t} style={{ background: dim, border: `1px solid ${border}`, borderRadius: 10, padding: '8px 14px', display: 'flex', gap: 7, alignItems: 'center' }}>
+                <span style={{ fontSize: 14 }}>{icon}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color }}>{tipoCount(t)}</span>
+                <span style={{ fontSize: 11, color: color + '99' }}>{label}</span>
               </div>
-              <button onClick={() => remove(entry.id)} style={{ padding: '5px 8px', background: '#ef444410', border: '1px solid #ef444430', borderRadius: 6, cursor: 'pointer', color: '#ef4444', flexShrink: 0 }}>
-                <Trash2 style={{ width: 12, height: 12 }} />
-              </button>
-            </div>
-            <p style={{ margin: '0 0 8px', fontSize: 13, color: '#A1A1AA', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{entry.descricao}</p>
-            {entry.impacto && (
-              <p style={{ margin: 0, fontSize: 12, color: '#555' }}><span style={{ color: '#7B3FE4', fontWeight: 700 }}>Impacto: </span>{entry.impacto}</p>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {showForm && (
-        <Modal title="Nova entrada no changelog" onClose={() => setShowForm(false)}>
-          <Field label="Tipo">
-            <select style={selectStyle} value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as ChangelogEntry['tipo'] }))}>
-              <option value="decisao">Decisão</option>
-              <option value="aprendizado">Aprendizado</option>
-              <option value="diretriz">Diretriz</option>
-              <option value="restricao">Restrição</option>
-            </select>
-          </Field>
-          <Field label="Título *">
-            <input style={inputStyle} value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} placeholder="Ex: Ana não deve usar a palavra 'produto'" />
-          </Field>
-          <Field label="Descrição">
-            <textarea style={textareaStyle} value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Detalhe a decisão ou aprendizado..." />
-          </Field>
-          <Field label="Impacto esperado">
-            <input style={inputStyle} value={form.impacto} onChange={e => setForm(f => ({ ...f, impacto: e.target.value }))} placeholder="Ex: Melhora naturalidade do script" />
-          </Field>
-          <Field label="Autor">
-            <input style={inputStyle} value={form.autor} onChange={e => setForm(f => ({ ...f, autor: e.target.value }))} placeholder="Quem tomou esta decisão?" />
-          </Field>
-          <button onClick={save} disabled={saving || !form.titulo.trim()} style={{ width: '100%', padding: '10px', background: saving ? '#444' : '#7B3FE4', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#fff', fontSize: 13, fontWeight: 700 }}>
-            {saving ? 'Salvando...' : 'Registrar entrada'}
-          </button>
-        </Modal>
-      )}
-    </div>
-  )
-}
-
-// ─── SCORECARD TAB ────────────────────────────────────────────────────────────
-
-function ScorecardTab({ entries, sims, onRefresh }: { entries: ScorecardEntry[]; sims: Simulacao[]; onRefresh: () => void }) {
-  const [showForm, setShowForm] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ sim_id: '', etapa: 'geral', criterio: SCORECARD_CRITERIOS[0], score: 7, max_score: 10, nota: '' })
-
-  const save = async () => {
-    setSaving(true)
-    await createRecord('ana_scorecard', { ...form, sim_id: form.sim_id || null })
-    setSaving(false)
-    setShowForm(false)
-    setForm({ sim_id: '', etapa: 'geral', criterio: SCORECARD_CRITERIOS[0], score: 7, max_score: 10, nota: '' })
-    onRefresh()
-  }
-
-  const remove = async (id: string) => {
-    if (!confirm('Remover avaliação?')) return
-    await deleteRecord('ana_scorecard', id)
-    onRefresh()
-  }
-
-  // Group by criterio
-  const byCriterio: Record<string, ScorecardEntry[]> = {}
-  for (const e of entries) {
-    if (!byCriterio[e.criterio]) byCriterio[e.criterio] = []
-    byCriterio[e.criterio].push(e)
-  }
-
-  return (
-    <div style={{ maxWidth: 900, margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <div>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#F0F0F5' }}>Scorecard</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: '#555' }}>Avaliações por critério através das simulações.</p>
+            )
+          })}
         </div>
-        <button onClick={() => setShowForm(true)} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', background: '#22c55e', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#000', fontSize: 12, fontWeight: 700 }}>
-          <Plus style={{ width: 14, height: 14 }} /> Nova avaliação
-        </button>
-      </div>
+      )}
 
-      {/* Averages by criterio */}
-      {Object.keys(byCriterio).length > 0 && (
-        <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 12, padding: 18, marginBottom: 20 }}>
-          <h3 style={{ margin: '0 0 14px', fontSize: 12, fontWeight: 700, color: '#555', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Médias por critério</h3>
-          <div style={{ display: 'grid', gap: 8 }}>
-            {Object.entries(byCriterio).map(([crit, list]) => {
-              const avg = list.reduce((s, e) => s + e.score / e.max_score, 0) / list.length
-              const pct = Math.round(avg * 100)
-              const color = pct >= 80 ? '#22c55e' : pct >= 60 ? '#f59e0b' : '#ef4444'
-              return (
-                <div key={crit} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <span style={{ fontSize: 12, color: '#A1A1AA', width: 200, flexShrink: 0 }}>{crit}</span>
-                  <div style={{ flex: 1, height: 6, background: '#1C1C1E', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 99, transition: 'width 0.4s' }} />
+      {entries.length === 0 && <EmptyState icon={<Clock />} text="Nenhuma entrada no changelog ainda. Registre decisões e aprendizados aqui." />}
+
+      {/* Timeline */}
+      <div style={{ position: 'relative' }}>
+        {entries.length > 0 && (
+          <div style={{ position: 'absolute', left: 15, top: 24, bottom: 0, width: 1, background: `linear-gradient(to bottom, ${C.border}, transparent)` }} />
+        )}
+        <div style={{ display: 'grid', gap: 12 }}>
+          {entries.map((entry, i) => {
+            const { color, dim, border, icon } = TIPO_META[entry.tipo]
+            return (
+              <div key={entry.id} style={{ display: 'flex', gap: 14 }}>
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: dim, border: `1.5px solid ${border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 13, zIndex: 1 }}>
+                  {icon}
+                </div>
+                <div style={{ flex: 1, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 18px', marginBottom: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+                    <div>
+                      <div style={{ display: 'flex', gap: 7, alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }}>
+                        <ChangelogBadge tipo={entry.tipo} />
+                        <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{entry.titulo}</span>
+                      </div>
+                      <span style={{ fontSize: 10, color: C.textFaint }}>{fmtDate(entry.created_at)}{entry.autor ? ` · por ${entry.autor}` : ''}</span>
+                    </div>
+                    <ActionBtn icon={<Trash2 style={{ width: 12, height: 12 }} />} onClick={async () => { if (confirm('Remover?')) { await deleteRecord('ana_changelog', entry.id); onRefresh() } }} danger title="Remover" />
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 800, color, width: 36, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{pct}%</span>
-                  <span style={{ fontSize: 10, color: '#444', width: 30, textAlign: 'right' }}>n={list.length}</span>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {entries.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '48px 0', color: '#444' }}>
-          <BarChart3 style={{ width: 36, height: 36, margin: '0 auto 12px', opacity: 0.3 }} />
-          <p style={{ margin: 0, fontSize: 13 }}>Nenhuma avaliação ainda. Avalie critérios após cada simulação.</p>
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gap: 8 }}>
-        {entries.map(entry => {
-          const pct = Math.round(entry.score / entry.max_score * 100)
-          const color = pct >= 80 ? '#22c55e' : pct >= 60 ? '#f59e0b' : '#ef4444'
-          const sim = sims.find(s => s.id === entry.sim_id)
-          return (
-            <div key={entry.id} style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#D4D4D8' }}>{entry.criterio}</div>
-                <div style={{ fontSize: 10, color: '#555' }}>
-                  {ETAPA_LABELS[entry.etapa] || entry.etapa}
-                  {sim ? ` · ${sim.titulo}` : ''}
-                  {entry.nota ? ` — ${entry.nota}` : ''}
+                  {entry.descricao && <p style={{ margin: '0 0 8px', fontSize: 13, color: C.textMuted, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{entry.descricao}</p>}
+                  {entry.impacto && <p style={{ margin: 0, fontSize: 12, color: C.textFaint }}><span style={{ color, fontWeight: 700 }}>Impacto: </span>{entry.impacto}</p>}
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <ScoreBadge score={entry.score} max={entry.max_score} />
-                <button onClick={() => remove(entry.id)} style={{ padding: '4px 6px', background: '#ef444410', border: '1px solid #ef444430', borderRadius: 6, cursor: 'pointer', color: '#ef4444' }}>
-                  <Trash2 style={{ width: 11, height: 11 }} />
-                </button>
-              </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
 
       {showForm && (
-        <Modal title="Nova avaliação" onClose={() => setShowForm(false)}>
-          <Field label="Simulação (opcional)">
-            <select style={selectStyle} value={form.sim_id} onChange={e => setForm(f => ({ ...f, sim_id: e.target.value }))}>
-              <option value="">— sem vínculo —</option>
-              {sims.map(s => <option key={s.id} value={s.id}>{s.titulo}</option>)}
+        <Modal title="Nova entrada no changelog" accent={C.purple} onClose={() => setShowForm(false)}>
+          <Field label="Tipo">
+            <select style={sel} value={form.tipo} onChange={e => setForm(f => ({ ...f, tipo: e.target.value as ChangelogEntry['tipo'] }))}>
+              <option value="decisao">⚡ Decisão</option>
+              <option value="aprendizado">💡 Aprendizado</option>
+              <option value="diretriz">📐 Diretriz</option>
+              <option value="restricao">🚫 Restrição</option>
             </select>
           </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="Etapa">
-              <select style={selectStyle} value={form.etapa} onChange={e => setForm(f => ({ ...f, etapa: e.target.value }))}>
-                {ETAPAS.map(e => <option key={e} value={e}>{ETAPA_LABELS[e]}</option>)}
-              </select>
-            </Field>
-            <Field label="Critério">
-              <select style={selectStyle} value={form.criterio} onChange={e => setForm(f => ({ ...f, criterio: e.target.value }))}>
-                {SCORECARD_CRITERIOS.map(c => <option key={c} value={c}>{c}</option>)}
-                <option value="outro">Outro...</option>
-              </select>
-            </Field>
-          </div>
-          {form.criterio === 'outro' && (
-            <Field label="Critério personalizado">
-              <input style={inputStyle} placeholder="Ex: Timing de escuta" onChange={e => setForm(f => ({ ...f, criterio: e.target.value }))} />
-            </Field>
-          )}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Field label="Score">
-              <input type="number" min={0} max={form.max_score} style={inputStyle} value={form.score} onChange={e => setForm(f => ({ ...f, score: Number(e.target.value) }))} />
-            </Field>
-            <Field label="Máximo">
-              <input type="number" min={1} max={100} style={inputStyle} value={form.max_score} onChange={e => setForm(f => ({ ...f, max_score: Number(e.target.value) }))} />
-            </Field>
-          </div>
-          <Field label="Nota (opcional)">
-            <input style={inputStyle} value={form.nota} onChange={e => setForm(f => ({ ...f, nota: e.target.value }))} placeholder="Ex: Ana repetiu pergunta fechada duas vezes" />
-          </Field>
-          <button onClick={save} disabled={saving} style={{ width: '100%', padding: '10px', background: saving ? '#444' : '#22c55e', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#000', fontSize: 13, fontWeight: 700 }}>
-            {saving ? 'Salvando...' : 'Salvar avaliação'}
-          </button>
+          <Field label="Título *"><input style={inp} value={form.titulo} onChange={e => setForm(f => ({ ...f, titulo: e.target.value }))} placeholder="Ex: Ana não usa a palavra 'produto'" /></Field>
+          <Field label="Descrição"><textarea style={ta} value={form.descricao} onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))} placeholder="Detalhe a decisão ou aprendizado..." /></Field>
+          <Field label="Impacto esperado"><input style={inp} value={form.impacto} onChange={e => setForm(f => ({ ...f, impacto: e.target.value }))} placeholder="Ex: Melhora naturalidade do script" /></Field>
+          <Field label="Autor"><input style={inp} value={form.autor} onChange={e => setForm(f => ({ ...f, autor: e.target.value }))} placeholder="Quem tomou esta decisão?" /></Field>
+          <Btn onClick={save} disabled={saving || !form.titulo.trim()} full>{saving ? 'Salvando...' : 'Registrar'}</Btn>
         </Modal>
       )}
     </div>
   )
 }
 
-// ─── MAIN PAGE ────────────────────────────────────────────────────────────────
+// ─── Shared layout helpers ────────────────────────────────────────────────────
+
+function PageHeader({ title, subtitle, count, children }: { title: string; subtitle: string; count?: number; children?: React.ReactNode }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 24, gap: 16 }}>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900, color: C.text }}>{title}</h2>
+          {count !== undefined && (
+            <span style={{ fontSize: 13, fontWeight: 700, color: C.textFaint, background: '#ffffff08', border: `1px solid ${C.border}`, borderRadius: 8, padding: '1px 9px', fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+          )}
+        </div>
+        <p style={{ margin: 0, fontSize: 12, color: C.textMuted, lineHeight: 1.5 }}>{subtitle}</p>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '56px 24px', color: C.textFaint }}>
+      <div style={{ width: 48, height: 48, margin: '0 auto 14px', opacity: 0.2 }}>{icon}</div>
+      <p style={{ margin: 0, fontSize: 13, lineHeight: 1.6, maxWidth: 340, marginLeft: 'auto', marginRight: 'auto' }}>{text}</p>
+    </div>
+  )
+}
+
+function ActionBtn({ icon, onClick, active, activeColor, danger, title }: {
+  icon: React.ReactNode; onClick: () => void; active?: boolean; activeColor?: string
+  danger?: boolean; title?: string
+}) {
+  return (
+    <button onClick={onClick} title={title} style={{
+      width: 30, height: 30, padding: 0, borderRadius: 8,
+      border: `1px solid ${active ? (activeColor || C.purple) + '50' : danger ? C.redBorder : C.border}`,
+      background: active ? (activeColor || C.purple) + '18' : danger ? C.redDim : 'transparent',
+      cursor: 'pointer', color: active ? (activeColor || C.purple) : danger ? C.red : C.textMuted,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
+    }}>
+      {icon}
+    </button>
+  )
+}
+
+// ─── TABS CONFIG ──────────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] = [
-  { id: 'central', label: 'Central', icon: <Sparkles style={{ width: 13, height: 13 }} />, color: '#7B3FE4' },
-  { id: 'simulacoes', label: 'Simulações', icon: <Brain style={{ width: 13, height: 13 }} />, color: '#7B3FE4' },
-  { id: 'gold', label: 'Gold Standard', icon: <Star style={{ width: 13, height: 13 }} />, color: '#f59e0b' },
-  { id: 'anti-gold', label: 'Anti-Gold', icon: <XCircle style={{ width: 13, height: 13 }} />, color: '#ef4444' },
-  { id: 'matriz', label: 'Matriz', icon: <Grid3X3 style={{ width: 13, height: 13 }} />, color: '#3B82F6' },
-  { id: 'scorecard', label: 'Scorecard', icon: <BarChart3 style={{ width: 13, height: 13 }} />, color: '#22c55e' },
-  { id: 'changelog', label: 'Changelog', icon: <Clock style={{ width: 13, height: 13 }} />, color: '#A1A1AA' },
+  { id: 'central',    label: 'Central',       icon: <Sparkles style={{ width: 12, height: 12 }} />,  color: C.purple },
+  { id: 'simulacoes', label: 'Simulações',    icon: <Brain style={{ width: 12, height: 12 }} />,    color: C.purple },
+  { id: 'gold',       label: 'Gold ✦',        icon: <Star style={{ width: 12, height: 12 }} />,     color: C.gold },
+  { id: 'anti-gold',  label: 'Anti-Gold',     icon: <XCircle style={{ width: 12, height: 12 }} />,  color: C.red },
+  { id: 'scorecard',  label: 'Scorecard',     icon: <BarChart3 style={{ width: 12, height: 12 }} />, color: C.green },
+  { id: 'matriz',     label: 'Matriz',        icon: <Grid3X3 style={{ width: 12, height: 12 }} />,  color: C.blue },
+  { id: 'changelog',  label: 'Changelog',     icon: <Clock style={{ width: 12, height: 12 }} />,    color: C.textMuted },
 ]
+
+// ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
 export default function AnaMasterPage() {
   const [tab, setTab] = useState<Tab>('central')
@@ -1123,8 +1098,10 @@ export default function AnaMasterPage() {
   const [matriz, setMatriz] = useState<MatrizItem[]>([])
   const [changelog, setChangelog] = useState<ChangelogEntry[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (silent = false) => {
+    if (!silent) setRefreshing(true)
     const [s, g, ag, sc, m, cl] = await Promise.all([
       fetchTable<Simulacao>('ana_simulacoes'),
       fetchTable<GoldItem>('ana_gold'),
@@ -1133,67 +1110,76 @@ export default function AnaMasterPage() {
       fetchTable<MatrizItem>('ana_matriz'),
       fetchTable<ChangelogEntry>('ana_changelog'),
     ])
-    setSims(s)
-    setGold(g)
-    setAntiGold(ag)
-    setScorecard(sc)
-    setMatriz(m)
-    setChangelog(cl)
-    setLoading(false)
+    setSims(s); setGold(g); setAntiGold(ag); setScorecard(sc); setMatriz(m); setChangelog(cl)
+    setLoading(false); setRefreshing(false)
   }, [])
 
   useEffect(() => { refresh() }, [refresh])
 
-  return (
-    <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
-      <Sidebar role="admin" />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar title="Ana DNA Nuclear — Painel de Simulação" />
+  const counts: Partial<Record<Tab, number>> = {
+    simulacoes: sims.length, gold: gold.length, 'anti-gold': antiGold.length,
+    scorecard: scorecard.length, matriz: matriz.length, changelog: changelog.length,
+  }
 
-        {/* Header */}
-        <div style={{ background: '#0A0A0B', borderBottom: '1px solid #1A1A1C', padding: '0 20px', display: 'flex', alignItems: 'stretch', gap: 0, flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1 }}>
-            {TABS.map(t => (
+  return (
+    <div style={{ display: 'flex', height: '100vh', background: C.bg, overflow: 'hidden' }}>
+      <Sidebar role="admin" />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <TopBar title="Ana DNA Nuclear" />
+
+        {/* Tab nav */}
+        <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '0 20px', display: 'flex', alignItems: 'stretch', flexShrink: 0, overflowX: 'auto' }}>
+          {TABS.map(t => {
+            const isActive = tab === t.id
+            const n = counts[t.id]
+            return (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 6, padding: '10px 14px',
-                  fontSize: 12, fontWeight: 700, cursor: 'pointer', border: 'none', background: 'transparent',
-                  color: tab === t.id ? t.color : '#555',
-                  borderBottom: tab === t.id ? `2px solid ${t.color}` : '2px solid transparent',
-                  transition: 'color 0.15s',
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '12px 16px', fontSize: 12, fontWeight: 700,
+                  cursor: 'pointer', border: 'none', background: 'transparent', whiteSpace: 'nowrap',
+                  color: isActive ? t.color : C.textFaint,
+                  borderBottom: `2px solid ${isActive ? t.color : 'transparent'}`,
+                  transition: 'all 0.15s',
                 }}
               >
-                <span style={{ color: tab === t.id ? t.color : '#444' }}>{t.icon}</span>
+                <span style={{ color: isActive ? t.color : C.textFaint, transition: 'color 0.15s' }}>{t.icon}</span>
                 {t.label}
+                {n !== undefined && n > 0 && (
+                  <span style={{ fontSize: 10, fontWeight: 800, color: isActive ? t.color : C.textFaint, background: isActive ? t.color + '20' : '#ffffff08', borderRadius: 6, padding: '1px 6px', fontVariantNumeric: 'tabular-nums' }}>
+                    {n}
+                  </span>
+                )}
               </button>
-            ))}
-          </div>
+            )
+          })}
+          <div style={{ flex: 1 }} />
           <button
-            onClick={refresh}
+            onClick={() => refresh()}
             title="Atualizar"
-            style={{ padding: '0 14px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#444', flexShrink: 0 }}
+            style={{ padding: '0 14px', background: 'transparent', border: 'none', cursor: 'pointer', color: refreshing ? C.purple : C.textFaint, flexShrink: 0, display: 'flex', alignItems: 'center' }}
           >
-            <RefreshCw style={{ width: 14, height: 14 }} />
+            <RefreshCw style={{ width: 14, height: 14, animation: refreshing ? 'spin 0.8s linear infinite' : 'none' }} />
           </button>
         </div>
 
-        {/* Content */}
+        {/* Content area */}
         <div style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
           {loading ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200 }}>
-              <div className="w-6 h-6 border-2 border-[#7B3FE4] border-t-transparent rounded-full animate-spin" />
+              <div style={{ width: 28, height: 28, border: `2px solid ${C.purple}`, borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
             </div>
           ) : (
             <>
-              {tab === 'central' && <CentralTab sims={sims} gold={gold} antiGold={antiGold} scorecard={scorecard} matriz={matriz} changelog={changelog} />}
+              {tab === 'central'    && <CentralTab sims={sims} gold={gold} antiGold={antiGold} scorecard={scorecard} matriz={matriz} changelog={changelog} />}
               {tab === 'simulacoes' && <SimulacoesTab sims={sims} onRefresh={refresh} />}
-              {tab === 'gold' && <GoldTab items={gold} onRefresh={refresh} />}
-              {tab === 'anti-gold' && <AntiGoldTab items={antiGold} onRefresh={refresh} />}
-              {tab === 'scorecard' && <ScorecardTab entries={scorecard} sims={sims} onRefresh={refresh} />}
-              {tab === 'matriz' && <MatrizTab items={matriz} onRefresh={refresh} />}
-              {tab === 'changelog' && <ChangelogTab entries={changelog} onRefresh={refresh} />}
+              {tab === 'gold'       && <GoldTab items={gold} onRefresh={refresh} />}
+              {tab === 'anti-gold'  && <AntiGoldTab items={antiGold} onRefresh={refresh} />}
+              {tab === 'scorecard'  && <ScorecardTab entries={scorecard} sims={sims} onRefresh={refresh} />}
+              {tab === 'matriz'     && <MatrizTab items={matriz} onRefresh={refresh} />}
+              {tab === 'changelog'  && <ChangelogTab entries={changelog} onRefresh={refresh} />}
             </>
           )}
         </div>

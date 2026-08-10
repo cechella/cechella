@@ -81,6 +81,12 @@ const flatNav: Record<Exclude<UserRole, 'admin'>, NavItem[]> = {
 // ─── Admin: nav com seções ────────────────────────────────────────────────────
 const adminNav: NavSection[] = [
   {
+    section: 'Ana DNA',
+    items: [
+      { label: 'Ana DNA Nuclear', href: '/admin/ana-master', icon: <Brain className="w-5 h-5" /> },
+    ],
+  },
+  {
     section: 'Gestão',
     items: [
       { label: 'Dashboard',    href: '/admin/dashboard',   icon: <LayoutDashboard className="w-5 h-5" /> },
@@ -104,12 +110,6 @@ const adminNav: NavSection[] = [
       { label: 'Agente IA',    href: '/admin/agente',      icon: <Bot className="w-5 h-5" /> },
       { label: 'Referidos',    href: '/admin/referidos',   icon: <Share2 className="w-5 h-5" /> },
       { label: 'Assinatura',   href: '/admin/assinatura',  icon: <CreditCard className="w-5 h-5" /> },
-    ],
-  },
-  {
-    section: 'Ana DNA',
-    items: [
-      { label: 'Ana DNA Nuclear', href: '/admin/ana-master', icon: <Brain className="w-5 h-5" /> },
     ],
   },
   {
@@ -198,17 +198,67 @@ export function Sidebar({ role = 'patient' }: { role?: UserRole }) {
           // Admin: seções com labels
           adminNav.map((section) => (
             <div key={section.section} className="mb-1">
-              {!collapsed && section.section && (
-                <p className="text-[9px] font-bold tracking-[0.12em] text-[#3F3F46] uppercase px-3 pt-3 pb-1">
-                  {section.section}
-                </p>
+              {section.section === 'Ana DNA' ? (
+                // Special Ana DNA section with gradient treatment
+                <>
+                  {!collapsed && (
+                    <p className="text-[9px] font-bold tracking-[0.12em] text-[#3F3F46] uppercase px-3 pt-3 pb-1">
+                      {section.section}
+                    </p>
+                  )}
+                  {collapsed && <div className="h-px bg-[#1C1C1E] mx-2 my-2" />}
+                  {section.items.map((item) => {
+                    const isActive = pathname === item.href || pathname?.startsWith(item.href + '/')
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        title={collapsed ? item.label : undefined}
+                        className={`flex items-center gap-3 px-3 py-2.5 rounded-xl mb-0.5 transition-all duration-200 group ${
+                          isActive
+                            ? 'text-white'
+                            : 'text-[#71717A] hover:text-white'
+                        }`}
+                        style={{
+                          background: isActive
+                            ? 'linear-gradient(135deg, rgba(139,92,246,0.25) 0%, rgba(59,130,246,0.15) 100%)'
+                            : undefined,
+                          border: isActive ? '1px solid rgba(139,92,246,0.3)' : '1px solid transparent',
+                          boxShadow: isActive ? '0 0 20px rgba(139,92,246,0.15)' : undefined,
+                        }}
+                        onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLAnchorElement).style.background = 'linear-gradient(135deg, rgba(139,92,246,0.12) 0%, rgba(59,130,246,0.08) 100%)' }}
+                        onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLAnchorElement).style.background = '' }}
+                      >
+                        <span style={{ background: 'linear-gradient(135deg, #8B5CF6, #3B82F6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+                          {item.icon}
+                        </span>
+                        {!collapsed && (
+                          <span className="text-sm font-bold truncate" style={isActive ? { background: 'linear-gradient(90deg, #C4B5FD, #93C5FD)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' } : {}}>
+                            {item.label}
+                          </span>
+                        )}
+                        {!collapsed && isActive && (
+                          <div className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: 'linear-gradient(135deg, #8B5CF6, #3B82F6)', boxShadow: '0 0 6px rgba(139,92,246,0.8)' }} />
+                        )}
+                      </Link>
+                    )
+                  })}
+                </>
+              ) : (
+                <>
+                  {!collapsed && section.section && (
+                    <p className="text-[9px] font-bold tracking-[0.12em] text-[#3F3F46] uppercase px-3 pt-3 pb-1">
+                      {section.section}
+                    </p>
+                  )}
+                  {collapsed && section.section && (
+                    <div className="h-px bg-[#1C1C1E] mx-2 my-2" />
+                  )}
+                  {section.items.map((item) => (
+                    <NavLink key={item.href} item={item} collapsed={collapsed} pathname={pathname} />
+                  ))}
+                </>
               )}
-              {collapsed && section.section && (
-                <div className="h-px bg-[#1C1C1E] mx-2 my-2" />
-              )}
-              {section.items.map((item) => (
-                <NavLink key={item.href} item={item} collapsed={collapsed} pathname={pathname} />
-              ))}
             </div>
           ))
         ) : (
