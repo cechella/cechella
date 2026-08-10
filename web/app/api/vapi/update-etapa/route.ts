@@ -33,7 +33,9 @@ export async function POST(req: NextRequest) {
     } else if (body.message?.type === 'tool-calls') {
       const tool = body.message.toolCallList?.find((t: any) => t.function?.name === 'update_etapa')
       if (tool) {
-        const params = JSON.parse(tool.function?.arguments || '{}')
+        const params = typeof tool.function?.arguments === 'string'
+          ? JSON.parse(tool.function.arguments)
+          : (tool.function?.arguments || {})
         telefone = params.telefone
         etapa = params.etapa ?? params.nova_etapa
       }

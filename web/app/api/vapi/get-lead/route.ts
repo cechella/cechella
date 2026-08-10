@@ -29,7 +29,9 @@ export async function POST(req: NextRequest) {
     } else if (body.message?.type === 'tool-calls') {
       const tool = body.message.toolCallList?.find((t: any) => t.function?.name === 'get_lead_context')
       if (tool) {
-        const params = JSON.parse(tool.function?.arguments || '{}')
+        const params = typeof tool.function?.arguments === 'string'
+          ? JSON.parse(tool.function.arguments)
+          : (tool.function?.arguments || {})
         telefone = params.telefone
       }
       if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
