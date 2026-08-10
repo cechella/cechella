@@ -16,15 +16,17 @@ export async function GET(req: NextRequest) {
         headers: { Authorization: `Bearer ${VAPI_KEY}` },
       })
       const data = await res.json()
+      if (!res.ok) return NextResponse.json({ error: data.message || data.error || `HTTP ${res.status}` }, { status: res.status })
       return NextResponse.json(data)
     }
 
     if (last && assistantId) {
       const res = await fetch(
-        `https://api.vapi.ai/call?assistantId=${assistantId}&limit=1&sortOrder=DESC`,
+        `https://api.vapi.ai/call?assistantId=${assistantId}&limit=1`,
         { headers: { Authorization: `Bearer ${VAPI_KEY}` } }
       )
       const data = await res.json()
+      if (!res.ok) return NextResponse.json({ error: data.message || data.error || `HTTP ${res.status}` })
       const calls = Array.isArray(data) ? data : data.results || []
       if (calls.length === 0) return NextResponse.json({ error: 'Nenhuma ligação encontrada' })
       return NextResponse.json(calls[0])
