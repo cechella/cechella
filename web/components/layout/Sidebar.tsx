@@ -34,6 +34,7 @@ import {
   PhoneCall,
   Cpu,
   ServerCog,
+  Brain,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -103,6 +104,12 @@ const adminNav: NavSection[] = [
       { label: 'Agente IA',    href: '/admin/agente',      icon: <Bot className="w-5 h-5" /> },
       { label: 'Referidos',    href: '/admin/referidos',   icon: <Share2 className="w-5 h-5" /> },
       { label: 'Assinatura',   href: '/admin/assinatura',  icon: <CreditCard className="w-5 h-5" /> },
+    ],
+  },
+  {
+    section: 'Ana DNA',
+    items: [
+      { label: 'Ana DNA Nuclear', href: '/admin/ana-master', icon: <Brain className="w-5 h-5" /> },
     ],
   },
   {
