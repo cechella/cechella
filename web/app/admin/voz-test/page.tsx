@@ -308,11 +308,6 @@ function RealtimePanel() {
             </div>
           )}
 
-          <div className="px-5 pb-4">
-            <p className="text-[#3F3F46] text-xs font-mono">Assistente: Ana Real Time Test</p>
-            <p className="text-[#3F3F46] text-xs font-mono mt-1">ID: {REALTIME_ASSISTANT_ID}</p>
-            <p className="text-[#3F3F46] text-xs font-mono mt-1">Número Twilio: +17196742872</p>
-          </div>
         </div>
       )}
 

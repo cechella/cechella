@@ -9,6 +9,13 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
+function vapiResponse(result: string, toolCallId?: string) {
+  if (toolCallId) {
+    return NextResponse.json({ results: [{ toolCallId, result }] })
+  }
+  return NextResponse.json({ result })
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -16,10 +23,12 @@ export async function POST(req: NextRequest) {
     let telefone: string | undefined
     let sintoma: string | undefined
     let callId: string | undefined
+    let toolCallId: string | undefined
 
     if (body.message?.type === 'tool-calls') {
       const tool = body.message.toolCallList?.find((t: any) => t.function?.name === 'save_sintoma')
       if (tool) {
+        toolCallId = tool.id
         const params = typeof tool.function?.arguments === 'string'
           ? JSON.parse(tool.function.arguments)
           : (tool.function?.arguments || {})
@@ -42,6 +51,15 @@ export async function POST(req: NextRequest) {
       telefone = body.telefone
       sintoma = body.sintoma
       callId = body.call_id ?? body.callId
+      if (!sintoma && body.message?.toolCallList?.length) {
+        const tool = body.message.toolCallList[0]
+        toolCallId = tool.id
+        const args = typeof tool.function?.arguments === 'string'
+          ? JSON.parse(tool.function.arguments)
+          : (tool.function?.arguments || {})
+        if (!sintoma) sintoma = args.sintoma
+        if (!telefone) telefone = args.telefone
+      }
     }
 
     // Fallback 1: busca por callId
@@ -69,11 +87,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (!sintoma) {
-      return NextResponse.json({ result: 'Sintoma não informado.' })
+      return vapiResponse('Sintoma não informado.', toolCallId)
     }
 
     if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
-      return NextResponse.json({ result: `Sintoma "${sintoma}" registrado (lead não encontrado).` })
+      return vapiResponse(`Sintoma "${sintoma}" registrado (lead não encontrado).`, toolCallId)
     }
 
     const digits = String(telefone).replace(/\D/g, '')
@@ -83,7 +101,7 @@ export async function POST(req: NextRequest) {
       .update({ dor_principal: sintoma, updated_at: new Date().toISOString() })
       .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${digits.replace(/^55/, '')}`)
 
-    return NextResponse.json({ result: `Sintoma "${sintoma}" salvo com sucesso.` })
+    return vapiResponse(`Sintoma "${sintoma}" salvo com sucesso.`, toolCallId)
   } catch (err: any) {
     console.error('save-sintoma error:', err)
     return NextResponse.json({ result: 'Sintoma salvo.' })

@@ -15,15 +15,21 @@ const ETAPA_NUM: Record<string, number> = {
   fechamento: 5, referidos: 6, validacao: 7, ganho: 8, perdido: 9,
 }
 
+function vapiResponse(result: string, toolCallId?: string) {
+  if (toolCallId) {
+    return NextResponse.json({ results: [{ toolCallId, result }] })
+  }
+  return NextResponse.json({ result })
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
 
-    // VAPI wraps function call results in message.toolCallList or message.functionCall
-    // Handle both VAPI server-url format and direct calls
     let telefone: string | undefined
     let etapa: string | number | undefined
     let callId: string | undefined
+    let toolCallId: string | undefined
 
     if (body.message?.type === 'function-call') {
       const params = body.message.functionCall?.parameters || {}
@@ -33,6 +39,7 @@ export async function POST(req: NextRequest) {
     } else if (body.message?.type === 'tool-calls') {
       const tool = body.message.toolCallList?.find((t: any) => t.function?.name === 'update_etapa')
       if (tool) {
+        toolCallId = tool.id
         const params = typeof tool.function?.arguments === 'string'
           ? JSON.parse(tool.function.arguments)
           : (tool.function?.arguments || {})
@@ -49,13 +56,12 @@ export async function POST(req: NextRequest) {
       }
       callId = body.message.call?.id
     } else {
-      // Direct call from VAPI server-url or admin
       telefone = body.telefone
       etapa = body.etapa ?? body.nova_etapa
       callId = body.call_id ?? body.callId
-      // Also try toolCallList when type is absent (some VAPI versions omit type)
       if (etapa === undefined && body.message?.toolCallList?.length) {
         const tool = body.message.toolCallList[0]
+        toolCallId = tool.id
         const args = typeof tool.function?.arguments === 'string'
           ? JSON.parse(tool.function.arguments)
           : (tool.function?.arguments || {})
@@ -93,12 +99,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (!telefone || etapa === undefined) {
-      return NextResponse.json({ result: 'Parâmetros insuficientes — etapa não atualizada.' })
+      return vapiResponse('Parâmetros insuficientes — etapa não atualizada.', toolCallId)
     }
 
     const digits = String(telefone).replace(/\D/g, '')
 
-    // Resolve etapa: accept number (1-9) or string name
     let etapaNum: number
     let etapaStr: string
     if (typeof etapa === 'number' || /^\d+$/.test(String(etapa))) {
@@ -110,7 +115,6 @@ export async function POST(req: NextRequest) {
       etapaNum = ETAPA_NUM[etapaStr] || 1
     }
 
-    // Find lead by phone (try with and without country code)
     const { data: leads } = await supabase
       .from('leads')
       .select('id, etapa_agente, nome, telefone')
@@ -120,7 +124,6 @@ export async function POST(req: NextRequest) {
     const lead = leads?.[0]
 
     if (!lead) {
-      // Create minimal lead entry so voice lead appears in pipeline
       const { data: newLead } = await supabase
         .from('leads')
         .insert({
@@ -138,14 +141,13 @@ export async function POST(req: NextRequest) {
           .eq('call_id', callId)
       }
 
-      return NextResponse.json({ result: `Lead criado e etapa definida: ${etapaStr} (${etapaNum})` })
+      return vapiResponse(`Lead criado e etapa definida: ${etapaStr} (${etapaNum})`, toolCallId)
     }
 
     const etapaAtual = Number(lead.etapa_agente) || 1
 
-    // Only advance, never regress (same rule as WhatsApp Ana)
     if (etapaNum <= etapaAtual && etapaStr !== 'perdido') {
-      return NextResponse.json({ result: `Etapa mantida em ${etapaAtual} (sem regressão)` })
+      return vapiResponse(`Etapa mantida em ${etapaAtual} (sem regressão)`, toolCallId)
     }
 
     await supabase
@@ -163,9 +165,7 @@ export async function POST(req: NextRequest) {
         .eq('call_id', callId)
     }
 
-    return NextResponse.json({
-      result: `Etapa atualizada: ${etapaStr} (${etapaNum}) para ${lead.nome || digits}`,
-    })
+    return vapiResponse(`Etapa atualizada: ${etapaStr} (${etapaNum}) para ${lead.nome || digits}`, toolCallId)
   } catch (err: any) {
     console.error('update-etapa error:', err)
     return NextResponse.json({ error: err.message }, { status: 500 })

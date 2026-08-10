@@ -14,12 +14,20 @@ const ETAPA_LABELS: Record<number, string> = {
   5: 'Fechamento', 6: 'Referidos', 7: 'Validação', 8: 'Ganho',
 }
 
+function vapiResponse(result: string, toolCallId?: string) {
+  if (toolCallId) {
+    return NextResponse.json({ results: [{ toolCallId, result }] })
+  }
+  return NextResponse.json({ result })
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
 
     let telefone: string | undefined
     let callId: string | undefined
+    let toolCallId: string | undefined
 
     if (body.message?.type === 'function-call') {
       telefone = body.message.functionCall?.parameters?.telefone
@@ -29,6 +37,7 @@ export async function POST(req: NextRequest) {
     } else if (body.message?.type === 'tool-calls') {
       const tool = body.message.toolCallList?.find((t: any) => t.function?.name === 'get_lead_context')
       if (tool) {
+        toolCallId = tool.id
         const params = typeof tool.function?.arguments === 'string'
           ? JSON.parse(tool.function.arguments)
           : (tool.function?.arguments || {})
@@ -49,6 +58,7 @@ export async function POST(req: NextRequest) {
       callId = body.call?.id || body.callId
       if (!telefone && body.message?.toolCallList?.length) {
         const tool = body.message.toolCallList[0]
+        toolCallId = tool.id
         const args = typeof tool.function?.arguments === 'string'
           ? JSON.parse(tool.function.arguments)
           : (tool.function?.arguments || {})
@@ -85,7 +95,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
-      return NextResponse.json({ result: 'Telefone não informado. Trate como novo lead.' })
+      return vapiResponse('Telefone não informado. Trate como novo lead.', toolCallId)
     }
 
     const digits = String(telefone).replace(/\D/g, '')
@@ -122,15 +132,13 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      return NextResponse.json({
-        result: JSON.stringify({
-          status: 'novo_lead',
-          telefone: telefoneNorm,
-          etapa: 1,
-          etapa_label: 'Apresentação',
-          instrucao: 'Novo lead. Inicie pela apresentação do Hormone Ecosystem.',
-        }),
-      })
+      return vapiResponse(JSON.stringify({
+        status: 'novo_lead',
+        telefone: telefoneNorm,
+        etapa: 1,
+        etapa_label: 'Apresentação',
+        instrucao: 'Novo lead. Inicie pela apresentação do Hormone Ecosystem.',
+      }), toolCallId)
     }
 
     etapa = Number(lead.etapa_agente) || 1
@@ -189,23 +197,21 @@ export async function POST(req: NextRequest) {
       if (referidosFaltam === 0 && semProfissao === 0 && semMensagem === 0) instrucao += ' Todos os 20 referidos completos. Avance para etapa 8 (ganho).'
     }
 
-    return NextResponse.json({
-      result: JSON.stringify({
-        nome: lead.nome || null,
-        telefone: telefoneNorm,
-        etapa,
-        etapa_label: ETAPA_LABELS[etapa] || 'Apresentação',
-        temperatura: lead.temperatura || 'frio',
-        dor_principal: lead.dor_principal || null,
-        origem: lead.origem || null,
-        total_referidos: totalReferidos,
-        referidos_faltam: referidosFaltam,
-        referidos_sem_profissao_hobby: semProfissao,
-        referidos_sem_mensagem: semMensagem,
-        referidos: referidosDetalhe,
-        instrucao,
-      }),
-    })
+    return vapiResponse(JSON.stringify({
+      nome: lead.nome || null,
+      telefone: telefoneNorm,
+      etapa,
+      etapa_label: ETAPA_LABELS[etapa] || 'Apresentação',
+      temperatura: lead.temperatura || 'frio',
+      dor_principal: lead.dor_principal || null,
+      origem: lead.origem || null,
+      total_referidos: totalReferidos,
+      referidos_faltam: referidosFaltam,
+      referidos_sem_profissao_hobby: semProfissao,
+      referidos_sem_mensagem: semMensagem,
+      referidos: referidosDetalhe,
+      instrucao,
+    }), toolCallId)
   } catch (err: any) {
     console.error('get-lead-context error:', err)
     return NextResponse.json({ result: 'Erro ao buscar lead. Trate como novo.' })
