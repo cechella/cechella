@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { initMuteLog, muteBeforeTool, markToolDone, unmuteAfterTool } from '@/lib/vapi-control'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,6 +25,10 @@ function vapiResponse(result: string, toolCallId?: string) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+
+    // SILENCE TEST — mute immediately on webhook arrival
+    const muteLog = initMuteLog(body, 'get_lead_context')
+    await muteBeforeTool(muteLog)
 
     let telefone: string | undefined
     let callId: string | undefined
@@ -95,6 +100,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
+      markToolDone(muteLog)
+      await unmuteAfterTool(muteLog)
       return vapiResponse('Telefone não informado. Trate como novo lead.', toolCallId)
     }
 
@@ -132,6 +139,8 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      markToolDone(muteLog)
+      await unmuteAfterTool(muteLog)
       return vapiResponse(JSON.stringify({
         status: 'novo_lead',
         telefone: telefoneNorm,
@@ -196,6 +205,9 @@ export async function POST(req: NextRequest) {
       if (semMensagem > 0) instrucao += ` ${semMensagem} referidos ainda não receberam a mensagem.`
       if (referidosFaltam === 0 && semProfissao === 0 && semMensagem === 0) instrucao += ' Todos os 20 referidos completos. Avance para etapa 8 (ganho).'
     }
+
+    markToolDone(muteLog)
+    await unmuteAfterTool(muteLog)
 
     return vapiResponse(JSON.stringify({
       nome: lead.nome || null,

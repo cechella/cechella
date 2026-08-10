@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { initMuteLog, muteBeforeTool, markToolDone, unmuteAfterTool } from '@/lib/vapi-control'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,23 +12,41 @@ const supabase = createClient(
 
 const N8N_VAPI = 'https://n8n.hormoneecosystem.com/webhook/vapi-ana'
 
+function vapiResponse(result: string, toolCallId?: string) {
+  if (toolCallId) {
+    return NextResponse.json({ results: [{ toolCallId, result }] })
+  }
+  return NextResponse.json({ result })
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+
+    // SILENCE TEST — mute immediately on webhook arrival
+    const muteLog = initMuteLog(body, 'register_interesse')
+    await muteBeforeTool(muteLog)
 
     let telefone: string | undefined
     let metodo: string | undefined
     let temperatura: string | undefined
     let callId: string | undefined
+    let toolCallId: string | undefined
 
     if (body.message?.type === 'tool-calls') {
       const tool = body.message.toolCallList?.find((t: any) => t.function?.name === 'register_interesse')
       if (tool) {
-        const params = JSON.parse(tool.function?.arguments || '{}')
+        toolCallId = tool.id
+        const params = typeof tool.function?.arguments === 'string'
+          ? JSON.parse(tool.function.arguments)
+          : (tool.function?.arguments || {})
         metodo = params.metodo
         temperatura = params.temperatura
       }
-      telefone = body.message.call?.customer?.number || body.message.call?.phoneNumber?.number
+      telefone = body.message.call?.customer?.number
+        || body.message.call?.customer?.numberE164
+        || body.message.call?.phoneNumber?.number
+        || body.message.call?.to
       callId = body.message.call?.id
     } else if (body.message?.type === 'function-call') {
       const params = body.message.functionCall?.parameters || {}
@@ -42,8 +61,7 @@ export async function POST(req: NextRequest) {
       callId = body.call_id ?? body.callId
     }
 
-    // If telefone is empty (VAPI apiRequest doesn't inject call context),
-    // fall back to most recent active call in historico_voz
+    // Fallback: ligação ativa mais recente
     if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
       const since = new Date(Date.now() - 5 * 60 * 1000).toISOString()
       const { data: activeCall } = await supabase
@@ -61,19 +79,19 @@ export async function POST(req: NextRequest) {
     }
 
     if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
-      return NextResponse.json({ result: 'Erro: telefone não encontrado.' })
+      markToolDone(muteLog)
+      await unmuteAfterTool(muteLog)
+      return vapiResponse('Erro: telefone não encontrado.', toolCallId)
     }
 
     const digits = String(telefone).replace(/\D/g, '')
     const telefoneNorm = digits.startsWith('55') ? digits : `55${digits}`
 
-    // Update lead temperatura in Supabase
     await supabase
       .from('leads')
       .update({ temperatura: temperatura || 'quente', updated_at: new Date().toISOString() })
       .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${digits.replace(/^55/, '')}`)
 
-    // Call n8n to generate payment and send via WhatsApp
     await fetch(N8N_VAPI, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -86,9 +104,10 @@ export async function POST(req: NextRequest) {
     })
 
     const metodoLabel = metodo === 'cartao' ? 'link de pagamento' : 'código PIX'
-    return NextResponse.json({
-      result: `Interesse registrado. ${metodoLabel} enviado no WhatsApp do lead.`,
-    })
+
+    markToolDone(muteLog)
+    await unmuteAfterTool(muteLog)
+    return vapiResponse(`Interesse registrado. ${metodoLabel} enviado no WhatsApp do lead.`, toolCallId)
   } catch (err: any) {
     console.error('register-interesse error:', err)
     return NextResponse.json({ result: 'Erro ao registrar interesse.' })

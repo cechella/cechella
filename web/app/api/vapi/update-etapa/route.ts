@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { initMuteLog, muteBeforeTool, markToolDone, unmuteAfterTool } from '@/lib/vapi-control'
 
 export const dynamic = 'force-dynamic'
 
@@ -25,6 +26,10 @@ function vapiResponse(result: string, toolCallId?: string) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+
+    // SILENCE TEST — mute immediately on webhook arrival
+    const muteLog = initMuteLog(body, 'update_etapa')
+    await muteBeforeTool(muteLog)
 
     let telefone: string | undefined
     let etapa: string | number | undefined
@@ -99,6 +104,8 @@ export async function POST(req: NextRequest) {
     }
 
     if (!telefone || etapa === undefined) {
+      markToolDone(muteLog)
+      await unmuteAfterTool(muteLog)
       return vapiResponse('Parâmetros insuficientes — etapa não atualizada.', toolCallId)
     }
 
@@ -141,12 +148,16 @@ export async function POST(req: NextRequest) {
           .eq('call_id', callId)
       }
 
+      markToolDone(muteLog)
+      await unmuteAfterTool(muteLog)
       return vapiResponse(`Lead criado e etapa definida: ${etapaStr} (${etapaNum})`, toolCallId)
     }
 
     const etapaAtual = Number(lead.etapa_agente) || 1
 
     if (etapaNum <= etapaAtual && etapaStr !== 'perdido') {
+      markToolDone(muteLog)
+      await unmuteAfterTool(muteLog)
       return vapiResponse(`Etapa mantida em ${etapaAtual} (sem regressão)`, toolCallId)
     }
 
@@ -165,6 +176,8 @@ export async function POST(req: NextRequest) {
         .eq('call_id', callId)
     }
 
+    markToolDone(muteLog)
+    await unmuteAfterTool(muteLog)
     return vapiResponse(`Etapa atualizada: ${etapaStr} (${etapaNum}) para ${lead.nome || digits}`, toolCallId)
   } catch (err: any) {
     console.error('update-etapa error:', err)

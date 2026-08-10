@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { initMuteLog, muteBeforeTool, markToolDone, unmuteAfterTool } from '@/lib/vapi-control'
 
 export const dynamic = 'force-dynamic'
 
@@ -19,6 +20,10 @@ function vapiResponse(result: string, toolCallId?: string) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+
+    // SILENCE TEST — mute immediately on webhook arrival
+    const muteLog = initMuteLog(body, 'save_sintoma')
+    await muteBeforeTool(muteLog)
 
     let telefone: string | undefined
     let sintoma: string | undefined
@@ -87,10 +92,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (!sintoma) {
+      markToolDone(muteLog)
+      await unmuteAfterTool(muteLog)
       return vapiResponse('Sintoma não informado.', toolCallId)
     }
 
     if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
+      markToolDone(muteLog)
+      await unmuteAfterTool(muteLog)
       return vapiResponse(`Sintoma "${sintoma}" registrado (lead não encontrado).`, toolCallId)
     }
 
@@ -101,6 +110,8 @@ export async function POST(req: NextRequest) {
       .update({ dor_principal: sintoma, updated_at: new Date().toISOString() })
       .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${digits.replace(/^55/, '')}`)
 
+    markToolDone(muteLog)
+    await unmuteAfterTool(muteLog)
     return vapiResponse(`Sintoma "${sintoma}" salvo com sucesso.`, toolCallId)
   } catch (err: any) {
     console.error('save-sintoma error:', err)
