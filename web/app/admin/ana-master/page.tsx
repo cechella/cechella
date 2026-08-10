@@ -41,7 +41,7 @@ interface ChangelogEntry {
   titulo: string; descricao: string; impacto?: string; autor?: string
 }
 
-type Tab = 'central' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog'
+type Tab = 'central' | 'dna' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1075,10 +1075,416 @@ function ActionBtn({ icon, onClick, active, activeColor, danger, title }: {
   )
 }
 
+// ─── DNA v1 TAB ───────────────────────────────────────────────────────────────
+
+const DNA_STAGES = [
+  {
+    id: 'apresentacao', label: 'Apresentação', emoji: '👋',
+    gate: 'Nome + origem confirmados',
+    objetivo: 'Criar identidade imediata e abrir contexto',
+    estado: 'Caloroso, atento, presente',
+    comportamento: 'Chama pelo nome, menciona quem indicou, ancoragem de tempo',
+    gateCond: 'Nome e origem confirmados → Conexão',
+  },
+  {
+    id: 'conexao', label: 'Conexão', emoji: '🤝',
+    gate: 'Contexto emocional estabelecido',
+    objetivo: 'Entender a realidade clínica e emocional do lead',
+    estado: 'Curioso, sem pressa, receptivo',
+    comportamento: 'Pergunta aberta, escuta ativa, reflexo emocional',
+    gateCond: 'Dor/contexto mapeados → D.I.',
+  },
+  {
+    id: 'di', label: 'D.I.', emoji: '🎯',
+    gate: 'Diagnóstico + intenção + combinado',
+    objetivo: 'Mapear histórico, definir proposta e criar compromisso',
+    estado: 'Preciso, clínico, confiante',
+    comportamento: 'Pergunta direta, resume diagnóstico, propõe combinado',
+    gateCond: 'Combinado validado → Speech',
+  },
+  {
+    id: 'speech', label: 'Speech', emoji: '⚡',
+    gate: 'Proposta entregue com clareza',
+    objetivo: 'Apresentar a transformação com valor > preço',
+    estado: 'Energético, convicto, inspirador',
+    comportamento: 'Ancoragem de resultado, proof points, call to action',
+    gateCond: 'Lead ouviu e respondeu → Fechamento',
+  },
+  {
+    id: 'fechamento', label: 'Fechamento', emoji: '🔒',
+    gate: 'Decisão obtida ou objeção tratada',
+    objetivo: 'Obter decisão ou tratar objeção com framework',
+    estado: 'Firme, tranquilo, sem pressão',
+    comportamento: 'Pergunta direta de decisão, trata objeção, retorna ao fechamento',
+    gateCond: 'Sim → Pagamento | Objeção → Framework',
+  },
+  {
+    id: 'pagamento', label: 'Pagamento', emoji: '💳',
+    gate: 'Pagamento confirmado no sistema',
+    objetivo: 'Executar pagamento com fluidez e segurança',
+    estado: 'Calmo, auxiliar, celebratório',
+    comportamento: 'Guia passo a passo, confirma recebimento, celebra decisão',
+    gateCond: 'Confirmação real no sistema → Referidos',
+  },
+  {
+    id: 'referidos', label: 'Referidos', emoji: '🔗',
+    gate: 'Nome(s) colhido(s) ou recusa registrada',
+    objetivo: 'Colher referidos por reciprocidade',
+    estado: 'Leve, grato, natural',
+    comportamento: 'Ancoragem de reciprocidade, pergunta natural, sem pressão',
+    gateCond: 'Nome colhido ou recusa → Validação',
+  },
+  {
+    id: 'validacao', label: 'Validação', emoji: '✅',
+    gate: 'Lead verbalizou satisfação',
+    objetivo: 'Confirmar experiência positiva e criar âncora de boas-vindas',
+    estado: 'Acolhedor, celebratório, humano',
+    comportamento: 'Pergunta de satisfação, ouve, boas-vindas com calor',
+    gateCond: 'Satisfação verbalizada → GANHO',
+  },
+]
+
+const MODULATION_MAP = [
+  { momento: 'Apresentação', energia: 'Média-alta', ritmo: 'Cadenciado', tom: 'Caloroso e seguro', exemplo: '"Oi [nome]! Que bom falar com você — [quem indicou] me contou sobre você."' },
+  { momento: 'Conexão', energia: 'Média', ritmo: 'Lento', tom: 'Acolhedor, receptivo', exemplo: '"Me conta — como você está se sentindo com isso tudo?"' },
+  { momento: 'Dor/contexto', energia: 'Baixa', ritmo: 'Pausado', tom: 'Empático, presente', exemplo: '"Entendo… isso deve ser desgastante."' },
+  { momento: 'Combinado', energia: 'Média', ritmo: 'Firme', tom: 'Clínico, confiante', exemplo: '"Então vamos combinar: você vai iniciar o protocolo na semana que vem, tudo bem?"' },
+  { momento: 'Speech', energia: 'Alta', ritmo: 'Dinâmico', tom: 'Convicto, inspirador', exemplo: '"Quem passa por esse protocolo relata transformação já nas primeiras semanas."' },
+  { momento: 'Preço', energia: 'Média-alta', ritmo: 'Firme', tom: 'Natural, sem desculpas', exemplo: '"O investimento é R$ X — e inclui [valor]."' },
+  { momento: 'Objeção', energia: 'Baixa-média', ritmo: 'Lento, deliberado', tom: 'Curioso, sem defensiva', exemplo: '"Entendo. Só me ajuda a entender — isso é a única razão?"' },
+  { momento: 'Fechamento', energia: 'Média-alta', ritmo: 'Direto', tom: 'Firme, tranquilo', exemplo: '"Então vamos fechar agora? Qual cartão você tem disponível?"' },
+  { momento: 'Pagamento', energia: 'Média', ritmo: 'Auxiliar', tom: 'Guia, celebratório', exemplo: '"Perfeito! Já vi aqui que entrou. Parabéns pela decisão!"' },
+  { momento: 'Referidos', energia: 'Média', ritmo: 'Leve', tom: 'Grato, natural', exemplo: '"Você conhece alguém que poderia se beneficiar como você?"' },
+  { momento: 'Validação', energia: 'Baixa-média', ritmo: 'Acolhedor', tom: 'Humano, presente', exemplo: '"Como você se sentiu com a nossa conversa?"' },
+  { momento: 'Boas-vindas', energia: 'Alta', ritmo: 'Celebratório', tom: 'Caloroso, entusiasmado', exemplo: '"Seja bem-vindo(a) à família! Vai ser incrível."' },
+]
+
+const MEMORY_MAP = [
+  { etapa: 'Apresentação', produz: 'Nome + origem do lead', consome: '—' },
+  { etapa: 'Conexão', produz: 'Contexto emocional + realidade clínica', consome: 'Nome, origem' },
+  { etapa: 'D.I.', produz: 'Diagnóstico + combinado + intenção', consome: 'Contexto, dor' },
+  { etapa: 'Speech', produz: 'Reação ao valor', consome: 'Combinado, diagnóstico' },
+  { etapa: 'Fechamento', produz: 'Decisão ou objeção', consome: 'Reação, combinado' },
+  { etapa: 'Pagamento', produz: 'Confirmação real do sistema', consome: 'Decisão, cartão' },
+  { etapa: 'Referidos', produz: 'Nome(s) de novos leads', consome: 'Pagamento confirmado' },
+  { etapa: 'Validação', produz: 'Satisfação verbalizada', consome: 'Toda a conversa' },
+]
+
+const OBJECTION_STEPS = [
+  { step: 'OUVIR', desc: 'Deixa a objeção sair completa, sem interromper', color: '#6366F1' },
+  { step: 'ISOLAR', desc: '"Isso é a única razão que te impede?"', color: '#8B5CF6' },
+  { step: 'CONFIRMAR', desc: 'Reflete e valida o sentimento', color: '#A855F7' },
+  { step: 'OFERECER', desc: 'Apresenta reframe ou solução alternativa', color: '#C084FC' },
+  { step: 'TESTAR', desc: '"Se a gente resolver isso, você fecha?"', color: '#D946EF' },
+  { step: 'AJUSTAR', desc: 'Adapta proposta se necessário', color: '#EC4899' },
+  { step: 'DECIDIR', desc: 'Volta ao fechamento direto', color: '#F43F5E' },
+]
+
+const LEAD_ORIGINS = [
+  { origem: 'Referido', abertura: 'Menciona nome de quem indicou', tom: 'Caloroso, relacional', speech: 'Prova social do indicador', foco: 'Pertencimento e continuidade' },
+  { origem: 'Instagram', abertura: 'Referência ao conteúdo consumido', tom: 'Descontraído, familiar', speech: 'Transformação visual e resultados', foco: 'Aspiração e identidade' },
+  { origem: 'Site', abertura: 'Pergunta o que levou à busca', tom: 'Informativo, técnico', speech: 'Expertise e protocolo', foco: 'Credibilidade e especificidade' },
+  { origem: 'Campanha', abertura: 'Valida a oferta da campanha', tom: 'Direto, objetivo', speech: 'Urgência e exclusividade', foco: 'Decisão imediata' },
+  { origem: 'Retorno', abertura: 'Reconhece o histórico anterior', tom: 'Íntimo, continuidade', speech: 'Evolução e próximo passo', foco: 'Reengajamento e confiança' },
+]
+
+const ARCH_LAYERS = [
+  { layer: 'CONTEXTO', subs: ['Apresentação', 'Conexão'], color: '#6366F1', desc: 'Quem é, de onde vem, o que sente' },
+  { layer: 'COMPROMISSO', subs: ['D.I.', 'Combinado'], color: '#8B5CF6', desc: 'O que vai acontecer e o que se compromete' },
+  { layer: 'VALOR', subs: ['Speech', 'Objeção'], color: '#A855F7', desc: 'Por que vale a transformação' },
+  { layer: 'DECISÃO', subs: ['Fechamento'], color: '#C084FC', desc: 'O momento da escolha' },
+  { layer: 'EXECUÇÃO', subs: ['Pagamento'], color: '#D946EF', desc: 'A ação concreta realizada' },
+  { layer: 'RECIPROCIDADE', subs: ['Referidos'], color: '#EC4899', desc: 'O ciclo que se perpetua' },
+  { layer: 'VALIDAÇÃO', subs: ['Validação', 'Boas-vindas'], color: '#F43F5E', desc: 'A experiência que cria âncora positiva' },
+]
+
+function DnaTab() {
+  const [section, setSection] = useState<'maquina' | 'modulacao' | 'memoria' | 'objecao' | 'origens' | 'arquitetura'>('maquina')
+  const [activeStage, setActiveStage] = useState<string | null>(null)
+
+  const sectionBtns: { id: typeof section; label: string }[] = [
+    { id: 'maquina', label: '⚙️ Máquina de Estados' },
+    { id: 'modulacao', label: '🎭 Modulação' },
+    { id: 'memoria', label: '🧠 Memória' },
+    { id: 'objecao', label: '🛡️ Objeção' },
+    { id: 'origens', label: '🌐 Origens' },
+    { id: 'arquitetura', label: '🏗️ Arquitetura' },
+  ]
+
+  return (
+    <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ background: 'linear-gradient(135deg, #0d0520 0%, #0a0a1a 60%, #0d1a12 100%)', border: `1px solid ${C.purpleBorder}`, borderRadius: 20, padding: '24px 28px', marginBottom: 20, position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 14, background: C.purpleDim, border: `1px solid ${C.purpleBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🧬</div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.purple, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>ANA DNA Comercial — Gold Standard</div>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: C.text }}>Versão 1 · Documento Fundacional</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: C.textMuted }}>Arquitetura conversacional da Ana para conversões de alta qualidade</p>
+          </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.green, background: C.greenDim, border: `1px solid ${C.greenBorder}`, borderRadius: 8, padding: '4px 10px' }}>✓ ATIVO</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.gold, background: C.goldDim, border: `1px solid ${C.goldBorder}`, borderRadius: 8, padding: '4px 10px' }}>8 ETAPAS</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Section picker */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
+        {sectionBtns.map(s => (
+          <button key={s.id} onClick={() => setSection(s.id)} style={{ padding: '7px 14px', borderRadius: 10, border: `1px solid ${section === s.id ? C.purple : C.border}`, background: section === s.id ? C.purpleDim : C.surface, color: section === s.id ? C.purple : C.textMuted, fontSize: 12, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s' }}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Máquina de Estados ── */}
+      {section === 'maquina' && (
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+            {DNA_STAGES.map((stage, i) => {
+              const isActive = activeStage === stage.id
+              return (
+                <div
+                  key={stage.id}
+                  onClick={() => setActiveStage(isActive ? null : stage.id)}
+                  style={{ background: C.surface, border: `1px solid ${isActive ? C.purple : C.border}`, borderRadius: 14, padding: '16px 18px', cursor: 'pointer', transition: 'all 0.18s', boxShadow: isActive ? `0 0 0 1px ${C.purple}40, 0 8px 32px rgba(139,92,246,0.12)` : 'none' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: 9, background: isActive ? C.purpleDim : '#ffffff08', border: `1px solid ${isActive ? C.purpleBorder : C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, flexShrink: 0 }}>{stage.emoji}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ fontSize: 9, fontWeight: 700, color: C.textFaint, fontVariantNumeric: 'tabular-nums' }}>ETAPA {i + 1}</span>
+                        {i < DNA_STAGES.length - 1 && <span style={{ fontSize: 9, color: C.textFaint }}>→</span>}
+                        {i === DNA_STAGES.length - 1 && <span style={{ fontSize: 9, color: C.green, fontWeight: 700 }}>GANHO</span>}
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 800, color: isActive ? C.purple : C.text }}>{stage.label}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: C.textMuted, marginBottom: 8, lineHeight: 1.5 }}>{stage.objetivo}</div>
+                  {isActive && (
+                    <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                        <div style={{ background: C.purpleDim, borderRadius: 8, padding: '8px 10px' }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: C.purple, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Estado</div>
+                          <div style={{ fontSize: 11, color: C.text }}>{stage.estado}</div>
+                        </div>
+                        <div style={{ background: '#ffffff06', borderRadius: 8, padding: '8px 10px' }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 4 }}>Comportamento</div>
+                          <div style={{ fontSize: 11, color: C.text }}>{stage.comportamento}</div>
+                        </div>
+                      </div>
+                      <div style={{ background: C.greenDim, border: `1px solid ${C.greenBorder}`, borderRadius: 8, padding: '8px 10px' }}>
+                        <div style={{ fontSize: 9, fontWeight: 700, color: C.green, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 3 }}>Gate de Saída</div>
+                        <div style={{ fontSize: 11, color: C.text }}>{stage.gateCond}</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+          <p style={{ marginTop: 14, fontSize: 11, color: C.textFaint, textAlign: 'center' }}>Clique em qualquer etapa para expandir detalhes · Gates são obrigatórios para avançar</p>
+        </div>
+      )}
+
+      {/* ── Modulação ── */}
+      {section === 'modulacao' && (
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}`, background: '#ffffff04' }}>
+            <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: C.text }}>Mapa de Modulação Emocional e Vocal</h3>
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: C.textMuted }}>Como a Ana calibra energia, ritmo e tom em cada momento da conversa</p>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#ffffff04' }}>
+                  {['Momento', 'Energia', 'Ritmo', 'Tom', 'Exemplo'].map(h => (
+                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {MODULATION_MAP.map((row, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{row.momento}</td>
+                    <td style={{ padding: '10px 14px' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: row.energia.includes('Alta') ? C.green : row.energia.includes('Média') ? C.gold : C.textMuted, background: row.energia.includes('Alta') ? C.greenDim : row.energia.includes('Média') ? C.goldDim : '#ffffff08', borderRadius: 6, padding: '2px 7px' }}>
+                        {row.energia}
+                      </span>
+                    </td>
+                    <td style={{ padding: '10px 14px', color: C.textMuted }}>{row.ritmo}</td>
+                    <td style={{ padding: '10px 14px', color: C.text }}>{row.tom}</td>
+                    <td style={{ padding: '10px 14px', color: C.textFaint, fontStyle: 'italic', fontSize: 11, maxWidth: 260 }}>{row.exemplo}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Memória ── */}
+      {section === 'memoria' && (
+        <div>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', marginBottom: 16 }}>
+            <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}` }}>
+              <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: C.text }}>Mapa de Memória Conversacional</h3>
+              <p style={{ margin: '4px 0 0', fontSize: 11, color: C.textMuted }}>O que cada etapa produz (grava) e consome (usa) da memória da conversa</p>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: '#ffffff04' }}>
+                    {['Etapa', 'Produz (grava)', 'Consome (usa)'].map(h => (
+                      <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: `1px solid ${C.border}` }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {MEMORY_MAP.map((row, i) => (
+                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                      <td style={{ padding: '10px 14px', fontWeight: 700, color: C.purple, whiteSpace: 'nowrap' }}>{row.etapa}</td>
+                      <td style={{ padding: '10px 14px' }}>
+                        <span style={{ fontSize: 11, color: C.green, background: C.greenDim, borderRadius: 6, padding: '2px 8px' }}>✦ {row.produz}</span>
+                      </td>
+                      <td style={{ padding: '10px 14px', color: row.consome === '—' ? C.textFaint : C.textMuted, fontStyle: row.consome === '—' ? 'italic' : 'normal' }}>{row.consome}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div style={{ background: C.blueDim, border: `1px solid ${C.blueBorder}`, borderRadius: 12, padding: '14px 18px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.blue, marginBottom: 8 }}>📌 REGRA FUNDAMENTAL DA MEMÓRIA</div>
+            <p style={{ margin: 0, fontSize: 12, color: C.text, lineHeight: 1.7 }}>
+              A Ana nunca pede a mesma informação duas vezes. Cada fato registrado em memória deve ser usado nas etapas seguintes para criar continuidade e demonstrar escuta ativa. A consistência interna da conversa é o sinal mais forte de presença e confiança.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Objeção ── */}
+      {section === 'objecao' && (
+        <div>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px 24px', marginBottom: 16 }}>
+            <h3 style={{ margin: '0 0 6px', fontSize: 13, fontWeight: 800, color: C.text }}>Framework de Tratamento de Objeções</h3>
+            <p style={{ margin: '0 0 24px', fontSize: 11, color: C.textMuted }}>Sequência obrigatória — cada passo ativa o próximo. Pular um passo invalida o framework.</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {OBJECTION_STEPS.map((s, i) => (
+                <div key={s.step} style={{ display: 'flex', gap: 0 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: 48, flexShrink: 0 }}>
+                    <div style={{ width: 36, height: 36, borderRadius: '50%', background: s.color + '22', border: `2px solid ${s.color}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, color: s.color, flexShrink: 0, zIndex: 1 }}>{i + 1}</div>
+                    {i < OBJECTION_STEPS.length - 1 && <div style={{ width: 2, flex: 1, minHeight: 16, background: `linear-gradient(to bottom, ${s.color}60, ${OBJECTION_STEPS[i + 1].color}40)` }} />}
+                  </div>
+                  <div style={{ flex: 1, paddingBottom: i < OBJECTION_STEPS.length - 1 ? 16 : 0, paddingLeft: 14, paddingTop: 6 }}>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: s.color, marginBottom: 2 }}>{s.step}</div>
+                    <div style={{ fontSize: 12, color: C.textMuted }}>{s.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ background: C.greenDim, border: `1px solid ${C.greenBorder}`, borderRadius: 12, padding: '14px 16px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.green, marginBottom: 8 }}>✓ PADRÃO GOLD — Objeção Financeira</div>
+              <p style={{ margin: 0, fontSize: 12, color: C.text, fontStyle: 'italic', lineHeight: 1.7 }}>
+                "Entendo. Só me ajuda a entender — isso é a única razão que te impede de começar? [pausa] Porque se a gente resolver a questão do valor, você se vê iniciando o protocolo?"
+              </p>
+            </div>
+            <div style={{ background: C.redDim, border: `1px solid ${C.redBorder}`, borderRadius: 12, padding: '14px 16px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.red, marginBottom: 8 }}>✗ ANTI-GOLD — O que nunca fazer</div>
+              <p style={{ margin: 0, fontSize: 12, color: C.text, lineHeight: 1.7 }}>
+                Repetir a objeção de volta sem isolar. Defender o preço antes de entender a real barreira. Dar desconto antes de testar comprometimento.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Origens ── */}
+      {section === 'origens' && (
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+          <div style={{ padding: '14px 18px', borderBottom: `1px solid ${C.border}` }}>
+            <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: C.text }}>Adaptação por Origem do Lead</h3>
+            <p style={{ margin: '4px 0 0', fontSize: 11, color: C.textMuted }}>A Ana calibra abertura, tom, speech e foco conforme a origem de entrada do lead</p>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#ffffff04' }}>
+                  {['Origem', 'Abertura', 'Tom', 'Speech foco', 'Driver'].map(h => (
+                    <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {LEAD_ORIGINS.map((row, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td style={{ padding: '10px 14px' }}>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: C.text, background: C.purpleDim, border: `1px solid ${C.purpleBorder}`, borderRadius: 7, padding: '3px 9px' }}>{row.origem}</span>
+                    </td>
+                    <td style={{ padding: '10px 14px', color: C.textMuted }}>{row.abertura}</td>
+                    <td style={{ padding: '10px 14px', color: C.text }}>{row.tom}</td>
+                    <td style={{ padding: '10px 14px', color: C.textMuted }}>{row.speech}</td>
+                    <td style={{ padding: '10px 14px' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, color: C.gold, background: C.goldDim, borderRadius: 6, padding: '2px 8px' }}>{row.foco}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Arquitetura ── */}
+      {section === 'arquitetura' && (
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12, marginBottom: 16 }}>
+            {ARCH_LAYERS.map((layer) => (
+              <div key={layer.layer} style={{ background: C.surface, border: `1px solid ${C.border}`, borderLeft: `3px solid ${layer.color}`, borderRadius: 12, padding: '14px 16px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: layer.color, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }}>{layer.layer}</div>
+                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
+                  {layer.subs.map(s => (
+                    <span key={s} style={{ fontSize: 10, color: C.text, background: layer.color + '15', border: `1px solid ${layer.color}30`, borderRadius: 5, padding: '1px 7px' }}>{s}</span>
+                  ))}
+                </div>
+                <div style={{ fontSize: 11, color: C.textMuted }}>{layer.desc}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: '20px 24px' }}>
+            <h3 style={{ margin: '0 0 16px', fontSize: 13, fontWeight: 800, color: C.text }}>Contratos de Ferramentas — Fase 2 (backlog)</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+              {[
+                { name: 'State Machine', desc: 'Gerencia etapa atual e gates', status: 'pendente' },
+                { name: 'Conversation Memory', desc: 'Armazena e recupera fatos-chave', status: 'pendente' },
+                { name: 'Realtime Model', desc: 'Geração de resposta em tempo real', status: 'pendente' },
+                { name: 'Tool Layer', desc: 'Funções externas (CRM, pagamento)', status: 'pendente' },
+                { name: 'Policy Engine', desc: 'Garante restrições (no claims clínicos)', status: 'pendente' },
+                { name: 'Observability', desc: 'Scorecard automático por conversa', status: 'pendente' },
+              ].map(t => (
+                <div key={t.name} style={{ background: '#ffffff04', border: `1px solid ${C.border}`, borderRadius: 10, padding: '10px 12px' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text, marginBottom: 3 }}>{t.name}</div>
+                  <div style={{ fontSize: 10, color: C.textMuted, marginBottom: 6 }}>{t.desc}</div>
+                  <span style={{ fontSize: 9, fontWeight: 700, color: C.textFaint, background: '#ffffff08', borderRadius: 5, padding: '1px 6px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Fase 2</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── TABS CONFIG ──────────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] = [
   { id: 'central',    label: 'Central',       icon: <Sparkles style={{ width: 12, height: 12 }} />,  color: C.purple },
+  { id: 'dna',        label: 'DNA v1',        icon: <span style={{ fontSize: 12 }}>🧬</span>,        color: '#A855F7' },
   { id: 'simulacoes', label: 'Simulações',    icon: <Brain style={{ width: 12, height: 12 }} />,    color: C.purple },
   { id: 'gold',       label: 'Gold ✦',        icon: <Star style={{ width: 12, height: 12 }} />,     color: C.gold },
   { id: 'anti-gold',  label: 'Anti-Gold',     icon: <XCircle style={{ width: 12, height: 12 }} />,  color: C.red },
@@ -1174,6 +1580,7 @@ export default function AnaMasterPage() {
           ) : (
             <>
               {tab === 'central'    && <CentralTab sims={sims} gold={gold} antiGold={antiGold} scorecard={scorecard} matriz={matriz} changelog={changelog} />}
+              {tab === 'dna'        && <DnaTab />}
               {tab === 'simulacoes' && <SimulacoesTab sims={sims} onRefresh={refresh} />}
               {tab === 'gold'       && <GoldTab items={gold} onRefresh={refresh} />}
               {tab === 'anti-gold'  && <AntiGoldTab items={antiGold} onRefresh={refresh} />}
