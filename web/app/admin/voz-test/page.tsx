@@ -113,11 +113,9 @@ function RealtimePanel() {
     setTranscriptError('')
     setCallData(null)
     try {
-      const res = await fetch(`https://api.vapi.ai/call/${target}`, {
-        headers: { Authorization: `Bearer ${VAPI_API_KEY}` },
-      })
+      const res = await fetch(`/api/admin/vapi-transcript?callId=${target}`)
       const data = await res.json()
-      if (res.ok) setCallData(data)
+      if (res.ok && !data.error) setCallData(data)
       else setTranscriptError(data.message || data.error || 'Erro')
     } catch (e: any) {
       setTranscriptError(e.message)
@@ -131,13 +129,10 @@ function RealtimePanel() {
     setTranscriptError('')
     setCallData(null)
     try {
-      const res = await fetch(`https://api.vapi.ai/call?assistantId=${REALTIME_ASSISTANT_ID}&limit=1`, {
-        headers: { Authorization: `Bearer ${VAPI_API_KEY}` },
-      })
+      const res = await fetch(`/api/admin/vapi-transcript?last=1&assistantId=${REALTIME_ASSISTANT_ID}`)
       const data = await res.json()
-      const list = Array.isArray(data) ? data : data.results || []
-      if (list.length > 0) { setCallData(list[0]); setManualId(list[0].id) }
-      else setTranscriptError('Nenhuma ligação encontrada')
+      if (res.ok && !data.error) { setCallData(data); setManualId(data.id) }
+      else setTranscriptError(data.error || 'Nenhuma ligação encontrada')
     } catch (e: any) {
       setTranscriptError(e.message)
     } finally {
@@ -379,11 +374,9 @@ export default function VozTestPage() {
     setTranscriptError('')
     setCallData(null)
     try {
-      const res = await fetch(`https://api.vapi.ai/call/${target}`, {
-        headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
-      })
+      const res = await fetch(`/api/admin/vapi-transcript?callId=${target}`)
       const data = await res.json()
-      if (res.ok) setCallData(data)
+      if (res.ok && !data.error) setCallData(data)
       else setTranscriptError(data.message || data.error || 'Erro ao buscar ligação')
     } catch (err: any) {
       setTranscriptError(err.message || 'Erro de rede')
@@ -397,13 +390,10 @@ export default function VozTestPage() {
     setTranscriptError('')
     setCallData(null)
     try {
-      const res = await fetch(`https://api.vapi.ai/call?assistantId=${ASSISTANT_ID}&limit=1`, {
-        headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
-      })
+      const res = await fetch(`/api/admin/vapi-transcript?last=1&assistantId=${vapiConfig.assistantId}`)
       const data = await res.json()
-      const list = Array.isArray(data) ? data : data.results || []
-      if (list.length > 0) { setCallData(list[0]); setManualCallId(list[0].id) }
-      else setTranscriptError('Nenhuma ligação encontrada')
+      if (res.ok && !data.error) { setCallData(data); setManualCallId(data.id) }
+      else setTranscriptError(data.error || 'Nenhuma ligação encontrada')
     } catch (err: any) {
       setTranscriptError(err.message || 'Erro de rede')
     } finally {
