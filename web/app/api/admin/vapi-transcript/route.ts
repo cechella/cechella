@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
-const VAPI_KEY = process.env.VAPI_API_KEY!
+const VAPI_KEY = process.env.VAPI_API_KEY || 'e3bc519a-7466-4450-bcfc-2ae9566d9e2f'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)

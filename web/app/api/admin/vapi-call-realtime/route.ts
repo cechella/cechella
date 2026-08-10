@@ -9,7 +9,7 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-const VAPI_KEY = process.env.VAPI_API_KEY!
+const VAPI_KEY = process.env.VAPI_API_KEY || 'e3bc519a-7466-4450-bcfc-2ae9566d9e2f'
 const REALTIME_ASSISTANT_ID = process.env.VAPI_REALTIME_ASSISTANT_ID || 'f6460055-a69b-49c8-ae0b-4edc9dca9668'
 const PHONE_NUMBER_ID = process.env.VAPI_PHONE_NUMBER_ID || '41636d14-3f1f-4343-8d1c-f16327403690'
 const SERVER_URL = 'https://www.hormoneecosystem.com/api/vapi/end-call'
