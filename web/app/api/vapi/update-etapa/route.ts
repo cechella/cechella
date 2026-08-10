@@ -65,8 +65,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // If telefone is empty (VAPI apiRequest doesn't inject call context),
-    // fall back to most recent active call in historico_voz
+    // Fallback 1: busca por callId
+    if ((!telefone || String(telefone).replace(/\D/g, '').length < 8) && callId) {
+      const { data: byCall } = await supabase
+        .from('historico_voz')
+        .select('telefone')
+        .eq('call_id', callId)
+        .maybeSingle()
+      if (byCall?.telefone) telefone = byCall.telefone
+    }
+
+    // Fallback 2: ligação ativa mais recente
     if (!telefone || String(telefone).replace(/\D/g, '').length < 8) {
       const since = new Date(Date.now() - 5 * 60 * 1000).toISOString()
       const { data: activeCall } = await supabase
@@ -84,7 +93,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!telefone || etapa === undefined) {
-      return NextResponse.json({ error: 'telefone e etapa são obrigatórios' }, { status: 400 })
+      return NextResponse.json({ result: 'Parâmetros insuficientes — etapa não atualizada.' })
     }
 
     const digits = String(telefone).replace(/\D/g, '')
