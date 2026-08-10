@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import {
@@ -41,7 +41,7 @@ interface ChangelogEntry {
   titulo: string; descricao: string; impacto?: string; autor?: string
 }
 
-type Tab = 'central' | 'dna' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog'
+type Tab = 'central' | 'dna' | 'recovery' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1480,11 +1480,257 @@ function DnaTab() {
   )
 }
 
+// ─── RECOVERY TAB ─────────────────────────────────────────────────────────────
+
+const RECOVERY_ARCH = [
+  { name: 'Call Orchestrator', icon: '📞', color: '#6366F1', desc: 'Cria e associa cada chamada a uma conversation lógica. Detecta início/fim via webhook. Emite eventos de call_started e call_ended.' },
+  { name: 'State Store', icon: '🗄️', color: '#8B5CF6', desc: 'Snapshot atual do funil e memória factual estruturada. Fonte de verdade para reidratação. Suporta versionamento otimista.' },
+  { name: 'Event Log', icon: '📋', color: '#A855F7', desc: 'Histórico append-only para auditoria e replay. Nunca sobrescrito. Registra fact_saved, gate_passed, call_dropped, recovery_started, payment_confirmed.' },
+  { name: 'Recovery Engine', icon: '🔄', color: '#C084FC', desc: 'Classifica a interrupção, escolhe o checkpoint correto, agenda ou aceita reconexão e monta o resume_context para o modelo.' },
+  { name: 'Realtime Session Builder', icon: '⚡', color: '#D946EF', desc: 'Reidrata instruções + estado mínimo para nova sessão OpenAI Realtime. Gera o pacote compacto resume_context — nunca inventado pelo modelo.' },
+  { name: 'Tool Runner', icon: '🔧', color: '#EC4899', desc: 'Executa efeitos externos (pagamento, WhatsApp, referidos) com idempotency_key garantida. Impede duplicação de cobranças e mensagens.' },
+  { name: 'Scheduler / Queue', icon: '⏱️', color: '#F43F5E', desc: 'Gerencia redial e retries sem bloquear processo web. Respeita política de opt-out e encerramento voluntário.' },
+  { name: 'Observability', icon: '📊', color: '#FB923C', desc: 'Métricas, traces e alertas em tempo real. Monitora recovery_rate, duplicate_tool_action_rate, time_to_resume e outras 6 métricas.' },
+]
+
+const ACCEPTANCE_TESTS = [
+  { id: 'R1', cenario: 'Queda após Apresentação', criterio: 'Nova chamada reconhece origem e entra em Conexão sem reapresentação completa', status: 'pendente' },
+  { id: 'R2', cenario: 'Queda após sintomas', criterio: 'ANA não pergunta novamente sintomas já salvos', status: 'pendente' },
+  { id: 'R3', cenario: 'Queda no Combinado', criterio: 'Retoma exatamente o compromisso e segue ao Speech', status: 'pendente' },
+  { id: 'R4', cenario: 'Queda no Speech', criterio: 'Retoma tópico pendente sem repetir apresentação inteira', status: 'pendente' },
+  { id: 'R5', cenario: 'Queda durante objeção', criterio: 'Mantém objeção isolada e alternativas já tentadas', status: 'pendente' },
+  { id: 'R6', cenario: 'Queda antes/depois de pagamento', criterio: 'Não duplica cobrança — confirma somente estado real no provider', status: 'pendente' },
+  { id: 'R7', cenario: 'Queda com 12/20 referidos', criterio: 'Retoma de 12, não de zero', status: 'pendente' },
+  { id: 'R8', cenario: 'Queda durante validação', criterio: 'Solicita apenas campos pendentes', status: 'pendente' },
+  { id: 'R9', cenario: 'Reconexão concorrente', criterio: 'Uma única sessão recebe lock de escrita do conversation state', status: 'pendente' },
+  { id: 'R10', cenario: 'Lead pede para parar', criterio: 'Sistema não entra em redial automático indevido', status: 'pendente' },
+]
+
+const EDGE_CASES = [
+  { icon: '🔇', titulo: 'Lead não pode falar', descricao: 'Atende mas está ocupado. Salvar follow-up sem perder a etapa atual.' },
+  { icon: '👥', titulo: 'Outra pessoa atende', descricao: 'Não expor dados sensíveis da conversa antes de confirmar identidade.' },
+  { icon: '🔄', titulo: 'Número mudado/reutilizado', descricao: 'Exigir resolução segura de identidade antes de revelar contexto.' },
+  { icon: '⚡', titulo: 'Lead contradiz fato anterior', descricao: 'Marcar conflito no fact store e confirmar — nunca sobrescrever silenciosamente.' },
+  { icon: '💳', titulo: 'Pagamento concluiu durante queda', descricao: 'Reconsultar status real no provider e retomar já após o gate correto.' },
+  { icon: '🔧', titulo: 'Tool em andamento na queda', descricao: 'Reconciliar execução com idempotency_key antes de repetir qualquer ação.' },
+  { icon: '🔒', titulo: 'Duas chamadas simultâneas', descricao: 'Apenas uma pode possuir lock de escrita do conversation state.' },
+  { icon: '📅', titulo: 'Retorno semanas depois', descricao: 'Confirmar se o contexto ainda é atual antes de continuar o funil.' },
+  { icon: '↩️', titulo: 'Lead pede para recomeçar', descricao: 'Permitir reset conversacional controlado sem apagar histórico auditável.' },
+]
+
+const METRICS = [
+  { key: 'recovery_rate', desc: '% de conversas interrompidas retomadas com sucesso', target: '≥ 90%', color: C.green },
+  { key: 'resume_to_next_stage_rate', desc: '% de retomadas que avançam ao próximo gate', target: '≥ 80%', color: C.green },
+  { key: 'duplicate_question_rate', desc: 'Repetição de perguntas já respondidas na mesma conversa', target: '= 0%', color: C.red },
+  { key: 'duplicate_tool_action_rate', desc: 'Ações externas duplicadas (pagamento, WhatsApp, referidos)', target: '= 0%', color: C.red },
+  { key: 'time_to_resume', desc: 'Tempo médio entre queda e retomada efetiva', target: '< 60s', color: C.gold },
+  { key: 'context_recall_accuracy', desc: 'Fatos usados na retomada correspondem ao state store', target: '= 100%', color: C.green },
+  { key: 'recovery_abandonment_rate', desc: 'Leads perdidos definitivamente após interrupção', target: '< 5%', color: C.gold },
+  { key: 'state_conflict_rate', desc: 'Conflitos de versão / concorrência inconsistente', target: '= 0%', color: C.red },
+  { key: 'manual_recovery_rate', desc: 'Casos que exigem intervenção humana', target: '< 2%', color: C.gold },
+]
+
+const SCHEMA_TABLES = [
+  { name: 'ana_conversations', desc: 'Registro lógico por lead/conversa — sobrevive às chamadas', fields: 'lead_id, stage, status, completed_gates, next_action, state_version, lock_token' },
+  { name: 'ana_calls', desc: 'Cada segmento de telefonia', fields: 'conversation_id, provider_call_id, end_reason, attempt_number, duration_seconds' },
+  { name: 'ana_conversation_facts', desc: 'Memória factual estruturada (key/value)', fields: 'conversation_id, key, value, confidence, stage_captured — unique(conversation_id, key)' },
+  { name: 'ana_conversation_events', desc: 'Event log append-only', fields: 'conversation_id, type, payload, stage_at_event — sem DELETE' },
+  { name: 'ana_tool_executions', desc: 'Idempotência de tools externas', fields: 'conversation_id, tool, idempotency_key unique, status, result' },
+  { name: 'ana_recovery_attempts', desc: 'Histórico de retomadas com resume_context', fields: 'conversation_id, attempt_no, status, scheduled_at, resume_context jsonb' },
+  { name: 'ana_referrals', desc: 'Persistência granular de referidos (etapas 7/8)', fields: 'conversation_id, contact_key, profissao, hobby, validation_status, whatsapp_status' },
+]
+
+function RecoveryTab() {
+  const [section, setSection] = useState<'arquitetura' | 'schema' | 'testes' | 'edge' | 'metricas'>('arquitetura')
+
+  const sectionBtns: { id: typeof section; label: string }[] = [
+    { id: 'arquitetura', label: '⚙️ Arquitetura' },
+    { id: 'schema', label: '🗄️ Schema' },
+    { id: 'testes', label: '🧪 Testes R1–R10' },
+    { id: 'edge', label: '⚠️ Edge Cases' },
+    { id: 'metricas', label: '📊 Métricas' },
+  ]
+
+  return (
+    <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+      {/* Header */}
+      <div style={{ background: 'linear-gradient(135deg, #0a0520 0%, #0a0a1e 60%, #0a1420 100%)', border: `1px solid ${C.purpleBorder}`, borderRadius: 20, padding: '24px 28px', marginBottom: 20, position: 'relative', overflow: 'hidden' }}>
+        <div style={{ position: 'absolute', top: -40, right: -40, width: 180, height: 180, borderRadius: '50%', background: 'radial-gradient(circle, rgba(99,102,241,0.12) 0%, transparent 70%)' }} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{ width: 48, height: 48, borderRadius: 14, background: '#6366F120', border: '1px solid #6366F130', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🛡️</div>
+          <div>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#818CF8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>Conversation Recovery Engine · Addendum v1</div>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: C.text }}>Memória Persistente & Recuperação de Chamada</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: C.textMuted }}>Uma queda de ligação nunca deve reiniciar a venda.</p>
+          </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.gold, background: C.goldDim, border: `1px solid ${C.goldBorder}`, borderRadius: 8, padding: '4px 10px' }}>FASE 1.5 — SCHEMA ATIVO</span>
+            <span style={{ fontSize: 10, color: C.textMuted }}>Motor live: Fase 2</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Section picker */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 20, flexWrap: 'wrap' }}>
+        {sectionBtns.map(s => (
+          <button key={s.id} onClick={() => setSection(s.id)} style={{ padding: '7px 14px', borderRadius: 10, border: `1px solid ${section === s.id ? '#6366F1' : C.border}`, background: section === s.id ? '#6366F120' : C.surface, color: section === s.id ? '#818CF8' : C.textMuted, fontSize: 12, fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s' }}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Arquitetura ── */}
+      {section === 'arquitetura' && (
+        <div>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px', marginBottom: 14 }}>
+            <p style={{ margin: 0, fontSize: 12, color: C.textMuted, lineHeight: 1.7 }}>
+              O motor é composto por 8 componentes independentes. Cada um tem responsabilidade única. A sessão de voz pode cair — o estado da conversa comercial não cai com ela porque é mantido externamente ao modelo e à sessão WebSocket.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+            {RECOVERY_ARCH.map((comp, i) => (
+              <div key={comp.name} style={{ background: C.surface, border: `1px solid ${C.border}`, borderLeft: `3px solid ${comp.color}`, borderRadius: 12, padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <span style={{ fontSize: 20 }}>{comp.icon}</span>
+                  <div>
+                    <div style={{ fontSize: 9, fontWeight: 700, color: comp.color, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Componente {i + 1}</div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: C.text }}>{comp.name}</div>
+                  </div>
+                </div>
+                <p style={{ margin: 0, fontSize: 11, color: C.textMuted, lineHeight: 1.6 }}>{comp.desc}</p>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 14, background: '#6366F112', border: '1px solid #6366F130', borderRadius: 12, padding: '14px 18px' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: '#818CF8', marginBottom: 6 }}>🔗 FLUXO DE RECUPERAÇÃO — 9 FASES</div>
+            <div style={{ display: 'flex', gap: 0, flexWrap: 'wrap', alignItems: 'center' }}>
+              {['Detectar', 'Consolidar', 'Agendar', 'Identificar', 'Reidratar', 'Gerar ponte', 'Permissão', 'Continuar', 'Auditar'].map((fase, i, arr) => (
+                <React.Fragment key={fase}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: C.text, background: '#6366F120', borderRadius: 6, padding: '3px 8px', whiteSpace: 'nowrap' }}>{i + 1}. {fase}</span>
+                  {i < arr.length - 1 && <span style={{ color: C.textFaint, fontSize: 10, margin: '0 3px' }}>→</span>}
+                </React.Fragment>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Schema ── */}
+      {section === 'schema' && (
+        <div>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px', marginBottom: 14 }}>
+            <p style={{ margin: 0, fontSize: 12, color: C.textMuted, lineHeight: 1.7 }}>
+              7 tabelas no Supabase com RLS ativo. Prefixo <code style={{ background: '#ffffff10', borderRadius: 4, padding: '1px 5px', fontFamily: 'monospace', fontSize: 11 }}>ana_*</code> — isoladas do schema de produção. Migration: <code style={{ background: '#ffffff10', borderRadius: 4, padding: '1px 5px', fontFamily: 'monospace', fontSize: 11 }}>20260810_recovery_engine.sql</code>
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {SCHEMA_TABLES.map((table, i) => (
+              <div key={table.name} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px', display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: C.purpleDim, border: `1px solid ${C.purpleBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 900, color: C.purple, flexShrink: 0 }}>{i + 1}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+                    <code style={{ fontSize: 12, fontWeight: 700, color: C.purple, fontFamily: 'monospace' }}>{table.name}</code>
+                    <span style={{ fontSize: 11, color: C.textMuted }}>{table.desc}</span>
+                  </div>
+                  <div style={{ fontSize: 10, color: C.textFaint, fontFamily: 'monospace', background: '#ffffff06', borderRadius: 6, padding: '4px 8px' }}>{table.fields}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ background: C.greenDim, border: `1px solid ${C.greenBorder}`, borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.green, marginBottom: 6 }}>✓ IDEMPOTÊNCIA GARANTIDA</div>
+              <p style={{ margin: 0, fontSize: 11, color: C.text }}>
+                <code style={{ fontFamily: 'monospace' }}>ana_tool_executions.idempotency_key</code> tem constraint UNIQUE. Nenhum pagamento, WhatsApp ou referido pode ser duplicado por queda.
+              </p>
+            </div>
+            <div style={{ background: C.blueDim, border: `1px solid ${C.blueBorder}`, borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ fontSize: 10, fontWeight: 700, color: C.blue, marginBottom: 6 }}>📋 EVENT LOG APPEND-ONLY</div>
+              <p style={{ margin: 0, fontSize: 11, color: C.text }}>
+                <code style={{ fontFamily: 'monospace' }}>ana_conversation_events</code> não tem DELETE. Cada save, queda, recovery e retomada é auditável para diagnóstico e replay.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Testes R1-R10 ── */}
+      {section === 'testes' && (
+        <div>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px', marginBottom: 14 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: C.red, marginBottom: 6 }}>CRITÉRIO DE ACEITE GLOBAL</div>
+            <p style={{ margin: 0, fontSize: 12, color: C.text, lineHeight: 1.7 }}>
+              Nenhuma queda de chamada pode obrigar o lead a refazer o processo por falha de memória do sistema. Todos os 10 testes devem ser aprovados antes do deploy da Fase 2.
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {ACCEPTANCE_TESTS.map(t => (
+              <div key={t.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 16px', display: 'flex', gap: 14, alignItems: 'center' }}>
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: '#ffffff06', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: 12, color: C.textMuted, flexShrink: 0 }}>{t.id}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 2 }}>{t.cenario}</div>
+                  <div style={{ fontSize: 11, color: C.textMuted }}>{t.criterio}</div>
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 700, color: C.textFaint, background: '#ffffff08', border: `1px solid ${C.border}`, borderRadius: 6, padding: '3px 8px', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Fase 2
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Edge Cases ── */}
+      {section === 'edge' && (
+        <div>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px', marginBottom: 14 }}>
+            <p style={{ margin: 0, fontSize: 12, color: C.textMuted, lineHeight: 1.7 }}>
+              9 situações que o motor deve cobrir além do fluxo feliz. Cada uma tem comportamento definido — não pode ser deixada para tratamento ad-hoc.
+            </p>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+            {EDGE_CASES.map((ec, i) => (
+              <div key={i} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 20 }}>{ec.icon}</span>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{ec.titulo}</div>
+                </div>
+                <p style={{ margin: 0, fontSize: 11, color: C.textMuted, lineHeight: 1.6 }}>{ec.descricao}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Métricas ── */}
+      {section === 'metricas' && (
+        <div>
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, padding: '16px 18px', marginBottom: 14 }}>
+            <p style={{ margin: 0, fontSize: 12, color: C.textMuted, lineHeight: 1.7 }}>
+              9 métricas de observabilidade. Targets são referências — a Fase 2 vai calibrar com dados reais das primeiras recuperações.
+            </p>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {METRICS.map((m) => (
+              <div key={m.key} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '12px 16px', display: 'flex', gap: 14, alignItems: 'center' }}>
+                <code style={{ fontSize: 11, fontWeight: 700, color: m.color, fontFamily: 'monospace', minWidth: 200, flexShrink: 0 }}>{m.key}</code>
+                <div style={{ flex: 1, fontSize: 12, color: C.textMuted }}>{m.desc}</div>
+                <span style={{ fontSize: 11, fontWeight: 800, color: m.color, background: m.color + '20', border: `1px solid ${m.color}40`, borderRadius: 7, padding: '3px 10px', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{m.target}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── TABS CONFIG ──────────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] = [
   { id: 'central',    label: 'Central',       icon: <Sparkles style={{ width: 12, height: 12 }} />,  color: C.purple },
   { id: 'dna',        label: 'DNA v1',        icon: <span style={{ fontSize: 12 }}>🧬</span>,        color: '#A855F7' },
+  { id: 'recovery',   label: 'Recovery',      icon: <span style={{ fontSize: 12 }}>🛡️</span>,        color: '#6366F1' },
   { id: 'simulacoes', label: 'Simulações',    icon: <Brain style={{ width: 12, height: 12 }} />,    color: C.purple },
   { id: 'gold',       label: 'Gold ✦',        icon: <Star style={{ width: 12, height: 12 }} />,     color: C.gold },
   { id: 'anti-gold',  label: 'Anti-Gold',     icon: <XCircle style={{ width: 12, height: 12 }} />,  color: C.red },
@@ -1581,6 +1827,7 @@ export default function AnaMasterPage() {
             <>
               {tab === 'central'    && <CentralTab sims={sims} gold={gold} antiGold={antiGold} scorecard={scorecard} matriz={matriz} changelog={changelog} />}
               {tab === 'dna'        && <DnaTab />}
+              {tab === 'recovery'   && <RecoveryTab />}
               {tab === 'simulacoes' && <SimulacoesTab sims={sims} onRefresh={refresh} />}
               {tab === 'gold'       && <GoldTab items={gold} onRefresh={refresh} />}
               {tab === 'anti-gold'  && <AntiGoldTab items={antiGold} onRefresh={refresh} />}
