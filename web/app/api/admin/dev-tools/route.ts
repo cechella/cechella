@@ -182,11 +182,18 @@ export async function POST(req: NextRequest) {
         .gte('created_at', '2000-01-01')
         .select('id')
       if (error) throw error
-      const { error: e2 } = await supabase
-        .from('ana_padroes')
-        .delete()
-        .gte('created_at', '2000-01-01')
+      await supabase.from('ana_padroes').delete().gte('created_at', '2000-01-01')
       return NextResponse.json({ data, rows: data?.length ?? 0, tabelas: ['ana_memoria', 'ana_padroes'] })
+    }
+
+    if (action === 'limpar_ana_master') {
+      const { data: d1 } = await supabase.from('ana_memories').delete().gte('created_at', '2000-01-01').select('id')
+      const { data: d2 } = await supabase.from('ana_calls').delete().gte('created_at', '2000-01-01').select('id')
+      return NextResponse.json({
+        rows: (d1?.length ?? 0) + (d2?.length ?? 0),
+        tabelas: ['ana_memories', 'ana_calls'],
+        detalhes: { ana_memories: d1?.length ?? 0, ana_calls: d2?.length ?? 0 },
+      })
     }
 
     if (action === 'limpar_pagamentos') {
@@ -202,7 +209,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'reset_total') {
-      const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10] = await Promise.all([
+      const [r1, r2, r3, r4, r5, r6, r7, r8, r9, r10, r11, r12] = await Promise.all([
         supabase.from('leads').delete().gte('created_at', '2000-01-01').select('id'),
         supabase.from('contatos_referidos').delete().gte('created_at', '2000-01-01').select('id'),
         supabase.from('leads_m4_flag').delete().gte('created_at', '2000-01-01').select('telefone'),
@@ -213,9 +220,11 @@ export async function POST(req: NextRequest) {
         supabase.from('mensagens_whatsapp').delete().gte('ts', '2000-01-01').select('id'),
         supabase.from('historico_voz').delete().gte('created_at', '2000-01-01').select('id'),
         supabase.from('sessao_wpp').delete().gte('created_at', '2000-01-01').select('phone'),
+        supabase.from('ana_memories').delete().gte('created_at', '2000-01-01').select('id'),
+        supabase.from('ana_calls').delete().gte('created_at', '2000-01-01').select('id'),
       ])
-      const rows = (r1.data?.length ?? 0) + (r2.data?.length ?? 0) + (r3.data?.length ?? 0) + (r4.data?.length ?? 0) + (r5.data?.length ?? 0) + (r6.data?.length ?? 0) + (r7.data?.length ?? 0) + (r8.data?.length ?? 0) + (r9.data?.length ?? 0) + (r10.data?.length ?? 0)
-      return NextResponse.json({ rows, detalhes: { leads: r1.data?.length ?? 0, referidos: r2.data?.length ?? 0, m4_flag: r3.data?.length ?? 0, memoria: r4.data?.length ?? 0, padroes: r5.data?.length ?? 0, pagamentos: r6.data?.length ?? 0, recorrentes: r7.data?.length ?? 0, mensagens: r8.data?.length ?? 0, historico_voz: r9.data?.length ?? 0, sessao_wpp: r10.data?.length ?? 0 } })
+      const rows = [r1,r2,r3,r4,r5,r6,r7,r8,r9,r10,r11,r12].reduce((s,r) => s + (r.data?.length ?? 0), 0)
+      return NextResponse.json({ rows, detalhes: { leads: r1.data?.length ?? 0, referidos: r2.data?.length ?? 0, m4_flag: r3.data?.length ?? 0, memoria: r4.data?.length ?? 0, padroes: r5.data?.length ?? 0, pagamentos: r6.data?.length ?? 0, recorrentes: r7.data?.length ?? 0, mensagens: r8.data?.length ?? 0, historico_voz: r9.data?.length ?? 0, sessao_wpp: r10.data?.length ?? 0, ana_memories: r11.data?.length ?? 0, ana_calls: r12.data?.length ?? 0 } })
     }
 
     return NextResponse.json({ error: 'Ação inválida' }, { status: 400 })

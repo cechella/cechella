@@ -339,6 +339,14 @@ export default function TestePage() {
             {loading === 'limpar_memoria_ana' ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : 'Apagar memória da Ana'}
           </button>
           <button
+            onClick={() => executar('limpar_ana_master')}
+            disabled={!!loading}
+            className="flex items-center justify-center gap-2 p-3 rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-400 hover:opacity-90 transition-all disabled:opacity-50 text-sm font-semibold"
+          >
+            <Trash2 className="w-4 h-4" />
+            {loading === 'limpar_ana_master' ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" /> : 'Apagar ANA MASTER (calls + memories)'}
+          </button>
+          <button
             onClick={() => executar('limpar_pagamentos')}
             disabled={!!loading}
             className="flex items-center justify-center gap-2 p-3 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400 hover:opacity-90 transition-all disabled:opacity-50 text-sm font-semibold"
