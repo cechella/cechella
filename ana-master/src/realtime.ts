@@ -40,7 +40,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
   const agent = new RealtimeAgent({
     name: 'ANA',
     instructions: ANA_SYSTEM_PROMPT,
-    voice: REALTIME_DEFAULTS.voice,
+    voice: REALTIME_DEFAULTS.voice as any,
     tools: buildTools(sessionRef) as any,
   })
 
