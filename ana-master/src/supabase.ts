@@ -4,7 +4,7 @@ import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from './config.js'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
-  realtime: { transport: ws },
+  realtime: { transport: ws as any },
 })
 
 export interface AnaCall {
