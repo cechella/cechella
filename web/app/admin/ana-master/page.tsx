@@ -65,7 +65,13 @@ interface ChangelogEntry {
   titulo: string; descricao: string; impacto?: string; autor?: string
 }
 
-type Tab = 'central' | 'dna' | 'recovery' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog' | 'disparar'
+// ANA MASTER live types
+interface AnaCall {
+  id: string; call_sid: string; telefone: string; stage: string; status: string
+  gates_passed: string[]; memories: Record<string, unknown>; created_at: string; updated_at: string
+}
+
+type Tab = 'central' | 'dna' | 'recovery' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog' | 'disparar' | 'ligacoes' | 'monitor' | 'script' | 'config'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -2133,6 +2139,375 @@ function RecoveryTab() {
   )
 }
 
+// ─── LIGAÇÕES TAB ────────────────────────────────────────────────────────────
+
+const STAGE_LABELS: Record<string, string> = {
+  apresentacao: 'E1 Apresentação', conexao: 'E2 Conexão', combinado: 'E3 Combinado',
+  speech: 'E4 Speech', fechamento: 'E5 Fechamento', pagamento: 'E6 Pagamento',
+  referidos: 'E7 Referidos', validacao: 'E8 Validação', ganho: '★ GANHO',
+}
+const STAGE_COLOR: Record<string, string> = {
+  apresentacao: '#71717A', conexao: '#3B82F6', combinado: '#8B5CF6',
+  speech: '#F59E0B', fechamento: '#EF4444', pagamento: '#10B981',
+  referidos: '#06B6D4', validacao: '#F97316', ganho: '#22C55E',
+}
+const ALL_GATES = ['GATE_ABERTURA','GATE_CONEXAO','GATE_COMBINADO','GATE_SPEECH','GATE_FECHAMENTO','GATE_PAGAMENTO','GATE_REFERIDOS','GATE_VALIDACAO']
+
+async function fetchAnaCalls(status?: string): Promise<AnaCall[]> {
+  const params = status ? `?status=${status}` : ''
+  const res = await fetch(`/api/admin/ana-calls${params}`).catch(() => null)
+  if (!res?.ok) return []
+  return res.json().catch(() => [])
+}
+
+function LigacoesTab() {
+  const [calls, setCalls] = useState<AnaCall[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filter, setFilter] = useState<'all' | 'active' | 'ganho' | 'perdido'>('all')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const data = await fetchAnaCalls(filter === 'all' ? undefined : filter)
+    setCalls(data)
+    setLoading(false)
+  }, [filter])
+
+  useEffect(() => { load() }, [load])
+
+  const STATUS_COLOR: Record<string, string> = { active: '#38BDF8', ganho: '#22C55E', perdido: '#EF4444', encerrado: '#71717A' }
+  const STATUS_LABEL: Record<string, string> = { active: 'Ativa', ganho: '★ GANHO', perdido: 'Perdido', encerrado: 'Encerrada' }
+
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+        {(['all','active','ganho','perdido'] as const).map(f => (
+          <button key={f} onClick={() => setFilter(f)}
+            style={{ padding: '5px 14px', borderRadius: 8, border: `1px solid ${filter === f ? '#38BDF8' : C.border}`, background: filter === f ? '#38BDF820' : 'transparent', color: filter === f ? '#38BDF8' : C.textMuted, fontSize: 12, cursor: 'pointer' }}>
+            {f === 'all' ? 'Todas' : STATUS_LABEL[f] ?? f}
+          </button>
+        ))}
+        <button onClick={load} style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.textFaint, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <RefreshCw style={{ width: 12, height: 12 }} /> Atualizar
+        </button>
+      </div>
+      {loading ? (
+        <div style={{ color: C.textFaint, textAlign: 'center', padding: 48 }}>Carregando...</div>
+      ) : calls.length === 0 ? (
+        <div style={{ color: C.textFaint, textAlign: 'center', padding: 48 }}>Nenhuma ligação encontrada.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {calls.map(c => (
+            <div key={c.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 18px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                <span style={{ fontFamily: 'monospace', fontSize: 11, color: C.textFaint }}>{c.call_sid?.slice(0,20)}</span>
+                <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>📞 {c.telefone}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px', borderRadius: 99, background: (STATUS_COLOR[c.status] ?? '#888') + '20', color: STATUS_COLOR[c.status] ?? '#888', border: `1px solid ${(STATUS_COLOR[c.status] ?? '#888')}40` }}>
+                  {STATUS_LABEL[c.status] ?? c.status}
+                </span>
+                <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 99, background: (STAGE_COLOR[c.stage] ?? '#888') + '20', color: STAGE_COLOR[c.stage] ?? '#888' }}>
+                  {STAGE_LABELS[c.stage] ?? c.stage}
+                </span>
+              </div>
+              {/* Gates progress */}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+                {ALL_GATES.map(g => {
+                  const passed = (c.gates_passed ?? []).includes(g)
+                  return (
+                    <span key={g} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: passed ? '#22C55E20' : '#ffffff08', color: passed ? '#22C55E' : C.textFaint, border: `1px solid ${passed ? '#22C55E40' : C.border}` }}>
+                      {passed ? '✓' : '○'} {g.replace('GATE_', '')}
+                    </span>
+                  )
+                })}
+              </div>
+              <div style={{ fontSize: 11, color: C.textFaint }}>{new Date(c.created_at).toLocaleString('pt-BR')}</div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── LIVE MONITOR TAB ─────────────────────────────────────────────────────────
+
+function LiveMonitorTab() {
+  const [calls, setCalls] = useState<AnaCall[]>([])
+  const [selected, setSelected] = useState<AnaCall | null>(null)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const load = useCallback(async () => {
+    const data = await fetchAnaCalls('active')
+    setCalls(data)
+    if (selected) {
+      const updated = data.find(c => c.id === selected.id)
+      if (updated) setSelected(updated)
+    }
+  }, [selected])
+
+  useEffect(() => {
+    load()
+    intervalRef.current = setInterval(load, 5000)
+    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+  }, [load])
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: selected ? '320px 1fr' : '1fr', gap: 20 }}>
+      {/* Call list */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#EF4444', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />
+          <span style={{ fontSize: 12, color: '#EF4444', fontWeight: 600 }}>LIVE</span>
+          <span style={{ fontSize: 12, color: C.textMuted }}>{calls.length} ligação(ões) ativa(s)</span>
+          <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }`}</style>
+        </div>
+        {calls.length === 0 ? (
+          <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 32, textAlign: 'center', color: C.textFaint, fontSize: 13 }}>
+            Nenhuma ligação ativa no momento.<br />
+            <span style={{ fontSize: 11, marginTop: 6, display: 'block' }}>Atualiza automaticamente a cada 5s</span>
+          </div>
+        ) : (
+          calls.map(c => (
+            <div key={c.id} onClick={() => setSelected(c === selected ? null : c)}
+              style={{ background: selected?.id === c.id ? '#0A1628' : C.surface, border: `1px solid ${selected?.id === c.id ? '#1D4ED8' : C.border}`, borderRadius: 12, padding: '12px 16px', marginBottom: 10, cursor: 'pointer' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>📞 {c.telefone}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 11, color: STAGE_COLOR[c.stage] ?? '#888' }}>{STAGE_LABELS[c.stage] ?? c.stage}</span>
+              </div>
+              {/* Mini gate bar */}
+              <div style={{ display: 'flex', gap: 3, marginTop: 8 }}>
+                {ALL_GATES.map((g, i) => (
+                  <div key={g} style={{ height: 4, flex: 1, borderRadius: 2, background: (c.gates_passed ?? []).includes(g) ? '#22C55E' : (i === (c.gates_passed ?? []).length ? '#38BDF8' : '#ffffff10') }} title={g} />
+                ))}
+              </div>
+              <div style={{ fontSize: 10, color: C.textFaint, marginTop: 4 }}>{(c.gates_passed ?? []).length}/8 gates • {new Date(c.created_at).toLocaleTimeString('pt-BR')}</div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Detail panel */}
+      {selected && (
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 24, overflowY: 'auto', maxHeight: 600 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+            <span style={{ color: C.text, fontWeight: 700, fontSize: 15 }}>📞 {selected.telefone}</span>
+            <button onClick={() => setSelected(null)} style={{ background: 'transparent', border: 'none', color: C.textFaint, cursor: 'pointer', fontSize: 18 }}>×</button>
+          </div>
+
+          {/* Stage + status */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <span style={{ padding: '4px 12px', borderRadius: 99, background: (STAGE_COLOR[selected.stage] ?? '#888') + '20', color: STAGE_COLOR[selected.stage] ?? '#888', fontSize: 12 }}>
+              {STAGE_LABELS[selected.stage] ?? selected.stage}
+            </span>
+            <span style={{ padding: '4px 12px', borderRadius: 99, background: '#38BDF820', color: '#38BDF8', fontSize: 12 }}>Ativa</span>
+          </div>
+
+          {/* Gates */}
+          <p style={{ color: C.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Gates</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 20 }}>
+            {ALL_GATES.map((g, i) => {
+              const passed = (selected.gates_passed ?? []).includes(g)
+              const current = !passed && i === (selected.gates_passed ?? []).length
+              return (
+                <div key={g} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 8, background: passed ? '#22C55E10' : current ? '#38BDF810' : 'transparent', border: `1px solid ${passed ? '#22C55E30' : current ? '#38BDF830' : 'transparent'}` }}>
+                  <span style={{ fontSize: 14 }}>{passed ? '✅' : current ? '⏳' : '○'}</span>
+                  <span style={{ fontSize: 12, color: passed ? '#22C55E' : current ? '#38BDF8' : C.textFaint }}>{g}</span>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Memories */}
+          {Object.keys(selected.memories ?? {}).length > 0 && (
+            <>
+              <p style={{ color: C.textMuted, fontSize: 11, fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Memórias</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {Object.entries(selected.memories ?? {}).map(([k, v]) => (
+                  <div key={k} style={{ display: 'flex', gap: 8, background: '#8B5CF610', borderRadius: 8, padding: '6px 10px' }}>
+                    <span style={{ fontSize: 11, color: '#8B5CF6', fontWeight: 600, minWidth: 120 }}>{k}</span>
+                    <span style={{ fontSize: 11, color: C.text }}>{String(v)}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── SCRIPT TAB (State Machine visual) ────────────────────────────────────────
+
+const GATE_SPEC = [
+  { id: 'G1', gate: 'GATE_ABERTURA', from: 'apresentacao', to: 'conexao', color: '#3B82F6',
+    evidencias: ['Lead confirmou disponibilidade', 'Nome confirmado e repetido por ANA', 'Quem indicou + relação capturada'],
+    memorias: ['lead_name', 'referida_por', 'indicadora_contexto'],
+    bloqueios: ['Lead pediu para ligar depois → callback_agendado'],
+    tools: ['get_lead_context', 'write_memory', 'update_etapa(2)'] },
+  { id: 'G2', gate: 'GATE_CONEXAO', from: 'conexao', to: 'combinado', color: '#8B5CF6',
+    evidencias: ['P1: O que a fez se interessar?', 'P2: save_sintoma() chamado', 'P3: Rotina compreendida', 'P4: Lead disse "sim" à pergunta de interesse'],
+    memorias: ['sintoma_principal', 'sintomas_explorados', 'contexto_vida', 'interesse_confirmado'],
+    bloqueios: ['Pergunta obrigatória não feita', 'Lead não disse "sim"', 'PROIBIDO: explicar implante / falar preço'],
+    tools: ['save_sintoma(sintoma)', 'write_memory', 'update_etapa(3)'] },
+  { id: 'G3', gate: 'GATE_COMBINADO', from: 'combinado', to: 'speech', color: '#F59E0B',
+    evidencias: ['Frase exata dita', 'Lead confirmou: "sim/combinado/tá bom"', 'P2a: decisão sozinha ou com alguém?', 'P2b: viagem marcada?', 'Respostas processadas'],
+    memorias: ['combinado_confirmado', 'decisao_autonomia', 'parceiro_envolvido', 'disponibilidade_agenda'],
+    bloqueios: ['NUNCA explique implante antes do combinado', 'Lead não disse "sim"', 'NUNCA avance sem: combinado + marido + viagem respondidos'],
+    tools: ['write_memory', 'update_etapa(4)'] },
+  { id: 'G4', gate: 'GATE_SPEECH', from: 'speech', to: 'fechamento', color: '#06B6D4',
+    evidencias: ['Parte 1: âncora na dor + analogia combustível', 'Parte 2: grão de arroz, 6 meses, liberação contínua', 'Parte 3: sono/energia/libido/fogachos/proteção', 'Parte 4: 6 meses + pergunta obrigatória', 'Lead respondeu demonstrando interesse'],
+    memorias: ['speech_partes_executadas', 'resposta_pergunta_speech', 'interesse_pos_speech'],
+    bloqueios: ['Alguma das 4 partes não executada', 'Pergunta obrigatória não feita', 'Lead sinalizou recusa', 'PROIBIDO: mencionar menopausa / valor / consulta'],
+    tools: ['check_speech_completeness', 'write_memory', 'update_etapa(5)'] },
+  { id: 'G5', gate: 'GATE_FECHAMENTO', from: 'fechamento', to: 'pagamento', color: '#EF4444',
+    evidencias: ['Invocou combinado', 'Apresentou R$ 5.000', 'Fracionou < R$ 850/mês', 'Formas: PIX ou até 6x sem juros', 'Lead escolheu forma de pagamento'],
+    memorias: ['investimento_apresentado', 'forma_pagamento_escolhida', 'objecao_financeira'],
+    bloqueios: ['Lead não escolhou forma', 'Objeção não trabalhada (mín 3 tentativas ISOLA)', 'NUNCA mencione 12x', 'NUNCA invente valores ≠ R$ 5.000'],
+    tools: ['get_pricing', 'register_interesse(metodo, temperatura)', 'write_memory', 'update_etapa(6)'] },
+  { id: 'G6', gate: 'GATE_PAGAMENTO', from: 'pagamento', to: 'referidos', color: '#10B981',
+    evidencias: ['verificar_pagamento() retornou confirmado: true', 'Status no banco: confirmed (não pending)'],
+    memorias: ['pagamento_confirmado', 'pagamento_id'],
+    bloqueios: ['PROIBIDO iniciar referidos antes de verificar_pagamento() = true'],
+    tools: ['verificar_pagamento()', 'write_memory'] },
+  { id: 'G7', gate: 'GATE_REFERIDOS', from: 'referidos', to: 'validacao', color: '#F97316',
+    evidencias: ['iniciar_coleta_referidos() chamado', 'Lead abriu o link', 'verificar_referidos() → missaoCompleta: true (20+ / semDados=0)', 'finalizar_indicacoes() confirmado'],
+    memorias: ['referidos_link_enviado', 'referidos_total', 'referidos_completo', 'missao_completa'],
+    bloqueios: ['verificar_pagamento()=false → proibido iniciar', 'completo=false / missaoCompleta=false', 'NUNCA colete por voz — link é canal único'],
+    tools: ['verificar_pagamento()', 'iniciar_coleta_referidos()', 'verificar_referidos()', 'finalizar_indicacoes()', 'update_etapa(8)'] },
+  { id: 'G8', gate: 'GATE_VALIDACAO', from: 'validacao', to: 'GANHO ★', color: '#22C55E',
+    evidencias: ['Negativas das indicadas verificadas e removidas', 'semDados=0 confirmado', 'update_etapa(8) confirmado', 'set_call_status_ganho() confirmado', 'send_welcome() disparado'],
+    memorias: ['negativos_filtrados', 'referidos_dados_completos', 'call_status: GANHO'],
+    bloqueios: ['G7 não concluído', 'Negativas não verificadas', 'set_call_status_ganho() não confirmado'],
+    tools: ['set_call_status_ganho()', 'send_welcome()', 'write_memory'] },
+]
+
+function ScriptTab() {
+  const [expanded, setExpanded] = useState<string | null>('G1')
+
+  return (
+    <div style={{ maxWidth: 800 }}>
+      <div style={{ background: '#0A1628', border: '1px solid #1D4ED8', borderRadius: 12, padding: '10px 16px', marginBottom: 20, fontSize: 12, color: '#38BDF8' }}>
+        ⚡ 8 Gates · State Machine = autoridade técnica · Script Voz = autoridade comercial · Backend valida, nunca ANA decide sozinha
+      </div>
+      {GATE_SPEC.map(g => {
+        const isOpen = expanded === g.id
+        return (
+          <div key={g.id} style={{ background: C.surface, border: `1px solid ${isOpen ? g.color + '40' : C.border}`, borderRadius: 12, marginBottom: 10, overflow: 'hidden' }}>
+            <button onClick={() => setExpanded(isOpen ? null : g.id)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+              <span style={{ width: 28, height: 28, borderRadius: 8, background: g.color + '20', border: `1px solid ${g.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, color: g.color, fontWeight: 700, flexShrink: 0 }}>{g.id}</span>
+              <div style={{ flex: 1 }}>
+                <p style={{ color: C.text, fontWeight: 700, margin: 0, fontSize: 13 }}>{g.gate}</p>
+                <p style={{ color: C.textMuted, fontSize: 11, margin: 0 }}>{g.from} → {g.to}</p>
+              </div>
+              <ChevronDown style={{ width: 14, height: 14, color: C.textFaint, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+            </button>
+
+            {isOpen && (
+              <div style={{ padding: '0 18px 18px', borderTop: `1px solid ${C.border}` }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, paddingTop: 16 }}>
+                  <div>
+                    <p style={{ color: '#22C55E', fontSize: 10, fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Evidências obrigatórias</p>
+                    {g.evidencias.map(e => <p key={e} style={{ color: C.text, fontSize: 12, margin: '3px 0' }}>✓ {e}</p>)}
+                  </div>
+                  <div>
+                    <p style={{ color: '#EF4444', fontSize: 10, fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Bloqueios</p>
+                    {g.bloqueios.map(b => <p key={b} style={{ color: '#F87171', fontSize: 12, margin: '3px 0' }}>✕ {b}</p>)}
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 12 }}>
+                  <div>
+                    <p style={{ color: '#8B5CF6', fontSize: 10, fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Memórias persistidas</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {g.memorias.map(m => <span key={m} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: '#8B5CF620', color: '#A78BFA', border: '1px solid #8B5CF630' }}>{m}</span>)}
+                    </div>
+                  </div>
+                  <div>
+                    <p style={{ color: '#38BDF8', fontSize: 10, fontWeight: 700, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 1 }}>Tools</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                      {g.tools.map(t => <span key={t} style={{ fontSize: 10, padding: '2px 8px', borderRadius: 6, background: '#38BDF810', color: '#38BDF8', border: '1px solid #38BDF830', fontFamily: 'monospace' }}>{t}</span>)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── REALTIME CONFIG TAB ──────────────────────────────────────────────────────
+
+function RealtimeConfigTab() {
+  const [health, setHealth] = useState<{ ok?: boolean; ts?: string; error?: string } | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  async function checkHealth() {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/admin/ana-health')
+      const data = await res.json()
+      setHealth(data)
+    } catch (e: any) {
+      setHealth({ error: e.message })
+    } finally { setLoading(false) }
+  }
+
+  useEffect(() => { checkHealth() }, [])
+
+  const CONFIGS = [
+    { label: 'Modelo', value: 'gpt-4o-realtime-preview', badge: 'OpenAI Realtime' },
+    { label: 'Transport', value: 'TwilioRealtimeTransportLayer', badge: '@openai/agents-extensions' },
+    { label: 'Agent SDK', value: 'RealtimeAgent + RealtimeSession', badge: '@openai/agents' },
+    { label: 'Voz', value: 'shimmer', badge: 'en-US' },
+    { label: 'Backend', value: 'Fastify v4 + @fastify/websocket v8', badge: 'GCP VM' },
+    { label: 'Host', value: 'ana-master.hormoneecosystem.com', badge: 'HTTPS' },
+    { label: 'Memória', value: 'Supabase ana_memories + ana_calls', badge: 'Persistente' },
+    { label: 'WhatsApp', value: 'Z-API', badge: 'Integrado' },
+    { label: 'Gates', value: '8 gates server-side validated', badge: 'Gate Spec v1.2' },
+    { label: 'GANHO', value: 'set_call_status_ganho() único ponto', badge: '✅ Garantido' },
+    { label: 'Parcelamento', value: '6x sem juros (hardcoded)', badge: 'DIV-01 Resolvida' },
+    { label: 'Referidos canal', value: 'Link único — fallback proibido', badge: 'DIV-03 Resolvida' },
+  ]
+
+  return (
+    <div style={{ maxWidth: 720 }}>
+      {/* Health card */}
+      <div style={{ background: health?.ok ? '#052e0a' : health?.error ? '#2d0a0a' : C.surface, border: `1px solid ${health?.ok ? '#16a34a' : health?.error ? '#991b1b' : C.border}`, borderRadius: 16, padding: '16px 20px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 16 }}>
+        <div style={{ flex: 1 }}>
+          <p style={{ color: C.text, fontWeight: 700, margin: 0 }}>
+            {health?.ok ? '✅ ANA MASTER — Online' : health?.error ? '❌ ANA MASTER — Offline' : '⏳ Verificando...'}
+          </p>
+          {health?.ts && <p style={{ color: '#4ADE80', fontSize: 12, margin: '4px 0 0', fontFamily: 'monospace' }}>Last ping: {new Date(health.ts).toLocaleTimeString('pt-BR')}</p>}
+          {health?.error && <p style={{ color: '#F87171', fontSize: 12, margin: '4px 0 0' }}>{health.error}</p>}
+        </div>
+        <button onClick={checkHealth} disabled={loading}
+          style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #22C55E40', background: '#22C55E10', color: '#22C55E', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <RefreshCw style={{ width: 12, height: 12, animation: loading ? 'spin 0.8s linear infinite' : 'none' }} /> Ping
+        </button>
+      </div>
+
+      {/* Config table */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+        <div style={{ padding: '12px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Zap style={{ width: 14, height: 14, color: '#38BDF8' }} />
+          <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>Configuração Realtime</span>
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: C.textFaint }}>Gate Spec v1.2 · Arquitetura v2.1</span>
+        </div>
+        {CONFIGS.map((cfg, i) => (
+          <div key={cfg.label} style={{ display: 'flex', alignItems: 'center', padding: '11px 20px', borderBottom: i < CONFIGS.length - 1 ? `1px solid ${C.border}` : 'none', background: i % 2 === 0 ? 'transparent' : '#ffffff03' }}>
+            <span style={{ color: C.textMuted, fontSize: 12, width: 160, flexShrink: 0 }}>{cfg.label}</span>
+            <span style={{ color: C.text, fontSize: 12, flex: 1, fontFamily: cfg.value.includes('.') || cfg.value.includes('(') ? 'monospace' : 'inherit' }}>{cfg.value}</span>
+            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: '#38BDF810', color: '#38BDF8', border: '1px solid #38BDF820', flexShrink: 0 }}>{cfg.badge}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── DISPARAR TAB ─────────────────────────────────────────────────────────────
 
 function DispararTab() {
@@ -2220,7 +2595,11 @@ function DispararTab() {
 // ─── TABS CONFIG ──────────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] = [
+  { id: 'ligacoes',   label: 'Ligações',      icon: <span style={{ fontSize: 12 }}>📞</span>,        color: '#38BDF8' },
+  { id: 'monitor',    label: 'Live Monitor',  icon: <span style={{ fontSize: 12 }}>🔴</span>,        color: '#EF4444' },
   { id: 'disparar',   label: '⚡ Disparar',   icon: <Zap style={{ width: 12, height: 12 }} />,       color: '#38BDF8' },
+  { id: 'script',     label: 'Script',        icon: <BookOpen style={{ width: 12, height: 12 }} />,  color: '#F59E0B' },
+  { id: 'config',     label: 'Realtime Config', icon: <span style={{ fontSize: 12 }}>⚙️</span>,      color: '#10B981' },
   { id: 'central',    label: 'Central',       icon: <Sparkles style={{ width: 12, height: 12 }} />,  color: C.purple },
   { id: 'dna',        label: 'DNA v1',        icon: <span style={{ fontSize: 12 }}>🧬</span>,        color: '#A855F7' },
   { id: 'recovery',   label: 'Recovery',      icon: <span style={{ fontSize: 12 }}>🛡️</span>,        color: '#6366F1' },
@@ -2318,7 +2697,11 @@ export default function AnaMasterPage() {
             </div>
           ) : (
             <>
+              {tab === 'ligacoes'   && <LigacoesTab />}
+              {tab === 'monitor'    && <LiveMonitorTab />}
               {tab === 'disparar'   && <DispararTab />}
+              {tab === 'script'     && <ScriptTab />}
+              {tab === 'config'     && <RealtimeConfigTab />}
               {tab === 'central'    && <CentralTab sims={sims} gold={gold} antiGold={antiGold} scorecard={scorecard} matriz={matriz} changelog={changelog} />}
               {tab === 'dna'        && <DnaTab />}
               {tab === 'recovery'   && <RecoveryTab />}
