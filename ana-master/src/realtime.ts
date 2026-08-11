@@ -113,17 +113,30 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
     console.error('[ANA MASTER] RealtimeSession error:', err)
   })
 
-  // Debug: log session config confirmed by OpenAI
+  // Debug: log session config and VAD events
   ;(transport as any).on('*', (event: any) => {
     if (event?.type === 'session.updated') {
       const fmt = event?.session?.audio?.output?.format
-      console.log('[ANA MASTER] session.updated — output format:', JSON.stringify(fmt))
+      const inputFmt = event?.session?.audio?.input?.format
+      console.log('[ANA MASTER] session.updated — input format:', JSON.stringify(inputFmt), '| output format:', JSON.stringify(fmt))
     }
     if (event?.type === 'response.output_audio.delta') {
       console.log('[ANA MASTER] audio delta recebido — bytes:', event?.delta?.length ?? 0)
     }
     if (event?.type === 'response.done') {
       console.log('[ANA MASTER] response.done')
+    }
+    if (event?.type === 'input_audio_buffer.speech_started') {
+      console.log('[ANA MASTER] 🎤 VAD: fala detectada!')
+    }
+    if (event?.type === 'input_audio_buffer.speech_stopped') {
+      console.log('[ANA MASTER] 🎤 VAD: fala parou')
+    }
+    if (event?.type === 'input_audio_buffer.committed') {
+      console.log('[ANA MASTER] 🎤 audio buffer committed')
+    }
+    if (event?.type === 'conversation.item.input_audio_transcription.completed') {
+      console.log('[ANA MASTER] 📝 transcrição:', event?.transcript)
     }
   })
 
