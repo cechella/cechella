@@ -11,6 +11,20 @@ const app = Fastify({ logger: true })
 
 await app.register(websocket)
 
+// Parse Twilio's application/x-www-form-urlencoded webhook bodies
+// Must be registered BEFORE any routes that consume this content type
+app.addContentTypeParser(
+  'application/x-www-form-urlencoded',
+  { parseAs: 'string' },
+  (_req, body, done) => {
+    try {
+      done(null, Object.fromEntries(new URLSearchParams(body as string)))
+    } catch (err: any) {
+      done(err)
+    }
+  },
+)
+
 app.get('/health', async () => ({
   ok: true,
   service: 'ana-master',
@@ -117,17 +131,5 @@ app.post('/outbound', async (req, reply) => {
   return reply.send({ ok: true, sid: data.sid, status: data.status })
 })
 
-// Parse Twilio's application/x-www-form-urlencoded webhook bodies
-app.addContentTypeParser(
-  'application/x-www-form-urlencoded',
-  { parseAs: 'string' },
-  (_req, body, done) => {
-    try {
-      done(null, Object.fromEntries(new URLSearchParams(body as string)))
-    } catch (err: any) {
-      done(err)
-    }
-  },
-)
 
 await app.listen({ port: PORT, host: '0.0.0.0' })
