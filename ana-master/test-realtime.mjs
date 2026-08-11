@@ -46,6 +46,7 @@ ws.on('open', () => {
     session: {
       type: 'realtime',
       instructions: 'Responda apenas: "ANA ONLINE"',
+      audio: { output: { voice: 'marin' } },
     },
   }))
 
