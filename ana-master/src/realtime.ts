@@ -23,9 +23,46 @@ INÍCIO: Você recebe a ligação e fala PRIMEIRO. Comece agora pela Etapa 1.
 
 ${STAGE_INSTRUCTIONS.apresentacao}`
 
+// gpt-realtime-2.1 ignores g711_ulaw format request and sends PCM 24kHz.
+// Twilio expects mulaw 8kHz, so we intercept the WebSocket send and convert.
+function wrapTwilioWithPcmToMulaw(ws: any): any {
+  const originalSend = ws.send.bind(ws)
+  ws.send = function (data: any) {
+    try {
+      const msg = JSON.parse(data)
+      if (msg.event === 'media' && msg.media?.payload) {
+        const pcm = Buffer.from(msg.media.payload, 'base64')
+        msg.media.payload = pcm16_24k_to_mulaw8k(pcm).toString('base64')
+        originalSend(JSON.stringify(msg))
+        return
+      }
+    } catch { /* non-media frames pass through unchanged */ }
+    originalSend(data)
+  }
+  return ws
+}
+
+function linearToMulaw(s: number): number {
+  const BIAS = 0x84, CLIP = 32635
+  const sign = s < 0 ? 0x80 : 0
+  if (s < 0) s = -s
+  if (s > CLIP) s = CLIP
+  s += BIAS
+  let exp = 7
+  for (let mask = 0x4000; (s & mask) === 0 && exp > 0; mask >>= 1) exp--
+  return (~(sign | (exp << 4) | ((s >> (exp + 3)) & 0x0F))) & 0xFF
+}
+
+function pcm16_24k_to_mulaw8k(input: Buffer): Buffer {
+  const outLen = Math.floor(input.length / 6) // 3 samples * 2 bytes = 6 bytes per output byte
+  const out = Buffer.allocUnsafe(outLen)
+  for (let i = 0; i < outLen; i++) out[i] = linearToMulaw(input.readInt16LE(i * 6))
+  return out
+}
+
 export async function createAnaMasterSession(twilioWebSocket: unknown) {
   const transport = new TwilioRealtimeTransportLayer({
-    twilioWebSocket,
+    twilioWebSocket: wrapTwilioWithPcmToMulaw(twilioWebSocket),
   } as any)
 
   // SessionRef is mutable — callSid/telefone are filled from the Twilio 'start' event
