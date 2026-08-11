@@ -17,6 +17,30 @@ interface Simulacao {
   titulo: string; descricao?: string; etapa: string; transcript?: string; observacoes?: string
   score_geral: number; score_conexao: number; score_objecao: number; score_fechamento: number
   aprovada: boolean
+  // Extended fields (Phase 2 migration)
+  simulation_type?: string
+  consultant?: string
+  lead_name?: string
+  lead_origin?: string
+  referrer_name?: string
+  dna_version?: string
+  gold_reference?: boolean
+  immutable_reference?: boolean
+  reference_simulation_id?: string
+}
+interface SimTurn {
+  id: string; simulation_id: string; turn_number: number
+  stage?: string; speaker: string; content: string
+  text_source?: string; behavioral_intent?: string
+  gold_moment?: boolean; gold_marker?: string
+  creates_memory?: string; consumes_memory?: string
+  gate_passed?: string; created_at: string
+}
+interface SimMemory {
+  id: string; simulation_id: string; memory_key: string
+  fact_captured: string; origin_stage?: string
+  reused_stage?: string; commercial_function?: string
+  created_at: string
 }
 interface GoldItem {
   id: string; created_at: string; updated_at?: string
@@ -365,9 +389,403 @@ function CentralTab({ sims, gold, antiGold, scorecard, matriz, changelog }: {
   )
 }
 
+// ─── SIMULAÇÕES — EXPANDED PANEL (6 abas) ────────────────────────────────────
+
+type InnerTab = 'overview' | 'timeline' | 'vocal' | 'memoria' | 'gold' | 'comparar'
+
+const VOCAL_MAP = [
+  { momento: 'Abertura', energia: 'Alta, acolhedora', ritmo: 'Lento e pausado', tom: 'Caloroso', intencao: 'Criar familiaridade imediata' },
+  { momento: 'Gancho / referido', energia: 'Moderada', ritmo: 'Natural, conversacional', tom: 'Empático', intencao: 'Transferir credibilidade da indicadora' },
+  { momento: 'Conexão / DI', energia: 'Baixa-média', ritmo: 'Muito lento — espaço para a lead falar', tom: 'Curioso, aberto', intencao: 'Extrair contexto de vida sem questionário' },
+  { momento: 'Combinado', energia: 'Moderada, firme', ritmo: 'Cadenciado', tom: 'Confiante, leve', intencao: 'Criar contrato de decisão sem pressão' },
+  { momento: 'Speech — entrada', energia: 'Alta, entusiasmada', ritmo: 'Mais rápido', tom: 'Inspirador', intencao: 'Criar expectativa positiva' },
+  { momento: 'Speech — técnico', energia: 'Moderada', ritmo: 'Deliberado, com pausas', tom: 'Educativo, claro', intencao: 'Construir compreensão e confiança' },
+  { momento: 'Perguntas de fit', energia: 'Baixa, curiosa', ritmo: 'Muito lento — aguarda resposta', tom: 'Gentil', intencao: 'Confirmar relevância antes de fechar' },
+  { momento: 'Fechamento direto', energia: 'Alta, assertiva', ritmo: 'Firme, sem hesitação', tom: 'Seguro', intencao: 'Pedir decisão com naturalidade' },
+  { momento: 'Objeção — escuta', energia: 'Baixa, receptiva', ritmo: 'Muito lento', tom: 'Compreensivo', intencao: 'Não interromper — deixar a objeção completa' },
+  { momento: 'Objeção — isolar', energia: 'Moderada', ritmo: 'Pausado, questionador', tom: 'Curioso, não defensivo', intencao: 'Identificar causa real antes de argumentar' },
+  { momento: 'Referidos', energia: 'Média-alta, narrativa', ritmo: 'Fluido, storytelling', tom: 'Caloroso, recíproco', intencao: 'Criar sentido antes de pedir ação' },
+  { momento: 'Boas-vindas / encerramento', energia: 'Alta, celebratória', ritmo: 'Leve, fluido', tom: 'Festivo, caloroso', intencao: 'Reforçar decisão e criar senso de pertencimento' },
+]
+
+function SimExpandedPanel({
+  sim, gold, antiGold, scorecard,
+}: {
+  sim: Simulacao
+  gold: GoldItem[]
+  antiGold: AntiGoldItem[]
+  scorecard: ScorecardEntry[]
+}) {
+  const [innerTab, setInnerTab] = useState<InnerTab>('overview')
+  const [turns, setTurns] = useState<SimTurn[]>([])
+  const [memories, setMemories] = useState<SimMemory[]>([])
+  const [loadingTurns, setLoadingTurns] = useState(false)
+
+  useEffect(() => {
+    setLoadingTurns(true)
+    Promise.all([
+      fetch(`/api/admin/ana-master?table=ana_simulation_turns&simulation_id=${sim.id}&order_by=turn_number&order_asc=true&limit=100`).then(r => r.json()).then(j => j.data || []),
+      fetch(`/api/admin/ana-master?table=ana_simulation_memories&simulation_id=${sim.id}&limit=100`).then(r => r.json()).then(j => j.data || []),
+    ]).then(([t, m]) => {
+      setTurns(t); setMemories(m); setLoadingTurns(false)
+    }).catch(() => setLoadingTurns(false))
+  }, [sim.id])
+
+  const simGold = gold.filter(g => g.sim_id === sim.id)
+  const simAntiGold = antiGold.filter(a => a.sim_id === sim.id)
+  const simScorecard = scorecard.filter(s => s.sim_id === sim.id)
+
+  const INNER_TABS: { id: InnerTab; label: string }[] = [
+    { id: 'overview', label: 'Overview' },
+    { id: 'timeline', label: 'Timeline' },
+    { id: 'vocal', label: 'Mapa Vocal' },
+    { id: 'memoria', label: 'Memória' },
+    { id: 'gold', label: 'Gold Moments' },
+    { id: 'comparar', label: 'Comparar' },
+  ]
+
+  return (
+    <div style={{ borderTop: `1px solid ${C.border}` }}>
+      {/* Imutability banner */}
+      {sim.immutable_reference && (
+        <div style={{ margin: '14px 18px 0', background: '#1a0a3e', border: `1px solid ${C.purpleBorder}`, borderRadius: 10, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 16 }}>🔒</span>
+          <div>
+            <span style={{ fontSize: 11, fontWeight: 800, color: C.purple, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Referência Imutável</span>
+            <p style={{ margin: 0, fontSize: 11, color: C.textMuted, lineHeight: 1.5 }}>Esta simulação é o Gold Standard fundacional. Edição e exclusão estão bloqueadas. Toda candidata ANA é comparada a ela.</p>
+          </div>
+        </div>
+      )}
+
+      {/* Inner tab bar */}
+      <div style={{ padding: '12px 18px 0', display: 'flex', gap: 4, borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap' }}>
+        {INNER_TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setInnerTab(t.id)}
+            style={{ background: innerTab === t.id ? C.purpleDim : 'transparent', border: `1px solid ${innerTab === t.id ? C.purpleBorder : 'transparent'}`, borderBottom: `2px solid ${innerTab === t.id ? C.purple : 'transparent'}`, borderRadius: '8px 8px 0 0', padding: '7px 14px', fontSize: 12, fontWeight: innerTab === t.id ? 700 : 500, color: innerTab === t.id ? C.purple : C.textMuted, cursor: 'pointer', transition: 'all 0.15s', marginBottom: -1 }}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── OVERVIEW ── */}
+      {innerTab === 'overview' && (
+        <div style={{ padding: '18px 18px' }}>
+          {/* 4 score bars */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 14 }}>
+            <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
+              <p style={{ margin: '0 0 12px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Score por dimensão</p>
+              {[
+                { label: 'Geral', score: sim.score_geral },
+                { label: 'Conexão', score: sim.score_conexao },
+                { label: 'Objeção', score: sim.score_objecao },
+                { label: 'Fechamento', score: sim.score_fechamento },
+              ].map(({ label, score }) => {
+                const c = scoreColor(score)
+                return (
+                  <div key={label} style={{ marginBottom: 9 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <span style={{ fontSize: 11, color: C.textMuted }}>{label}</span>
+                      <span style={{ fontSize: 11, fontWeight: 800, color: c, fontVariantNumeric: 'tabular-nums' }}>{score}<span style={{ opacity: 0.4, fontWeight: 400 }}>/10</span></span>
+                    </div>
+                    <div style={{ height: 5, background: '#ffffff08', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${(score / 10) * 100}%`, background: c, borderRadius: 3, boxShadow: `0 0 6px ${c}80`, transition: 'width 0.6s ease' }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Identity metadata */}
+            <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
+              <p style={{ margin: '0 0 12px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Identidade</p>
+              {[
+                { label: 'Tipo', value: sim.simulation_type || 'candidata' },
+                { label: 'Consultor', value: sim.consultant || '—' },
+                { label: 'Lead', value: sim.lead_name || '—' },
+                { label: 'Origem', value: sim.lead_origin || '—' },
+                { label: 'Referidor', value: sim.referrer_name || '—' },
+                { label: 'DNA Version', value: sim.dna_version || 'v1' },
+                { label: 'Data', value: fmtDate(sim.created_at) },
+              ].map(({ label, value }) => (
+                <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0', borderBottom: `1px solid ${C.border}` }}>
+                  <span style={{ fontSize: 11, color: C.textMuted }}>{label}</span>
+                  <span style={{ fontSize: 11, color: C.text, fontWeight: 500 }}>{value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Scorecard 12 dimensões */}
+          {simScorecard.length > 0 && (
+            <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px', marginBottom: 14 }}>
+              <p style={{ margin: '0 0 12px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Scorecard — {simScorecard.length} dimensões</p>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
+                {simScorecard.map(s => {
+                  const c = scoreColor(s.score, s.max_score)
+                  return (
+                    <div key={s.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: c + '08', border: `1px solid ${c}30`, borderRadius: 8, padding: '7px 10px' }}>
+                      <span style={{ fontSize: 11, color: C.textMuted }}>{s.criterio}</span>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: c, fontVariantNumeric: 'tabular-nums' }}>{s.score}/{s.max_score}</span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Descrição + observações */}
+          {sim.descricao && (
+            <div style={{ marginBottom: 12 }}>
+              <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Descrição</p>
+              <p style={{ margin: 0, fontSize: 13, color: C.textMuted, lineHeight: 1.7 }}>{sim.descricao}</p>
+            </div>
+          )}
+          {sim.observacoes && (
+            <div style={{ background: C.purpleDim, border: `1px solid ${C.purpleBorder}`, borderRadius: 10, padding: '12px 14px' }}>
+              <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 700, color: C.purple, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Observações</p>
+              <p style={{ margin: 0, fontSize: 13, color: C.textMuted, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{sim.observacoes}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── TIMELINE ── */}
+      {innerTab === 'timeline' && (
+        <div style={{ padding: '18px 18px' }}>
+          {/* RECONSTRUCTED warning */}
+          <div style={{ background: '#1a1000', border: `1px solid ${C.goldBorder}`, borderRadius: 10, padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 14 }}>⚠️</span>
+            <p style={{ margin: 0, fontSize: 11, color: '#FDE68A', lineHeight: 1.5 }}>
+              <strong>RECONSTRUCTED</strong> — Estes turnos representam o comportamento observado na simulação fundacional. Nenhuma fala literal foi gravada ou transcrita. A fonte é a intenção comportamental, não a frase exata.
+            </p>
+          </div>
+
+          {loadingTurns ? (
+            <div style={{ textAlign: 'center', padding: '32px 0', color: C.textFaint }}>
+              <RefreshCw style={{ width: 20, height: 20, margin: '0 auto 8px', opacity: 0.4 }} />
+              <p style={{ margin: 0, fontSize: 12 }}>Carregando turnos...</p>
+            </div>
+          ) : turns.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px 0', color: C.textFaint }}>
+              <p style={{ margin: 0, fontSize: 12 }}>Nenhum turno mapeado. Execute /api/admin/ana-master/seed-extend para inserir os turnos fundacionais.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 12 }}>
+              {turns.map((turn, idx) => {
+                const isAna = turn.speaker === 'ANA'
+                const speakerColor = isAna ? C.purple : C.gold
+                const speakerBg = isAna ? C.purpleDim : C.goldDim
+                const speakerBorder = isAna ? C.purpleBorder : C.goldBorder
+                return (
+                  <div key={turn.id} style={{ background: C.bg, border: `1px solid ${turn.gold_moment ? C.goldBorder : C.border}`, borderRadius: 12, padding: '14px 16px', position: 'relative' }}>
+                    {turn.gold_moment && (
+                      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: `linear-gradient(90deg, ${C.gold}, ${C.gold}50)`, borderRadius: '12px 12px 0 0' }} />
+                    )}
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: speakerBg, border: `1.5px solid ${speakerBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <span style={{ fontSize: 10, fontWeight: 800, color: speakerColor }}>{turn.speaker.slice(0, 2)}</span>
+                        </div>
+                        <span style={{ fontSize: 9, color: C.textFaint, fontWeight: 700 }}>#{idx + 1}</span>
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: speakerColor }}>{turn.speaker}</span>
+                          {turn.stage && <EtapaBadge etapa={turn.stage} />}
+                          <span style={{ fontSize: 9, fontWeight: 700, color: '#F59E0B', background: '#F59E0B12', border: `1px solid #F59E0B30`, borderRadius: 5, padding: '1px 6px' }}>{turn.text_source || 'RECONSTRUCTED'}</span>
+                          {turn.gold_moment && <span style={{ fontSize: 9, fontWeight: 700, color: C.gold }}>✦ GOLD</span>}
+                        </div>
+                        <p style={{ margin: '0 0 8px', fontSize: 13, color: C.text, lineHeight: 1.7, fontStyle: 'italic' }}>"{turn.content}"</p>
+                        {turn.behavioral_intent && (
+                          <p style={{ margin: 0, fontSize: 11, color: C.textMuted, lineHeight: 1.5 }}>
+                            <span style={{ color: C.purple, fontWeight: 700 }}>Intenção: </span>{turn.behavioral_intent}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    {/* Chips: memory + gate */}
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
+                      {turn.creates_memory && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: C.green, background: C.greenDim, border: `1px solid ${C.greenBorder}`, borderRadius: 5, padding: '2px 7px' }}>✦ Cria: {turn.creates_memory}</span>
+                      )}
+                      {turn.consumes_memory && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: C.blue, background: C.blueDim, border: `1px solid ${C.blueBorder}`, borderRadius: 5, padding: '2px 7px' }}>✦ Usa: {turn.consumes_memory}</span>
+                      )}
+                      {turn.gate_passed && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: C.textMuted, background: '#ffffff08', border: `1px solid ${C.border}`, borderRadius: 5, padding: '2px 7px' }}>⬡ {turn.gate_passed}</span>
+                      )}
+                      {turn.gold_marker && (
+                        <span style={{ fontSize: 9, fontWeight: 700, color: C.gold, background: C.goldDim, border: `1px solid ${C.goldBorder}`, borderRadius: 5, padding: '2px 7px' }}>{turn.gold_marker}</span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── MAPA VOCAL ── */}
+      {innerTab === 'vocal' && (
+        <div style={{ padding: '18px 18px' }}>
+          <p style={{ margin: '0 0 14px', fontSize: 11, color: C.textMuted, lineHeight: 1.6 }}>
+            12 momentos conversacionais mapeados com energia, ritmo, tom e intenção comportamental. Fonte: DNA Comercial v1 — Seção 9 Modulação Emocional.
+          </p>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: '#ffffff06' }}>
+                  {['Momento', 'Energia', 'Ritmo', 'Tom', 'Intenção'].map(h => (
+                    <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: `1px solid ${C.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {VOCAL_MAP.map((row, i) => (
+                  <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 700, color: C.text, whiteSpace: 'nowrap' }}>{row.momento}</td>
+                    <td style={{ padding: '10px 12px', color: C.textMuted }}>{row.energia}</td>
+                    <td style={{ padding: '10px 12px', color: C.textMuted }}>{row.ritmo}</td>
+                    <td style={{ padding: '10px 12px', color: C.textMuted }}>{row.tom}</td>
+                    <td style={{ padding: '10px 12px', color: C.textMuted, fontSize: 11 }}>{row.intencao}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── MEMÓRIA ── */}
+      {innerTab === 'memoria' && (
+        <div style={{ padding: '18px 18px' }}>
+          {loadingTurns ? (
+            <div style={{ textAlign: 'center', padding: '32px 0', color: C.textFaint }}>
+              <RefreshCw style={{ width: 20, height: 20, margin: '0 auto 8px', opacity: 0.4 }} />
+              <p style={{ margin: 0, fontSize: 12 }}>Carregando memórias...</p>
+            </div>
+          ) : memories.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px 0', color: C.textFaint }}>
+              <p style={{ margin: 0, fontSize: 12 }}>Nenhum mapa de memória. Execute /api/admin/ana-master/seed-extend para inserir as memórias fundacionais.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gap: 10 }}>
+              {memories.map(mem => (
+                <div key={mem.id} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: C.green, background: C.greenDim, border: `1px solid ${C.greenBorder}`, borderRadius: 6, padding: '2px 8px', fontFamily: 'monospace' }}>{mem.memory_key}</span>
+                  </div>
+                  <p style={{ margin: '0 0 10px', fontSize: 13, color: C.text, lineHeight: 1.6 }}>{mem.fact_captured}</p>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {mem.origin_stage && (
+                      <div style={{ background: '#ffffff06', border: `1px solid ${C.border}`, borderRadius: 7, padding: '5px 10px' }}>
+                        <p style={{ margin: '0 0 2px', fontSize: 9, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Origem</p>
+                        <p style={{ margin: 0, fontSize: 11, color: C.textMuted }}>{ETAPA_LABELS[mem.origin_stage] || mem.origin_stage}</p>
+                      </div>
+                    )}
+                    {mem.reused_stage && (
+                      <div style={{ background: C.blueDim, border: `1px solid ${C.blueBorder}`, borderRadius: 7, padding: '5px 10px' }}>
+                        <p style={{ margin: '0 0 2px', fontSize: 9, color: C.blue, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Reutilizado</p>
+                        <p style={{ margin: 0, fontSize: 11, color: C.textMuted }}>{ETAPA_LABELS[mem.reused_stage] || mem.reused_stage}</p>
+                      </div>
+                    )}
+                    {mem.commercial_function && (
+                      <div style={{ flex: 1, minWidth: 140, background: C.purpleDim, border: `1px solid ${C.purpleBorder}`, borderRadius: 7, padding: '5px 10px' }}>
+                        <p style={{ margin: '0 0 2px', fontSize: 9, color: C.purple, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Função comercial</p>
+                        <p style={{ margin: 0, fontSize: 11, color: C.textMuted }}>{mem.commercial_function}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── GOLD MOMENTS ── */}
+      {innerTab === 'gold' && (
+        <div style={{ padding: '18px 18px' }}>
+          {simGold.length > 0 ? (
+            <>
+              <p style={{ margin: '0 0 12px', fontSize: 10, fontWeight: 700, color: C.gold, textTransform: 'uppercase', letterSpacing: '0.08em' }}>✦ Gold — {simGold.length} exemplos</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+                {simGold.map(g => (
+                  <div key={g.id} style={{ background: C.goldDim, border: `1px solid ${C.goldBorder}`, borderRadius: 10, padding: '12px 14px' }}>
+                    <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 700, color: C.text }}>{g.titulo}</p>
+                    <p style={{ margin: '0 0 8px', fontSize: 11, color: '#FDE68A', fontStyle: 'italic', lineHeight: 1.5 }}>"{g.exemplo.slice(0, 100)}{g.exemplo.length > 100 ? '…' : ''}"</p>
+                    <p style={{ margin: 0, fontSize: 11, color: C.textMuted, lineHeight: 1.4 }}>{g.motivo}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : (
+            <p style={{ fontSize: 12, color: C.textFaint, marginBottom: 20 }}>Nenhum Gold vinculado a esta simulação.</p>
+          )}
+
+          {simAntiGold.length > 0 && (
+            <>
+              <p style={{ margin: '0 0 12px', fontSize: 10, fontWeight: 700, color: C.red, textTransform: 'uppercase', letterSpacing: '0.08em' }}>✕ Anti-Gold — {simAntiGold.length} padrões</p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                {simAntiGold.map(a => (
+                  <div key={a.id} style={{ background: C.redDim, border: `1px solid ${C.redBorder}`, borderRadius: 10, padding: '12px 14px' }}>
+                    <p style={{ margin: '0 0 4px', fontSize: 12, fontWeight: 700, color: C.text }}>{a.titulo}</p>
+                    <p style={{ margin: '0 0 6px', fontSize: 11, color: '#FCA5A5', fontStyle: 'italic', lineHeight: 1.5 }}>"{a.exemplo.slice(0, 80)}{a.exemplo.length > 80 ? '…' : ''}"</p>
+                    <p style={{ margin: 0, fontSize: 11, color: C.textMuted, lineHeight: 1.4 }}>{a.problema}</p>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── COMPARAR ── */}
+      {innerTab === 'comparar' && (
+        <div style={{ padding: '18px 18px' }}>
+          {sim.gold_reference ? (
+            <div style={{ background: C.purpleDim, border: `1px solid ${C.purpleBorder}`, borderRadius: 10, padding: '12px 14px', marginBottom: 16 }}>
+              <p style={{ margin: 0, fontSize: 12, color: C.purple, lineHeight: 1.6 }}>
+                <strong>Esta é a simulação de referência.</strong> As candidatas ANA são comparadas a ela. Para comparar, abra uma simulação candidata e navegue até a aba Comparar.
+              </p>
+            </div>
+          ) : (
+            <div style={{ background: '#ffffff04', border: `1px dashed ${C.border}`, borderRadius: 10, padding: '16px', textAlign: 'center' }}>
+              <p style={{ margin: 0, fontSize: 12, color: C.textFaint }}>Comparação disponível quando esta simulação referenciar uma simulação Gold.</p>
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 16 }}>
+            {[
+              { label: '🏆 Fundador Gold', color: C.gold, border: C.goldBorder, bg: C.goldDim, items: ['Abertura por referido', 'Conexão aberta / DI', 'Combinado antes do speech', 'Speech adaptado ao perfil', 'Fechamento direto', 'Isolar objeção antes de oferecer', 'Referidos por reciprocidade', 'Validação completa antes de GANHO'] },
+              { label: '🤖 ANA Candidata', color: C.purple, border: C.purpleBorder, bg: C.purpleDim, items: ['Abertura por referido', 'Conexão aberta / DI', 'Combinado antes do speech', 'Speech adaptado ao perfil', 'Fechamento direto', 'Isolar objeção antes de oferecer', 'Referidos por reciprocidade', 'Validação completa antes de GANHO'] },
+            ].map(col => (
+              <div key={col.label} style={{ background: col.bg, border: `1px solid ${col.border}`, borderRadius: 12, padding: '14px 16px' }}>
+                <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 800, color: col.color }}>{col.label}</p>
+                {col.items.map((item, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '5px 0', borderBottom: i < col.items.length - 1 ? `1px solid ${C.border}` : 'none' }}>
+                    <span style={{ width: 16, height: 16, borderRadius: '50%', background: col.color + '20', border: `1px solid ${col.color}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: col.color, fontWeight: 800, flexShrink: 0 }}>✓</span>
+                    <span style={{ fontSize: 11, color: C.textMuted }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+          <p style={{ margin: '14px 0 0', fontSize: 11, color: C.textFaint, textAlign: 'center' }}>Similaridade comportamental calculada automaticamente na Fase 2 quando candidatas forem rodadas.</p>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── SIMULAÇÕES TAB ────────────────────────────────────────────────────────────
 
-function SimulacoesTab({ sims, onRefresh }: { sims: Simulacao[]; onRefresh: () => void }) {
+function SimulacoesTab({ sims, gold, antiGold, scorecard, onRefresh }: {
+  sims: Simulacao[]; gold: GoldItem[]; antiGold: AntiGoldItem[]; scorecard: ScorecardEntry[]; onRefresh: () => void
+}) {
   const [showForm, setShowForm] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -393,7 +811,8 @@ function SimulacoesTab({ sims, onRefresh }: { sims: Simulacao[]; onRefresh: () =
     onRefresh()
   }
 
-  const remove = async (id: string) => {
+  const remove = async (id: string, immutable?: boolean) => {
+    if (immutable) return
     if (!confirm('Remover simulação?')) return
     await deleteRecord('ana_simulacoes', id); onRefresh()
   }
@@ -408,7 +827,7 @@ function SimulacoesTab({ sims, onRefresh }: { sims: Simulacao[]; onRefresh: () =
 
       <div style={{ display: 'grid', gap: 10 }}>
         {sims.map(sim => (
-          <div key={sim.id} style={{ background: C.surface, border: `1px solid ${expanded === sim.id ? C.purpleBorder : C.border}`, borderRadius: 14, overflow: 'hidden', transition: 'border-color 0.2s' }}>
+          <div key={sim.id} style={{ background: C.surface, border: `1px solid ${expanded === sim.id ? (sim.gold_reference ? C.goldBorder : C.purpleBorder) : C.border}`, borderRadius: 14, overflow: 'hidden', transition: 'border-color 0.2s' }}>
             <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14 }}>
               {/* Score ring mini */}
               <div style={{ width: 44, height: 44, borderRadius: '50%', border: `2.5px solid ${scoreColor(sim.score_geral)}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: scoreColor(sim.score_geral) + '12' }}>
@@ -417,10 +836,14 @@ function SimulacoesTab({ sims, onRefresh }: { sims: Simulacao[]; onRefresh: () =
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{sim.titulo}</span>
+                  {sim.immutable_reference && <span style={{ fontSize: 10, color: C.gold, background: C.goldDim, border: `1px solid ${C.goldBorder}`, borderRadius: 5, padding: '1px 7px', fontWeight: 700 }}>🔒 REFERÊNCIA</span>}
+                  {sim.gold_reference && !sim.immutable_reference && <Badge label="Gold" color={C.gold} dim={C.goldDim} border={C.goldBorder} />}
                   <EtapaBadge etapa={sim.etapa} />
                   {sim.aprovada && <Badge label="Aprovada" color={C.green} dim={C.greenDim} border={C.greenBorder} />}
                 </div>
                 <div style={{ display: 'flex', gap: 14, fontSize: 11, color: C.textFaint, flexWrap: 'wrap' }}>
+                  {sim.consultant && <span>👤 {sim.consultant}</span>}
+                  {sim.lead_name && <span>🧑 {sim.lead_name}</span>}
                   <span>Conexão <strong style={{ color: scoreColor(sim.score_conexao) }}>{sim.score_conexao}</strong></span>
                   <span>Objeção <strong style={{ color: scoreColor(sim.score_objecao) }}>{sim.score_objecao}</strong></span>
                   <span>Fechamento <strong style={{ color: scoreColor(sim.score_fechamento) }}>{sim.score_fechamento}</strong></span>
@@ -430,123 +853,12 @@ function SimulacoesTab({ sims, onRefresh }: { sims: Simulacao[]; onRefresh: () =
               <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
                 <ActionBtn icon={<CheckCircle style={{ width: 13, height: 13 }} />} onClick={() => toggleAprovada(sim)} active={sim.aprovada} activeColor={C.green} title={sim.aprovada ? 'Desaprovar' : 'Aprovar'} />
                 <ActionBtn icon={expanded === sim.id ? <ChevronUp style={{ width: 13, height: 13 }} /> : <ChevronDown style={{ width: 13, height: 13 }} />} onClick={() => setExpanded(expanded === sim.id ? null : sim.id)} title="Expandir" />
-                <ActionBtn icon={<Trash2 style={{ width: 13, height: 13 }} />} onClick={() => remove(sim.id)} danger title="Remover" />
+                <ActionBtn icon={<Trash2 style={{ width: 13, height: 13 }} />} onClick={() => remove(sim.id, sim.immutable_reference)} danger title={sim.immutable_reference ? 'Protegida — não pode ser removida' : 'Remover'} style={sim.immutable_reference ? { opacity: 0.25, cursor: 'not-allowed' } : undefined} />
               </div>
             </div>
 
             {expanded === sim.id && (
-              <div style={{ borderTop: `1px solid ${C.border}` }}>
-                {/* ── Overview header ── */}
-                <div style={{ padding: '18px 18px 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
-                  {/* Score breakdown */}
-                  <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
-                    <p style={{ margin: '0 0 12px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Score por dimensão</p>
-                    {[
-                      { label: 'Geral', score: sim.score_geral },
-                      { label: 'Conexão', score: sim.score_conexao },
-                      { label: 'Objeção', score: sim.score_objecao },
-                      { label: 'Fechamento', score: sim.score_fechamento },
-                    ].map(({ label, score }) => {
-                      const c = scoreColor(score)
-                      const pct = (score / 10) * 100
-                      return (
-                        <div key={label} style={{ marginBottom: 9 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <span style={{ fontSize: 11, color: C.textMuted }}>{label}</span>
-                            <span style={{ fontSize: 11, fontWeight: 800, color: c, fontVariantNumeric: 'tabular-nums' }}>{score}<span style={{ opacity: 0.4, fontWeight: 400 }}>/10</span></span>
-                          </div>
-                          <div style={{ height: 5, background: '#ffffff08', borderRadius: 3, overflow: 'hidden' }}>
-                            <div style={{ height: '100%', width: `${pct}%`, background: c, borderRadius: 3, boxShadow: `0 0 6px ${c}80`, transition: 'width 0.6s ease' }} />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-
-                  {/* Meta + etapas cobertas */}
-                  <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
-                    <p style={{ margin: '0 0 12px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Metadados</p>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 11, color: C.textMuted }}>Etapa foco</span>
-                        <EtapaBadge etapa={sim.etapa} />
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 11, color: C.textMuted }}>Status</span>
-                        {sim.aprovada
-                          ? <Badge label="Aprovada" color={C.green} dim={C.greenDim} border={C.greenBorder} />
-                          : <Badge label="Pendente" color={C.textMuted} dim="#ffffff08" border={C.border} />}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 11, color: C.textMuted }}>Data</span>
-                        <span style={{ fontSize: 11, color: C.text }}>{fmtDate(sim.created_at)}</span>
-                      </div>
-                      {sim.updated_at && (
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 11, color: C.textMuted }}>Atualizada</span>
-                          <span style={{ fontSize: 11, color: C.textFaint }}>{fmtDate(sim.updated_at)}</span>
-                        </div>
-                      )}
-                    </div>
-                    <div style={{ marginTop: 14 }}>
-                      <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Etapas do DNA v1</p>
-                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                        {['Apresentação','Conexão','D.I.','Speech','Fechamento','Pagamento','Referidos','Validação'].map((e, i) => {
-                          const covered = sim.etapa === 'geral' || true
-                          return (
-                            <span key={e} style={{ fontSize: 9, fontWeight: 700, color: covered ? C.purple : C.textFaint, background: covered ? C.purpleDim : '#ffffff06', border: `1px solid ${covered ? C.purpleBorder : C.border}`, borderRadius: 5, padding: '2px 6px' }}>
-                              {i + 1}. {e}
-                            </span>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── Descrição ── */}
-                {sim.descricao && (
-                  <div style={{ margin: '0 18px 12px' }}>
-                    <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Descrição</p>
-                    <p style={{ margin: 0, fontSize: 13, color: C.textMuted, lineHeight: 1.7 }}>{sim.descricao}</p>
-                  </div>
-                )}
-
-                {/* ── Observações ── */}
-                {sim.observacoes && (
-                  <div style={{ margin: '0 18px 12px', background: C.purpleDim, border: `1px solid ${C.purpleBorder}`, borderRadius: 10, padding: '12px 14px' }}>
-                    <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 700, color: C.purple, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Observações</p>
-                    <p style={{ margin: 0, fontSize: 13, color: C.textMuted, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{sim.observacoes}</p>
-                  </div>
-                )}
-
-                {/* ── Transcript ── */}
-                {sim.transcript ? (
-                  <div style={{ margin: '0 18px 18px' }}>
-                    <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Transcript completo</p>
-                    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
-                      <div style={{ maxHeight: 420, overflow: 'auto', padding: '14px 16px' }}>
-                        {sim.transcript.split('\n').filter(Boolean).map((line, i) => {
-                          const isAna = /^(ANA|Ana|ASSISTENTE|Assistant)[\s:]/i.test(line)
-                          const isLead = /^(LEAD|Lead|DR|Dr|VINICIUS|Vinícius|USER|User)[\s:]/i.test(line)
-                          return (
-                            <div key={i} style={{ marginBottom: 8, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                              <div style={{ width: 4, height: '100%', minHeight: 16, borderRadius: 2, background: isAna ? C.purple : isLead ? C.gold : C.border, flexShrink: 0, marginTop: 4 }} />
-                              <p style={{ margin: 0, fontSize: 12, color: isAna ? C.text : isLead ? '#FDE68A' : C.textMuted, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontWeight: isAna || isLead ? 500 : 400 }}>
-                                {line}
-                              </p>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div style={{ margin: '0 18px 18px', background: '#ffffff04', border: `1px dashed ${C.border}`, borderRadius: 10, padding: '16px', textAlign: 'center' }}>
-                    <p style={{ margin: 0, fontSize: 12, color: C.textFaint }}>Sem transcript — esta é uma simulação de referência conceitual.</p>
-                  </div>
-                )}
-              </div>
+              <SimExpandedPanel sim={sim} gold={gold} antiGold={antiGold} scorecard={scorecard} />
             )}
           </div>
         ))}
@@ -1153,9 +1465,9 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
   )
 }
 
-function ActionBtn({ icon, onClick, active, activeColor, danger, title }: {
+function ActionBtn({ icon, onClick, active, activeColor, danger, title, style: extraStyle }: {
   icon: React.ReactNode; onClick: () => void; active?: boolean; activeColor?: string
-  danger?: boolean; title?: string
+  danger?: boolean; title?: string; style?: React.CSSProperties
 }) {
   return (
     <button onClick={onClick} title={title} style={{
@@ -1164,6 +1476,7 @@ function ActionBtn({ icon, onClick, active, activeColor, danger, title }: {
       background: active ? (activeColor || C.purple) + '18' : danger ? C.redDim : 'transparent',
       cursor: 'pointer', color: active ? (activeColor || C.purple) : danger ? C.red : C.textMuted,
       display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s',
+      ...extraStyle,
     }}>
       {icon}
     </button>
@@ -1923,7 +2236,7 @@ export default function AnaMasterPage() {
               {tab === 'central'    && <CentralTab sims={sims} gold={gold} antiGold={antiGold} scorecard={scorecard} matriz={matriz} changelog={changelog} />}
               {tab === 'dna'        && <DnaTab />}
               {tab === 'recovery'   && <RecoveryTab />}
-              {tab === 'simulacoes' && <SimulacoesTab sims={sims} onRefresh={refresh} />}
+              {tab === 'simulacoes' && <SimulacoesTab sims={sims} gold={gold} antiGold={antiGold} scorecard={scorecard} onRefresh={refresh} />}
               {tab === 'gold'       && <GoldTab items={gold} onRefresh={refresh} />}
               {tab === 'anti-gold'  && <AntiGoldTab items={antiGold} onRefresh={refresh} />}
               {tab === 'scorecard'  && <ScorecardTab entries={scorecard} sims={sims} onRefresh={refresh} />}
