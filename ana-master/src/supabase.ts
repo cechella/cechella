@@ -75,6 +75,18 @@ export async function getMemories(callSid: string): Promise<Record<string, unkno
   return (data?.memories as Record<string, unknown>) ?? {}
 }
 
+export async function appendTranscript(callSid: string, role: 'user' | 'assistant', text: string) {
+  if (!text?.trim()) return
+  const { data } = await supabase.from('ana_calls').select('memories').eq('call_sid', callSid).single()
+  const memories = (data?.memories as Record<string, unknown>) ?? {}
+  const transcript = Array.isArray(memories.transcript) ? [...memories.transcript] : []
+  transcript.push({ role, text: text.trim(), ts: Date.now() })
+  await supabase.from('ana_calls').update({
+    memories: { ...memories, transcript },
+    updated_at: new Date().toISOString(),
+  }).eq('call_sid', callSid)
+}
+
 export async function getLeadByPhone(telefone: string) {
   const digits = String(telefone).replace(/\D/g, '')
   const { data } = await supabase
