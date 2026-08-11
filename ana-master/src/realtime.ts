@@ -111,14 +111,29 @@ function wrapTwilioInputMulawToPcm(ws: any): any {
 }
 
 export async function createAnaMasterSession(twilioWebSocket: unknown) {
-  // Apply both wrappers to the Twilio WebSocket:
-  // 1. wrapTwilioInputMulawToPcm — convert inbound mulaw 8kHz → PCM 24kHz (gpt-realtime-2.1
-  //    ignores input_audio_format: g711_ulaw just like it ignores the output format)
-  // 2. wrapTwilioWithPcmToMulaw — convert outbound PCM 24kHz → mulaw 8kHz for Twilio
-  const wrappedWs = wrapTwilioWithPcmToMulaw(wrapTwilioInputMulawToPcm(twilioWebSocket))
+  // Pipeline de áudio:
+  //
+  // INBOUND  Twilio mulaw 8kHz → transport (raw, sem conversão) → OpenAI
+  //          Transport declara input_audio_format=g711_ulaw na sessão
+  //          OpenAI decodifica internamente (se respeitar o formato)
+  //
+  // OUTBOUND OpenAI → transport (raw, sem conversão) → wrapTwilioWithPcmToMulaw → Twilio
+  //          gpt-realtime-2.1 envia PCM 24kHz apesar de output_audio_format=g711_ulaw
+  //          Nosso wrapper converte PCM→mulaw 8kHz para o Twilio (ÚNICA conversão outbound)
+  //
+  // NOTA: wrapTwilioInputMulawToPcm NÃO está ativo — o transport tem silence padding
+  // interno que injeta mulaw bytes diretamente, então converter no WebSocket causaria
+  // formato misto. A conversão inbound só será necessária se g711_ulaw input for ignorado.
+
+  console.log('[ANA MASTER] PIPELINE:',
+    'TWILIO_IN=mulaw8k',
+    '| OPENAI_IN=g711_ulaw(declarado)',
+    '| OPENAI_OUT=pcm24k(real,ignorou g711_ulaw)',
+    '| TWILIO_OUT=mulaw8k(convertido por wrapper)',
+  )
 
   const transport = new TwilioRealtimeTransportLayer({
-    twilioWebSocket: wrappedWs,
+    twilioWebSocket: wrapTwilioWithPcmToMulaw(twilioWebSocket),
   } as any)
 
   // SessionRef is mutable — callSid/telefone are filled from the Twilio 'start' event
@@ -242,13 +257,11 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
 
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 
-  // Tell OpenAI to expect PCM 16-bit input (we convert from mulaw 8kHz before it arrives)
-  // and enable transcription so we can log/save what the user says.
+  // Enable input transcription — transport já configurou g711_ulaw, não sobrescrevemos.
   ;(transport as any).sendEvent?.({
     type: 'session.update',
     session: {
       type: 'realtime',
-      input_audio_format: 'pcm16',
       input_audio_transcription: { model: 'gpt-4o-transcribe' },
     },
   }).catch?.(() => {})
