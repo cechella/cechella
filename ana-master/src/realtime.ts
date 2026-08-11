@@ -76,35 +76,29 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
     console.error('[ANA MASTER] RealtimeSession error:', err)
   })
 
+  // Debug: log session config confirmed by OpenAI
+  ;(transport as any).on('*', (event: any) => {
+    if (event?.type === 'session.updated') {
+      const fmt = event?.session?.audio?.output?.format
+      console.log('[ANA MASTER] session.updated — output format:', JSON.stringify(fmt))
+    }
+    if (event?.type === 'response.output_audio.delta') {
+      console.log('[ANA MASTER] audio delta recebido — bytes:', event?.delta?.length ?? 0)
+    }
+    if (event?.type === 'response.done') {
+      console.log('[ANA MASTER] response.done')
+    }
+  })
+
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 
   // Trigger ANA to speak first — outbound call, AI must initiate.
-  // Try sendMessage first; fall back to raw response.create on OpenAI WS.
   setTimeout(() => {
     try {
       realtimeSession.sendMessage('iniciar')
       console.log('[ANA MASTER] sendMessage trigger enviado')
     } catch (e) {
-      console.error('[ANA MASTER] sendMessage falhou, tentando response.create direto:', e)
-    }
-
-    // Also send response.create directly on the underlying OpenAI WebSocket
-    try {
-      const openaiWs = (transport as any)._ws
-        ?? (transport as any).ws
-        ?? (transport as any)._socket
-      if (openaiWs?.readyState === 1) {
-        openaiWs.send(JSON.stringify({
-          type: 'conversation.item.create',
-          item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'iniciar' }] },
-        }))
-        openaiWs.send(JSON.stringify({ type: 'response.create' }))
-        console.log('[ANA MASTER] response.create direto enviado via OpenAI WS')
-      } else {
-        console.log('[ANA MASTER] OpenAI WS state:', openaiWs?.readyState)
-      }
-    } catch (e2) {
-      console.error('[ANA MASTER] response.create direto falhou:', e2)
+      console.error('[ANA MASTER] sendMessage falhou:', e)
     }
   }, 1000)
 
