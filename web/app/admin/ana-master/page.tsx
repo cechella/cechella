@@ -435,21 +435,116 @@ function SimulacoesTab({ sims, onRefresh }: { sims: Simulacao[]; onRefresh: () =
             </div>
 
             {expanded === sim.id && (
-              <div style={{ borderTop: `1px solid ${C.border}`, padding: '16px 18px' }}>
-                {sim.descricao && <p style={{ margin: '0 0 14px', fontSize: 13, color: C.textMuted, lineHeight: 1.6 }}>{sim.descricao}</p>}
+              <div style={{ borderTop: `1px solid ${C.border}` }}>
+                {/* ── Overview header ── */}
+                <div style={{ padding: '18px 18px 0', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+                  {/* Score breakdown */}
+                  <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
+                    <p style={{ margin: '0 0 12px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Score por dimensão</p>
+                    {[
+                      { label: 'Geral', score: sim.score_geral },
+                      { label: 'Conexão', score: sim.score_conexao },
+                      { label: 'Objeção', score: sim.score_objecao },
+                      { label: 'Fechamento', score: sim.score_fechamento },
+                    ].map(({ label, score }) => {
+                      const c = scoreColor(score)
+                      const pct = (score / 10) * 100
+                      return (
+                        <div key={label} style={{ marginBottom: 9 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                            <span style={{ fontSize: 11, color: C.textMuted }}>{label}</span>
+                            <span style={{ fontSize: 11, fontWeight: 800, color: c, fontVariantNumeric: 'tabular-nums' }}>{score}<span style={{ opacity: 0.4, fontWeight: 400 }}>/10</span></span>
+                          </div>
+                          <div style={{ height: 5, background: '#ffffff08', borderRadius: 3, overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pct}%`, background: c, borderRadius: 3, boxShadow: `0 0 6px ${c}80`, transition: 'width 0.6s ease' }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Meta + etapas cobertas */}
+                  <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 16px' }}>
+                    <p style={{ margin: '0 0 12px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Metadados</p>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 11, color: C.textMuted }}>Etapa foco</span>
+                        <EtapaBadge etapa={sim.etapa} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 11, color: C.textMuted }}>Status</span>
+                        {sim.aprovada
+                          ? <Badge label="Aprovada" color={C.green} dim={C.greenDim} border={C.greenBorder} />
+                          : <Badge label="Pendente" color={C.textMuted} dim="#ffffff08" border={C.border} />}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 11, color: C.textMuted }}>Data</span>
+                        <span style={{ fontSize: 11, color: C.text }}>{fmtDate(sim.created_at)}</span>
+                      </div>
+                      {sim.updated_at && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 11, color: C.textMuted }}>Atualizada</span>
+                          <span style={{ fontSize: 11, color: C.textFaint }}>{fmtDate(sim.updated_at)}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ marginTop: 14 }}>
+                      <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Etapas do DNA v1</p>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {['Apresentação','Conexão','D.I.','Speech','Fechamento','Pagamento','Referidos','Validação'].map((e, i) => {
+                          const covered = sim.etapa === 'geral' || true
+                          return (
+                            <span key={e} style={{ fontSize: 9, fontWeight: 700, color: covered ? C.purple : C.textFaint, background: covered ? C.purpleDim : '#ffffff06', border: `1px solid ${covered ? C.purpleBorder : C.border}`, borderRadius: 5, padding: '2px 6px' }}>
+                              {i + 1}. {e}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Descrição ── */}
+                {sim.descricao && (
+                  <div style={{ margin: '0 18px 12px' }}>
+                    <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Descrição</p>
+                    <p style={{ margin: 0, fontSize: 13, color: C.textMuted, lineHeight: 1.7 }}>{sim.descricao}</p>
+                  </div>
+                )}
+
+                {/* ── Observações ── */}
                 {sim.observacoes && (
-                  <div style={{ background: C.purpleDim, border: `1px solid ${C.purpleBorder}`, borderRadius: 10, padding: '12px 14px', marginBottom: 14 }}>
+                  <div style={{ margin: '0 18px 12px', background: C.purpleDim, border: `1px solid ${C.purpleBorder}`, borderRadius: 10, padding: '12px 14px' }}>
                     <p style={{ margin: '0 0 4px', fontSize: 10, fontWeight: 700, color: C.purple, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Observações</p>
                     <p style={{ margin: 0, fontSize: 13, color: C.textMuted, whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{sim.observacoes}</p>
                   </div>
                 )}
-                {sim.transcript && (
-                  <>
-                    <p style={{ margin: '0 0 6px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Transcript</p>
-                    <pre style={{ margin: 0, fontSize: 11, color: '#888', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, padding: 14, maxHeight: 320, overflow: 'auto', whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'monospace', lineHeight: 1.6 }}>
-                      {sim.transcript}
-                    </pre>
-                  </>
+
+                {/* ── Transcript ── */}
+                {sim.transcript ? (
+                  <div style={{ margin: '0 18px 18px' }}>
+                    <p style={{ margin: '0 0 8px', fontSize: 10, fontWeight: 700, color: C.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Transcript completo</p>
+                    <div style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10, overflow: 'hidden' }}>
+                      <div style={{ maxHeight: 420, overflow: 'auto', padding: '14px 16px' }}>
+                        {sim.transcript.split('\n').filter(Boolean).map((line, i) => {
+                          const isAna = /^(ANA|Ana|ASSISTENTE|Assistant)[\s:]/i.test(line)
+                          const isLead = /^(LEAD|Lead|DR|Dr|VINICIUS|Vinícius|USER|User)[\s:]/i.test(line)
+                          return (
+                            <div key={i} style={{ marginBottom: 8, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                              <div style={{ width: 4, height: '100%', minHeight: 16, borderRadius: 2, background: isAna ? C.purple : isLead ? C.gold : C.border, flexShrink: 0, marginTop: 4 }} />
+                              <p style={{ margin: 0, fontSize: 12, color: isAna ? C.text : isLead ? '#FDE68A' : C.textMuted, lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontWeight: isAna || isLead ? 500 : 400 }}>
+                                {line}
+                              </p>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ margin: '0 18px 18px', background: '#ffffff04', border: `1px dashed ${C.border}`, borderRadius: 10, padding: '16px', textAlign: 'center' }}>
+                    <p style={{ margin: 0, fontSize: 12, color: C.textFaint }}>Sem transcript — esta é uma simulação de referência conceitual.</p>
+                  </div>
                 )}
               </div>
             )}
