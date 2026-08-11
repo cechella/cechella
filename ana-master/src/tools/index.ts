@@ -21,7 +21,7 @@ export function buildTools(session: SessionRef) {
           .enum(GATES as unknown as [string, ...string[]])
           .describe('ID do gate a validar'),
         evidence: z
-          .record(z.unknown())
+          .record(z.string(), z.unknown())
           .describe('Evidências coletadas nesta etapa'),
       }),
       execute: async ({
