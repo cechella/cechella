@@ -253,6 +253,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
       for (const item of output) {
         for (const content of (item?.content ?? [])) {
           const text = content?.transcript ?? content?.text
+          console.log('[ANA MASTER] 📝 assistant raw:', JSON.stringify({ type: content?.type, transcript: content?.transcript, text: content?.text }))
           if (text && sessionRef.callSid !== 'unknown') {
             appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
           }
