@@ -1,8 +1,10 @@
 import { createClient } from '@supabase/supabase-js'
+import ws from 'ws'
 import { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY } from './config.js'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false },
+  realtime: { transport: ws },
 })
 
 export interface AnaCall {
