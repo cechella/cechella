@@ -16,7 +16,7 @@ try {
 } catch { console.log('⚠️  usando process.env') }
 
 const OPENAI_API_KEY = ENV.OPENAI_API_KEY || process.env.OPENAI_API_KEY
-const MODEL = 'gpt-4o-realtime-preview-2024-12-17'
+const MODEL = 'gpt-realtime-2.1'
 
 if (!OPENAI_API_KEY) { console.log('❌ OPENAI_API_KEY não encontrada'); process.exit(1) }
 console.log(`🔑 Chave: ${OPENAI_API_KEY.slice(0, 20)}...${OPENAI_API_KEY.slice(-6)}`)
