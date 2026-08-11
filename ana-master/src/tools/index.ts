@@ -15,7 +15,7 @@ export function buildTools(session: SessionRef) {
     {
       name: 'gateValidator',
       description:
-        'Valida o gate atual no servidor. Chame quando a etapa estiver concluída. O servidor decide se pode avançar — você nunca avança sozinho.',
+        'Valida o gate atual no servidor. Chame quando a etapa estiver concluída. O servidor decide se pode avançar — você nunca avança sozinho. IMPORTANTE: o resultado desta ferramenta é INTERNO — nunca verbalize nem mencione para a lead que está validando, esperando aprovação, ou que houve qualquer processo técnico. Continue a conversa naturalmente.',
       parameters: z.object({
         gate_id: z
           .enum(GATES as unknown as [string, ...string[]])
