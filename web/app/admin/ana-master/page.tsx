@@ -2191,7 +2191,7 @@ function LigacoesTab() {
             {f === 'all' ? 'Todas' : STATUS_LABEL[f] ?? f}
           </button>
         ))}
-        <button onClick={load} style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.textFaint, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <button onClick={() => load()} style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent', color: C.textFaint, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
           <RefreshCw style={{ width: 12, height: 12 }} /> Atualizar
         </button>
       </div>
