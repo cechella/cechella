@@ -26,7 +26,6 @@ console.log('🔌 Conectando na OpenAI Realtime API...\n')
 const ws = new WebSocket(`wss://api.openai.com/v1/realtime?model=${MODEL}`, {
   headers: {
     Authorization: `Bearer ${OPENAI_API_KEY}`,
-    'OpenAI-Beta': 'realtime=v1',
   },
 })
 
