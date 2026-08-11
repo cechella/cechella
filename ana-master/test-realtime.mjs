@@ -45,7 +45,6 @@ ws.on('open', () => {
     type: 'session.update',
     session: {
       type: 'realtime',
-      modalities: ['text'],
       instructions: 'Responda apenas: "ANA ONLINE"',
     },
   }))
