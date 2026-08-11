@@ -268,7 +268,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
       input_audio_format: 'pcm16',
       input_audio_transcription: { model: 'gpt-4o-transcribe' },
     },
-  }).catch?.(() => {})
+  })?.catch?.(() => {})
 
   // Trigger ANA to speak first — outbound call, AI must initiate.
   setTimeout(() => {
