@@ -3,7 +3,7 @@ import { TwilioRealtimeTransportLayer } from '@openai/agents-extensions'
 import { OPENAI_API_KEY, REALTIME_DEFAULTS } from './config.js'
 import { STAGE_INSTRUCTIONS } from './state-machine.js'
 import { buildTools, SessionRef } from './tools/index.js'
-import { upsertCall, saveMemory } from './supabase.js'
+import { upsertCall, saveMemory, appendTranscript } from './supabase.js'
 
 const ANA_SYSTEM_PROMPT = `Você é ANA — Agente de Nutrição e Ativação da Hormone Ecosystem. Você é consultora de vendas por voz especializada em implantes hormonais para mulheres.
 
@@ -136,11 +136,32 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
       console.log('[ANA MASTER] 🎤 audio buffer committed')
     }
     if (event?.type === 'conversation.item.input_audio_transcription.completed') {
-      console.log('[ANA MASTER] 📝 transcrição:', event?.transcript)
+      const text = event?.transcript as string | undefined
+      console.log('[ANA MASTER] 📝 user:', text)
+      if (text && sessionRef.callSid !== 'unknown') {
+        appendTranscript(sessionRef.callSid, 'user', text).catch(() => {})
+      }
+    }
+    if (event?.type === 'response.done') {
+      const output: any[] = event?.response?.output ?? []
+      for (const item of output) {
+        for (const content of (item?.content ?? [])) {
+          const text = content?.transcript ?? content?.text
+          if (text && sessionRef.callSid !== 'unknown') {
+            appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
+          }
+        }
+      }
     }
   })
 
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
+
+  // Enable input audio transcription so we can save what the user says
+  ;(transport as any).sendEvent?.({
+    type: 'session.update',
+    session: { type: 'realtime', input_audio_transcription: { model: 'gpt-4o-transcribe' } },
+  }).catch?.(() => {})
 
   // Trigger ANA to speak first — outbound call, AI must initiate.
   setTimeout(() => {

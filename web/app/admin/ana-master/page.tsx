@@ -2164,6 +2164,7 @@ function LigacoesTab() {
   const [calls, setCalls] = useState<AnaCall[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<'all' | 'active' | 'ganho' | 'perdido'>('all')
+  const [expanded, setExpanded] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -2196,32 +2197,78 @@ function LigacoesTab() {
         <div style={{ color: C.textFaint, textAlign: 'center', padding: 48 }}>Nenhuma ligação encontrada.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {calls.map(c => (
-            <div key={c.id} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: '14px 18px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                <span style={{ fontFamily: 'monospace', fontSize: 11, color: C.textFaint }}>{c.call_sid?.slice(0,20)}</span>
-                <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>📞 {c.telefone}</span>
-                <span style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px', borderRadius: 99, background: (STATUS_COLOR[c.status] ?? '#888') + '20', color: STATUS_COLOR[c.status] ?? '#888', border: `1px solid ${(STATUS_COLOR[c.status] ?? '#888')}40` }}>
-                  {STATUS_LABEL[c.status] ?? c.status}
-                </span>
-                <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 99, background: (STAGE_COLOR[c.stage] ?? '#888') + '20', color: STAGE_COLOR[c.stage] ?? '#888' }}>
-                  {STAGE_LABELS[c.stage] ?? c.stage}
-                </span>
+          {calls.map(c => {
+            const transcript: {role: string; text: string; ts: number}[] = Array.isArray((c.memories as any)?.transcript) ? (c.memories as any).transcript : []
+            const isExpanded = expanded === c.id
+            return (
+            <div key={c.id} style={{ background: C.surface, border: `1px solid ${isExpanded ? '#38BDF8' : C.border}`, borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ padding: '14px 18px', cursor: 'pointer' }} onClick={() => setExpanded(isExpanded ? null : c.id)}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                  <span style={{ fontFamily: 'monospace', fontSize: 11, color: C.textFaint }}>{c.call_sid?.slice(0,20)}</span>
+                  <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>📞 {c.telefone}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 11, padding: '2px 8px', borderRadius: 99, background: (STATUS_COLOR[c.status] ?? '#888') + '20', color: STATUS_COLOR[c.status] ?? '#888', border: `1px solid ${(STATUS_COLOR[c.status] ?? '#888')}40` }}>
+                    {STATUS_LABEL[c.status] ?? c.status}
+                  </span>
+                  <span style={{ fontSize: 12, padding: '2px 10px', borderRadius: 99, background: (STAGE_COLOR[c.stage] ?? '#888') + '20', color: STAGE_COLOR[c.stage] ?? '#888' }}>
+                    {STAGE_LABELS[c.stage] ?? c.stage}
+                  </span>
+                  <span style={{ fontSize: 11, color: C.textFaint }}>{isExpanded ? '▲' : '▼'}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
+                  {ALL_GATES.map(g => {
+                    const passed = (c.gates_passed ?? []).includes(g)
+                    return (
+                      <span key={g} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: passed ? '#22C55E20' : '#ffffff08', color: passed ? '#22C55E' : C.textFaint, border: `1px solid ${passed ? '#22C55E40' : C.border}` }}>
+                        {passed ? '✓' : '○'} {g.replace('GATE_', '')}
+                      </span>
+                    )
+                  })}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 11, color: C.textFaint }}>{new Date(c.created_at).toLocaleString('pt-BR')}</span>
+                  {transcript.length > 0 && <span style={{ fontSize: 11, color: '#38BDF8' }}>💬 {transcript.length} mensagens</span>}
+                </div>
               </div>
-              {/* Gates progress */}
-              <div style={{ display: 'flex', gap: 4, marginBottom: 8, flexWrap: 'wrap' }}>
-                {ALL_GATES.map(g => {
-                  const passed = (c.gates_passed ?? []).includes(g)
-                  return (
-                    <span key={g} style={{ fontSize: 10, padding: '1px 6px', borderRadius: 4, background: passed ? '#22C55E20' : '#ffffff08', color: passed ? '#22C55E' : C.textFaint, border: `1px solid ${passed ? '#22C55E40' : C.border}` }}>
-                      {passed ? '✓' : '○'} {g.replace('GATE_', '')}
-                    </span>
-                  )
-                })}
-              </div>
-              <div style={{ fontSize: 11, color: C.textFaint }}>{new Date(c.created_at).toLocaleString('pt-BR')}</div>
+              {isExpanded && (
+                <div style={{ borderTop: `1px solid ${C.border}`, padding: '14px 18px' }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Transcrição</div>
+                  {transcript.length === 0 ? (
+                    <div style={{ color: C.textFaint, fontSize: 12, padding: '12px 0', fontStyle: 'italic' }}>Sem transcrição — ligação anterior ao sistema de transcrição ou ANA não ouviu nada.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {transcript.map((m, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: m.role === 'assistant' ? 'row' : 'row-reverse' }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: m.role === 'assistant' ? '#7C3AED20' : '#0EA5E920', border: `1px solid ${m.role === 'assistant' ? '#7C3AED40' : '#0EA5E940'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>
+                            {m.role === 'assistant' ? '🤖' : '👤'}
+                          </div>
+                          <div style={{ maxWidth: '80%', background: m.role === 'assistant' ? '#7C3AED15' : '#0EA5E915', border: `1px solid ${m.role === 'assistant' ? '#7C3AED30' : '#0EA5E930'}`, borderRadius: 10, padding: '8px 12px' }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: m.role === 'assistant' ? '#A78BFA' : '#38BDF8', marginBottom: 3 }}>{m.role === 'assistant' ? 'ANA' : 'Lead'}</div>
+                            <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{m.text}</div>
+                            <div style={{ fontSize: 10, color: C.textFaint, marginTop: 4 }}>{new Date(m.ts).toLocaleTimeString('pt-BR')}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {/* Memórias */}
+                  {Object.keys(c.memories ?? {}).filter(k => k !== 'transcript' && k !== 'telefone').length > 0 && (
+                    <div style={{ marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Memórias salvas</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {Object.entries(c.memories ?? {}).filter(([k]) => k !== 'transcript' && k !== 'telefone').map(([k, v]) => (
+                          <div key={k} style={{ display: 'flex', gap: 8, fontSize: 11 }}>
+                            <span style={{ color: '#A78BFA', fontWeight: 700, minWidth: 160 }}>{k}</span>
+                            <span style={{ color: C.textMuted }}>{typeof v === 'string' ? v : JSON.stringify(v)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
