@@ -61,7 +61,7 @@ app.get('/media-stream', { websocket: true }, (socket, _req) => {
         app.log.info({ callSid, telefone }, 'ANA MASTER session started')
       } catch (err) {
         app.log.error({ err, callSid }, 'Failed to start RealtimeSession — closing stream')
-        socket.close()
+        socket.destroy()
       }
     }
   })
