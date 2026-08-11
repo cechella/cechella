@@ -2155,7 +2155,7 @@ const ALL_GATES = ['GATE_ABERTURA','GATE_CONEXAO','GATE_COMBINADO','GATE_SPEECH'
 
 async function fetchAnaCalls(status?: string): Promise<AnaCall[]> {
   const params = status ? `?status=${status}` : ''
-  const res = await fetch(`/api/admin/ana-calls${params}`).catch(() => null)
+  const res = await fetch(`/api/admin/ana-calls${params}`, { cache: 'no-store' }).catch(() => null)
   if (!res?.ok) return []
   return res.json().catch(() => [])
 }
@@ -2166,14 +2166,18 @@ function LigacoesTab() {
   const [filter, setFilter] = useState<'all' | 'active' | 'ganho' | 'perdido'>('all')
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     const data = await fetchAnaCalls(filter === 'all' ? undefined : filter)
     setCalls(data)
-    setLoading(false)
+    if (!silent) setLoading(false)
   }, [filter])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    const iv = setInterval(() => load(true), 5000)
+    return () => clearInterval(iv)
+  }, [load])
 
   const STATUS_COLOR: Record<string, string> = { active: '#38BDF8', ganho: '#22C55E', perdido: '#EF4444', encerrado: '#71717A' }
   const STATUS_LABEL: Record<string, string> = { active: 'Ativa', ganho: '★ GANHO', perdido: 'Perdido', encerrado: 'Encerrada' }
