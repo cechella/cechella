@@ -1,6 +1,6 @@
 import { RealtimeAgent, RealtimeSession } from '@openai/agents/realtime'
 import { TwilioRealtimeTransportLayer } from '@openai/agents-extensions'
-import { REALTIME_DEFAULTS } from './config.js'
+import { OPENAI_API_KEY, REALTIME_DEFAULTS } from './config.js'
 import { STAGE_INSTRUCTIONS } from './state-machine.js'
 import { buildTools, SessionRef } from './tools/index.js'
 import { upsertCall, saveMemory } from './supabase.js'
@@ -41,7 +41,7 @@ export async function createAnaMasterSession(
     callSid,
     telefone,
     updateInstructions: async (instructions: string) => {
-      await realtimeSession.updateSession({ instructions })
+      await (realtimeSession as any).updateSession({ instructions })
     },
   }
 
@@ -57,7 +57,7 @@ export async function createAnaMasterSession(
     model: REALTIME_DEFAULTS.model,
   } as any)
 
-  await realtimeSession.connect()
+  await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 
   return realtimeSession
 }
