@@ -71,6 +71,11 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
     }
   })
 
+  // Prevent unhandled error crash if OpenAI rejects the session
+  realtimeSession.on('error', (err: unknown) => {
+    console.error('[ANA MASTER] RealtimeSession error:', err)
+  })
+
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 
   return realtimeSession
