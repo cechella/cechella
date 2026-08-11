@@ -1,7 +1,7 @@
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY!
 
 export const REALTIME_DEFAULTS = {
-  voice: (process.env.REALTIME_VOICE ?? 'shimmer') as string,
+  voice: (process.env.REALTIME_VOICE ?? 'marin') as string,
   model: 'gpt-realtime-2.1' as const,
 }
 
