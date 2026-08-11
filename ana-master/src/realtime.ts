@@ -23,23 +23,15 @@ INÍCIO: Você recebe a ligação e fala PRIMEIRO. Comece agora pela Etapa 1.
 
 ${STAGE_INSTRUCTIONS.apresentacao}`
 
-export async function createAnaMasterSession(
-  twilioWebSocket: unknown,
-  callSid: string,
-  telefone: string,
-) {
-  await upsertCall(callSid, telefone)
-  await saveMemory(callSid, 'telefone', telefone)
-
+export async function createAnaMasterSession(twilioWebSocket: unknown) {
   const transport = new TwilioRealtimeTransportLayer({
     twilioWebSocket,
   } as any)
 
-  let realtimeSession: RealtimeSession
-
+  // SessionRef is mutable — callSid/telefone are filled from the Twilio 'start' event
   const sessionRef: SessionRef = {
-    callSid,
-    telefone,
+    callSid: 'unknown',
+    telefone: '',
     updateInstructions: async (instructions: string) => {
       await (realtimeSession as any).updateSession({ instructions })
     },
@@ -52,10 +44,32 @@ export async function createAnaMasterSession(
     tools: buildTools(sessionRef) as any,
   })
 
+  let realtimeSession: RealtimeSession
+
   realtimeSession = new RealtimeSession(agent, {
     transport,
     model: REALTIME_DEFAULTS.model,
   } as any)
+
+  // Capture callSid/telefone from the Twilio 'start' event.
+  // The Transport emits '*' events for every Twilio message — we listen before connecting
+  // so we don't miss 'start' (which fires early in the stream lifecycle).
+  let dbInitialized = false
+  ;(transport as any).on('*', async (event: any) => {
+    if (event?.type !== 'twilio_message') return
+    const msg = event.message ?? event.data
+    if (msg?.event === 'start' && !dbInitialized) {
+      dbInitialized = true
+      const callSid = msg.start?.callSid
+        ?? msg.start?.customParameters?.callSid
+        ?? `stream_${msg.start?.streamSid ?? Date.now()}`
+      const telefone = String(msg.start?.customParameters?.from ?? '').replace(/\D/g, '')
+      sessionRef.callSid = callSid
+      sessionRef.telefone = telefone
+      await upsertCall(callSid, telefone).catch(() => {})
+      await saveMemory(callSid, 'telefone', telefone).catch(() => {})
+    }
+  })
 
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 

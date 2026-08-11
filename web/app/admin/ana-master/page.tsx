@@ -2532,23 +2532,7 @@ function DispararTab() {
   }
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, maxWidth: 860 }}>
-      {/* LEGADO */}
-      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-          <span style={{ fontSize: 20 }}>📞</span>
-          <div>
-            <p style={{ color: C.text, fontWeight: 600, margin: 0, fontSize: 14 }}>Ana Realtime Test</p>
-            <p style={{ color: C.textMuted, fontSize: 12, margin: 0 }}>Via VAPI</p>
-          </div>
-          <span style={{ marginLeft: 'auto', background: '#3A1F5C', color: '#A855F7', fontSize: 10, padding: '2px 8px', borderRadius: 99, border: '1px solid #6B21A8' }}>LEGADO</span>
-        </div>
-        <p style={{ color: C.textFaint, fontSize: 12, marginBottom: 20 }}>VAPI controla a conversa. Gates, memória e DNA não disponíveis.</p>
-        <button disabled style={{ width: '100%', padding: 12, background: '#2A1A3A', color: '#6B21A8', border: '1px solid #3B1F5C', borderRadius: 10, cursor: 'not-allowed', opacity: 0.5, fontSize: 13 }}>
-          📞 Ligar (VAPI) — desativado
-        </button>
-      </div>
-
+    <div style={{ maxWidth: 500 }}>
       {/* ANA MASTER */}
       <div style={{ background: '#0A1628', border: '1px solid #1D4ED8', borderRadius: 16, padding: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>

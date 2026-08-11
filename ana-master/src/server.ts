@@ -56,41 +56,21 @@ app.post('/twiml', async (req, reply) => {
 app.get('/media-stream', { websocket: true }, (socket, _req) => {
   app.log.info('Twilio Media Stream connected')
 
-  let callSid = 'unknown'
-  let telefone = ''
-  let sessionStarted = false
+  // TwilioRealtimeTransportLayer needs the raw ws.WebSocket (has addEventListener).
+  // Fastify gives us a SocketStream wrapper — socket.socket is the actual ws instance.
+  const rawWs = (socket as any).socket
 
-  socket.on('message', async (raw: Buffer) => {
-    let msg: Record<string, any>
-    try {
-      msg = JSON.parse(raw.toString())
-    } catch {
-      return
-    }
+  // Create session immediately so the Transport sees all events including 'start'
+  // (it uses 'start' to capture streamSid, required for sending audio back).
+  createAnaMasterSession(rawWs)
+    .then(() => { app.log.info('ANA MASTER session started') })
+    .catch((err: unknown) => {
+      app.log.error({ err }, 'Failed to start RealtimeSession — closing stream')
+      socket.destroy()
+    })
 
-    // First message from Twilio is always 'start' — contains metadata
-    if (msg.event === 'start' && !sessionStarted) {
-      sessionStarted = true
-      callSid = msg.start?.callSid ?? msg.start?.customParameters?.callSid ?? 'unknown'
-      telefone = String(msg.start?.customParameters?.from ?? '').replace(/\D/g, '')
-
-      try {
-        await createAnaMasterSession(socket, callSid, telefone)
-        app.log.info({ callSid, telefone }, 'ANA MASTER session started')
-      } catch (err) {
-        app.log.error({ err, callSid }, 'Failed to start RealtimeSession — closing stream')
-        socket.destroy()
-      }
-    }
-  })
-
-  socket.on('close', () => {
-    app.log.info({ callSid }, 'Media Stream closed')
-  })
-
-  socket.on('error', (err: Error) => {
-    app.log.error({ err, callSid }, 'Media Stream error')
-  })
+  socket.on('close', () => { app.log.info('Media Stream closed') })
+  socket.on('error', (err: Error) => { app.log.error({ err }, 'Media Stream error') })
 })
 
 // Outbound call — Admin dispara ligação para lead
