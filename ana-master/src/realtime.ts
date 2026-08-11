@@ -111,29 +111,31 @@ function wrapTwilioInputMulawToPcm(ws: any): any {
 }
 
 export async function createAnaMasterSession(twilioWebSocket: unknown) {
-  // Pipeline de áudio:
+  // Pipeline de áudio (PROVADO por diagnóstico — gpt-realtime-2.1 ignora g711_ulaw input):
   //
-  // INBOUND  Twilio mulaw 8kHz → transport (raw, sem conversão) → OpenAI
-  //          Transport declara input_audio_format=g711_ulaw na sessão
-  //          OpenAI decodifica internamente (se respeitar o formato)
+  // INBOUND  Twilio mulaw 8kHz
+  //          → wrapTwilioInputMulawToPcm (mulaw→PCM 24kHz nos media events do WebSocket)
+  //          → transport encaminha PCM para OpenAI
+  //          → session.update declara input_audio_format=pcm16 (sobrescreve g711_ulaw do transport)
+  //          → OpenAI VAD detecta fala ✓
   //
-  // OUTBOUND OpenAI → transport (raw, sem conversão) → wrapTwilioWithPcmToMulaw → Twilio
-  //          gpt-realtime-2.1 envia PCM 24kHz apesar de output_audio_format=g711_ulaw
-  //          Nosso wrapper converte PCM→mulaw 8kHz para o Twilio (ÚNICA conversão outbound)
+  // OUTBOUND OpenAI PCM 24kHz (ignora output_audio_format=g711_ulaw)
+  //          → transport encaminha raw
+  //          → wrapTwilioWithPcmToMulaw (PCM→mulaw 8kHz)
+  //          → Twilio toca áudio ✓
   //
-  // NOTA: wrapTwilioInputMulawToPcm NÃO está ativo — o transport tem silence padding
-  // interno que injeta mulaw bytes diretamente, então converter no WebSocket causaria
-  // formato misto. A conversão inbound só será necessária se g711_ulaw input for ignorado.
+  // CAVEAT: transport injeta silence padding mulaw internamente (não passa pelo wrapper).
+  // Em chamadas ativas (sem gaps no stream) isso é inofensivo — 0xff como PCM ≈ zero.
 
   console.log('[ANA MASTER] PIPELINE:',
-    'TWILIO_IN=mulaw8k',
-    '| OPENAI_IN=g711_ulaw(declarado)',
-    '| OPENAI_OUT=pcm24k(real,ignorou g711_ulaw)',
-    '| TWILIO_OUT=mulaw8k(convertido por wrapper)',
+    'TWILIO_IN=mulaw8k→PCM24k(wrapper)',
+    '| OPENAI_IN=pcm16(declarado+convertido)',
+    '| OPENAI_OUT=pcm24k(real)',
+    '| TWILIO_OUT=mulaw8k(wrapper)',
   )
 
   const transport = new TwilioRealtimeTransportLayer({
-    twilioWebSocket: wrapTwilioWithPcmToMulaw(twilioWebSocket),
+    twilioWebSocket: wrapTwilioWithPcmToMulaw(wrapTwilioInputMulawToPcm(twilioWebSocket)),
   } as any)
 
   // SessionRef is mutable — callSid/telefone are filled from the Twilio 'start' event
@@ -257,11 +259,13 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
 
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 
-  // Enable input transcription — transport já configurou g711_ulaw, não sobrescrevemos.
+  // Sobrescreve input_audio_format do transport (g711_ulaw → pcm16) pois convertemos
+  // o áudio inbound antes de chegar na OpenAI. Habilita também transcrição.
   ;(transport as any).sendEvent?.({
     type: 'session.update',
     session: {
       type: 'realtime',
+      input_audio_format: 'pcm16',
       input_audio_transcription: { model: 'gpt-4o-transcribe' },
     },
   }).catch?.(() => {})
