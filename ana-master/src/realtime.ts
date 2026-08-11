@@ -78,5 +78,16 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
 
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 
+  // Trigger ANA to speak first — outbound calls require explicit sendMessage
+  // because VAD waits for user audio; in outbound the AI must initiate
+  setTimeout(() => {
+    try {
+      realtimeSession.sendMessage('iniciar')
+      console.log('[ANA MASTER] Trigger inicial enviado')
+    } catch (e) {
+      console.error('[ANA MASTER] Erro ao triggerar resposta inicial:', e)
+    }
+  }, 800)
+
   return realtimeSession
 }
