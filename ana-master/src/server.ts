@@ -3,6 +3,10 @@ import websocket from '@fastify/websocket'
 import { PORT, PUBLIC_HOST } from './config.js'
 import { createAnaMasterSession } from './realtime.js'
 
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN!
+const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER!
+
 const app = Fastify({ logger: true })
 
 await app.register(websocket)
@@ -73,6 +77,44 @@ app.get('/media-stream', { websocket: true }, (socket, _req) => {
   socket.on('error', (err: Error) => {
     app.log.error({ err, callSid }, 'Media Stream error')
   })
+})
+
+// Outbound call — Admin dispara ligação para lead
+app.post('/outbound', async (req, reply) => {
+  const body = req.body as Record<string, string>
+  const numero = (body?.numero ?? '').replace(/\D/g, '')
+  const referidor = body?.referidor ?? ''
+  const contexto = body?.contexto ?? ''
+
+  if (!numero) return reply.status(400).send({ error: 'numero obrigatório' })
+
+  const to = numero.startsWith('+') ? numero : `+${numero}`
+
+  const twimlUrl = new URL(`${PUBLIC_HOST}/twiml`)
+  if (referidor) twimlUrl.searchParams.set('referidor', referidor)
+  if (contexto) twimlUrl.searchParams.set('contexto', contexto)
+
+  const params = new URLSearchParams({
+    To: to,
+    From: TWILIO_PHONE_NUMBER,
+    Url: twimlUrl.toString(),
+    Method: 'POST',
+  })
+
+  const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Calls.json`
+  const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64')
+
+  const res = await fetch(twilioUrl, {
+    method: 'POST',
+    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  })
+
+  const data = await res.json() as any
+  if (!res.ok) return reply.status(res.status).send({ error: data?.message ?? 'Twilio error' })
+
+  app.log.info({ sid: data.sid, to }, 'Outbound call initiated')
+  return reply.send({ ok: true, sid: data.sid, status: data.status })
 })
 
 // Parse Twilio's application/x-www-form-urlencoded webhook bodies

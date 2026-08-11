@@ -83,7 +83,7 @@ const adminNav: NavSection[] = [
   {
     section: 'Ana DNA',
     items: [
-      { label: 'Ana DNA Nuclear', href: '/admin/ana-master', icon: <Brain className="w-5 h-5" /> },
+      { label: 'Ana DNA Nuclear', href: '/admin/ana-dna-nuclear', icon: <Brain className="w-5 h-5" /> },
     ],
   },
   {
