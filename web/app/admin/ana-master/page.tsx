@@ -65,7 +65,7 @@ interface ChangelogEntry {
   titulo: string; descricao: string; impacto?: string; autor?: string
 }
 
-type Tab = 'central' | 'dna' | 'recovery' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog'
+type Tab = 'central' | 'dna' | 'recovery' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog' | 'disparar'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -2133,9 +2133,94 @@ function RecoveryTab() {
   )
 }
 
+// ─── DISPARAR TAB ─────────────────────────────────────────────────────────────
+
+function DispararTab() {
+  const [numero, setNumero] = React.useState('+5548988416899')
+  const [referidor, setReferidor] = React.useState('')
+  const [contexto, setContexto] = React.useState('')
+  const [loading, setLoading] = React.useState(false)
+  const [result, setResult] = React.useState<any>(null)
+
+  async function ligar() {
+    setLoading(true); setResult(null)
+    try {
+      const res = await fetch('/api/admin/ana-master-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numero, referidor, contexto }),
+      })
+      setResult(await res.json())
+    } catch (e: any) {
+      setResult({ error: e.message })
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, maxWidth: 860 }}>
+      {/* LEGADO */}
+      <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 16, padding: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <span style={{ fontSize: 20 }}>📞</span>
+          <div>
+            <p style={{ color: C.text, fontWeight: 600, margin: 0, fontSize: 14 }}>Ana Realtime Test</p>
+            <p style={{ color: C.textMuted, fontSize: 12, margin: 0 }}>Via VAPI</p>
+          </div>
+          <span style={{ marginLeft: 'auto', background: '#3A1F5C', color: '#A855F7', fontSize: 10, padding: '2px 8px', borderRadius: 99, border: '1px solid #6B21A8' }}>LEGADO</span>
+        </div>
+        <p style={{ color: C.textFaint, fontSize: 12, marginBottom: 20 }}>VAPI controla a conversa. Gates, memória e DNA não disponíveis.</p>
+        <button disabled style={{ width: '100%', padding: 12, background: '#2A1A3A', color: '#6B21A8', border: '1px solid #3B1F5C', borderRadius: 10, cursor: 'not-allowed', opacity: 0.5, fontSize: 13 }}>
+          📞 Ligar (VAPI) — desativado
+        </button>
+      </div>
+
+      {/* ANA MASTER */}
+      <div style={{ background: '#0A1628', border: '1px solid #1D4ED8', borderRadius: 16, padding: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+          <Zap style={{ width: 18, height: 18, color: '#38BDF8' }} />
+          <div>
+            <p style={{ color: C.text, fontWeight: 700, margin: 0, fontSize: 14 }}>ANA MASTER</p>
+            <p style={{ color: '#38BDF8', fontSize: 11, margin: 0 }}>TwilioTransport · RealtimeAgent · gpt-realtime</p>
+          </div>
+          <span style={{ marginLeft: 'auto', background: '#0C4A6E', color: '#38BDF8', fontSize: 10, padding: '2px 8px', borderRadius: 99, border: '1px solid #0369A1' }}>NOVO</span>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+          {[
+            { label: 'Número do lead', val: numero, set: setNumero, ph: '+5548988416899' },
+            { label: 'Referidor (opcional)', val: referidor, set: setReferidor, ph: 'Ex: Adriana' },
+            { label: 'Contexto inicial (opcional)', val: contexto, set: setContexto, ph: 'Ex: lead perguntou sobre implante' },
+          ].map(f => (
+            <div key={f.label}>
+              <label style={{ color: C.textMuted, fontSize: 11, display: 'block', marginBottom: 4 }}>{f.label}</label>
+              <input value={f.val} onChange={e => f.set(e.target.value)} placeholder={f.ph}
+                style={{ width: '100%', background: '#111827', border: `1px solid ${C.border}`, borderRadius: 8, padding: '9px 12px', color: C.text, fontSize: 13, boxSizing: 'border-box' }} />
+            </div>
+          ))}
+        </div>
+        <div style={{ background: '#0C4A6E22', border: '1px solid #0369A155', borderRadius: 8, padding: '7px 12px', marginBottom: 14, fontSize: 11, color: '#38BDF8' }}>
+          ⚡ TwilioTransport · RealtimeAgent · State Machine · 8 Gates · Memory · Recovery
+        </div>
+        <button onClick={ligar} disabled={loading}
+          style={{ width: '100%', padding: 13, background: loading ? '#1D4ED8' : 'linear-gradient(135deg,#1D4ED8,#0EA5E9)', color: '#fff', border: 'none', borderRadius: 10, cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 14 }}>
+          {loading ? '⏳ Iniciando...' : '⚡ Ligar com ANA MASTER'}
+        </button>
+        {result && (
+          <div style={{ marginTop: 10, background: result.error ? '#3B0A0A' : '#0A2E0A', border: `1px solid ${result.error ? '#7F1D1D' : '#14532D'}`, borderRadius: 8, padding: '9px 12px' }}>
+            {result.error
+              ? <p style={{ color: '#F87171', fontSize: 12, margin: 0 }}>❌ {result.error}</p>
+              : <><p style={{ color: '#4ADE80', fontSize: 12, margin: 0 }}>✅ Ligação iniciada!</p><p style={{ color: '#86EFAC', fontSize: 11, margin: '3px 0 0' }}>SID: {result.sid} · {result.status}</p></>
+            }
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── TABS CONFIG ──────────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] = [
+  { id: 'disparar',   label: '⚡ Disparar',   icon: <Zap style={{ width: 12, height: 12 }} />,       color: '#38BDF8' },
   { id: 'central',    label: 'Central',       icon: <Sparkles style={{ width: 12, height: 12 }} />,  color: C.purple },
   { id: 'dna',        label: 'DNA v1',        icon: <span style={{ fontSize: 12 }}>🧬</span>,        color: '#A855F7' },
   { id: 'recovery',   label: 'Recovery',      icon: <span style={{ fontSize: 12 }}>🛡️</span>,        color: '#6366F1' },
@@ -2233,6 +2318,7 @@ export default function AnaMasterPage() {
             </div>
           ) : (
             <>
+              {tab === 'disparar'   && <DispararTab />}
               {tab === 'central'    && <CentralTab sims={sims} gold={gold} antiGold={antiGold} scorecard={scorecard} matriz={matriz} changelog={changelog} />}
               {tab === 'dna'        && <DnaTab />}
               {tab === 'recovery'   && <RecoveryTab />}
