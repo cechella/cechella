@@ -78,16 +78,35 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
 
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 
-  // Trigger ANA to speak first — outbound calls require explicit sendMessage
-  // because VAD waits for user audio; in outbound the AI must initiate
+  // Trigger ANA to speak first — outbound call, AI must initiate.
+  // Try sendMessage first; fall back to raw response.create on OpenAI WS.
   setTimeout(() => {
     try {
       realtimeSession.sendMessage('iniciar')
-      console.log('[ANA MASTER] Trigger inicial enviado')
+      console.log('[ANA MASTER] sendMessage trigger enviado')
     } catch (e) {
-      console.error('[ANA MASTER] Erro ao triggerar resposta inicial:', e)
+      console.error('[ANA MASTER] sendMessage falhou, tentando response.create direto:', e)
     }
-  }, 800)
+
+    // Also send response.create directly on the underlying OpenAI WebSocket
+    try {
+      const openaiWs = (transport as any)._ws
+        ?? (transport as any).ws
+        ?? (transport as any)._socket
+      if (openaiWs?.readyState === 1) {
+        openaiWs.send(JSON.stringify({
+          type: 'conversation.item.create',
+          item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: 'iniciar' }] },
+        }))
+        openaiWs.send(JSON.stringify({ type: 'response.create' }))
+        console.log('[ANA MASTER] response.create direto enviado via OpenAI WS')
+      } else {
+        console.log('[ANA MASTER] OpenAI WS state:', openaiWs?.readyState)
+      }
+    } catch (e2) {
+      console.error('[ANA MASTER] response.create direto falhou:', e2)
+    }
+  }, 1000)
 
   return realtimeSession
 }
