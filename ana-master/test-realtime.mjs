@@ -44,6 +44,7 @@ ws.on('open', () => {
   ws.send(JSON.stringify({
     type: 'session.update',
     session: {
+      type: 'realtime',
       modalities: ['text'],
       instructions: 'Responda apenas: "ANA ONLINE"',
     },
