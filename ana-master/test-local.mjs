@@ -101,13 +101,13 @@ try {
 } catch(e) { fail(`Não conseguiu carregar dist/gate-validator.js: ${e.message}\nRode: npm run build`) }
 
 if (validateGate) {
-  // G1 — deve APROVAR com evidências completas
+  // G1 — deve APROVAR com evidências corretas
   try {
     const result = await validateGate('GATE_ABERTURA', {
       telefone: MOCK_TELEFONE,
+      nome_confirmado: true,
+      referida_confirmada: true,
       disponibilidade_confirmada: true,
-      nome_confirmado: 'Teste Maria',
-      referida_por: 'Adriana'
     }, MOCK_CALL_SID)
     result.approved ? ok(`G1 GATE_ABERTURA aprovado → ${result.next_stage}`) : fail(`G1 recusado: ${result.reason}`)
   } catch(e) { fail(`G1 erro: ${e.message}`) }
@@ -122,9 +122,8 @@ if (validateGate) {
   try {
     const result = await validateGate('GATE_CONEXAO', {
       telefone: MOCK_TELEFONE,
-      sintoma_principal: 'insônia e cansaço',
-      contexto_vida: 'professora, 2 filhos',
-      interesse_confirmado: true
+      contexto_vida_capturado: true,
+      rapport_estabelecido: true,
     }, MOCK_CALL_SID)
     result.approved ? ok(`G2 GATE_CONEXAO aprovado → ${result.next_stage}`) : fail(`G2 recusado: ${result.reason}`)
   } catch(e) { fail(`G2 erro: ${e.message}`) }
@@ -133,9 +132,7 @@ if (validateGate) {
   try {
     const result = await validateGate('GATE_COMBINADO', {
       telefone: MOCK_TELEFONE,
-      combinado_confirmado: true,
-      decisao_autonomia: 'sozinha',
-      disponibilidade_agenda: true
+      intencao_avanco: 'sim',
     }, MOCK_CALL_SID)
     result.approved ? ok(`G3 GATE_COMBINADO aprovado → ${result.next_stage}`) : fail(`G3 recusado: ${result.reason}`)
   } catch(e) { fail(`G3 erro: ${e.message}`) }
@@ -144,28 +141,31 @@ if (validateGate) {
   try {
     const result = await validateGate('GATE_SPEECH', {
       telefone: MOCK_TELEFONE,
-      speech_partes_executadas: ['ancora_dor','implante','resultados','duracao'],
-      resposta_pergunta_speech: 'me chamou atenção a duração de 6 meses',
-      interesse_pos_speech: true
+      parte1_entregue: true,
+      parte2_entregue: true,
+      parte3_entregue: true,
+      parte4_entregue: true,
+      pergunta_abertura_feita: true,
+      interesse_protocolo: 'duração de 6 meses',
     }, MOCK_CALL_SID)
     result.approved ? ok(`G4 GATE_SPEECH aprovado → ${result.next_stage}`) : fail(`G4 recusado: ${result.reason}`)
   } catch(e) { fail(`G4 erro: ${e.message}`) }
 
-  // G5 — sem pagamento escolhido (deve reprovar)
-  try {
-    const result = await validateGate('GATE_FECHAMENTO', {
-      telefone: MOCK_TELEFONE,
-      investimento_apresentado: true
-    }, MOCK_CALL_SID)
-    !result.approved ? ok(`G5 bloqueio correto sem forma_pagamento: ${result.reason}`) : fail('G5 deveria ter reprovado sem forma_pagamento')
-  } catch(e) { fail(`G5 bloqueio erro: ${e.message}`) }
-
-  // G5 — com pagamento (deve aprovar)
+  // G5 — sem forma_pagamento (deve reprovar)
   try {
     const result = await validateGate('GATE_FECHAMENTO', {
       telefone: MOCK_TELEFONE,
       investimento_apresentado: true,
-      forma_pagamento_escolhida: 'pix'
+    }, MOCK_CALL_SID)
+    !result.approved ? ok(`G5 bloqueio correto sem forma_pagamento: ${result.reason}`) : fail('G5 deveria ter reprovado sem forma_pagamento')
+  } catch(e) { fail(`G5 bloqueio erro: ${e.message}`) }
+
+  // G5 — com PIX (deve aprovar)
+  try {
+    const result = await validateGate('GATE_FECHAMENTO', {
+      telefone: MOCK_TELEFONE,
+      investimento_apresentado: true,
+      forma_pagamento_escolhida: 'pix',
     }, MOCK_CALL_SID)
     result.approved ? ok(`G5 GATE_FECHAMENTO aprovado → ${result.next_stage}`) : fail(`G5 recusado: ${result.reason}`)
   } catch(e) { fail(`G5 erro: ${e.message}`) }

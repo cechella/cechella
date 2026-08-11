@@ -20,10 +20,8 @@ export interface GateEvidence {
   pergunta_abertura_feita?: boolean
   interesse_protocolo?: string
   // GATE_FECHAMENTO
-  data_confirmada?: boolean
-  horario_confirmado?: boolean
-  valor_confirmado?: boolean
-  link_pagamento_enviado?: boolean
+  investimento_apresentado?: boolean
+  forma_pagamento_escolhida?: 'pix' | 'cartao'
   parcelamento_6x_mencionado?: boolean
   // GATE_PAGAMENTO (server verifies independently)
   telefone?: string
@@ -81,14 +79,12 @@ export async function validateGate(
     }
 
     case 'GATE_FECHAMENTO': {
-      if (!evidence.data_confirmada) return { approved: false, reason: 'Data do procedimento não confirmada.' }
-      if (!evidence.horario_confirmado) return { approved: false, reason: 'Horário não confirmado.' }
-      if (!evidence.valor_confirmado) return { approved: false, reason: 'Valor não confirmado.' }
-      if (!evidence.link_pagamento_enviado) return { approved: false, reason: 'Link de pagamento não foi enviado.' }
-      // Enforce 6x — never 12x
+      if (!evidence.investimento_apresentado) return { approved: false, reason: 'Investimento de R$ 5.000 não apresentado.' }
+      if (!evidence.forma_pagamento_escolhida) return { approved: false, reason: 'Lead não escolheu forma de pagamento (PIX ou cartão). Continue na etapa.' }
       if (evidence.parcelamento_6x_mencionado === false) {
-        return { approved: false, reason: 'Parcelamento deve ser apresentado como ATÉ 6X SEM JUROS.' }
+        return { approved: false, reason: 'Parcelamento deve ser apresentado como ATÉ 6X SEM JUROS — nunca 12x.' }
       }
+      await saveMemory(callSid, 'forma_pagamento_escolhida', evidence.forma_pagamento_escolhida)
       break
     }
 
