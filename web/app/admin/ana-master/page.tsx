@@ -2159,7 +2159,7 @@ function DispararTab() {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24, maxWidth: 860 }}>
       {/* LEGADO */}
-      <div style={{ background: C.bg2, border: `1px solid ${C.border}`, borderRadius: 16, padding: 28 }}>
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
           <span style={{ fontSize: 20 }}>📞</span>
           <div>
