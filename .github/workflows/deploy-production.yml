@@ -11,4 +11,4 @@ jobs:
     steps:
       - name: Trigger Vercel Production Deploy
         run: |
-          curl -X POST "https://api.vercel.com/v1/integrations/deploy/prj_iHPAMfZeYXvc8tWgtek3hxMjE3tY/TVFLqJV1s6"
+          curl -X POST "https://api.vercel.com/v1/integrations/deploy/prj_iHPAMfZeYXvc8tWgtek3hxMjE3tY/7U36wykJbL"
