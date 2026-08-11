@@ -111,8 +111,14 @@ function wrapTwilioInputMulawToPcm(ws: any): any {
 }
 
 export async function createAnaMasterSession(twilioWebSocket: unknown) {
+  // Apply both wrappers to the Twilio WebSocket:
+  // 1. wrapTwilioInputMulawToPcm — convert inbound mulaw 8kHz → PCM 24kHz (gpt-realtime-2.1
+  //    ignores input_audio_format: g711_ulaw just like it ignores the output format)
+  // 2. wrapTwilioWithPcmToMulaw — convert outbound PCM 24kHz → mulaw 8kHz for Twilio
+  const wrappedWs = wrapTwilioWithPcmToMulaw(wrapTwilioInputMulawToPcm(twilioWebSocket))
+
   const transport = new TwilioRealtimeTransportLayer({
-    twilioWebSocket: wrapTwilioWithPcmToMulaw(twilioWebSocket),
+    twilioWebSocket: wrappedWs,
   } as any)
 
   // SessionRef is mutable — callSid/telefone are filled from the Twilio 'start' event
@@ -236,10 +242,15 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
 
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 
-  // Enable input audio transcription so we can save what the user says
+  // Tell OpenAI to expect PCM 16-bit input (we convert from mulaw 8kHz before it arrives)
+  // and enable transcription so we can log/save what the user says.
   ;(transport as any).sendEvent?.({
     type: 'session.update',
-    session: { type: 'realtime', input_audio_transcription: { model: 'gpt-4o-transcribe' } },
+    session: {
+      type: 'realtime',
+      input_audio_format: 'pcm16',
+      input_audio_transcription: { model: 'gpt-4o-transcribe' },
+    },
   }).catch?.(() => {})
 
   // Trigger ANA to speak first — outbound call, AI must initiate.
