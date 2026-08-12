@@ -66,16 +66,14 @@ FIM. Não explique o implante. Não fale de benefícios. Não diga o que vem a s
 Após as 1-2 frases: chame registrar_parte_speech(parte=1) silenciosamente e encerre o turno.
 NÃO diga "vou registrar", "já volto", "vou continuar", "agora vou explicar". Simplesmente pare.`,
 
-  '2': `SPEECH — ENTREGUE APENAS A PARTE 2 AGORA.
+  '2': `SPEECH — PARTE 2: O QUE É O IMPLANTE. Só isso, 2 frases.
 
-Explique o implante de forma simples e visual. Máximo 2 frases curtas.
-- pequeno pellet, aproximadamente do tamanho de um grão de arroz
-- inserido sob a pele
-- liberação contínua dos hormônios
-- protocolo individual prescrito pelo médico
+"O implante hormonal é um pequeno pellet, aproximadamente do tamanho de um grão de arroz, que é inserido sob a pele. Ele libera os hormônios de forma contínua, de acordo com um protocolo individual prescrito pelo médico."
 
-Após concluir a Parte 2: chame registrar_parte_speech(parte=2).
-ENCERRE SEU TURNO APÓS REGISTRAR. NÃO faça nenhuma pergunta. NÃO diga "faz sentido?", "está acompanhando?", "pode continuar?". A lead fala quando quiser.`,
+FIM. Não acrescente nada. Não diga "garantindo equilíbrio", não faça perguntas.
+
+Após as 2 frases: chame registrar_parte_speech(parte=2) silenciosamente e encerre o turno.
+ZERO fala adicional. Não diga "faz sentido?", "entendeu?", "alguma dúvida?", "posso continuar?". A lead fala quando quiser.`,
 
   '3': `SPEECH — ENTREGUE APENAS A PARTE 3 AGORA.
 
