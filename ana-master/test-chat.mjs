@@ -580,10 +580,6 @@ async function callAna(userMessage) {
     const spokenContent = msg.content?.trim()
     if (spokenContent) {
       console.log(`\x1b[35mANA:\x1b[0m ${spokenContent}\n`)
-      // Mark the current part as verbalized so the guard below can confirm delivery
-      if (currentStage === 'speech' && speechProgress.state === 'DELIVERING_PART') {
-        speechProgress._parte_verbalizada = true
-      }
     }
 
     const toolResults = []
@@ -595,17 +591,9 @@ async function callAna(userMessage) {
 
       if (tc.function.name === 'gateValidator') result = handleGateValidator(args)
       else if (tc.function.name === 'registrar_parte_speech') {
-        // Structural guard: refuse registration if no verbal delivery happened in this turn
-        const parte = args.parte
-        if (typeof parte === 'number' && !speechProgress._parte_verbalizada && !spokenContent) {
-          result = { error: `Entrega verbal da Parte ${parte} não detectada neste turno. Verbalize o conteúdo da parte antes de registrar.` }
-          console.log(`\n  ⛔ GUARD: registrar_parte_speech(${parte}) BLOQUEADO — sem conteúdo verbal neste turno.\n`)
-        } else {
-          result = handleRegistrarParteSpeech(args)
-          speechProgress._parte_verbalizada = false  // reset for next part
-          if (result.aguardando === 'turno_da_lead' || result.aguardando === 'resposta_final_da_lead') {
-            waitingForLead = true
-          }
+        result = handleRegistrarParteSpeech(args)
+        if (result.aguardando === 'turno_da_lead' || result.aguardando === 'resposta_final_da_lead') {
+          waitingForLead = true
         }
       }
       else if (tc.function.name === 'save_memory') result = handleSaveMemory(args)
