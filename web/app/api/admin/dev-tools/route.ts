@@ -187,12 +187,14 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === 'limpar_ana_master') {
-      const { data: d1 } = await supabase.from('ana_memories').delete().gte('created_at', '2000-01-01').select('id')
-      const { data: d2 } = await supabase.from('ana_calls').delete().gte('created_at', '2000-01-01').select('id')
+      const { count: c1 } = await supabase.from('ana_memories').select('id', { count: 'exact', head: true })
+      const { count: c2 } = await supabase.from('ana_calls').select('id', { count: 'exact', head: true })
+      await supabase.from('ana_memories').delete().neq('id', '00000000-0000-0000-0000-000000000000')
+      await supabase.from('ana_calls').delete().neq('id', '00000000-0000-0000-0000-000000000000')
       return NextResponse.json({
-        rows: (d1?.length ?? 0) + (d2?.length ?? 0),
+        rows: (c1 ?? 0) + (c2 ?? 0),
         tabelas: ['ana_memories', 'ana_calls'],
-        detalhes: { ana_memories: d1?.length ?? 0, ana_calls: d2?.length ?? 0 },
+        detalhes: { ana_memories: c1 ?? 0, ana_calls: c2 ?? 0 },
       })
     }
 
