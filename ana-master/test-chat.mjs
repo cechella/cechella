@@ -147,7 +147,61 @@ function classifyLeadTurn(transcript, state) {
 // ── Persistência de sessão ────────────────────────────────────────────────────
 
 const SESSION_FILE = path.join(process.cwd(), 'simulation-session.json')
+const CHECKPOINT_DIR = path.join(process.cwd(), 'checkpoints')
 const ANA_VERSION = 'gold-v1-speech-progress-v2'
+
+// Gate → checkpoint label mapping
+const GATE_CHECKPOINT_LABEL = {
+  GATE_ABERTURA:  'conexao',
+  GATE_CONEXAO:   'combinado',
+  GATE_COMBINADO: 'speech',
+  GATE_SPEECH:    'fechamento',
+  GATE_FECHAMENTO:'pagamento',
+  GATE_PAGAMENTO: 'referidos',
+  GATE_REFERIDOS: 'validacao',
+  GATE_VALIDACAO: 'ganho',
+}
+
+function saveCheckpoint(gateId) {
+  try {
+    if (!fs.existsSync(CHECKPOINT_DIR)) fs.mkdirSync(CHECKPOINT_DIR, { recursive: true })
+    const label = GATE_CHECKPOINT_LABEL[gateId]
+    if (!label) return
+    const file = path.join(CHECKPOINT_DIR, `checkpoint_${label}.json`)
+    fs.writeFileSync(file, JSON.stringify({
+      checkpoint_label: label,
+      gate_passed: gateId,
+      ana_version: ANA_VERSION,
+      saved_at: new Date().toISOString(),
+      current_stage: currentStage,
+      current_instruction: currentInstruction,
+      gates_passed: gateLog,
+      speech_progress: speechProgress,
+      memory: Object.fromEntries(memoryStore),
+      messages,
+    }, null, 2))
+    console.log(`  💾 Checkpoint salvo: ${label}\n`)
+  } catch (e) { console.error('⚠️  Erro ao salvar checkpoint:', e.message) }
+}
+
+function listCheckpoints() {
+  if (!fs.existsSync(CHECKPOINT_DIR)) return []
+  return fs.readdirSync(CHECKPOINT_DIR)
+    .filter(f => f.startsWith('checkpoint_') && f.endsWith('.json'))
+    .map(f => {
+      try {
+        const data = JSON.parse(fs.readFileSync(path.join(CHECKPOINT_DIR, f), 'utf8'))
+        return { file: f, label: data.checkpoint_label, gate: data.gate_passed, saved_at: data.saved_at, data }
+      } catch { return null }
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(a.saved_at) - new Date(b.saved_at))
+}
+
+function loadCheckpoint(label) {
+  const file = path.join(CHECKPOINT_DIR, `checkpoint_${label}.json`)
+  try { return JSON.parse(fs.readFileSync(file, 'utf8')) } catch { return null }
+}
 
 function initialSpeechProgress() {
   return {
@@ -648,6 +702,8 @@ function handleGateValidator(args) {
   console.log(`  📋 Evidências: ${JSON.stringify(evidence)}`)
   console.log(`${'─'.repeat(60)}\n`)
 
+  saveCheckpoint(gate_id)
+
   return { approved: true, reason: `${gate_id} aprovado.`, next_stage: transition.to }
 }
 
@@ -1020,34 +1076,44 @@ function printHeader() {
 
 async function selectMode() {
   const saved = loadSessionFile()
+  const checkpoints = listCheckpoints()
 
-  if (!saved) {
-    console.log('\n▶  Nenhuma sessão salva encontrada. Iniciando nova simulação.\n')
-    return 'new'
+  // Build menu options
+  const options = []
+  let idx = 1
+
+  if (saved) {
+    const age = Math.round((Date.now() - new Date(saved.updated_at).getTime()) / 60000)
+    const ageStr = age < 60 ? `${age}min atrás` : `${Math.round(age/60)}h atrás`
+    options.push({ key: String(idx++), label: `Continuar sessão atual — ${saved.current_stage.toUpperCase()} (${ageStr})`, action: 'continue' })
   }
 
-  const age = Math.round((Date.now() - new Date(saved.updated_at).getTime()) / 60000)
-  const ageStr = age < 60 ? `${age}min atrás` : `${Math.round(age/60)}h atrás`
+  for (const cp of checkpoints) {
+    const age = Math.round((Date.now() - new Date(cp.saved_at).getTime()) / 60000)
+    const ageStr = age < 60 ? `${age}min atrás` : `${Math.round(age/60)}h atrás`
+    options.push({ key: String(idx++), label: `Checkpoint: etapa ${cp.label.toUpperCase()} — ${ageStr}`, action: 'checkpoint', checkpoint: cp })
+  }
 
-  console.log(`\n📁 Sessão salva encontrada:`)
-  console.log(`   ID:      ${saved.session_id}`)
-  console.log(`   Etapa:   ${saved.current_stage.toUpperCase()}`)
-  console.log(`   Gates:   ${saved.gates_passed?.length ?? 0} passados`)
-  console.log(`   Versão:  ${saved.ana_version}`)
-  console.log(`   Salva:   ${ageStr}`)
-  if (saved.last_lead_message) console.log(`   Última lead: "${saved.last_lead_message.slice(0, 60)}..."`)
-  console.log()
-  console.log('  [1] Continuar de onde parou')
-  console.log('  [2] Nova simulação (mantém arquivo anterior)')
-  console.log('  [3] Resetar e começar do zero')
+  options.push({ key: String(idx++), label: 'Nova simulação do zero', action: 'new' })
+  options.push({ key: String(idx), label: 'Resetar tudo (apaga sessão e checkpoints)', action: 'reset' })
+
+  if (options.length === 1 && options[0].action === 'new') {
+    console.log('\n▶  Nenhuma sessão ou checkpoint encontrado. Iniciando nova simulação.\n')
+    return { action: 'new' }
+  }
+
+  console.log('\n📋 Como deseja iniciar?\n')
+  for (const opt of options) {
+    console.log(`  [${opt.key}] ${opt.label}`)
+  }
   console.log()
 
+  const keys = options.map(o => o.key)
   while (true) {
-    const choice = await prompt('Escolha [1/2/3]: ')
-    if (choice.trim() === '1') return 'continue'
-    if (choice.trim() === '2') return 'new'
-    if (choice.trim() === '3') return 'reset'
-    console.log('  Digite 1, 2 ou 3.')
+    const choice = await prompt(`Escolha [${keys.join('/')}]: `)
+    const opt = options.find(o => o.key === choice.trim())
+    if (opt) return opt
+    console.log(`  Digite ${keys.join(', ')}.`)
   }
 }
 
@@ -1062,29 +1128,52 @@ async function main() {
 
   const mode = await selectMode()
 
-  if (mode === 'reset') {
-    resetSession()
-    console.log('\n🗑️  Sessão resetada. Iniciando nova simulação.\n')
-  }
-
-  if (mode === 'continue') {
-    const saved = loadSessionFile()
+  function restoreState(saved) {
     currentStage = saved.current_stage
     currentInstruction = saved.current_instruction ?? null
     messages = saved.messages ?? []
     gateLog = saved.gates_passed ?? []
     speechProgress = saved.speech_progress ?? initialSpeechProgress()
+    memoryStore.clear()
     if (saved.memory) {
       for (const [k, v] of Object.entries(saved.memory)) memoryStore.set(k, v)
     }
+  }
 
+  if (mode.action === 'reset') {
+    resetSession()
+    // Also delete all checkpoints
+    if (fs.existsSync(CHECKPOINT_DIR)) {
+      for (const f of fs.readdirSync(CHECKPOINT_DIR)) {
+        try { fs.unlinkSync(path.join(CHECKPOINT_DIR, f)) } catch {}
+      }
+    }
+    console.log('\n🗑️  Sessão e checkpoints apagados. Iniciando nova simulação.\n')
+  }
+
+  if (mode.action === 'continue') {
+    const saved = loadSessionFile()
+    restoreState(saved)
     console.log(`\n✅ Sessão restaurada — etapa: ${currentStage.toUpperCase()}`)
     console.log(`   Gates passados: ${gateLog.map(g => g.gate).join(', ') || 'nenhum'}`)
     if (currentStage === 'speech') {
       console.log(`   Speech Progress: P${speechProgress.parte_atual} | ${speechProgress.state}`)
     }
-
-    // Show last exchange so user remembers context
+    const lastAna = [...messages].reverse().find(m => m.role === 'assistant' && typeof m.content === 'string')
+    if (lastAna) {
+      console.log(`\n--- Última fala da ANA ---`)
+      console.log(`\x1b[35mANA:\x1b[0m ${lastAna.content}`)
+      console.log(`--- Retomando aqui ---\n`)
+    }
+  } else if (mode.action === 'checkpoint') {
+    const cp = mode.checkpoint.data
+    restoreState(cp)
+    console.log(`\n✅ Checkpoint carregado — etapa: ${currentStage.toUpperCase()}`)
+    console.log(`   Gate passado: ${cp.gate_passed}`)
+    console.log(`   Memórias: ${memoryStore.size} entradas`)
+    if (currentStage === 'speech') {
+      console.log(`   Speech Progress: P${speechProgress.parte_atual} | ${speechProgress.state}`)
+    }
     const lastAna = [...messages].reverse().find(m => m.role === 'assistant' && typeof m.content === 'string')
     if (lastAna) {
       console.log(`\n--- Última fala da ANA ---`)
@@ -1126,6 +1215,22 @@ async function main() {
       if (memoryStore.size === 0) console.log('  (nenhuma)')
       memoryStore.forEach((entry, k) => console.log(`  ${k}: "${entry.value}" [${entry.source}]${entry.raw_evidence ? ' — ev: "' + entry.raw_evidence + '"' : ''}`))
       console.log()
+      continue
+    }
+
+    if (input.trim() === '/checkpoints') {
+      const cps = listCheckpoints()
+      if (cps.length === 0) {
+        console.log('\n  (nenhum checkpoint salvo ainda)\n')
+      } else {
+        console.log('\n💾 Checkpoints disponíveis:')
+        cps.forEach(cp => {
+          const age = Math.round((Date.now() - new Date(cp.saved_at).getTime()) / 60000)
+          const ageStr = age < 60 ? `${age}min atrás` : `${Math.round(age/60)}h atrás`
+          console.log(`  • ${cp.label.toUpperCase()} — ${ageStr} (gate: ${cp.gate})`)
+        })
+        console.log()
+      }
       continue
     }
 
