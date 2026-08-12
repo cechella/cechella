@@ -1,4 +1,4 @@
-import { verifyPayment, checkReferidos, setCallStatusGanho, recordGatePassed, updateCallStage, saveMemory, getMemories, getCallStage } from './supabase.js'
+import { verifyPayment, checkReferidos, setCallStatusGanho, recordGatePassed, atomicTransitionStage, saveMemory, getMemories, getCallStage } from './supabase.js'
 import { GateId, GATE_TRANSITIONS, STAGE_INSTRUCTIONS, Stage } from './state-machine.js'
 import { sendWelcome } from './tools/whatsapp.js'
 
@@ -169,9 +169,16 @@ export async function validateGate(
     }
   }
 
-  // Gate passed — persist and return next stage instructions
+  // Atomic transition: only write new stage if still in fromStage (race-condition safe)
+  const transitioned = await atomicTransitionStage(callSid, requiredStage, nextStage)
+  if (!transitioned) {
+    return {
+      approved: false,
+      reason: `${gateId} bloqueado — transição atômica falhou. Stage já havia mudado (possível race condition). Stage atual preservado.`,
+    }
+  }
+
   await recordGatePassed(callSid, gateId)
-  await updateCallStage(callSid, nextStage)
 
   return {
     approved: true,

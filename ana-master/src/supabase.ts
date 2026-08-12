@@ -34,6 +34,23 @@ export async function getCallStage(callSid: string): Promise<string | null> {
   return (data as any)?.stage ?? null
 }
 
+// Atomic conditional transition: only updates if current stage matches fromStage.
+// Returns true if transition succeeded, false if stage had already changed (race condition).
+export async function atomicTransitionStage(
+  callSid: string,
+  fromStage: string,
+  toStage: string,
+): Promise<boolean> {
+  const { count } = await supabase
+    .from('ana_calls')
+    .update({ stage: toStage, updated_at: new Date().toISOString() })
+    .eq('call_sid', callSid)
+    .eq('stage', fromStage)  // conditional: only update if still in fromStage
+    .select()
+  return (count ?? 0) > 0
+}
+
+// Kept for internal non-gate use (e.g. setCallStatusGanho writes stage directly)
 export async function updateCallStage(callSid: string, stage: string) {
   await supabase
     .from('ana_calls')

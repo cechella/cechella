@@ -10,6 +10,8 @@ import OpenAI from 'openai'
 import * as readline from 'readline'
 import * as fs from 'fs'
 import * as path from 'path'
+// Canonical source of truth for gate transitions — same definition used by production server
+import { GATE_TRANSITIONS as _GATE_TRANSITIONS } from './dist/state-machine.js'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -395,18 +397,8 @@ function processSpeechTurn(userInput) {
   }
 }
 
-// ── Gates ─────────────────────────────────────────────────────────────────────
-
-const GATE_TRANSITIONS = {
-  GATE_ABERTURA:   { from: 'apresentacao', to: 'conexao' },
-  GATE_CONEXAO:    { from: 'conexao',      to: 'combinado' },
-  GATE_COMBINADO:  { from: 'combinado',    to: 'speech' },
-  GATE_SPEECH:     { from: 'speech',       to: 'fechamento' },
-  GATE_FECHAMENTO: { from: 'fechamento',   to: 'pagamento' },
-  GATE_PAGAMENTO:  { from: 'pagamento',    to: 'referidos' },
-  GATE_REFERIDOS:  { from: 'referidos',    to: 'validacao' },
-  GATE_VALIDACAO:  { from: 'validacao',    to: 'ganho' },
-}
+// ── Gates — fonte única: dist/state-machine.js (mesma definição do servidor) ──
+const GATE_TRANSITIONS = _GATE_TRANSITIONS
 
 const STAGE_INSTRUCTIONS = {
   apresentacao: `ETAPA ATUAL: 1 de 8 — Abertura
