@@ -71,7 +71,7 @@ interface AnaCall {
   gates_passed: string[]; memories: Record<string, unknown>; created_at: string; updated_at: string
 }
 
-type Tab = 'central' | 'dna' | 'recovery' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog' | 'disparar' | 'ligacoes' | 'monitor' | 'script' | 'config'
+type Tab = 'central' | 'dna' | 'recovery' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog' | 'disparar' | 'ligacoes' | 'monitor' | 'script' | 'config' | 'voz'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -2741,6 +2741,189 @@ function DispararTab() {
   )
 }
 
+// ─── VOZ TAB ─────────────────────────────────────────────────────────────────
+
+function VozTab() {
+  const VOZES = [
+    { id: 'shimmer', label: 'Shimmer', desc: 'Feminina, suave, calorosa', best: true },
+    { id: 'marin',   label: 'Marin',   desc: 'Feminina, natural, fluida', best: false },
+    { id: 'coral',   label: 'Coral',   desc: 'Feminina, clara, profissional', best: false },
+    { id: 'sage',    label: 'Sage',    desc: 'Feminina, calma, confiante', best: false },
+    { id: 'nova',    label: 'Nova',    desc: 'Feminina, jovem, energética', best: false },
+    { id: 'alloy',   label: 'Alloy',   desc: 'Neutra, clara, direta', best: false },
+    { id: 'echo',    label: 'Echo',    desc: 'Masculina, grave, confiante', best: false },
+    { id: 'onyx',    label: 'Onyx',    desc: 'Masculina, profunda, autoridade', best: false },
+    { id: 'fable',   label: 'Fable',   desc: 'Neutra, expressiva, calorosa', best: false },
+    { id: 'ash',     label: 'Ash',     desc: 'Neutra, seca, objetiva', best: false },
+    { id: 'ballad',  label: 'Ballad',  desc: 'Feminina, melodiosa, emocional', best: false },
+    { id: 'verse',   label: 'Verse',   desc: 'Neutra, versátil, adaptável', best: false },
+  ]
+
+  const VELOCIDADE = [
+    { val: 0.75, label: 'Muito lenta', desc: 'Para leads que precisam de mais tempo' },
+    { val: 0.9,  label: 'Lenta',       desc: 'Ritmo pausado, mais acolhedor' },
+    { val: 1.0,  label: 'Normal',      desc: 'Padrão atual — ritmo natural', current: true },
+    { val: 1.15, label: 'Rápida',      desc: 'Para leads diretas e objetivas' },
+    { val: 1.3,  label: 'Muito rápida',desc: 'Para fechamento e momentos de alta energia' },
+  ]
+
+  const VAD_CONFIGS = [
+    { param: 'threshold', label: 'Sensibilidade de detecção de fala', type: 'range', min: 0.1, max: 0.9, step: 0.05, default: 0.5, desc: 'Menor = detecta sussurros. Maior = ignora ruído de fundo.' },
+    { param: 'silence_duration_ms', label: 'Tempo de silêncio antes de responder', type: 'range', min: 200, max: 2000, step: 100, default: 800, desc: 'Menor = responde mais rápido. Maior = espera mais antes de falar.' },
+    { param: 'prefix_padding_ms', label: 'Padding de início de fala', type: 'range', min: 100, max: 500, step: 50, default: 300, desc: 'Quanto captura antes do início detectado — evita cortar o começo.' },
+  ]
+
+  return (
+    <div style={{ maxWidth: 760 }}>
+      {/* Header */}
+      <div style={{ background: '#0d0a1a', border: '1px solid #3B0764', borderRadius: 16, padding: '18px 24px', marginBottom: 20 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#A78BFA', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 6 }}>🎙️ Configuração de Voz — ANA MASTER</div>
+        <p style={{ margin: 0, fontSize: 13, color: '#CBD5E1' }}>Todos os parâmetros de voz da ANA. Para aplicar mudanças: edite o arquivo <code style={{ background: '#ffffff10', padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>ecosystem.config.cjs</code> no servidor e reinicie com <code style={{ background: '#ffffff10', padding: '1px 6px', borderRadius: 4, fontSize: 11 }}>pm2 restart ana-master</code></p>
+      </div>
+
+      {/* Vozes disponíveis */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', marginBottom: 20 }}>
+        <div style={{ padding: '12px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 14 }}>🎤</span>
+          <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>Timbre de Voz</span>
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#A78BFA', background: '#3B076420', border: '1px solid #3B076440', borderRadius: 99, padding: '2px 8px' }}>REALTIME_VOICE no ecosystem.config.cjs</span>
+        </div>
+        <div style={{ padding: '16px 20px' }}>
+          <div style={{ background: '#0a1628', border: '1px solid #1D4ED850', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#38BDF8' }}>
+            ⚙️ Voz atual: <strong>marin</strong> — para trocar, edite <code>REALTIME_VOICE=shimmer</code> no ecosystem.config.cjs e reinicie o PM2
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
+            {VOZES.map(v => (
+              <div key={v.id} style={{ background: v.id === 'marin' ? '#1D4ED820' : '#ffffff05', border: `1px solid ${v.id === 'marin' ? '#1D4ED860' : C.border}`, borderRadius: 10, padding: '10px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <code style={{ fontSize: 12, fontWeight: 700, color: v.id === 'marin' ? '#38BDF8' : C.text }}>{v.id}</code>
+                  {v.id === 'marin' && <span style={{ fontSize: 9, color: '#38BDF8', background: '#1D4ED820', borderRadius: 99, padding: '1px 6px', border: '1px solid #1D4ED840' }}>ATUAL</span>}
+                  {v.best && <span style={{ fontSize: 9, color: '#F59E0B', background: '#78350F20', borderRadius: 99, padding: '1px 6px', border: '1px solid #78350F40' }}>★ RECOMENDADA</span>}
+                </div>
+                <div style={{ fontSize: 11, color: C.textMuted }}>{v.desc}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 14, background: '#0a1f0a', border: '1px solid #14532D50', borderRadius: 10, padding: '12px 16px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#4ADE80', marginBottom: 6, textTransform: 'uppercase' }}>Como trocar a voz</div>
+            <code style={{ fontSize: 12, color: '#86EFAC', display: 'block', lineHeight: 2 }}>
+              # No servidor, edite ecosystem.config.cjs:<br/>
+              REALTIME_VOICE: &apos;shimmer&apos;,<br/><br/>
+              # Depois reinicie:<br/>
+              pm2 restart ana-master
+            </code>
+          </div>
+        </div>
+      </div>
+
+      {/* Velocidade via prompt */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', marginBottom: 20 }}>
+        <div style={{ padding: '12px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 14 }}>⚡</span>
+          <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>Velocidade de Fala</span>
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#F59E0B', background: '#78350F20', border: '1px solid #78350F40', borderRadius: 99, padding: '2px 8px' }}>VIA PROMPT — state-machine.ts</span>
+        </div>
+        <div style={{ padding: '16px 20px' }}>
+          <p style={{ color: C.textMuted, fontSize: 12, margin: '0 0 12px' }}>O modelo gpt-realtime-2.1 não tem parâmetro de velocidade direto. A velocidade é controlada via instrução de prompt em cada etapa. Configuração atual no state-machine.ts:</p>
+          {VELOCIDADE.map(v => (
+            <div key={v.val} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 12px', borderRadius: 8, background: v.current ? '#78350F20' : 'transparent', marginBottom: 4 }}>
+              <div style={{ width: 40, height: 4, borderRadius: 99, background: `hsl(${200 - v.val * 80}, 70%, 60%)`, flexShrink: 0 }} />
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: 12, fontWeight: v.current ? 700 : 400, color: v.current ? '#F59E0B' : C.text }}>{v.label}</span>
+                <span style={{ fontSize: 11, color: C.textFaint, marginLeft: 8 }}>{v.desc}</span>
+              </div>
+              {v.current && <span style={{ fontSize: 10, color: '#F59E0B' }}>← atual</span>}
+            </div>
+          ))}
+          <div style={{ marginTop: 12, background: '#0a1628', border: '1px solid #1D4ED850', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#94A3B8' }}>
+            Para ajustar: adicione à instrução da etapa em <strong>state-machine.ts</strong> frases como: <em>"fale com ritmo mais lento e pausado"</em> ou <em>"aumente o ritmo com energia crescente"</em>
+          </div>
+        </div>
+      </div>
+
+      {/* VAD — Detecção de voz */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', marginBottom: 20 }}>
+        <div style={{ padding: '12px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 14 }}>👂</span>
+          <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>Escuta — VAD (Voice Activity Detection)</span>
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#34D399', background: '#05280C20', border: '1px solid #14532D40', borderRadius: 99, padding: '2px 8px' }}>realtime.ts → session.update</span>
+        </div>
+        <div style={{ padding: '16px 20px' }}>
+          {VAD_CONFIGS.map(v => (
+            <div key={v.param} style={{ marginBottom: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{v.label}</span>
+                <code style={{ fontSize: 10, color: '#34D399', background: '#05280C20', borderRadius: 4, padding: '1px 6px' }}>{v.param}</code>
+              </div>
+              <div style={{ height: 6, background: '#ffffff10', borderRadius: 99, marginBottom: 6, position: 'relative' }}>
+                <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${((v.default - v.min) / (v.max - v.min)) * 100}%`, background: 'linear-gradient(90deg, #34D399, #10B981)', borderRadius: 99 }} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: C.textFaint, marginBottom: 4 }}>
+                <span>{v.min}</span><span style={{ color: '#34D399' }}>padrão: {v.default}</span><span>{v.max}</span>
+              </div>
+              <p style={{ fontSize: 11, color: C.textMuted, margin: 0 }}>{v.desc}</p>
+            </div>
+          ))}
+          <div style={{ background: '#0a1f0a', border: '1px solid #14532D50', borderRadius: 10, padding: '12px 16px' }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#4ADE80', marginBottom: 6, textTransform: 'uppercase' }}>Como ajustar o VAD em realtime.ts</div>
+            <code style={{ fontSize: 11, color: '#86EFAC', display: 'block', lineHeight: 1.8 }}>
+              {`// Dentro do session.update após connect():`}<br/>
+              {`type: 'session.update',`}<br/>
+              {`session: {`}<br/>
+              {`  turn_detection: {`}<br/>
+              {`    type: 'server_vad',`}<br/>
+              {`    threshold: 0.5,           // 0.1-0.9`}<br/>
+              {`    silence_duration_ms: 800,  // ms`}<br/>
+              {`    prefix_padding_ms: 300,    // ms`}<br/>
+              {`  }`}<br/>
+              {`}`}
+            </code>
+          </div>
+        </div>
+      </div>
+
+      {/* Expressividade via prompt */}
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', marginBottom: 20 }}>
+        <div style={{ padding: '12px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 14 }}>😄</span>
+          <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>Expressividade — Risadas, Entonação, Pausas</span>
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#A78BFA', background: '#3B076420', border: '1px solid #3B076440', borderRadius: 99, padding: '2px 8px' }}>VIA PROMPT</span>
+        </div>
+        <div style={{ padding: '16px 20px' }}>
+          <p style={{ color: C.textMuted, fontSize: 12, margin: '0 0 14px' }}>O modelo gpt-realtime-2.1 responde a instruções de expressividade no prompt. Para habilitar comportamentos específicos, adicione ao ANA_BASE_PROMPT em <strong>realtime.ts</strong>:</p>
+          {[
+            { feature: 'Risadas naturais', instrucao: 'Use risadas curtas e naturais quando a lead fizer algo engraçado ou compartilhar algo leve — nunca forçado.', status: 'não configurado' },
+            { feature: 'Pausas dramáticas', instrucao: 'Use silêncio de 1-2 segundos antes de revelar o valor do investimento ou fazer a pergunta de fechamento.', status: 'não configurado' },
+            { feature: 'Tom mais alto (ênfase)', instrucao: 'Eleve levemente o tom ao falar dos resultados do implante — "sono, energia, libido" — com entusiasmo genuíno.', status: 'no speech' },
+            { feature: 'Tom mais baixo (empatia)', instrucao: 'Reduza o tom e desacelere quando a lead compartilhar dor ou dificuldade — mostre que você está realmente ouvindo.', status: 'no prompt' },
+            { feature: 'Backchannels', instrucao: 'Use "entendo", "faz sentido", "claro" discretamente enquanto a lead fala — nunca interrompa.', status: 'não configurado' },
+            { feature: 'Vibrato emocional', instrucao: 'Ao celebrar uma decisão da lead, deixe a emoção genuína aparecer na voz — calor real, não performático.', status: 'não configurado' },
+          ].map(e => (
+            <div key={e.feature} style={{ marginBottom: 12, background: '#ffffff04', border: `1px solid ${C.border}`, borderRadius: 10, padding: '12px 14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{e.feature}</span>
+                <span style={{ fontSize: 10, color: e.status === 'não configurado' ? '#F87171' : '#34D399', background: e.status === 'não configurado' ? '#7F1D1D20' : '#05280C20', borderRadius: 99, padding: '1px 8px', border: `1px solid ${e.status === 'não configurado' ? '#7F1D1D40' : '#14532D40'}` }}>{e.status}</span>
+              </div>
+              <div style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }}>"{e.instrucao}"</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Limitações */}
+      <div style={{ background: '#1a0a0a', border: '1px solid #7F1D1D40', borderRadius: 12, padding: '14px 18px' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: '#F87171', marginBottom: 8 }}>⚠️ O que o modelo NÃO permite controlar diretamente</div>
+        {[
+          'Pitch (frequência da voz) — não há parâmetro de pitch no Realtime API',
+          'Volume absoluto — controlado pelo Twilio/telefone, não pelo modelo',
+          'Velocidade numérica (ex: 1.2x) — influenciada via instrução de prompt, não parâmetro',
+          'Emoções programadas isoladas — o modelo gera expressão como consequência da intenção, não de efeitos separados',
+        ].map(l => <p key={l} style={{ color: '#FCA5A5', fontSize: 11, margin: '4px 0' }}>✕ {l}</p>)}
+      </div>
+    </div>
+  )
+}
+
 // ─── TABS CONFIG ──────────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] = [
@@ -2749,6 +2932,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] =
   { id: 'disparar',   label: '⚡ Disparar',   icon: <Zap style={{ width: 12, height: 12 }} />,       color: '#38BDF8' },
   { id: 'script',     label: 'Script',        icon: <BookOpen style={{ width: 12, height: 12 }} />,  color: '#F59E0B' },
   { id: 'config',     label: 'Realtime Config', icon: <span style={{ fontSize: 12 }}>⚙️</span>,      color: '#10B981' },
+  { id: 'voz',       label: '🎙️ Voz',          icon: <span style={{ fontSize: 12 }}>🎙️</span>,       color: '#A78BFA' },
   { id: 'central',    label: 'Central',       icon: <Sparkles style={{ width: 12, height: 12 }} />,  color: C.purple },
   { id: 'dna',        label: 'DNA v1',        icon: <span style={{ fontSize: 12 }}>🧬</span>,        color: '#A855F7' },
   { id: 'recovery',   label: 'Recovery',      icon: <span style={{ fontSize: 12 }}>🛡️</span>,        color: '#6366F1' },
@@ -2851,6 +3035,7 @@ export default function AnaMasterPage() {
               {tab === 'disparar'   && <DispararTab />}
               {tab === 'script'     && <ScriptTab />}
               {tab === 'config'     && <RealtimeConfigTab />}
+              {tab === 'voz'       && <VozTab />}
               {tab === 'central'    && <CentralTab sims={sims} gold={gold} antiGold={antiGold} scorecard={scorecard} matriz={matriz} changelog={changelog} />}
               {tab === 'dna'        && <DnaTab />}
               {tab === 'recovery'   && <RecoveryTab />}
