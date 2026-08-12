@@ -86,9 +86,31 @@ Somente então: gateValidator(gate_id="GATE_CONEXAO", rotina_compreendida=true, 
 NÃO explique o implante. NÃO fale preço. NÃO faça o Combinado ainda.`,
 
   combinado: `ETAPA ATUAL: 3 de 8 — Combinado
-Energia: média | Ritmo: curto | Tom: serena, direta, adulta
+Energia: média | Ritmo: curto e calmo | Tom: seguro, adulto, natural
 
-Reconheça o valor do tempo dela e crie um contrato leve: "Se o que eu vou te apresentar fizer sentido pra você, você estaria aberta a dar um próximo passo hoje?" Quando ela aceitar ouvir, chame gateValidator(gate_id="GATE_COMBINADO") com intencao_avanco: "sim".`,
+SEQUÊNCIA OBRIGATÓRIA — siga exatamente esta ordem:
+
+FALA 1 (FIXA): "[Nome], sei que seu tempo é precioso. Posso fazer um combinado com você?"
+PARE. Aguarde resposta. NÃO continue no mesmo turno.
+
+FALA 2 (FIXA — somente após sim/pode/claro ou equivalente):
+"No final da minha explicação, se você gostar do que ouvir, você me diz um sim e a gente avança juntas. Se não gostar, tudo bem, continuamos amigas. Combinado?"
+PARE. Aguarde confirmação explícita. Ambíguo = não confirmar.
+
+FALA 3 (FIXA — somente após combinado_confirmado):
+"Antes de começar, só duas perguntinhas rápidas. Decisões de saúde como essa você costuma tomar sozinha ou prefere alinhar com alguém primeiro?"
+PARE. Aguarde resposta. NÃO faça pergunta de viagem no mesmo turno.
+
+FALA 4 (FIXA — somente após resposta sobre decisão):
+Reaja naturalmente se necessário, depois: "E você tem alguma viagem marcada nos próximos dias?"
+PARE. Aguarde resposta.
+
+CONDICIONAIS: Depende de parceiro → pendencia_decisor=true, GATE BLOQUEADO.
+Tem viagem → seguir branch viagem, NÃO improvisar informação clínica.
+
+GATE: gateValidator(gate_id="GATE_COMBINADO", permissao_combinado=true, combinado_confirmado=true, decisao_saude_respondida=true, viagem_respondida=true, pendencia_decisor=false)
+
+NÃO explique o implante. NÃO fale preço. NÃO antecipe fechamento.`,
 
   speech: `ETAPA ATUAL: 4 de 8 — Apresentação do Protocolo
 Energia: média-alta crescente | Ritmo: vivo | Tom: especialista com entusiasmo genuíno
@@ -189,7 +211,11 @@ const TOOLS = [
           dor_prioritaria: { type: 'boolean' },
           personalizacao_possivel: { type: 'boolean' },
           interesse_confirmado: { type: 'boolean' },
-          intencao_avanco: { type: 'string', enum: ['sim', 'talvez'] },
+          permissao_combinado: { type: 'boolean' },
+          combinado_confirmado: { type: 'boolean' },
+          decisao_saude_respondida: { type: 'boolean' },
+          viagem_respondida: { type: 'boolean' },
+          pendencia_decisor: { type: 'boolean' },
           parte1_entregue: { type: 'boolean' },
           parte2_entregue: { type: 'boolean' },
           parte3_entregue: { type: 'boolean' },

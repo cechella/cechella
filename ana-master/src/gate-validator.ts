@@ -14,7 +14,11 @@ export interface GateEvidence {
   personalizacao_possivel?: boolean
   interesse_confirmado?: boolean
   // GATE_COMBINADO
-  intencao_avanco?: 'sim' | 'talvez'
+  permissao_combinado?: boolean
+  combinado_confirmado?: boolean
+  decisao_saude_respondida?: boolean
+  viagem_respondida?: boolean
+  pendencia_decisor?: boolean
   // GATE_SPEECH
   parte1_entregue?: boolean
   parte2_entregue?: boolean
@@ -66,9 +70,16 @@ export async function validateGate(
     }
 
     case 'GATE_COMBINADO': {
-      if (!evidence.intencao_avanco || evidence.intencao_avanco === undefined) {
-        return { approved: false, reason: 'Lead não aceitou ouvir mais sobre o protocolo.' }
-      }
+      if (!evidence.permissao_combinado)
+        return { approved: false, reason: 'Permissão para o combinado não foi pedida.' }
+      if (!evidence.combinado_confirmado)
+        return { approved: false, reason: 'Lead não confirmou o contrato do combinado.' }
+      if (!evidence.decisao_saude_respondida)
+        return { approved: false, reason: 'Pergunta sobre autonomia de decisão não foi feita.' }
+      if (!evidence.viagem_respondida)
+        return { approved: false, reason: 'Pergunta sobre viagem não foi feita.' }
+      if (evidence.pendencia_decisor)
+        return { approved: false, reason: 'GATE BLOQUEADO — lead depende de terceiro para decidir. Seguir branch decisor compartilhado.' }
       break
     }
 
