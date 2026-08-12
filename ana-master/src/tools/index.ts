@@ -42,8 +42,8 @@ export function buildTools(session: SessionRef) {
         }
 
         return result.approved
-          ? `✅ ${result.reason} Avançando para: ${result.next_stage}`
-          : `⛔ Gate não aprovado: ${result.reason}. Continue nesta etapa.`
+          ? `{"gate":"ok","next":"${result.next_stage}"}`
+          : `{"gate":"blocked","reason":"${result.reason}"}`
       },
     },
 
