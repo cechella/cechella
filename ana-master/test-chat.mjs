@@ -207,7 +207,18 @@ let currentInstruction = null
 let messages = []
 let gateLog = []
 let speechProgress = initialSpeechProgress()
-const memoryStore = new Map()  // tracks save_memory calls within session
+// memoryStore: Map<key, { value: string, source: 'lead_explicit'|'model_inferred'|'backend_fact'|'system_config', raw_evidence?: string, created_stage?: string }>
+const memoryStore = new Map()
+
+function getMemoryValue(key) {
+  const entry = memoryStore.get(key)
+  return entry ? entry.value : undefined
+}
+
+function getMemorySource(key) {
+  const entry = memoryStore.get(key)
+  return entry ? entry.source : undefined
+}
 let autoRegisterCount = 0
 
 // ── QA Metrics ───────────────────────────────────────────────────────────────
@@ -277,8 +288,11 @@ function validateFechamentoContent(content) {
   }
 
   // Memória inventada — benefícios que a lead não mencionou
-  const memorizedInteresse = (memoryStore.get('interesse_protocolo') || '').toLowerCase()
-  const memorizedDor = (memoryStore.get('dor_principal') || '').toLowerCase()
+  // Only lead_explicit memories authorize strong attribution in comercial speech
+  const interesseSource = getMemorySource('interesse_protocolo')
+  const dorSource = getMemorySource('dor_principal')
+  const memorizedInteresse = (interesseSource === 'lead_explicit' ? getMemoryValue('interesse_protocolo') || '' : '').toLowerCase()
+  const memorizedDor = (dorSource === 'lead_explicit' ? getMemoryValue('dor_principal') || '' : '').toLowerCase()
   const authorizedText = memorizedInteresse + ' ' + memorizedDor
 
   const forbiddenIfNotMentioned = [
@@ -326,9 +340,9 @@ function validateP1Content(content) {
   }
 
   // Memory violations — always block (inventing lead facts)
-  const authorizedDor = (memoryStore.get('dor_principal') || '').toLowerCase()
-  const authorizedImpacto = (memoryStore.get('impacto') || '').toLowerCase()
-  const authorizedSintomas = (memoryStore.get('sintomas') || '').toLowerCase()
+  const authorizedDor = (getMemoryValue('dor_principal') || '').toLowerCase()
+  const authorizedImpacto = (getMemoryValue('impacto') || '').toLowerCase()
+  const authorizedSintomas = (getMemoryValue('sintomas') || '').toLowerCase()
   const authorizedText = `${authorizedDor} ${authorizedImpacto} ${authorizedSintomas}`
 
   const knownFakeData = ['falta de energia', 'atrapalhando seus treinos', 'sempre foi muito ativa']
@@ -343,9 +357,9 @@ function validateP1Content(content) {
 }
 
 function buildSpeechP1Instruction() {
-  const dor = memoryStore.get('dor_principal') || '(não registrado)'
-  const impacto = memoryStore.get('impacto') || '(não registrado)'
-  const sintomas = memoryStore.get('sintomas') || '(não registrado)'
+  const dor = getMemoryValue('dor_principal') || '(não registrado)'
+  const impacto = getMemoryValue('impacto') || '(não registrado)'
+  const sintomas = getMemoryValue('sintomas') || '(não registrado)'
   return `SPEECH — PARTE 1: PERSONALIZAÇÃO + PONTE.
 
 ORÇAMENTO: EXATAMENTE 2 FRASES. Nada antes. Nada depois.
@@ -378,8 +392,8 @@ PROIBIDO no conteúdo:
 }
 
 function buildFechamentoInstruction() {
-  const interesse = memoryStore.get('interesse_protocolo') || '[interesse não registrado]'
-  const dor = memoryStore.get('dor_principal') || '[dor não registrada]'
+  const interesse = getMemoryValue('interesse_protocolo') || '[interesse não registrado]'
+  const dor = getMemoryValue('dor_principal') || '[dor não registrada]'
 
   return `ETAPA ATUAL: 5 de 8 — Fechamento
 Energia: média-alta | Ritmo: curto | Tom: convicto, firme, sem pressão
@@ -392,7 +406,6 @@ PASSO 2 — INVOCAR O COMBINADO E APRESENTAR VALOR
 Diga: "[Nome], lembra do nosso combinado? Você disse que se gostasse do que ouvisse me daria um sim."
 Diga: "O investimento no seu implante hormonal é de ${COMERCIAL_CONFIG.investimento_fmt}. Isso inclui o procedimento completo, acompanhamento e os 6 meses de hormônio liberado de forma contínua no seu corpo."
 Diga: "Colocando na conta, são menos de oitocentos e cinquenta reais por mês dentro de um protocolo voltado justamente para o que você quer melhorar: [use SOMENTE o que está em interesse_protocolo = "${interesse}" — não acrescente benefícios que a lead não mencionou]."
-Diga: "Muitas mulheres gastam isso ou mais tentando melhorar isso sem resultado."
 
 PASSO 3 — APRESENTAR FORMAS DE PAGAMENTO
 Diga: "Para avançar temos duas formas: ${COMERCIAL_CONFIG.pix_descricao} ou ${COMERCIAL_CONFIG.cartao_descricao}. Qual funciona melhor para você, [nome]?"
@@ -694,8 +707,10 @@ function handleRegistrarParteSpeech(args) {
 }
 
 function handleSaveMemory(args) {
-  memoryStore.set(args.key, args.value)
-  console.log(`\n  💾 MEMÓRIA SALVA: ${args.key} = "${args.value}"\n`)
+  const source = args.source || 'model_inferred'
+  const entry = { value: args.value, source, raw_evidence: args.raw_evidence, created_stage: currentStage }
+  memoryStore.set(args.key, entry)
+  console.log(`\n  💾 MEMÓRIA SALVA: ${args.key} = "${args.value}" [source=${source}]\n`)
   return { ok: true }
 }
 
@@ -767,14 +782,16 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'save_memory',
-      description: 'Salva uma informação importante sobre a lead.',
+      description: 'Salva uma informação importante sobre a lead. Use source="lead_explicit" apenas quando a lead disse literalmente — não resuma ou infira.',
       parameters: {
         type: 'object',
         properties: {
           key: { type: 'string' },
           value: { type: 'string' },
+          source: { type: 'string', enum: ['lead_explicit', 'model_inferred', 'backend_fact', 'system_config'] },
+          raw_evidence: { type: 'string', description: 'Trecho literal da fala da lead (obrigatório quando source=lead_explicit)' },
         },
-        required: ['key', 'value'],
+        required: ['key', 'value', 'source'],
       },
     },
   },
@@ -1103,7 +1120,7 @@ async function main() {
     if (input.trim() === '/memory') {
       console.log('\n🧠 Memórias salvas:')
       if (memoryStore.size === 0) console.log('  (nenhuma)')
-      memoryStore.forEach((v, k) => console.log(`  ${k}: "${v}"`))
+      memoryStore.forEach((entry, k) => console.log(`  ${k}: "${entry.value}" [${entry.source}]${entry.raw_evidence ? ' — ev: "' + entry.raw_evidence + '"' : ''}`))
       console.log()
       continue
     }

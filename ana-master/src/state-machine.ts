@@ -236,7 +236,6 @@ PASSO 2 — INVOCAR O COMBINADO E APRESENTAR VALOR:
 "[Nome], lembra do nosso combinado? Você disse que se gostasse do que ouvisse me daria um sim."
 "O investimento no seu implante hormonal é de R$ 5.000. Isso inclui o procedimento completo, acompanhamento e os 6 meses de hormônio liberado de forma contínua no seu corpo."
 "Colocando na conta, são menos de oitocentos e cinquenta reais por mês dentro de um protocolo voltado justamente para o que você quer melhorar: [use SOMENTE interesse_protocolo da memória — NÃO acrescente benefícios que a lead não mencionou explicitamente, ex: NÃO diga 'energia' se a lead não mencionou energia]."
-"Muitas mulheres gastam isso ou mais tentando melhorar isso sem resultado."
 PASSO 3 — PEDIR ESCOLHA → STOP:
 "Para avançar temos duas formas: PIX à vista ou cartão de crédito parcelado em até 6 vezes sem juros. Qual funciona melhor para você, [nome]?"
 Encerre o turno. Não continue sem resposta da lead.
