@@ -8,6 +8,8 @@
 
 import OpenAI from 'openai'
 import * as readline from 'readline'
+import * as fs from 'fs'
+import * as path from 'path'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
@@ -140,24 +142,70 @@ function classifyLeadTurn(transcript, state) {
   return 'UNKNOWN'
 }
 
+// ── Persistência de sessão ────────────────────────────────────────────────────
+
+const SESSION_FILE = path.join(process.cwd(), 'simulation-session.json')
+const ANA_VERSION = 'gold-v1-speech-progress-v2'
+
+function initialSpeechProgress() {
+  return {
+    parte_atual: 1,
+    partes_entregues: [],
+    parte_em_execucao: 1,
+    parte_interrompida: false,
+    state: 'DELIVERING_PART',
+    waiting_for_lead: false,
+    pergunta_final_feita: false,
+    resposta_final_recebida: false,
+  }
+}
+
+function generateSessionId() {
+  return `sim-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
+}
+
+function saveSession() {
+  try {
+    const now = new Date().toISOString()
+    const existing = loadSessionFile()
+    const lastAna = [...messages].reverse().find(m => m.role === 'assistant' && typeof m.content === 'string')
+    const lastLead = [...messages].reverse().find(m => m.role === 'user')
+    fs.writeFileSync(SESSION_FILE, JSON.stringify({
+      session_id: existing?.session_id ?? generateSessionId(),
+      ana_version: ANA_VERSION,
+      created_at: existing?.created_at ?? now,
+      updated_at: now,
+      current_stage: currentStage,
+      current_instruction: currentInstruction,
+      gates_passed: gateLog,
+      speech_progress: speechProgress,
+      memory: Object.fromEntries(memoryStore),
+      last_ana_message: lastAna?.content ?? null,
+      last_lead_message: lastLead?.content ?? null,
+      messages,
+    }, null, 2))
+  } catch (e) { console.error('⚠️  Erro ao salvar sessão:', e.message) }
+}
+
+function loadSessionFile() {
+  try {
+    if (!fs.existsSync(SESSION_FILE)) return null
+    return JSON.parse(fs.readFileSync(SESSION_FILE, 'utf8'))
+  } catch { return null }
+}
+
+function resetSession() {
+  try { fs.unlinkSync(SESSION_FILE) } catch { /* ignore */ }
+}
+
 // ── Estado da simulação ───────────────────────────────────────────────────────
 
 let currentStage = 'apresentacao'
-let currentInstruction = null  // injected speech part instruction
-const messages = []
-const gateLog = []
-
-// Speech progress (simulado localmente)
-let speechProgress = {
-  parte_atual: 1,
-  partes_entregues: [],
-  parte_em_execucao: 1,   // Part 1 active from speech stage entry
-  parte_interrompida: false,
-  state: 'DELIVERING_PART',
-  waiting_for_lead: false,
-  pergunta_final_feita: false,
-  resposta_final_recebida: false,
-}
+let currentInstruction = null
+let messages = []
+let gateLog = []
+let speechProgress = initialSpeechProgress()
+const memoryStore = new Map()  // tracks save_memory calls within session
 
 function systemPrompt() {
   const stageInstruction = currentInstruction || STAGE_INSTRUCTIONS[currentStage]
@@ -395,6 +443,7 @@ function handleRegistrarParteSpeech(args) {
 }
 
 function handleSaveMemory(args) {
+  memoryStore.set(args.key, args.value)
   console.log(`\n  💾 MEMÓRIA SALVA: ${args.key} = "${args.value}"\n`)
   return { ok: true }
 }
@@ -549,28 +598,99 @@ async function callAna(userMessage) {
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
 function prompt(q) { return new Promise(resolve => rl.question(q, resolve)) }
 
-async function main() {
-  console.clear()
+function printHeader() {
   console.log('╔══════════════════════════════════════════════════════════════╗')
   console.log('║           SIMULADOR ANA — HORMONE ECOSYSTEM                 ║')
   console.log('║  Modelo: gpt-4o  |  Speech Progress Control ativo           ║')
-  console.log('║  Digite sua resposta e pressione Enter                      ║')
-  console.log('║  /gates — ver gates passados  |  /speech — ver progresso   ║')
-  console.log('║  Ctrl+C para encerrar                                       ║')
+  console.log('║  /gates /speech /memory /reset /save  |  Ctrl+C encerra     ║')
   console.log('╚══════════════════════════════════════════════════════════════╝')
+}
+
+async function selectMode() {
+  const saved = loadSessionFile()
+
+  if (!saved) {
+    console.log('\n▶  Nenhuma sessão salva encontrada. Iniciando nova simulação.\n')
+    return 'new'
+  }
+
+  const age = Math.round((Date.now() - new Date(saved.updated_at).getTime()) / 60000)
+  const ageStr = age < 60 ? `${age}min atrás` : `${Math.round(age/60)}h atrás`
+
+  console.log(`\n📁 Sessão salva encontrada:`)
+  console.log(`   ID:      ${saved.session_id}`)
+  console.log(`   Etapa:   ${saved.current_stage.toUpperCase()}`)
+  console.log(`   Gates:   ${saved.gates_passed?.length ?? 0} passados`)
+  console.log(`   Versão:  ${saved.ana_version}`)
+  console.log(`   Salva:   ${ageStr}`)
+  if (saved.last_lead_message) console.log(`   Última lead: "${saved.last_lead_message.slice(0, 60)}..."`)
+  console.log()
+  console.log('  [1] Continuar de onde parou')
+  console.log('  [2] Nova simulação (mantém arquivo anterior)')
+  console.log('  [3] Resetar e começar do zero')
   console.log()
 
+  while (true) {
+    const choice = await prompt('Escolha [1/2/3]: ')
+    if (choice.trim() === '1') return 'continue'
+    if (choice.trim() === '2') return 'new'
+    if (choice.trim() === '3') return 'reset'
+    console.log('  Digite 1, 2 ou 3.')
+  }
+}
+
+async function main() {
+  console.clear()
+  printHeader()
+
   if (!process.env.OPENAI_API_KEY) {
-    console.error('❌ OPENAI_API_KEY não encontrada.')
+    console.error('\n❌ OPENAI_API_KEY não encontrada.')
     process.exit(1)
   }
 
-  console.log('⏳ ANA está iniciando...\n')
-  const abertura = await callAna('')
-  console.log(`\x1b[35mANA:\x1b[0m ${abertura}\n`)
+  const mode = await selectMode()
+
+  if (mode === 'reset') {
+    resetSession()
+    console.log('\n🗑️  Sessão resetada. Iniciando nova simulação.\n')
+  }
+
+  if (mode === 'continue') {
+    const saved = loadSessionFile()
+    currentStage = saved.current_stage
+    currentInstruction = saved.current_instruction ?? null
+    messages = saved.messages ?? []
+    gateLog = saved.gates_passed ?? []
+    speechProgress = saved.speech_progress ?? initialSpeechProgress()
+    if (saved.memory) {
+      for (const [k, v] of Object.entries(saved.memory)) memoryStore.set(k, v)
+    }
+
+    console.log(`\n✅ Sessão restaurada — etapa: ${currentStage.toUpperCase()}`)
+    console.log(`   Gates passados: ${gateLog.map(g => g.gate).join(', ') || 'nenhum'}`)
+    if (currentStage === 'speech') {
+      console.log(`   Speech Progress: P${speechProgress.parte_atual} | ${speechProgress.state}`)
+    }
+
+    // Show last exchange so user remembers context
+    const lastAna = [...messages].reverse().find(m => m.role === 'assistant' && typeof m.content === 'string')
+    if (lastAna) {
+      console.log(`\n--- Última fala da ANA ---`)
+      console.log(`\x1b[35mANA:\x1b[0m ${lastAna.content}`)
+      console.log(`--- Retomando aqui ---\n`)
+    }
+  } else {
+    // New simulation
+    console.log('\n⏳ ANA está iniciando...\n')
+    const abertura = await callAna('')
+    console.log(`\x1b[35mANA:\x1b[0m ${abertura}\n`)
+    saveSession()
+  }
 
   while (true) {
-    const speechInfo = currentStage === 'speech' ? ` | Speech P${speechProgress.parte_atual} ${speechProgress.state}` : ''
+    const speechInfo = currentStage === 'speech'
+      ? ` | Speech P${speechProgress.parte_atual} ${speechProgress.state}`
+      : ''
     const label = `[${currentStage.toUpperCase()}${speechInfo}]`
     const input = await prompt(`\x1b[36m${label} Você:\x1b[0m `)
 
@@ -587,12 +707,43 @@ async function main() {
       continue
     }
 
+    if (input.trim() === '/memory') {
+      console.log('\n🧠 Memórias salvas:')
+      if (memoryStore.size === 0) console.log('  (nenhuma)')
+      memoryStore.forEach((v, k) => console.log(`  ${k}: "${v}"`))
+      console.log()
+      continue
+    }
+
+    if (input.trim() === '/reset') {
+      resetSession()
+      console.log('\n🗑️  Sessão apagada. Reiniciando...\n')
+      process.exit(0)
+    }
+
+    if (input.trim() === '/save') {
+      saveSession()
+      console.log('\n💾 Sessão salva manualmente.\n')
+      continue
+    }
+
+    if (input.trim() === '/status') {
+      const saved = loadSessionFile()
+      if (saved) {
+        console.log(`\n📋 Sessão: ${saved.session_id} | ${saved.ana_version}`)
+        console.log(`   Etapa: ${currentStage} | Messages: ${messages.length}`)
+      }
+      console.log()
+      continue
+    }
+
     if (input.trim() === '') continue
 
     process.stdout.write('\n\x1b[35mANA:\x1b[0m ')
     try {
       const reply = await callAna(input)
-      console.log(reply + '\n')
+      if (reply) console.log(reply + '\n')
+      saveSession()
     } catch (e) {
       console.error('\n❌ Erro:', e.message, '\n')
     }
