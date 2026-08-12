@@ -217,6 +217,7 @@ let messages = []
 let gateLog = []
 let speechProgress = initialSpeechProgress()
 const memoryStore = new Map()  // tracks save_memory calls within session
+let autoRegisterCount = 0
 
 function systemPrompt() {
   const stageInstruction = currentInstruction || STAGE_INSTRUCTIONS[currentStage]
@@ -618,14 +619,23 @@ async function callAna(userMessage) {
   }
 
   // Deterministic registration: if model generated content in DELIVERING_PART
-  // without calling registrar_parte_speech, inject it automatically.
-  if (
-    msg.content?.trim() &&
+  // without calling registrar_parte_speech, inject it automatically (simulator only).
+  const explicitRegistrarCalled = (msg.tool_calls || []).some(
+    tc => tc.function?.name === 'registrar_parte_speech'
+  )
+  const parte = speechProgress.parte_atual
+  const autoRegisterEligible =
     currentStage === 'speech' &&
-    speechProgress.state === 'DELIVERING_PART' &&
-    typeof speechProgress.parte_atual === 'number'
-  ) {
-    const parte = speechProgress.parte_atual
+    speechProgress.state === 'DELIVERING_PART' &&                          // guard 1
+    speechProgress.parte_em_execucao === speechProgress.parte_atual &&     // guard 2
+    typeof parte === 'number' &&
+    !!msg.content?.trim() &&                                               // guard 3
+    !explicitRegistrarCalled &&                                            // guard 4
+    !speechProgress.parte_interrompida &&                                  // guard 5
+    !speechProgress.partes_entregues.includes(parte)                       // guard 6
+
+  if (autoRegisterEligible) {
+    autoRegisterCount++
     const fakeId = `auto_${Date.now()}`
     // Replace the content-only message with one that also carries the tool call
     messages.pop()
@@ -639,9 +649,19 @@ async function callAna(userMessage) {
     })
     const result = handleRegistrarParteSpeech({ parte })
     messages.push({ role: 'tool', tool_call_id: fakeId, content: JSON.stringify(result) })
-    console.log(`\n  🤖 AUTO-REGISTRO: registrar_parte_speech(${parte}) injetado automaticamente\n`)
+    console.log(`\n  🤖 AUTO-REGISTRO: registrar_parte_speech(${parte}) injetado automaticamente [total: ${autoRegisterCount}]\n`)
     if (result.aguardando === 'turno_da_lead') return null
     return callAna(null)  // parte 4 → injeta final_question
+  }
+
+  // Model verbalized speech content without calling tool and guards failed → log only, safe state maintained
+  if (
+    currentStage === 'speech' &&
+    speechProgress.state === 'DELIVERING_PART' &&
+    msg.content?.trim() &&
+    !explicitRegistrarCalled
+  ) {
+    console.log(`  ⚠️  speech_tool_missing: parte ${parte} verbalizada sem registrar_parte_speech (guards não atendidos)`)
   }
 
   return msg.content
