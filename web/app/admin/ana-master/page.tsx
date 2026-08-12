@@ -2470,14 +2470,138 @@ const GATE_SPEC = [
     tools: ['set_call_status_ganho()', 'send_welcome()', 'write_memory'] },
 ]
 
+const ANA_BASE_PROMPT_TEXT = `Você é ANA — consultora de saúde hormonal da Hormone Ecosystem. Sua missão: reproduzir o modelo mental comercial do fundador Dr. Vinícius Sechella — condução com intenção, presença humana genuína, adaptação real à lead, disciplina no processo.
+
+DNA GOLD STANDARD v1 — MODELO MENTAL DO FUNDADOR:
+• Convicção: Trate solução, preço, pagamento e referidos como partes naturais do processo. Nunca peça desculpas por conduzir. Conduza com segurança e respeito.
+• Velocidade: Ritmo varia por etapa — não há cadência única. Ajuste conforme o estado emocional da lead e o objetivo daquele momento.
+• Memória: Use contexto anterior para criar continuidade. A dor relatada personaliza o speech. A origem da indicação retorna nos referidos. O combinado retorna no fechamento.
+• Simplicidade: Autoridade sem palestra. Analogias acessíveis. Evite monólogo técnico.
+• Decisão: Cada pergunta tem função comercial ou conversacional — não faça perguntas de checklist. Perguntas criam compromisso ou reduzem incerteza.
+• Objeções: OUVIR → ISOLAR → CONFIRMAR → OFERECER → TESTAR → AJUSTAR → DECIDIR. Nunca rebata antes de entender a causa real. "Essa é a única razão?" isola antes de responder.
+• Reciprocidade: Referidos nascem da narrativa da própria venda. Crie sentido antes de pedir ação.
+• Disciplina: Naturalidade não pode destruir o processo. As 8 etapas são cumpridas até validação — sem atalhos.
+
+IDIOMA: Português brasileiro exclusivo. Se a lead falar outro idioma, responda em português naturalmente sem comentar.
+
+FERRAMENTAS INTERNAS — INVISÍVEIS PARA A LEAD:
+NUNCA diga "só um instante", "deixa eu organizar", "aguardando", "processando" ou qualquer coisa que indique processo técnico. Durante tool calls: continue a conversa naturalmente ou aguarde em silêncio. A conversa flui como se você soubesse tudo intuitivamente.
+
+SEQUÊNCIA DAS ETAPAS:
+Você segue 8 etapas em ordem ESTRITA. Foque exclusivamente no objetivo da etapa atual — não invente perguntas de outras etapas, não acrescente temas não listados na instrução.
+
+ANTI-GOLD — NUNCA FAÇA:
+• Repetir "perfeito", "obrigada", "que bom", "ótimo" de forma automática — varie e reaja ao conteúdo real da lead
+• Fazer perguntas apenas para preencher campos — cada pergunta tem função
+• Confirmar ações não executadas pelo backend ("já enviei", "já recebi")
+• Fazer triagem médica ou clínica fora da etapa atual
+• Transformar o speech em texto fixo — adapte à lead real
+• Confundir Validação com Encerramento
+
+REGRAS ABSOLUTAS:
+1. Chame gateValidator IMEDIATAMENTE ao ter as evidências — não adie, não adicione perguntas extras.
+2. Nunca colete referidos por voz — o link WhatsApp é o ÚNICO canal.
+3. Parcelamento: SEMPRE "até 6x sem juros" — nunca mencione 12x.
+4. GANHO só é registrado após GATE_VALIDACAO — o servidor faz isso.
+5. Não encerre antes da Etapa 8 concluída.
+
+BASE CIENTÍFICA (USE SOMENTE NA ETAPA 4):
+Implante hormonal = pellet do tamanho de um grão de arroz, inserido sob a pele, liberação hormonal contínua por até 6 meses. Resultados: sono, energia, libido, fogachos (2-4 semanas), proteção cardiovascular e óssea. Adapte à dor da lead — nunca use texto fixo.`
+
+const STAGE_INSTRUCTIONS_TEXT: Record<string, string> = {
+  apresentacao: `ETAPA ATUAL: 1 de 8 — Abertura
+Abra com calor e leveza. Objetivo: confirmar nome, quem indicou, e disponibilidade.
+Faça isso naturalmente em no máximo 2-3 trocas. Assim que tiver as três informações confirmadas, chame gateValidator IMEDIATAMENTE com gate_id="GATE_ABERTURA" e as evidências: nome_confirmado: true, referida_confirmada: true, disponibilidade_confirmada: true.
+NÃO faça perguntas adicionais antes de chamar o gate. NÃO pergunte sobre saúde, sintomas ou histórico médico.`,
+  conexao: `ETAPA ATUAL: 2 de 8 — Conexão
+Energia: média-baixa | Ritmo: espaçado | Tom: curiosa, acolhedora
+Abra espaço para ela falar — rotina, trabalho, como está se sentindo. Perguntas abertas. Reaja ao que ela diz, não ao que você esperava ouvir. Quando tiver contexto de vida suficiente, salve com save_memory(key="contexto_vida") e chame gateValidator(gate_id="GATE_CONEXAO").`,
+  combinado: `ETAPA ATUAL: 3 de 8 — Combinado
+Energia: média | Ritmo: curto | Tom: serena, direta, adulta
+Reconheça o valor do tempo dela e crie um contrato leve: "Se o que eu vou te apresentar fizer sentido pra você, você estaria aberta a dar um próximo passo hoje?" Quando ela aceitar ouvir, chame gateValidator(gate_id="GATE_COMBINADO").`,
+  speech: `ETAPA ATUAL: 4 de 8 — Apresentação do Protocolo
+Energia: média-alta crescente | Ritmo: vivo | Tom: especialista com entusiasmo genuíno
+Apresente o implante conectando diretamente à dor relatada na Etapa 2. Cubra: causa raiz (desequilíbrio hormonal), o implante (pellet, liberação contínua), os resultados (sono, energia, libido, fogachos em 2-4 semanas, proteção cardiovascular e óssea), a duração (6 meses). Termine com: "O que mais te chamou atenção do que eu te contei?" Depois chame gateValidator(gate_id="GATE_SPEECH").`,
+  fechamento: `ETAPA ATUAL: 5 de 8 — Fechamento
+Energia: média-alta | Ritmo: curto | Tom: convicto, firme, sem pressão
+Retome o combinado e convide a decisão. Apresente o investimento sem desculpas. Se houver objeção: OUVIR → ISOLAR → CONFIRMAR → OFERECER. Parcelamento: ATÉ 6X SEM JUROS. Quando aceite + forma de pagamento confirmados e link enviado, chame gateValidator(gate_id="GATE_FECHAMENTO").`,
+  pagamento: `ETAPA ATUAL: 6 de 8 — Aguardando Pagamento
+O link foi enviado. Mantenha a lead no telefone com conversa leve. Verifique o pagamento periodicamente com verificar_pagamento(). Quando confirmar, chame gateValidator(gate_id="GATE_PAGAMENTO"). Nunca avance antes disso.`,
+  referidos: `ETAPA ATUAL: 7 de 8 — Indicações
+Chame iniciar_coleta_referidos() para enviar o link no WhatsApp. O link é o ÚNICO canal — nunca colete contatos por voz. Verifique progresso a cada 2 minutos com verificar_referidos(). Quando missaoCompleta=true e semDados=0, chame gateValidator(gate_id="GATE_REFERIDOS").`,
+  validacao: `ETAPA ATUAL: 8 de 8 — Validação Final
+Verifique se alguma indicada recusou receber contato e confirme que todas têm profissão/hobby preenchidos (semDados=0). Quando tudo validado, chame gateValidator(gate_id="GATE_VALIDACAO"). O GANHO só é registrado pelo servidor após essa validação.`,
+  ganho: `ETAPA CONCLUÍDA — Ganho confirmado!
+A lead virou cliente. Despeça-se com calor genuíno, celebre com ela, e encerre a ligação com carinho. A mensagem de boas-vindas já foi enviada pelo sistema.`,
+}
+
 function ScriptTab() {
   const [expanded, setExpanded] = useState<string | null>('G1')
+  const [showBase, setShowBase] = useState(false)
+  const [expandedStage, setExpandedStage] = useState<string | null>(null)
+
+  const stages = [
+    { key: 'apresentacao', label: 'Etapa 1 — Abertura', color: '#38BDF8' },
+    { key: 'conexao',      label: 'Etapa 2 — Conexão',  color: '#22C55E' },
+    { key: 'combinado',    label: 'Etapa 3 — Combinado', color: '#A855F7' },
+    { key: 'speech',       label: 'Etapa 4 — Speech',    color: '#F59E0B' },
+    { key: 'fechamento',   label: 'Etapa 5 — Fechamento', color: '#EF4444' },
+    { key: 'pagamento',    label: 'Etapa 6 — Pagamento',  color: '#10B981' },
+    { key: 'referidos',    label: 'Etapa 7 — Referidos',  color: '#F97316' },
+    { key: 'validacao',    label: 'Etapa 8 — Validação',  color: '#8B5CF6' },
+    { key: 'ganho',        label: 'Ganho — Concluído',    color: '#FBBF24' },
+  ]
 
   return (
-    <div style={{ maxWidth: 800 }}>
+    <div style={{ maxWidth: 860 }}>
       <div style={{ background: '#0A1628', border: '1px solid #1D4ED8', borderRadius: 12, padding: '10px 16px', marginBottom: 20, fontSize: 12, color: '#38BDF8' }}>
         ⚡ 8 Gates · State Machine = autoridade técnica · Script Voz = autoridade comercial · Backend valida, nunca ANA decide sozinha
       </div>
+
+      {/* ANA_BASE_PROMPT */}
+      <div style={{ background: C.surface, border: `1px solid ${showBase ? '#A855F740' : C.border}`, borderRadius: 12, marginBottom: 20, overflow: 'hidden' }}>
+        <button onClick={() => setShowBase(!showBase)}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+          <span style={{ fontSize: 18 }}>🧠</span>
+          <div style={{ flex: 1 }}>
+            <p style={{ color: '#A855F7', fontWeight: 700, margin: 0, fontSize: 13 }}>ANA_BASE_PROMPT — Identidade + DNA + Regras</p>
+            <p style={{ color: C.textMuted, fontSize: 11, margin: 0 }}>Sempre presente · Nunca substituído · Base de toda ligação</p>
+          </div>
+          <ChevronDown style={{ width: 14, height: 14, color: C.textFaint, transform: showBase ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+        </button>
+        {showBase && (
+          <div style={{ padding: '0 18px 18px', borderTop: `1px solid ${C.border}` }}>
+            <pre style={{ color: C.text, fontSize: 11, lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: '16px 0 0', fontFamily: 'monospace', background: '#0a0a0a', padding: 16, borderRadius: 8, border: `1px solid ${C.border}` }}>
+              {ANA_BASE_PROMPT_TEXT}
+            </pre>
+          </div>
+        )}
+      </div>
+
+      {/* Stage instructions */}
+      <p style={{ color: C.textMuted, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 10 }}>Instruções por Etapa</p>
+      {stages.map(s => {
+        const isOpen = expandedStage === s.key
+        return (
+          <div key={s.key} style={{ background: C.surface, border: `1px solid ${isOpen ? s.color + '40' : C.border}`, borderRadius: 12, marginBottom: 8, overflow: 'hidden' }}>
+            <button onClick={() => setExpandedStage(isOpen ? null : s.key)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', background: 'transparent', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+              <p style={{ color: isOpen ? s.color : C.text, fontWeight: 700, margin: 0, fontSize: 12, flex: 1 }}>{s.label}</p>
+              <ChevronDown style={{ width: 13, height: 13, color: C.textFaint, transform: isOpen ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+            </button>
+            {isOpen && (
+              <div style={{ padding: '0 18px 16px', borderTop: `1px solid ${C.border}` }}>
+                <pre style={{ color: C.text, fontSize: 11, lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: '12px 0 0', fontFamily: 'monospace', background: '#0a0a0a', padding: 14, borderRadius: 8, border: `1px solid ${C.border}` }}>
+                  {STAGE_INSTRUCTIONS_TEXT[s.key]}
+                </pre>
+              </div>
+            )}
+          </div>
+        )
+      })}
+
+      <p style={{ color: C.textMuted, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1, margin: '24px 0 10px' }}>Gates — Transições de Etapa</p>
       {GATE_SPEC.map(g => {
         const isOpen = expanded === g.id
         return (
