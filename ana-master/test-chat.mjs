@@ -151,6 +151,7 @@ const gateLog = []
 let speechProgress = {
   parte_atual: 1,
   partes_entregues: [],
+  parte_em_execucao: 1,   // Part 1 active from speech stage entry
   parte_interrompida: false,
   state: 'DELIVERING_PART',
   waiting_for_lead: false,
@@ -182,6 +183,9 @@ function processSpeechTurn(userInput) {
     case 'CONTINUE': {
       speechProgress.waiting_for_lead = false
       const next = String(speechProgress.parte_atual)
+      if (typeof speechProgress.parte_atual === 'number') {
+        speechProgress.parte_em_execucao = speechProgress.parte_atual
+      }
       return SPEECH_PART_INSTRUCTIONS[next] || null
     }
     case 'QUESTION':
@@ -327,9 +331,13 @@ function handleGateValidator(args) {
   currentStage = transition.to
   currentInstruction = null
 
-  // Reset speech progress when leaving speech stage
+  // Arm speech progress when entering speech stage
+  if (gate_id === 'GATE_COMBINADO') {
+    speechProgress = { parte_atual: 1, partes_entregues: [], parte_em_execucao: 1, parte_interrompida: false, state: 'DELIVERING_PART', waiting_for_lead: false, pergunta_final_feita: false, resposta_final_recebida: false }
+  }
+  // Reset when leaving speech stage
   if (gate_id === 'GATE_SPEECH') {
-    speechProgress = { parte_atual: 1, partes_entregues: [], parte_interrompida: false, state: 'DELIVERING_PART', waiting_for_lead: false, pergunta_final_feita: false, resposta_final_recebida: false }
+    speechProgress = { parte_atual: 1, partes_entregues: [], parte_em_execucao: undefined, parte_interrompida: false, state: 'DELIVERING_PART', waiting_for_lead: false, pergunta_final_feita: false, resposta_final_recebida: false }
   }
 
   console.log(`\n${'─'.repeat(60)}`)
@@ -349,16 +357,20 @@ function handleRegistrarParteSpeech(args) {
     if (parte !== sp.parte_atual) {
       return { error: `Ordem incorreta. parte_atual=${sp.parte_atual}, tentou registrar parte=${parte}. Não pule partes.` }
     }
+    if (sp.parte_em_execucao !== parte) {
+      return { error: `Parte ${parte} não está em execução (parte_em_execucao=${sp.parte_em_execucao}). Entregue o conteúdo da parte antes de registrar.` }
+    }
     if (sp.parte_interrompida) {
       return { error: `Parte ${parte} foi interrompida — conclua o conteúdo restante antes de registrar.` }
     }
     sp.partes_entregues.push(parte)
+    sp.parte_em_execucao = undefined
     sp.parte_atual = parte < 4 ? parte + 1 : 'final_question'
     sp.state = 'WAITING_LEAD'
     sp.waiting_for_lead = true
 
     console.log(`\n  📊 SPEECH PROGRESS: parte ${parte} registrada | próxima=${sp.parte_atual} | aguardando turno da lead\n`)
-    return { ok: true, parte_registrada: parte, aguardando: 'turno_da_lead', instrucao: 'PARE aqui. Aguarde a lead reagir. O backend liberará a próxima parte após o turno dela.' }
+    return { ok: true, parte_registrada: parte, aguardando: 'turno_da_lead' }
   }
 
   if (parte === 'pergunta_feita') {
@@ -501,12 +513,20 @@ async function callAna(userMessage) {
 
   if (msg.tool_calls && msg.tool_calls.length > 0) {
     const toolResults = []
+    let waitingForLead = false
+
     for (const tc of msg.tool_calls) {
       const args = JSON.parse(tc.function.arguments)
       let result
 
       if (tc.function.name === 'gateValidator') result = handleGateValidator(args)
-      else if (tc.function.name === 'registrar_parte_speech') result = handleRegistrarParteSpeech(args)
+      else if (tc.function.name === 'registrar_parte_speech') {
+        result = handleRegistrarParteSpeech(args)
+        // Break recursive loop — ANA's turn ends here, no more generation
+        if (result.aguardando === 'turno_da_lead' || result.aguardando === 'resposta_final_da_lead') {
+          waitingForLead = true
+        }
+      }
       else if (tc.function.name === 'save_memory') result = handleSaveMemory(args)
       else result = { ok: true }
 
@@ -514,6 +534,10 @@ async function callAna(userMessage) {
     }
 
     messages.push(...toolResults)
+
+    // After registrar_parte_speech: ANA's turn is OVER — do NOT generate more text
+    if (waitingForLead) return null
+
     return callAna(null)
   }
 

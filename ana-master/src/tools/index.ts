@@ -149,6 +149,9 @@ export function buildTools(session: SessionRef) {
           if (parte !== sp.parte_atual) {
             return `{"error":"Ordem incorreta. parte_atual=${sp.parte_atual}, tentou registrar parte=${parte}. Não pule partes."}`
           }
+          if (sp.parte_em_execucao !== parte) {
+            return `{"error":"Parte ${parte} não está em execução (parte_em_execucao=${sp.parte_em_execucao}). Entregue o conteúdo da parte antes de registrar."}`
+          }
           if (sp.parte_interrompida) {
             return `{"error":"Parte ${parte} foi interrompida — conclua o conteúdo restante antes de registrar."}`
           }

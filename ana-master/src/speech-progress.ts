@@ -36,7 +36,7 @@ export function initialSpeechProgress(): SpeechProgress {
   return {
     parte_atual: 1,
     partes_entregues: [],
-    parte_em_execucao: undefined,
+    parte_em_execucao: 1,   // Part 1 is active from the moment speech stage begins
     parte_interrompida: false,
     state: 'DELIVERING_PART',
     waiting_for_lead: false,
