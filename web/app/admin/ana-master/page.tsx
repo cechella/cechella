@@ -1625,22 +1625,54 @@ function DnaTab() {
     { id: 'arquitetura', label: '🏗️ Arquitetura' },
   ]
 
+  const DNA_DIMENSIONS = [
+    { dim: 'Convicção', obs: 'Trata solução, preço e referidos como partes naturais do processo', regra: 'Não pedir desculpas por conduzir. Segurança e respeito.' },
+    { dim: 'Velocidade', obs: 'Ritmo varia por etapa — não há cadência única', regra: 'Ritmo = função do estado emocional + objetivo comercial' },
+    { dim: 'Memória', obs: 'Retoma o combinado no fechamento e a indicadora nos referidos', regra: 'Usar contexto anterior para criar continuidade narrativa' },
+    { dim: 'Simplicidade', obs: 'Explica conceitos por analogias acessíveis', regra: 'Autoridade sem palestra — traduzir complexidade' },
+    { dim: 'Decisão', obs: 'Cada pergunta reduz incerteza e prepara o próximo passo', regra: 'Perguntas têm função — evitar checklist' },
+    { dim: 'Objeções', obs: 'Isola a objeção antes de oferecer alternativas', regra: 'Não rebater antes de compreender a causa real' },
+    { dim: 'Reciprocidade', obs: 'Referidos conectados ao benefício recebido via indicação', regra: 'Criar sentido antes de pedir ação' },
+    { dim: 'Disciplina', obs: 'Etapas cumpridas até validação sem atalhos', regra: 'Naturalidade não pode destruir o processo comercial' },
+  ]
+
   return (
     <div style={{ maxWidth: 1080, margin: '0 auto' }}>
+      {/* North Star */}
+      <div style={{ background: 'linear-gradient(135deg, #0d1a2a 0%, #0a0a1a 100%)', border: '1px solid #1D4ED840', borderRadius: 16, padding: '18px 24px', marginBottom: 14 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#38BDF8', textTransform: 'uppercase', letterSpacing: '0.12em', marginBottom: 6 }}>⭐ North Star — DNA Gold Standard v1</div>
+        <p style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#E2E8F0', lineHeight: 1.5 }}>
+          Duplicar em escala o modelo mental comercial do fundador em uma consultora feminina, humana, adaptativa e disciplinada no processo.
+        </p>
+        <p style={{ margin: '8px 0 0', fontSize: 11, color: '#64748B' }}>
+          Fonte primária: simulação integral conduzida pelo Dr. Vinícius Sechella · A referência não são as frases literais — é o comportamento: por que uma pergunta foi feita, em que momento, com qual energia.
+        </p>
+      </div>
+
       {/* Header */}
       <div style={{ background: 'linear-gradient(135deg, #0d0520 0%, #0a0a1a 60%, #0d1a12 100%)', border: `1px solid ${C.purpleBorder}`, borderRadius: 20, padding: '24px 28px', marginBottom: 20, position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(139,92,246,0.12) 0%, transparent 70%)' }} />
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20 }}>
           <div style={{ width: 48, height: 48, borderRadius: 14, background: C.purpleDim, border: `1px solid ${C.purpleBorder}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>🧬</div>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 700, color: C.purple, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>ANA DNA Comercial — Gold Standard</div>
-            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: C.text }}>Versão 1 · Documento Fundacional</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 12, color: C.textMuted }}>Arquitetura conversacional da Ana para conversões de alta qualidade</p>
+            <div style={{ fontSize: 10, fontWeight: 700, color: C.purple, textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 4 }}>DNA Comercial — Gold Standard v1 · ATIVO NO PROMPT</div>
+            <h2 style={{ margin: 0, fontSize: 20, fontWeight: 900, color: C.text }}>Modelo Mental do Fundador — 8 Dimensões</h2>
+            <p style={{ margin: '4px 0 0', fontSize: 12, color: C.textMuted }}>Regra de ouro: replicar intenção e competência, não decorar texto</p>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: C.green, background: C.greenDim, border: `1px solid ${C.greenBorder}`, borderRadius: 8, padding: '4px 10px' }}>✓ ATIVO</span>
             <span style={{ fontSize: 11, fontWeight: 700, color: C.gold, background: C.goldDim, border: `1px solid ${C.goldBorder}`, borderRadius: 8, padding: '4px 10px' }}>8 ETAPAS</span>
           </div>
+        </div>
+        {/* 8 Dimensions grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 8 }}>
+          {DNA_DIMENSIONS.map(d => (
+            <div key={d.dim} style={{ background: '#ffffff05', border: `1px solid ${C.purpleBorder}`, borderRadius: 10, padding: '10px 14px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: C.purple, marginBottom: 4 }}>{d.dim}</div>
+              <div style={{ fontSize: 11, color: C.textMuted, marginBottom: 4 }}>{d.obs}</div>
+              <div style={{ fontSize: 10, color: '#34D399', fontStyle: 'italic' }}>→ {d.regra}</div>
+            </div>
+          ))}
         </div>
       </div>
 
