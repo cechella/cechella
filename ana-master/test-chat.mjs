@@ -935,9 +935,9 @@ async function callAna(userMessage) {
       if (blocking.length > 0) {
         qaMetrics.guard_trigger_count++
         qaMetrics.p1_retry_count++
-        console.log(`\n  ❌ [QA] P1_STRUCTURAL_VIOLATION (auto-registro bloqueado)`)
+        console.log(`\n  ❌ [QA] P1_CONTENT_INVALID — P1_DELIVERY_MISSING → BLOCKED`)
         blocking.forEach(r => console.log(`     • ${r}`))
-        console.log(`     → P1 NÃO registrada. SpeechProgress NÃO avança.\n`)
+        console.log(`     → P1 NÃO entregue. SpeechProgress NÃO avança.\n`)
         const blockId = `auto_block_${Date.now()}`
         messages.pop()
         messages.push({
@@ -952,7 +952,11 @@ async function callAna(userMessage) {
       }
       if (qaMetrics.p1_retry_count === 0) qaMetrics.p1_first_pass_success++
       const label = qaMetrics.p1_retry_count === 0 ? 'GOLD' : 'RECOVERED'
-      console.log(`  ✅ [QA] P1_VALID — ${label}${warnings.length > 0 ? ' (com desvios de expressão)' : ''}`)
+      console.log(`  ✅ [QA] P1_CONTENT_VALID — ${label}${warnings.length > 0 ? ' (com desvios de expressão)' : ''}`)
+
+      // INVARIANTE: DELIVERED ≠ GENERATED — exibir para a lead ANTES de registrar
+      console.log(`\x1b[35mANA:\x1b[0m ${autoContent}\n`)
+      console.log(`  ✅ [QA] P1_DELIVERY_VALID — GOLD`)
     }
 
     qaMetrics.auto_register_count++
