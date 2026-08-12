@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, Suspense } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
-import { Mic, MicOff, Phone, PhoneOff, Copy, Check, RefreshCw, Link } from 'lucide-react'
+import { Mic, MicOff, Phone, PhoneOff, Copy, Check, RefreshCw, Link, RotateCcw } from 'lucide-react'
 import { SPEECH_PART_INSTRUCTIONS, ANA_BASE_PROMPT, STAGE_INSTRUCTIONS } from '@/lib/ana-master/constants'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -30,6 +31,13 @@ interface GateEntry {
   next_stage: string
 }
 
+interface CheckpointData {
+  stage: string
+  speech_progress: SpeechProgress
+  gate_log: GateEntry[]
+  ts: string
+}
+
 interface Memory {
   [key: string]: unknown
 }
@@ -41,6 +49,12 @@ const STAGE_LABELS: Record<string, string> = {
   apresentacao: 'Abertura', conexao: 'Conexão', combinado: 'Combinado',
   speech: 'Speech', fechamento: 'Fechamento', pagamento: 'Pagamento',
   referidos: 'Referidos', validacao: 'Validação', ganho: 'Ganho',
+}
+
+const GATE_LABELS: Record<string, string> = {
+  GATE_ABERTURA: 'Abertura', GATE_CONEXAO: 'Conexão', GATE_COMBINADO: 'Combinado',
+  GATE_SPEECH: 'Speech', GATE_FECHAMENTO: 'Fechamento', GATE_PAGAMENTO: 'Pagamento',
+  GATE_REFERIDOS: 'Referidos', GATE_VALIDACAO: 'Validação',
 }
 
 function initialSpeechProgress(): SpeechProgress {
@@ -55,9 +69,12 @@ function initialSpeechProgress(): SpeechProgress {
   }
 }
 
-// ── Main component ─────────────────────────────────────────────────────────────
+// ── Inner component (uses useSearchParams) ────────────────────────────────────
 
-export default function SimuladorVozPage() {
+function SimuladorVozInner() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+
   const [telefone, setTelefone] = useState('')
   const [status, setStatus] = useState<SessionStatus>('idle')
   const [currentStage, setCurrentStage] = useState('apresentacao')
@@ -65,11 +82,14 @@ export default function SimuladorVozPage() {
   const [transcript, setTranscript] = useState<TranscriptLine[]>([])
   const [memories, setMemories] = useState<Memory>({})
   const [gateLog, setGateLog] = useState<GateEntry[]>([])
+  const [savedCheckpoints, setSavedCheckpoints] = useState<Record<string, CheckpointData>>({})
   const [referidosLink, setReferidosLink] = useState<string | null>(null)
   const [referidosStatus, setReferidosStatus] = useState<{ total: number; semDados: number; missaoCompleta: boolean } | null>(null)
   const [copied, setCopied] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
   const [isMuted, setIsMuted] = useState(false)
+  const [isRecording, setIsRecording] = useState(false)
+  const [audioUploading, setAudioUploading] = useState(false)
 
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const dcRef = useRef<RTCDataChannel | null>(null)
@@ -80,13 +100,19 @@ export default function SimuladorVozPage() {
   const stageRef = useRef<string>('apresentacao')
   const localStreamRef = useRef<MediaStream | null>(null)
   const transcriptEndRef = useRef<HTMLDivElement | null>(null)
+  const gateLogRef = useRef<GateEntry[]>([])
+  const checkpointsRef = useRef<Record<string, CheckpointData>>({})
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const pendingInstructionsRef = useRef<string | null>(null)
 
   // Keep refs in sync
   useEffect(() => { speechRef.current = speechProgress }, [speechProgress])
   useEffect(() => { stageRef.current = currentStage }, [currentStage])
+  useEffect(() => { gateLogRef.current = gateLog }, [gateLog])
   useEffect(() => { transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [transcript])
 
-  // ── DataChannel message handler ────────────────────────────────────────────
+  // ── Helpers ────────────────────────────────────────────────────────────────
 
   const addTranscript = useCallback((role: TranscriptLine['role'], text: string) => {
     setTranscript(prev => [...prev, { role, text, ts: Date.now() }])
@@ -101,6 +127,51 @@ export default function SimuladorVozPage() {
   const updateInstructions = useCallback((instructions: string) => {
     sendEvent({ type: 'session.update', session: { instructions } })
   }, [sendEvent])
+
+  const saveTranscriptTurn = useCallback((role: string, text: string) => {
+    if (!callSidRef.current || !text.trim()) return
+    fetch('/api/admin/ana-master/simulador/transcript', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callSid: callSidRef.current, role, text }),
+    }).catch(() => {})
+  }, [])
+
+  const saveCheckpoint = useCallback((gateName: string, nextStage: string) => {
+    const sp = speechRef.current
+    const gl = gateLogRef.current
+    const cp: CheckpointData = {
+      stage: nextStage,
+      speech_progress: sp,
+      gate_log: gl,
+      ts: new Date().toISOString(),
+    }
+    checkpointsRef.current[gateName] = cp
+    setSavedCheckpoints(prev => ({ ...prev, [gateName]: cp }))
+    fetch('/api/admin/ana-master/simulador/transcript', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        callSid: callSidRef.current,
+        checkpoint: { gate: gateName, ...cp },
+      }),
+    }).catch(() => {})
+  }, [])
+
+  const uploadAudio = useCallback(async () => {
+    const chunks = audioChunksRef.current
+    if (chunks.length === 0 || !callSidRef.current) return
+    setAudioUploading(true)
+    try {
+      const blob = new Blob(chunks, { type: 'audio/webm' })
+      await fetch(`/api/admin/ana-master/simulador/audio?callSid=${callSidRef.current}`, {
+        method: 'POST',
+        body: blob,
+        headers: { 'Content-Type': 'audio/webm' },
+      })
+    } catch {}
+    setAudioUploading(false)
+  }, [])
 
   // ── Tool execution ─────────────────────────────────────────────────────────
 
@@ -129,7 +200,13 @@ export default function SimuladorVozPage() {
         const data = await res.json()
         if (data.approved) {
           setCurrentStage(data.next_stage)
-          setGateLog(prev => [...prev, { gate: gate_id, ts: new Date().toISOString(), next_stage: data.next_stage }])
+          const newEntry = { gate: gate_id, ts: new Date().toISOString(), next_stage: data.next_stage }
+          setGateLog(prev => {
+            const updated = [...prev, newEntry]
+            gateLogRef.current = updated
+            return updated
+          })
+          saveCheckpoint(gate_id, data.next_stage)
           addTranscript('system', `✓ ${gate_id} → ${data.next_stage.toUpperCase()}`)
           if (data.next_stage === 'speech') {
             setSpeechProgress(initialSpeechProgress())
@@ -205,7 +282,7 @@ export default function SimuladorVozPage() {
       default:
         return JSON.stringify({ error: `Tool desconhecida: ${name}` })
     }
-  }, [memories, addTranscript, updateInstructions])
+  }, [memories, addTranscript, updateInstructions, saveCheckpoint])
 
   // ── Speech Progress ────────────────────────────────────────────────────────
 
@@ -233,7 +310,6 @@ export default function SimuladorVozPage() {
         speechRef.current = newSp
         return JSON.stringify({ ok: true, parte_registrada: parte, aguardando: 'turno_da_lead', instrucao: 'ENCERRE SEU TURNO AGORA. A lead falará quando quiser.' })
       } else {
-        // Part 4: inject final_question instruction immediately
         const newSp: SpeechProgress = {
           ...sp,
           partes_entregues: newPartes,
@@ -273,7 +349,7 @@ export default function SimuladorVozPage() {
     return JSON.stringify({ error: `parte inválida: ${parte}` })
   }
 
-  // ── Lead turn handler for speech ──────────────────────────────────────────
+  // ── Lead turn handler ──────────────────────────────────────────────────────
 
   const onLeadTurn = useCallback(() => {
     const sp = speechRef.current
@@ -295,19 +371,16 @@ export default function SimuladorVozPage() {
     try { msg = JSON.parse(event.data) } catch { return }
 
     switch (msg.type) {
-      case 'response.audio_transcript.delta':
-        // Streaming — handled via response.done for simplicity
-        break
-
       case 'response.done': {
-        // Collect ANA transcript from audio items
         const audioItem = msg.response?.output?.find((o: any) => o.type === 'message' && o.role === 'assistant')
         if (audioItem) {
           const text = audioItem.content?.find((c: any) => c.type === 'audio')?.transcript
-          if (text) addTranscript('ana', text)
+          if (text) {
+            addTranscript('ana', text)
+            saveTranscriptTurn('ana', text)
+          }
         }
 
-        // Handle function calls
         const funcCalls = (msg.response?.output ?? []).filter((o: any) => o.type === 'function_call')
         for (const call of funcCalls) {
           let parsedArgs: Record<string, unknown> = {}
@@ -327,7 +400,7 @@ export default function SimuladorVozPage() {
         const text = msg.transcript
         if (text) {
           addTranscript('lead', text)
-          // Unlock next speech part on lead turn
+          saveTranscriptTurn('lead', text)
           onLeadTurn()
         }
         break
@@ -337,11 +410,31 @@ export default function SimuladorVozPage() {
         setErrorMsg(`Erro OpenAI: ${msg.error?.message ?? JSON.stringify(msg.error)}`)
         break
     }
-  }, [executeTool, addTranscript, sendEvent, onLeadTurn])
+  }, [executeTool, addTranscript, sendEvent, onLeadTurn, saveTranscriptTurn])
+
+  // ── Restore checkpoint state ───────────────────────────────────────────────
+
+  const restoreCheckpoint = useCallback((cp: CheckpointData) => {
+    setCurrentStage(cp.stage)
+    stageRef.current = cp.stage
+    if (cp.speech_progress) {
+      setSpeechProgress(cp.speech_progress)
+      speechRef.current = cp.speech_progress
+    }
+    if (cp.gate_log) {
+      setGateLog(cp.gate_log)
+      gateLogRef.current = cp.gate_log
+    }
+    const instructions = cp.stage === 'speech'
+      ? `${ANA_BASE_PROMPT}\n\n${SPEECH_PART_INSTRUCTIONS[String(cp.speech_progress?.parte_atual ?? 1)]}`
+      : `${ANA_BASE_PROMPT}\n\n${STAGE_INSTRUCTIONS[cp.stage] ?? ''}`
+    pendingInstructionsRef.current = instructions
+    addTranscript('system', `🔄 Retomando do checkpoint → ${(STAGE_LABELS[cp.stage] ?? cp.stage).toUpperCase()}`)
+  }, [addTranscript])
 
   // ── Start session ─────────────────────────────────────────────────────────
 
-  const startSession = useCallback(async () => {
+  const startSession = useCallback(async (checkpointOverride?: CheckpointData) => {
     if (!telefone.trim()) {
       setErrorMsg('Digite o telefone de teste antes de iniciar.')
       return
@@ -350,14 +443,17 @@ export default function SimuladorVozPage() {
     setStatus('connecting')
     setTranscript([])
     setGateLog([])
+    gateLogRef.current = []
     setMemories({})
     setReferidosLink(null)
     setReferidosStatus(null)
     setSpeechProgress(initialSpeechProgress())
     setCurrentStage('apresentacao')
+    checkpointsRef.current = {}
+    setSavedCheckpoints({})
+    audioChunksRef.current = []
 
     try {
-      // 1. Create session
       const sessionRes = await fetch('/api/admin/ana-master/simulador/session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -368,32 +464,52 @@ export default function SimuladorVozPage() {
       callSidRef.current = callSid
       telefoneRef.current = normPhone
 
-      // 2. Create peer connection
+      // Apply checkpoint if resuming
+      if (checkpointOverride) {
+        restoreCheckpoint(checkpointOverride)
+      }
+
       const pc = new RTCPeerConnection()
       pcRef.current = pc
 
-      // 3. Remote audio output
       const audio = document.createElement('audio')
       audio.autoplay = true
       audioRef.current = audio
       pc.ontrack = (e) => { audio.srcObject = e.streams[0] }
 
-      // 4. Local mic
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       localStreamRef.current = stream
       stream.getTracks().forEach(track => pc.addTrack(track, stream))
 
-      // 5. Data channel
+      // Start audio recording
+      try {
+        const supportedType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : ''
+        const recorder = new MediaRecorder(stream, supportedType ? { mimeType: supportedType } : {})
+        audioChunksRef.current = []
+        recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+        recorder.start(2000)
+        mediaRecorderRef.current = recorder
+        setIsRecording(true)
+      } catch {}
+
       const dc = pc.createDataChannel('oai-events')
       dcRef.current = dc
       dc.onmessage = handleDCMessage
-      dc.onopen = () => { addTranscript('system', '🎙️ Conectado — ANA está iniciando...') }
+      dc.onopen = () => {
+        addTranscript('system', '🎙️ Conectado — ANA está iniciando...')
+        if (pendingInstructionsRef.current) {
+          sendEvent({ type: 'session.update', session: { instructions: pendingInstructionsRef.current } })
+          pendingInstructionsRef.current = null
+        }
+      }
 
-      // 6. Offer
       const offer = await pc.createOffer()
       await pc.setLocalDescription(offer)
 
-      // 7. Connect to OpenAI Realtime
       const oaiRes = await fetch(`https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview`, {
         method: 'POST',
         headers: {
@@ -412,11 +528,19 @@ export default function SimuladorVozPage() {
       setStatus('error')
       setErrorMsg(e.message)
     }
-  }, [telefone, handleDCMessage, addTranscript])
+  }, [telefone, handleDCMessage, addTranscript, sendEvent, restoreCheckpoint])
 
   // ── Stop session ───────────────────────────────────────────────────────────
 
   const stopSession = useCallback(() => {
+    const recorder = mediaRecorderRef.current
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.onstop = () => uploadAudio()
+      recorder.stop()
+    }
+    mediaRecorderRef.current = null
+    setIsRecording(false)
+
     pcRef.current?.close()
     pcRef.current = null
     dcRef.current = null
@@ -425,7 +549,7 @@ export default function SimuladorVozPage() {
     if (audioRef.current) { audioRef.current.srcObject = null }
     setStatus('ended')
     addTranscript('system', '⏹ Sessão encerrada.')
-  }, [addTranscript])
+  }, [addTranscript, uploadAudio])
 
   const toggleMute = useCallback(() => {
     localStreamRef.current?.getTracks().forEach(t => { t.enabled = isMuted })
@@ -441,6 +565,7 @@ export default function SimuladorVozPage() {
   }, [referidosLink])
 
   // ── Speech progress display ────────────────────────────────────────────────
+
   const speechBadge = () => {
     if (currentStage !== 'speech') return null
     const sp = speechProgress
@@ -452,6 +577,10 @@ export default function SimuladorVozPage() {
     }
     return null
   }
+
+  const checkpointEntries = Object.entries(savedCheckpoints).sort(
+    ([, a], [, b]) => new Date(a.ts).getTime() - new Date(b.ts).getTime()
+  )
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -469,7 +598,11 @@ export default function SimuladorVozPage() {
             <div className="p-4 border-b border-[#1C1C1E]">
               <p className="text-[10px] font-semibold tracking-widest text-[#7B3FE4] uppercase mb-1">ANA MASTER</p>
               <h1 className="text-base font-bold text-white">Simulador de Voz</h1>
-              <p className="text-xs text-[#52525E] mt-0.5">WebRTC · gpt-4o-realtime</p>
+              <p className="text-xs text-[#52525E] mt-0.5 flex items-center gap-1.5">
+                WebRTC · gpt-4o-realtime
+                {isRecording && <span className="flex items-center gap-1 text-red-400"><span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse inline-block"></span>REC</span>}
+                {audioUploading && <span className="text-amber-400">↑ salvando áudio...</span>}
+              </p>
             </div>
 
             {/* Phone input */}
@@ -490,7 +623,7 @@ export default function SimuladorVozPage() {
             <div className="p-4 border-b border-[#1C1C1E] flex flex-col gap-2">
               {status === 'idle' || status === 'ended' || status === 'error' ? (
                 <button
-                  onClick={startSession}
+                  onClick={() => startSession()}
                   className="flex items-center justify-center gap-2 bg-[#7B3FE4] hover:bg-[#6D35CC] text-white rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors"
                 >
                   <Phone size={15} />
@@ -520,6 +653,42 @@ export default function SimuladorVozPage() {
                 </div>
               )}
             </div>
+
+            {/* Checkpoints */}
+            {checkpointEntries.length > 0 && (
+              <div className="p-4 border-b border-[#1C1C1E]">
+                <p className="text-[10px] font-semibold tracking-widest text-amber-500 uppercase mb-3">Checkpoints</p>
+                <div className="flex flex-col gap-1.5">
+                  {checkpointEntries.map(([gate, cp]) => (
+                    <button
+                      key={gate}
+                      onClick={() => {
+                        if (status === 'active') {
+                          restoreCheckpoint(cp)
+                          updateInstructions(
+                            cp.stage === 'speech'
+                              ? `${ANA_BASE_PROMPT}\n\n${SPEECH_PART_INSTRUCTIONS[String(cp.speech_progress?.parte_atual ?? 1)]}`
+                              : `${ANA_BASE_PROMPT}\n\n${STAGE_INSTRUCTIONS[cp.stage] ?? ''}`
+                          )
+                        } else {
+                          startSession(cp)
+                        }
+                      }}
+                      className="flex items-center justify-between gap-2 bg-amber-500/5 border border-amber-500/20 hover:border-amber-500/40 rounded-lg px-3 py-2 text-left transition-colors"
+                    >
+                      <div>
+                        <p className="text-[10px] font-bold text-amber-400">{GATE_LABELS[gate] ?? gate}</p>
+                        <p className="text-[10px] text-[#52525E]">→ {STAGE_LABELS[cp.stage] ?? cp.stage}</p>
+                      </div>
+                      <RotateCcw size={11} className="text-amber-500/60 shrink-0" />
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[10px] text-[#52525E] mt-2">
+                  {status === 'active' ? 'Clique para retomar nesta etapa' : 'Clique para iniciar daqui'}
+                </p>
+              </div>
+            )}
 
             {/* Stages */}
             <div className="p-4 border-b border-[#1C1C1E]">
@@ -560,7 +729,7 @@ export default function SimuladorVozPage() {
               ) : (
                 <div className="flex flex-col gap-1.5">
                   {Object.entries(memories)
-                    .filter(([k]) => !['telefone', 'nome', 'sim_browser', 'transcript', 'speech_progress'].includes(k))
+                    .filter(([k]) => !['telefone', 'nome', 'sim_browser', 'transcript', 'speech_progress', 'checkpoints', 'audio_url'].includes(k))
                     .map(([k, v]) => (
                       <div key={k} className="flex justify-between gap-2 text-xs">
                         <span className="text-[#52525E] shrink-0">{k}</span>
@@ -641,6 +810,7 @@ export default function SimuladorVozPage() {
                   <div>
                     <p className="text-sm font-semibold text-white">Simulador de Voz ANA</p>
                     <p className="text-xs text-[#52525E] mt-1">Digite o telefone e clique em Iniciar Simulação</p>
+                    <p className="text-xs text-[#52525E] mt-0.5">Áudio gravado automaticamente · Checkpoints por gate</p>
                   </div>
                 </div>
               )}
@@ -678,5 +848,15 @@ export default function SimuladorVozPage() {
         .badge-amber  { @apply text-[10px] px-2 py-0.5 rounded font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30; }
       `}</style>
     </div>
+  )
+}
+
+// ── Page wrapper (Suspense for useSearchParams) ────────────────────────────────
+
+export default function SimuladorVozPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen bg-[#0A0A0B] items-center justify-center text-white text-sm">Carregando...</div>}>
+      <SimuladorVozInner />
+    </Suspense>
   )
 }

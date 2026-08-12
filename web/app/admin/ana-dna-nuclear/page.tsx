@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
-import { Phone, Zap, Activity, BarChart3, Settings, GitBranch, RefreshCw, PhoneCall, Mic } from 'lucide-react'
+import { Phone, Zap, Activity, BarChart3, Settings, GitBranch, RefreshCw, PhoneCall, Mic, Play, ChevronDown, ChevronUp, Volume2 } from 'lucide-react'
 
 const TABS = [
   { key: 'disparar', label: 'Disparar', icon: <Zap className="w-4 h-4" /> },
@@ -11,6 +11,7 @@ const TABS = [
   { key: 'monitor', label: 'Live Monitor', icon: <Activity className="w-4 h-4" /> },
   { key: 'simulacoes', label: 'Simulações', icon: <BarChart3 className="w-4 h-4" /> },
   { key: 'simulador', label: 'Simulador de Voz', icon: <Mic className="w-4 h-4" /> },
+  { key: 'sessoes', label: 'Sessões', icon: <Play className="w-4 h-4" /> },
   { key: 'config', label: 'Realtime Config', icon: <Settings className="w-4 h-4" /> },
   { key: 'state', label: 'State Machine', icon: <GitBranch className="w-4 h-4" /> },
 ]
@@ -246,6 +247,256 @@ function TabSimulacoes() {
   )
 }
 
+// ─── Tab: Sessões ─────────────────────────────────────────────────────────────
+
+const GATE_ORDER = ['GATE_ABERTURA','GATE_CONEXAO','GATE_COMBINADO','GATE_SPEECH','GATE_FECHAMENTO','GATE_PAGAMENTO','GATE_REFERIDOS','GATE_VALIDACAO']
+const GATE_SHORT: Record<string,string> = {
+  GATE_ABERTURA:'Aber.',GATE_CONEXAO:'Conex.',GATE_COMBINADO:'Comb.',
+  GATE_SPEECH:'Speech',GATE_FECHAMENTO:'Fech.',GATE_PAGAMENTO:'Pag.',
+  GATE_REFERIDOS:'Ref.',GATE_VALIDACAO:'Valid.',
+}
+const STAGE_LABEL_MAP: Record<string,string> = {
+  apresentacao:'Abertura',conexao:'Conexão',combinado:'Combinado',speech:'Speech',
+  fechamento:'Fechamento',pagamento:'Pagamento',referidos:'Referidos',validacao:'Validação',ganho:'Ganho',
+}
+
+function formatTime(iso: string) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return d.toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
+}
+
+function TabSessoes() {
+  const [sessions, setSessions] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [expanded, setExpanded] = React.useState<string | null>(null)
+  const [detail, setDetail] = React.useState<any>(null)
+  const [loadingDetail, setLoadingDetail] = React.useState(false)
+
+  const load = React.useCallback(async () => {
+    setLoading(true)
+    try {
+      const r = await fetch('/api/admin/ana-master/simulador/sessions')
+      const data = await r.json()
+      setSessions(data.sessions ?? [])
+    } catch {}
+    setLoading(false)
+  }, [])
+
+  React.useEffect(() => { load() }, [load])
+
+  async function expand(callSid: string) {
+    if (expanded === callSid) { setExpanded(null); setDetail(null); return }
+    setExpanded(callSid)
+    setLoadingDetail(true)
+    try {
+      const r = await fetch(`/api/admin/ana-master/simulador/sessions?callSid=${callSid}`)
+      const data = await r.json()
+      setDetail(data.session)
+    } catch {}
+    setLoadingDetail(false)
+  }
+
+  const detailTranscript: any[] = detail?.memories?.transcript ?? []
+  const detailCheckpoints: Record<string,any> = detail?.memories?.checkpoints ?? {}
+  const detailAudio: string | null = detail?.memories?.audio_url ?? null
+
+  return (
+    <div style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 0 16px', flexShrink: 0 }}>
+        <div>
+          <p style={{ color: '#fff', fontWeight: 700, fontSize: 15, margin: 0 }}>Sessões gravadas</p>
+          <p style={{ color: '#52525B', fontSize: 12, margin: '2px 0 0' }}>Transcrição + áudio + checkpoints por gate</p>
+        </div>
+        <button onClick={load} style={{ background: '#1C1C1E', border: '1px solid #3A3A3C', borderRadius: 8, padding: '6px 12px', color: '#9CA3AF', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <RefreshCw className="w-3 h-3" /> Atualizar
+        </button>
+      </div>
+
+      {loading && <p style={{ color: '#52525B', textAlign: 'center', padding: 40, fontSize: 13 }}>Carregando sessões...</p>}
+      {!loading && sessions.length === 0 && (
+        <div style={{ textAlign: 'center', padding: 60, color: '#52525B' }}>
+          <Mic className="w-10 h-10" style={{ margin: '0 auto 12px', opacity: 0.3 }} />
+          <p style={{ fontSize: 13 }}>Nenhuma sessão gravada ainda.</p>
+          <p style={{ fontSize: 12, marginTop: 4 }}>Use o Simulador de Voz para começar.</p>
+        </div>
+      )}
+
+      {sessions.map((s: any) => {
+        const isOpen = expanded === s.callSid
+        const gatesPassed = new Set((s.gates ?? []).map((g: any) => g.gate))
+        const progress = GATE_ORDER.filter(g => gatesPassed.has(g)).length
+
+        return (
+          <div key={s.callSid} style={{ borderRadius: 12, border: `1px solid ${isOpen ? '#7B3FE4' : '#27272A'}`, marginBottom: 8, overflow: 'hidden', background: '#111113' }}>
+            {/* Row header */}
+            <button
+              onClick={() => expand(s.callSid)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            >
+              {/* Progress ring */}
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#1C1C1E', border: '2px solid #3A3A3C', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: progress === 8 ? '#34D399' : '#A78BFA' }}>{progress}/8</span>
+              </div>
+              {/* Info */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{s.telefone ?? 'sem telefone'}</span>
+                  <span style={{ fontSize: 11, color: '#52525B' }}>{formatTime(s.updatedAt)}</span>
+                  {s.hasAudio && <span style={{ fontSize: 10, color: '#38BDF8', background: '#38BDF8/10', border: '1px solid #38BDF8/20', borderRadius: 4, padding: '1px 6px' }}>🎙 áudio</span>}
+                  {s.stage === 'ganho' && <span style={{ fontSize: 10, color: '#34D399', background: 'rgba(52,211,153,0.1)', borderRadius: 4, padding: '1px 6px' }}>🏆 GANHO</span>}
+                </div>
+                {/* Gate timeline */}
+                <div style={{ display: 'flex', gap: 3, marginTop: 6, flexWrap: 'wrap' }}>
+                  {GATE_ORDER.map(g => {
+                    const passed = gatesPassed.has(g)
+                    return (
+                      <span key={g} style={{
+                        fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 4,
+                        background: passed ? 'rgba(52,211,153,0.12)' : '#1C1C1E',
+                        color: passed ? '#34D399' : '#3A3A3C',
+                        border: `1px solid ${passed ? 'rgba(52,211,153,0.25)' : '#27272A'}`,
+                      }}>
+                        {passed ? '✓ ' : ''}{GATE_SHORT[g]}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+              {isOpen ? <ChevronUp className="w-4 h-4" style={{ color: '#52525B', flexShrink: 0 }} /> : <ChevronDown className="w-4 h-4" style={{ color: '#52525B', flexShrink: 0 }} />}
+            </button>
+
+            {/* Expanded detail */}
+            {isOpen && (
+              <div style={{ borderTop: '1px solid #1C1C1E', padding: 16 }}>
+                {loadingDetail && <p style={{ color: '#52525B', fontSize: 12, textAlign: 'center', padding: 20 }}>Carregando detalhes...</p>}
+                {!loadingDetail && detail && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+
+                    {/* Left: Transcript */}
+                    <div>
+                      <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' }}>
+                        Transcrição ({detailTranscript.length} turnos)
+                      </p>
+                      {detailTranscript.length === 0 && (
+                        <p style={{ color: '#3A3A3C', fontSize: 12 }}>Sem transcrição salva.</p>
+                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 320, overflowY: 'auto' }}>
+                        {detailTranscript.map((t: any, i: number) => (
+                          <div key={i} style={{
+                            borderRadius: 8, padding: '8px 12px', fontSize: 12, lineHeight: 1.5,
+                            background: t.role === 'ana' ? 'rgba(123,63,228,0.08)' : t.role === 'lead' ? '#1C1C1E' : 'transparent',
+                            border: `1px solid ${t.role === 'ana' ? 'rgba(123,63,228,0.2)' : t.role === 'lead' ? '#27272A' : 'transparent'}`,
+                            color: t.role === 'ana' ? '#fff' : t.role === 'lead' ? '#A1A1AA' : '#52525B',
+                          }}>
+                            {(t.role === 'ana' || t.role === 'lead') && (
+                              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 3px', color: t.role === 'ana' ? '#A78BFA' : '#52525B' }}>
+                                {t.role === 'ana' ? 'ANA' : 'LEAD'}
+                              </p>
+                            )}
+                            {t.text}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Right: Timeline + audio + actions */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+                      {/* Checkpoint timeline */}
+                      <div>
+                        <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 10px' }}>
+                          Linha do tempo
+                        </p>
+                        <div style={{ position: 'relative', paddingLeft: 20 }}>
+                          {/* Vertical line */}
+                          <div style={{ position: 'absolute', left: 6, top: 8, bottom: 8, width: 1, background: '#27272A' }} />
+                          {GATE_ORDER.map((gate, idx) => {
+                            const cp = detailCheckpoints[gate]
+                            const passed = !!cp
+                            return (
+                              <div key={gate} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10, position: 'relative' }}>
+                                {/* Dot */}
+                                <div style={{
+                                  position: 'absolute', left: -14, top: 3,
+                                  width: 10, height: 10, borderRadius: '50%',
+                                  background: passed ? '#34D399' : '#27272A',
+                                  border: `2px solid ${passed ? '#34D399' : '#3A3A3C'}`,
+                                  flexShrink: 0,
+                                }} />
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: passed ? '#34D399' : '#3A3A3C' }}>
+                                      {GATE_SHORT[gate]}
+                                    </span>
+                                    {cp && <span style={{ fontSize: 10, color: '#52525B' }}>→ {STAGE_LABEL_MAP[cp.stage] ?? cp.stage}</span>}
+                                    {cp && <span style={{ fontSize: 10, color: '#3A3A3C' }}>{formatTime(cp.ts)}</span>}
+                                  </div>
+                                  {cp && (
+                                    <a
+                                      href={`/admin/ana-master/simulador?checkpoint=${gate}&resumeFrom=${s.callSid}`}
+                                      style={{ fontSize: 10, color: '#7B3FE4', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 3, marginTop: 2 }}
+                                    >
+                                      ↩ Retomar daqui
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Audio player */}
+                      {detailAudio && (
+                        <div>
+                          <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Volume2 className="w-3 h-3" /> Gravação de áudio
+                          </p>
+                          <audio
+                            controls
+                            src={detailAudio}
+                            style={{ width: '100%', borderRadius: 8, background: '#1C1C1E' }}
+                          />
+                        </div>
+                      )}
+
+                      {/* Quick stats */}
+                      <div style={{ background: '#1C1C1E', borderRadius: 10, padding: 12 }}>
+                        <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' }}>Resumo</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                            <span style={{ color: '#71717A' }}>Gates passados</span>
+                            <span style={{ color: '#fff', fontWeight: 700 }}>{progress}/8</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                            <span style={{ color: '#71717A' }}>Etapa final</span>
+                            <span style={{ color: '#A78BFA' }}>{STAGE_LABEL_MAP[detail.current_stage ?? ''] ?? detail.current_stage ?? '—'}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                            <span style={{ color: '#71717A' }}>Turnos transcritos</span>
+                            <span style={{ color: '#fff' }}>{detailTranscript.length}</span>
+                          </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
+                            <span style={{ color: '#71717A' }}>Áudio gravado</span>
+                            <span style={{ color: detailAudio ? '#34D399' : '#3A3A3C' }}>{detailAudio ? 'Sim' : 'Não'}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── Tab: Simulador ───────────────────────────────────────────────────────────
 
 function TabSimulador() {
@@ -348,6 +599,7 @@ export default function AnaDNANuclearPage() {
           {tab === 'simulacoes' && <TabSimulacoes />}
           {tab === 'config' && <TabConfig />}
           {tab === 'simulador' && <TabSimulador />}
+          {tab === 'sessoes' && <TabSessoes />}
           {tab === 'state' && (
             <div style={{ textAlign: 'center', padding: 60, color: '#52525B' }}>
               <GitBranch className="w-12 h-12" style={{ margin: '0 auto 12px', opacity: 0.3 }} />
