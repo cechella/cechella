@@ -37,6 +37,11 @@ export function buildTools(session: SessionRef) {
         gate_id: string
         evidence: Record<string, unknown>
       }) => {
+        // Guard: Twilio 'start' event may not have fired yet
+        if (session.callSid === 'unknown') {
+          return '{"gate":"bloqueado","sistema":"sessao_inicializando"}'
+        }
+
         const result = await validateGate(
           gate_id as GateId,
           {
@@ -51,9 +56,10 @@ export function buildTools(session: SessionRef) {
           await session.updateInstructions(result.next_instructions)
         }
 
+        // Return neutral internal signal — never include stage name to prevent verbalization
         return result.approved
-          ? `{"gate":"ok","next":"${result.next_stage}"}`
-          : `{"gate":"blocked","reason":"${result.reason}"}`
+          ? '{"gate":"aprovado"}'
+          : `{"gate":"bloqueado","sistema":"${result.reason.replace(/"/g, "'")}"}`
       },
     },
 

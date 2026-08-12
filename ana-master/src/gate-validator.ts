@@ -78,6 +78,11 @@ export async function validateGate(
       if (!evidence.dor_prioritaria) return { approved: false, reason: 'ANA ainda não identificou o que mais incomoda a lead hoje.' }
       if (!evidence.personalizacao_possivel) return { approved: false, reason: 'Não há contexto suficiente para personalizar a apresentação.' }
       if (!evidence.interesse_confirmado) return { approved: false, reason: 'Lead ainda não confirmou que quer entender como funciona o implante.' }
+      // Memory corroboration: dor_principal must be saved to DB — cannot be faked via boolean
+      const memoriesConexao = await getMemories(callSid)
+      if (!memoriesConexao.dor_principal) {
+        return { approved: false, reason: 'Memória dor_principal ausente — salve o sintoma principal via save_memory antes de avançar.' }
+      }
       break
     }
 
@@ -92,6 +97,11 @@ export async function validateGate(
         return { approved: false, reason: 'Pergunta sobre viagem não foi feita.' }
       if (evidence.pendencia_decisor)
         return { approved: false, reason: 'GATE BLOQUEADO — lead depende de terceiro para decidir. Seguir branch decisor compartilhado.' }
+      // Memory corroboration: combinado_confirmado must be saved to DB
+      const memoriesCombinado = await getMemories(callSid)
+      if (!memoriesCombinado.combinado_confirmado) {
+        return { approved: false, reason: 'Memória combinado_confirmado ausente — a lead ainda não confirmou o combinado explicitamente.' }
+      }
       break
     }
 
