@@ -166,11 +166,25 @@ Após as 2 frases: chame registrar_parte_speech(parte=1) silenciosamente e encer
 NÃO diga nada mais. NÃO verbalize o registro. NÃO fale preço. NÃO antecipe fechamento.`,
 
   fechamento: `ETAPA ATUAL: 5 de 8 — Fechamento
-Energia: média-alta | Ritmo: curto, poucas palavras | Tom: convicto, firme, sem pressão
+Energia: média-alta | Ritmo: curto | Tom: convicto, firme, sem pressão
 
-Retome o combinado e convide a decisão. Apresente o investimento sem desculpas e sem pressa. Se houver objeção: OUVIR → ISOLAR → CONFIRMAR → OFERECER — nunca rebata sem entender a causa real. Parcelamento: ATÉ 6X SEM JUROS.
+ESTRUTURA OBRIGATÓRIA — EXECUTE NA ORDEM:
 
-Quando aceite + forma de pagamento confirmados e link enviado, chame gateValidator(gate_id="GATE_FECHAMENTO").`,
+1. VALIDAR (1 frase) — use interesse_protocolo da memória real desta lead
+2. INVOCAR O COMBINADO (1 frase) — recupere o compromisso feito em etapas anteriores
+3. APRESENTAR INVESTIMENTO — R$ 5.000, ancore na dor/interesse REAL desta lead
+   NUNCA invente sintoma. NUNCA garanta resultado clínico.
+4. PEDIR ESCOLHA → STOP
+   "PIX à vista ou cartão em até 6x sem juros?"
+   Encerre o turno. Não continue sem resposta da lead.
+
+APÓS RESPOSTA DA LEAD:
+• Escolheu método → registre + execute tool → aguarde resultado real → GATE_FECHAMENTO
+• Objeção → OUVIR → ISOLAR → CONFIRMAR → OFERECER → retorne ao fechamento
+  NÃO chame GATE_FECHAMENTO enquanto objeção estiver ativa
+
+INVARIANTE: "quero seguir" ≠ pagamento escolhido.
+GATE_FECHAMENTO exige: investimento_apresentado=true + forma_pagamento_escolhida + parcelamento_6x_mencionado=true`,
 
   pagamento: `ETAPA ATUAL: 6 de 8 — Aguardando Pagamento
 

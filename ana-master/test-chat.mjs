@@ -376,11 +376,53 @@ PROIBIDO no conteúdo:
 ✗ qualquer dado que não veio dos DADOS AUTORIZADOS acima`
 }
 
+function buildFechamentoInstruction() {
+  const interesse = memoryStore.get('interesse_protocolo') || '[interesse não registrado]'
+  const dor = memoryStore.get('dor_principal') || '[dor não registrada]'
+  const combinado = memoryStore.get('combinado_resumo') || 'você disse que a decisão de saúde é sua'
+
+  return `ETAPA ATUAL: 5 de 8 — Fechamento
+Energia: média-alta | Ritmo: curto | Tom: convicto, firme, sem pressão
+
+ESTRUTURA OBRIGATÓRIA — EXECUTE NA ORDEM:
+
+1. VALIDAR (1 frase)
+   Reconheça brevemente o que ela disse que mais gostou.
+   Memória real: interesse_protocolo = "${interesse}"
+   Use isso — não invente outro benefício.
+
+2. INVOCAR O COMBINADO (1 frase)
+   Recupere o compromisso feito anteriormente:
+   "${combinado}"
+   Ex: "Lembra do nosso combinado — você disse que decisão de saúde é sua."
+
+3. APRESENTAR INVESTIMENTO (1-2 frases)
+   "O investimento é ${COMERCIAL_CONFIG.investimento_fmt}."
+   Ancore na dor/interesse real desta lead: "${dor}" / "${interesse}"
+   NUNCA invente sintoma que ela não relatou. NUNCA garanta resultado clínico.
+
+4. PEDIR ESCOLHA → STOP / WAITING_LEAD
+   "${COMERCIAL_CONFIG.pix_descricao} ou ${COMERCIAL_CONFIG.cartao_descricao}?"
+   Encerre seu turno. Não continue sem resposta da lead.
+
+APÓS RESPOSTA DA LEAD:
+• Escolheu método de pagamento → registre método → execute tool → aguarde resultado real → evidências → GATE_FECHAMENTO
+• Objeção → OUVIR → ISOLAR → CONFIRMAR → OFERECER → retorne naturalmente ao fechamento
+  NÃO chame GATE_FECHAMENTO enquanto objeção estiver ativa
+
+INVARIANTE: "quero seguir" ≠ pagamento escolhido.
+GATE_FECHAMENTO exige: investimento_apresentado=true + forma_pagamento_escolhida ("pix" ou "cartao") + parcelamento_6x_mencionado=true`
+}
+
 function systemPrompt() {
   let stageInstruction = currentInstruction || STAGE_INSTRUCTIONS[currentStage]
   // For Speech Part 1, always interpolate real memory values into the instruction
   if (currentStage === 'speech' && speechProgress.state === 'DELIVERING_PART' && speechProgress.parte_atual === 1 && !currentInstruction) {
     stageInstruction = buildSpeechP1Instruction()
+  }
+  // For Fechamento, always use interpolated instruction with real memory
+  if (currentStage === 'fechamento' && !currentInstruction) {
+    stageInstruction = buildFechamentoInstruction()
   }
   return `${ANA_BASE_PROMPT}\n\nINÍCIO: Você recebe a ligação e fala PRIMEIRO. Comece agora pela Etapa 1.\n\n${stageInstruction}`
 }
@@ -421,6 +463,13 @@ function processSpeechTurn(userInput) {
     default:
       return null
   }
+}
+
+// ── Dados comerciais — fonte estruturada (não hardcodar em prompts) ──────────
+const COMERCIAL_CONFIG = {
+  investimento_fmt: 'R$ 5.000',
+  pix_descricao: 'PIX à vista',
+  cartao_descricao: 'cartão em até 6x sem juros',
 }
 
 // ── Gates — fonte única: dist/state-machine.js (mesma definição do servidor) ──
@@ -493,10 +542,7 @@ Cada parte é liberada somente após o turno real da lead.
 
 AGORA — ENTREGUE APENAS A PARTE 1. Instrução detalhada será injetada pelo backend com os dados reais desta lead.`,
 
-  fechamento: `ETAPA ATUAL: 5 de 8 — Fechamento
-Energia: média-alta | Ritmo: curto | Tom: convicto, firme, sem pressão
-
-Retome o combinado. Apresente o investimento (R$ 5.000) sem desculpas. Se objeção: OUVIR → ISOLAR → CONFIRMAR → OFERECER. Parcelamento: ATÉ 6X SEM JUROS. Quando aceite + forma de pagamento confirmados, chame gateValidator(gate_id="GATE_FECHAMENTO").`,
+  fechamento: null, // built dynamically via buildFechamentoInstruction()
 
   pagamento: `ETAPA ATUAL: 6 de 8 — Aguardando Pagamento
 Mantenha conversa leve. Verifique periodicamente. Quando confirmar pagamento, chame gateValidator(gate_id="GATE_PAGAMENTO").`,
@@ -537,9 +583,10 @@ function handleGateValidator(args) {
   if (gate_id === 'GATE_COMBINADO') {
     speechProgress = { parte_atual: 1, partes_entregues: [], parte_em_execucao: 1, parte_interrompida: false, state: 'DELIVERING_PART', waiting_for_lead: false, pergunta_final_feita: false, resposta_final_recebida: false }
   }
-  // Reset when leaving speech stage
+  // Reset speech progress and arm fechamento instruction
   if (gate_id === 'GATE_SPEECH') {
     speechProgress = { parte_atual: 1, partes_entregues: [], parte_em_execucao: undefined, parte_interrompida: false, state: 'DELIVERING_PART', waiting_for_lead: false, pergunta_final_feita: false, resposta_final_recebida: false }
+    currentInstruction = buildFechamentoInstruction()
   }
 
   console.log(`\n${'─'.repeat(60)}`)
