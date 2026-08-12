@@ -2514,25 +2514,80 @@ function RealtimeConfigTab() {
 
   useEffect(() => { checkHealth() }, [])
 
-  const CONFIGS = [
-    { label: 'Modelo', value: 'gpt-4o-realtime-preview', badge: 'OpenAI Realtime' },
+  const INFRA = [
+    { label: 'Modelo IA', value: 'gpt-4o-realtime-preview', badge: 'OpenAI Realtime' },
     { label: 'Transport', value: 'TwilioRealtimeTransportLayer', badge: '@openai/agents-extensions' },
     { label: 'Agent SDK', value: 'RealtimeAgent + RealtimeSession', badge: '@openai/agents' },
-    { label: 'Voz', value: 'shimmer', badge: 'en-US' },
+    { label: 'Voz', value: 'shimmer', badge: 'pt-BR' },
+    { label: 'Áudio inbound', value: 'mulaw 8kHz → PCM 24kHz (wrapper)', badge: 'Twilio→OpenAI' },
+    { label: 'Áudio outbound', value: 'PCM 24kHz → mulaw 8kHz (wrapper)', badge: 'OpenAI→Twilio' },
+    { label: 'Transcrição usuário', value: 'gpt-4o-transcribe (input_audio_transcription)', badge: 'Realtime' },
+    { label: 'VAD', value: 'server_vad (OpenAI detecta fala)', badge: 'Auto' },
     { label: 'Backend', value: 'Fastify v4 + @fastify/websocket v8', badge: 'GCP VM' },
-    { label: 'Host', value: 'ana-master.hormoneecosystem.com', badge: 'HTTPS' },
-    { label: 'Memória', value: 'Supabase ana_memories + ana_calls', badge: 'Persistente' },
+    { label: 'Host', value: 'ana-master.hormoneecosystem.com', badge: 'HTTPS/WSS' },
+    { label: 'Memória', value: 'ana_memories + ana_calls (Supabase)', badge: 'Persistente' },
     { label: 'WhatsApp', value: 'Z-API', badge: 'Integrado' },
-    { label: 'Gates', value: '8 gates server-side validated', badge: 'Gate Spec v1.2' },
-    { label: 'GANHO', value: 'set_call_status_ganho() único ponto', badge: '✅ Garantido' },
-    { label: 'Parcelamento', value: '6x sem juros (hardcoded)', badge: 'DIV-01 Resolvida' },
-    { label: 'Referidos canal', value: 'Link único — fallback proibido', badge: 'DIV-03 Resolvida' },
   ]
 
+  const COMPORTAMENTO = [
+    { label: 'Idioma', value: 'Português brasileiro exclusivo — NUNCA inglês', badge: '🇧🇷' },
+    { label: 'Identidade', value: 'Voz calorosa, humana, empática — nunca robótica', badge: 'Persona' },
+    { label: 'Ferramentas', value: 'Invisíveis para a lead — sem mencionar validação interna', badge: 'Silencioso' },
+    { label: 'Ritmo', value: 'Coletar info naturalmente — nunca perguntar tudo de uma vez', badge: 'Fluxo' },
+    { label: 'Escuta ativa', value: 'Aprofunda o que a lead já contou, não faz formulário', badge: 'Conexão' },
+    { label: 'Confiança', value: 'Age como se soubesse tudo intuitivamente', badge: 'Credibilidade' },
+    { label: 'Silêncio', value: 'Durante tool calls: pergunta natural ou silêncio — nunca "aguarde"', badge: 'Naturalidade' },
+    { label: 'Parcelamento', value: 'SEMPRE "até 6x sem juros" — 12x proibido', badge: '✅' },
+    { label: 'Referidos canal', value: 'Link WhatsApp é o ÚNICO canal — voz proibido', badge: '✅' },
+    { label: 'Encerramento', value: 'Só encerra após Etapa 8 concluída com sucesso', badge: '✅' },
+  ]
+
+  const TOOLS_ANA = [
+    { name: 'gateValidator', desc: 'Valida o gate atual no servidor e avança a etapa', trigger: 'Ao concluir cada etapa' },
+    { name: 'get_lead_context', desc: 'Recupera nome, quem indicou e memórias da lead', trigger: 'Início da ligação' },
+    { name: 'save_memory', desc: 'Salva informação importante da lead (contexto_vida, etc.)', trigger: 'Ao capturar dado relevante' },
+    { name: 'verificar_pagamento', desc: 'Verifica se pagamento foi confirmado no sistema', trigger: 'Etapa 6 — a cada 2min' },
+    { name: 'iniciar_coleta_referidos', desc: 'Envia link de indicações no WhatsApp da lead', trigger: 'Início da Etapa 7' },
+    { name: 'verificar_referidos', desc: 'Verifica progresso do formulário de indicações', trigger: 'Etapa 7 — a cada 2min' },
+    { name: 'send_whatsapp', desc: 'Envia mensagem de texto no WhatsApp da lead', trigger: 'Quando necessário' },
+  ]
+
+  const REGRAS = [
+    { regra: 'ANA nunca avança de etapa sozinha — sempre via gateValidator', tipo: 'Técnica' },
+    { regra: 'GANHO gravado SOMENTE após GATE_VALIDACAO — nunca antes', tipo: 'Negócio' },
+    { regra: 'Parcelamento: até 6x sem juros — 12x é erro crítico', tipo: 'Negócio' },
+    { regra: 'Referidos: link WhatsApp único — nunca coletar por voz', tipo: 'Processo' },
+    { regra: 'Não encerra ligação antes da Etapa 8 concluída', tipo: 'Processo' },
+    { regra: 'Ferramentas internas invisíveis para a lead', tipo: 'UX' },
+    { regra: 'Idioma: português brasileiro exclusivo', tipo: 'UX' },
+  ]
+
+  function ConfigSection({ title, color, children }: { title: string; color: string; children: React.ReactNode }) {
+    return (
+      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden', marginBottom: 20 }}>
+        <div style={{ padding: '12px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 8, height: 8, borderRadius: 99, background: color, flexShrink: 0 }} />
+          <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>{title}</span>
+        </div>
+        {children}
+      </div>
+    )
+  }
+
+  function Row({ label, value, badge, mono }: { label: string; value: string; badge?: string; mono?: boolean }) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'flex-start', padding: '10px 20px', borderBottom: `1px solid ${C.border}` }}>
+        <span style={{ color: C.textMuted, fontSize: 12, width: 180, flexShrink: 0, paddingTop: 1 }}>{label}</span>
+        <span style={{ color: C.text, fontSize: 12, flex: 1, fontFamily: mono ? 'monospace' : 'inherit' }}>{value}</span>
+        {badge && <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: '#38BDF810', color: '#38BDF8', border: '1px solid #38BDF820', flexShrink: 0, marginLeft: 8 }}>{badge}</span>}
+      </div>
+    )
+  }
+
   return (
-    <div style={{ maxWidth: 720 }}>
+    <div style={{ maxWidth: 780 }}>
       {/* Health card */}
-      <div style={{ background: health?.ok ? '#052e0a' : health?.error ? '#2d0a0a' : C.surface, border: `1px solid ${health?.ok ? '#16a34a' : health?.error ? '#991b1b' : C.border}`, borderRadius: 16, padding: '16px 20px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 16 }}>
+      <div style={{ background: health?.ok ? '#052e0a' : health?.error ? '#2d0a0a' : C.surface, border: `1px solid ${health?.ok ? '#16a34a' : health?.error ? '#991b1b' : C.border}`, borderRadius: 16, padding: '16px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
         <div style={{ flex: 1 }}>
           <p style={{ color: C.text, fontWeight: 700, margin: 0 }}>
             {health?.ok ? '✅ ANA MASTER — Online' : health?.error ? '❌ ANA MASTER — Offline' : '⏳ Verificando...'}
@@ -2546,21 +2601,42 @@ function RealtimeConfigTab() {
         </button>
       </div>
 
-      {/* Config table */}
-      <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
-        <div style={{ padding: '12px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Zap style={{ width: 14, height: 14, color: '#38BDF8' }} />
-          <span style={{ color: C.text, fontWeight: 700, fontSize: 13 }}>Configuração Realtime</span>
-          <span style={{ marginLeft: 'auto', fontSize: 10, color: C.textFaint }}>Gate Spec v1.2 · Arquitetura v2.1</span>
+      {/* Infraestrutura */}
+      <ConfigSection title="Infraestrutura & Modelo" color="#38BDF8">
+        {INFRA.map(cfg => <Row key={cfg.label} label={cfg.label} value={cfg.value} badge={cfg.badge} mono={cfg.value.includes('(')} />)}
+      </ConfigSection>
+
+      {/* Comportamento */}
+      <ConfigSection title="Comportamento & Personalidade" color="#A78BFA">
+        {COMPORTAMENTO.map(cfg => <Row key={cfg.label} label={cfg.label} value={cfg.value} badge={cfg.badge} />)}
+      </ConfigSection>
+
+      {/* Tools */}
+      <ConfigSection title="Ferramentas disponíveis para ANA" color="#34D399">
+        <div style={{ padding: '4px 0' }}>
+          {TOOLS_ANA.map(t => (
+            <div key={t.name} style={{ display: 'flex', alignItems: 'flex-start', gap: 16, padding: '10px 20px', borderBottom: `1px solid ${C.border}` }}>
+              <span style={{ fontSize: 11, fontFamily: 'monospace', color: '#34D399', background: '#34D39910', border: '1px solid #34D39930', borderRadius: 6, padding: '2px 8px', flexShrink: 0, marginTop: 1 }}>{t.name}</span>
+              <div style={{ flex: 1 }}>
+                <p style={{ color: C.text, fontSize: 12, margin: 0 }}>{t.desc}</p>
+                <p style={{ color: C.textFaint, fontSize: 11, margin: '2px 0 0' }}>Acionada: {t.trigger}</p>
+              </div>
+            </div>
+          ))}
         </div>
-        {CONFIGS.map((cfg, i) => (
-          <div key={cfg.label} style={{ display: 'flex', alignItems: 'center', padding: '11px 20px', borderBottom: i < CONFIGS.length - 1 ? `1px solid ${C.border}` : 'none', background: i % 2 === 0 ? 'transparent' : '#ffffff03' }}>
-            <span style={{ color: C.textMuted, fontSize: 12, width: 160, flexShrink: 0 }}>{cfg.label}</span>
-            <span style={{ color: C.text, fontSize: 12, flex: 1, fontFamily: cfg.value.includes('.') || cfg.value.includes('(') ? 'monospace' : 'inherit' }}>{cfg.value}</span>
-            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: '#38BDF810', color: '#38BDF8', border: '1px solid #38BDF820', flexShrink: 0 }}>{cfg.badge}</span>
-          </div>
-        ))}
-      </div>
+      </ConfigSection>
+
+      {/* Regras absolutas */}
+      <ConfigSection title="Regras Absolutas" color="#F87171">
+        <div style={{ padding: '4px 0' }}>
+          {REGRAS.map(r => (
+            <div key={r.regra} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: `1px solid ${C.border}` }}>
+              <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: '#F8717110', color: '#F87171', border: '1px solid #F8717130', flexShrink: 0 }}>{r.tipo}</span>
+              <span style={{ color: C.text, fontSize: 12 }}>{r.regra}</span>
+            </div>
+          ))}
+        </div>
+      </ConfigSection>
     </div>
   )
 }

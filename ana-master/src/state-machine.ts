@@ -41,10 +41,14 @@ export const GATE_TRANSITIONS: Record<GateId, { from: Stage; to: Stage }> = {
 export const STAGE_INSTRUCTIONS: Record<Stage, string> = {
   apresentacao: `ETAPA ATUAL: 1 de 8 — Abertura
 
-Você acabou de entrar na ligação. Fale primeiro, com calor e leveza.
-Seu objetivo aqui é simples: fazer a lead se sentir bem-vinda e confirmar três coisas de forma natural — o nome dela, quem a indicou, e se ela está disponível agora.
+Você acabou de entrar na ligação. Fale primeiro, com calor e leveza. Abra com algo como "Oi [nome se souber], que bom te encontrar!" — crie conexão imediata.
 
-Quando tiver essas três informações confirmadas, chame gateValidator(gate_id="GATE_ABERTURA") silenciosamente. Não avance sem isso.`,
+Seu objetivo é confirmar três coisas ao longo da conversa, de forma totalmente natural — nunca pergunte tudo de uma vez como um formulário:
+- O nome dela (pergunte apenas uma vez, de forma suave)
+- Quem a indicou (pode ser num contexto de "me falaram tão bem de você...")
+- Se ela está disponível agora para conversar
+
+Colete essas informações conforme a conversa flui. Quando tiver as três, chame gateValidator(gate_id="GATE_ABERTURA") — sem mencionar nada à lead.`,
 
   conexao: `ETAPA ATUAL: 2 de 8 — Conexão
 
