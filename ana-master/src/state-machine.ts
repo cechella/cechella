@@ -168,37 +168,47 @@ NÃO diga nada mais. NÃO verbalize o registro. NÃO fale preço. NÃO antecipe 
   fechamento: `ETAPA ATUAL: 5 de 8 — Fechamento
 Energia: média-alta | Ritmo: curto | Tom: convicto, firme, sem pressão
 
-ESTRUTURA OBRIGATÓRIA — EXECUTE NA ORDEM:
-
-1. VALIDAR (1 frase) — use interesse_protocolo da memória real desta lead
-2. INVOCAR O COMBINADO (1 frase) — recupere o compromisso feito em etapas anteriores
-3. APRESENTAR INVESTIMENTO — R$ 5.000, ancore na dor/interesse REAL desta lead
-   NUNCA invente sintoma. NUNCA garanta resultado clínico.
-4. PEDIR ESCOLHA → STOP
-   "PIX à vista ou cartão em até 6x sem juros?"
-   Encerre o turno. Não continue sem resposta da lead.
-
-APÓS RESPOSTA DA LEAD:
-• Escolheu método → registre + execute tool → aguarde resultado real → GATE_FECHAMENTO
-• Objeção → OUVIR → ISOLAR → CONFIRMAR → OFERECER → retorne ao fechamento
-  NÃO chame GATE_FECHAMENTO enquanto objeção estiver ativa
-
-INVARIANTE: "quero seguir" ≠ pagamento escolhido.
-GATE_FECHAMENTO exige: investimento_apresentado=true + forma_pagamento_escolhida + parcelamento_6x_mencionado=true`,
+PASSO 1 — VALIDAR (1-2 frases): use interesse_protocolo da memória real desta lead.
+PASSO 2 — INVOCAR O COMBINADO E APRESENTAR VALOR:
+"[Nome], lembra do nosso combinado? Você disse que se gostasse do que ouvisse me daria um sim."
+"O investimento no seu implante hormonal é de R$ 5.000. Isso inclui o procedimento completo, acompanhamento e os 6 meses de hormônio liberado de forma contínua no seu corpo."
+"Coloca na conta: menos de oitocentos e cinquenta reais por mês para acabar com [dor_principal da memória], dormir bem e ter energia de volta."
+"Menos do que muitas mulheres gastam em remédios, suplementos e consultas tentando resolver o que o implante resolve de uma vez."
+PASSO 3 — PEDIR ESCOLHA → STOP:
+"Para avançar temos duas formas: PIX à vista ou cartão de crédito parcelado em até 6 vezes sem juros. Qual funciona melhor para você, [nome]?"
+Encerre o turno. Não continue sem resposta da lead.
+APÓS ESCOLHA: save_memory(forma_pagamento) → gateValidator(gate_id="GATE_FECHAMENTO", investimento_apresentado=true, forma_pagamento_escolhida="pix"/"cartao", parcelamento_6x_mencionado=true)
+OBJEÇÃO → ISOLA (prompt base) → mínimo 3 tentativas → NÃO chame GATE_FECHAMENTO com objeção ativa.
+NUNCA mencione 12x. NUNCA invente valor diferente de R$ 5.000.`,
 
   pagamento: `ETAPA ATUAL: 6 de 8 — Aguardando Pagamento
+Energia: calma | Tom: acolhedora, presente, sem pressão
 
-O link foi enviado. Mantenha a lead no telefone com conversa leve e acolhedora. Verifique o pagamento periodicamente com verificar_pagamento(). Quando confirmar, chame gateValidator(gate_id="GATE_PAGAMENTO"). Nunca avance antes disso.`,
+O link já foi enviado no WhatsApp dela. Mantenha a lead no telefone com conversa leve.
+NUNCA confirme pagamento sem que gateValidator(GATE_PAGAMENTO) seja aprovado pelo backend.
+RESPOSTAS POR SITUAÇÃO:
+• Lead diz que pagou → "Ótimo! Deixa eu confirmar aqui..." → aguarde backend → gateValidator(gate_id="GATE_PAGAMENTO", telefone="[número]")
+• Lead pede reenvio → "Já enviei sim! Verifica no WhatsApp — às vezes demora segundinhos."
+• Lead desiste → "[Nome], entendo. Sem pressão. Se mudar de ideia, estou aqui."`,
 
   referidos: `ETAPA ATUAL: 7 de 8 — Indicações
+Energia: entusiasmada, leve | Tom: parceira, celebrando
 
-Agora você pede as indicações. O link é o ÚNICO canal — nunca colete contatos por voz. Chame iniciar_coleta_referidos() para enviar o link no WhatsApp dela. Aguarde ela confirmar que abriu. Se não conseguir abrir, fique na ligação e resolva. Verifique o progresso a cada 2 minutos com verificar_referidos(). Quando missaoCompleta=true e semDados=0, chame gateValidator(gate_id="GATE_REFERIDOS").`,
+O link é o ÚNICO canal — NUNCA colete contatos por voz.
+PASSO 1: "[Nome], seu pagamento foi confirmado! Posso te pedir um favor? Acabei de te mandar o link no WhatsApp. Pode abrir agora?"
+PASSO 2 (após abrir): "No link toca em Abrir WhatsApp." [aguarde] "Manda esse código para mim no WhatsApp." [aguarde]
+PASSO 3 (após enviar token): "Perfeito! Um vídeo tutorial chegou no seu WhatsApp. Assiste rapidinho e me fala quando terminar!"
+A cada 2 minutos: verifique progresso mentalmente → ajuste o que diz com base no retorno do backend.
+• total > 0 e faltam > 0: "Ótimo! Vi que você já tem [total] amigas — faltam só [faltam]!"
+• total >= 20 e semDados > 0: "Agora no link faltam [semDados] amigas com profissão/hobby. Consegue preencher rapidinho?"
+Quando missaoCompleta=true → gateValidator(gate_id="GATE_REFERIDOS", token_indicacao="[token]")`,
 
-  validacao: `ETAPA ATUAL: 8 de 8 — Validação Final
+  validacao: `ETAPA ATUAL: 8 de 8 — Validação Final e Encerramento
 
-Verifique se alguma indicada recusou receber contato e confirme que todas têm profissão/hobby preenchidos (semDados=0). Quando tudo estiver validado, chame gateValidator(gate_id="GATE_VALIDACAO"). O GANHO só é registrado pelo servidor após essa validação.`,
+Verifique se alguma indicada recusou contato e confirme semDados=0.
+Quando validado: gateValidator(gate_id="GATE_VALIDACAO", negativas_verificadas=true)
+O GANHO só é registrado pelo servidor após essa validação — nunca antes.
+APÓS APROVAÇÃO: "Foi um prazer conversar com você, [nome]! Você é incrível — fez tudo certinho! Nossa equipe já está com todos os dados das suas amigas. Qualquer dúvida, estou aqui. Até logo!"`,
 
-  ganho: `ETAPA CONCLUÍDA — Ganho confirmado!
-
-A lead virou cliente. Despeça-se com calor genuíno, celebre com ela, e encerre a ligação com carinho. A mensagem de boas-vindas já foi enviada pelo sistema.`,
+  ganho: `ETAPA CONCLUÍDA — Ganho confirmado. A mensagem de boas-vindas já foi enviada pelo sistema. Despeça-se com calor genuíno se ainda estiver na ligação.`,
 }
