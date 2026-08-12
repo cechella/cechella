@@ -221,6 +221,8 @@ const qaMetrics = {
   memory_violation_count: 0,
   scope_violation_count: 0,
   trailing_text_count: 0,
+  fechamento_promise_violations: 0,
+  fechamento_memory_violations: 0,
 }
 
 function countSentences(text) {
@@ -257,6 +259,42 @@ const P1_EXPRESSION_DEVIATIONS = [
   { pattern: 'deixa eu te',    label: 'trailing_transition' },
   { pattern: 'já continuo',    label: 'trailing_transition' },
 ]
+
+// Fechamento QA — verifica violações de memória e promessas absolutas
+function validateFechamentoContent(content) {
+  const violations = []
+  const text = content.toLowerCase()
+
+  // Promessas absolutas — proibidas
+  const absoluteClaims = [
+    { pattern: 'acabar com',        label: 'fechamento_promise_violation="acabar com"' },
+    { pattern: 'resolve de uma vez',label: 'fechamento_promise_violation="resolve de uma vez"' },
+    { pattern: 'elimina ',          label: 'fechamento_promise_violation="elimina"' },
+    { pattern: 'cura ',             label: 'fechamento_promise_violation="cura"' },
+  ]
+  for (const c of absoluteClaims) {
+    if (text.includes(c.pattern)) violations.push(c.label)
+  }
+
+  // Memória inventada — benefícios que a lead não mencionou
+  const memorizedInteresse = (memoryStore.get('interesse_protocolo') || '').toLowerCase()
+  const memorizedDor = (memoryStore.get('dor_principal') || '').toLowerCase()
+  const authorizedText = memorizedInteresse + ' ' + memorizedDor
+
+  const forbiddenIfNotMentioned = [
+    { token: 'energia',   label: 'fechamento_memory_violation="energia de volta" — lead não mencionou energia' },
+    { token: 'libido',    label: 'fechamento_memory_violation="libido" — lead não mencionou libido' },
+    { token: 'treino',    label: 'fechamento_memory_violation="treino" — lead não mencionou treino' },
+    { token: 'humor',     label: 'fechamento_memory_violation="humor" — lead não mencionou humor' },
+  ]
+  for (const f of forbiddenIfNotMentioned) {
+    if (text.includes(f.token) && !authorizedText.includes(f.token)) {
+      violations.push(f.label)
+    }
+  }
+
+  return violations
+}
 
 // Returns { blocking: string[], warnings: string[] }
 function validateP1Content(content) {
@@ -353,8 +391,8 @@ Use exatamente isso — não invente benefício que ela não mencionou.
 PASSO 2 — INVOCAR O COMBINADO E APRESENTAR VALOR
 Diga: "[Nome], lembra do nosso combinado? Você disse que se gostasse do que ouvisse me daria um sim."
 Diga: "O investimento no seu implante hormonal é de ${COMERCIAL_CONFIG.investimento_fmt}. Isso inclui o procedimento completo, acompanhamento e os 6 meses de hormônio liberado de forma contínua no seu corpo."
-Diga: "Coloca na conta: menos de oitocentos e cinquenta reais por mês para acabar com [use: ${dor}], dormir bem e ter energia de volta."
-Diga: "Menos do que muitas mulheres gastam em remédios, suplementos e consultas tentando resolver o que o implante resolve de uma vez."
+Diga: "Colocando na conta, são menos de oitocentos e cinquenta reais por mês dentro de um protocolo voltado justamente para o que você quer melhorar: [use SOMENTE o que está em interesse_protocolo = "${interesse}" — não acrescente benefícios que a lead não mencionou]."
+Diga: "Muitas mulheres gastam isso ou mais tentando melhorar isso sem resultado."
 
 PASSO 3 — APRESENTAR FORMAS DE PAGAMENTO
 Diga: "Para avançar temos duas formas: ${COMERCIAL_CONFIG.pix_descricao} ou ${COMERCIAL_CONFIG.cartao_descricao}. Qual funciona melhor para você, [nome]?"
@@ -929,6 +967,20 @@ async function callAna(userMessage) {
     console.log(`  ⚠️  [QA] speech_tool_missing: parte ${parte} verbalizada sem registrar_parte_speech (guards não atendidos) [total: ${qaMetrics.tool_missing_count}]`)
   }
 
+  // Fechamento QA — valida expressão comercial da ANA
+  if (currentStage === 'fechamento' && msg.content?.trim()) {
+    const violations = validateFechamentoContent(msg.content)
+    if (violations.length > 0) {
+      console.log(`\n  ⚠️  [QA] FECHAMENTO_VIOLATION:`)
+      for (const v of violations) {
+        console.log(`     • ${v}`)
+        if (v.includes('promise')) qaMetrics.fechamento_promise_violations++
+        else if (v.includes('memory')) qaMetrics.fechamento_memory_violations++
+      }
+      console.log()
+    }
+  }
+
   return msg.content
 }
 
@@ -1089,6 +1141,8 @@ async function main() {
       console.log(`   Memory violations:    ${qaMetrics.memory_violation_count}`)
       console.log(`   Scope violations:     ${qaMetrics.scope_violation_count}`)
       console.log(`   Trailing text:        ${qaMetrics.trailing_text_count}`)
+      console.log(`   Fechamento promise ⚠: ${qaMetrics.fechamento_promise_violations}`)
+      console.log(`   Fechamento memory ⚠:  ${qaMetrics.fechamento_memory_violations}`)
       const total = qaMetrics.p1_attempt_count
       if (total > 0) {
         const gold = qaMetrics.p1_first_pass_success
