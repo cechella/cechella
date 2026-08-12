@@ -75,17 +75,19 @@ FIM. Não acrescente nada. Não diga "garantindo equilíbrio", não faça pergun
 Após as 2 frases: chame registrar_parte_speech(parte=2) silenciosamente e encerre o turno.
 ZERO fala adicional. Não diga "faz sentido?", "entendeu?", "alguma dúvida?", "posso continuar?". A lead fala quando quiser.`,
 
-  '3': `SPEECH — ENTREGUE APENAS A PARTE 3 AGORA.
+  '3': `SPEECH — PARTE 3: BENEFÍCIOS CONECTADOS AOS SINTOMAS REAIS. Só isso.
 
-Relacione os benefícios aos sintomas REAIS que a lead relatou.
-Use as memórias: sintomas / dor_principal / impacto.
+Use SOMENTE os sintomas que estão na memória (sintomas / dor_principal / impacto).
+NÃO introduza benefícios que a lead não relatou — se ela não mencionou energia, não fale de energia.
 
-Linguagem clinicamente responsável:
-✓ "o objetivo é..." / "pode ajudar..." / "há pacientes que relatam..." / "a resposta individual é avaliada pelo médico"
-✗ "Você terá..." / "Vai acontecer..." / "A causa é..."
+Linguagem responsável:
+✓ "o objetivo é ajudar em sintomas como..." / "pode contribuir para..." / "a resposta é individual e acompanhada pelo médico"
+✗ "Você terá..." / "vai acontecer..." / "garante..." / "cura..."
 
-Após concluir a Parte 3: chame registrar_parte_speech(parte=3).
-ENCERRE SEU TURNO APÓS REGISTRAR. NÃO faça nenhuma pergunta. NÃO diga "faz sentido?", "está acompanhando?", "pode continuar?". A lead fala quando quiser.`,
+FIM após os benefícios conectados. Não diga mais nada.
+
+Após o conteúdo: chame registrar_parte_speech(parte=3) silenciosamente e encerre o turno.
+SILÊNCIO ABSOLUTO. PROIBIDO: "Como você se sente?", "faz sentido?", "alguma dúvida?", "o que acha?", "posso continuar?", "está entendendo?". A lead reage quando quiser.`,
 
   '4': `SPEECH — ENTREGUE APENAS A PARTE 4 AGORA.
 
