@@ -219,11 +219,76 @@ let speechProgress = initialSpeechProgress()
 const memoryStore = new Map()  // tracks save_memory calls within session
 let autoRegisterCount = 0
 
-// Truncate text to at most maxSentences sentences (splits on ". " / ".\n" / "! " / "? ")
-function truncateToSentences(text, maxSentences) {
-  if (!text) return text
-  const parts = text.match(/[^.!?]+[.!?]+[\s]*/g) || [text]
-  return parts.slice(0, maxSentences).join('').trim()
+// ── QA Metrics ───────────────────────────────────────────────────────────────
+const qaMetrics = {
+  p1_first_pass_success: 0,
+  p1_retry_count: 0,
+  p1_attempt_count: 0,
+  guard_trigger_count: 0,
+  tool_missing_count: 0,
+  auto_register_count: 0,
+  memory_violation_count: 0,
+  scope_violation_count: 0,
+  trailing_text_count: 0,
+}
+
+function countSentences(text) {
+  if (!text) return 0
+  const parts = text.match(/[^.!?]+[.!?]+/g) || []
+  // If no punctuation found at all, treat the whole block as 1 sentence
+  return parts.length || (text.trim().length > 0 ? 1 : 0)
+}
+
+const P1_PROHIBITED_CONTENT = [
+  'pellet', 'grão de arroz', 'inserção', 'liberação contínua',
+  '6 meses', 'prazo de resultado', 'proteção cardiovascular', 'proteção óssea',
+]
+const P1_TRANSITION_PHRASES = [
+  'vou explicar', 'vou te contar', 'agora vou', 'na próxima parte',
+  'vou te mostrar', 'deixa eu te', 'já continuo', 'vou registrar',
+  'próxima parte', 'parte 2', 'parte dois',
+]
+
+function validateP1Content(content) {
+  const reasons = []
+  const text = content.toLowerCase()
+
+  const sentenceCount = countSentences(content)
+  if (sentenceCount > 2) {
+    reasons.push(`sentence_count=${sentenceCount} (máximo=2)`)
+    qaMetrics.trailing_text_count++
+  }
+
+  for (const phrase of P1_PROHIBITED_CONTENT) {
+    if (text.includes(phrase)) {
+      reasons.push(`conteúdo_proibido="${phrase}"`)
+      qaMetrics.scope_violation_count++
+    }
+  }
+
+  for (const phrase of P1_TRANSITION_PHRASES) {
+    if (text.includes(phrase)) {
+      reasons.push(`transição_indevida="${phrase}"`)
+      qaMetrics.trailing_text_count++
+    }
+  }
+
+  // Check for memory violations: only flag if specific known-fake data appears
+  // and is NOT in the authorized memory
+  const authorizedDor = (memoryStore.get('dor_principal') || '').toLowerCase()
+  const authorizedImpacto = (memoryStore.get('impacto') || '').toLowerCase()
+  const authorizedSintomas = (memoryStore.get('sintomas') || '').toLowerCase()
+  const authorizedText = `${authorizedDor} ${authorizedImpacto} ${authorizedSintomas}`
+
+  const knownFakeData = ['falta de energia', 'atrapalhando seus treinos', 'sempre foi muito ativa']
+  for (const fake of knownFakeData) {
+    if (text.includes(fake) && !authorizedText.includes(fake)) {
+      reasons.push(`dado_inventado="${fake}"`)
+      qaMetrics.memory_violation_count++
+    }
+  }
+
+  return reasons
 }
 
 function buildSpeechP1Instruction() {
@@ -615,15 +680,7 @@ async function callAna(userMessage) {
   if (msg.tool_calls && msg.tool_calls.length > 0) {
     // If the model generated text AND tool_calls in the same response,
     // display the text first — it is ANA's verbal delivery before the tool fires.
-    let spokenContent = msg.content?.trim()
-    // Speech P1 budget: max 2 sentences. Truncate trailing text silently.
-    if (spokenContent && currentStage === 'speech' && speechProgress.parte_atual === 1 && speechProgress.state === 'DELIVERING_PART') {
-      const truncated = truncateToSentences(spokenContent, 2)
-      if (truncated !== spokenContent) {
-        console.log(`  ✂️  P1 truncada: removido trailing text após 2ª frase`)
-        spokenContent = truncated
-      }
-    }
+    const spokenContent = msg.content?.trim()
     if (spokenContent) {
       console.log(`\x1b[35mANA:\x1b[0m ${spokenContent}\n`)
     }
@@ -638,17 +695,40 @@ async function callAna(userMessage) {
       if (tc.function.name === 'gateValidator') result = handleGateValidator(args)
       else if (tc.function.name === 'registrar_parte_speech') {
         const parte = args.parte
-        // GUARD: numeric part registration requires verbal content in the same turn.
-        // If model called registrar_parte_speech without speaking first, reject and force delivery.
         const isNumericPart = typeof parte === 'number'
         const hasVerbalContent = !!spokenContent
+
+        // GUARD 1: registration without verbal content in same turn
         if (isNumericPart && !hasVerbalContent) {
-          const sp = speechProgress
-          console.log(`  ⚠️  speech_content_missing: modelo tentou registrar parte ${parte} sem verbalizar conteúdo. Rejeitando.`)
+          qaMetrics.guard_trigger_count++
+          console.log(`  ⚠️  [QA] speech_content_missing: parte ${parte} — sem conteúdo verbal neste turno`)
           result = {
-            error: `Conteúdo não verbalizado. Você DEVE falar o conteúdo da Parte ${parte} antes de chamar registrar_parte_speech. Entregue agora as frases da Parte ${parte} e chame o registro após.`,
+            error: `Conteúdo não verbalizado. Fale o conteúdo da Parte ${parte} antes de registrar. Entregue as frases agora e chame registrar_parte_speech após.`,
           }
-        } else {
+        }
+        // GUARD 2: P1 content validation
+        else if (isNumericPart && parte === 1 && hasVerbalContent) {
+          qaMetrics.p1_attempt_count++
+          const violations = validateP1Content(spokenContent)
+          if (violations.length > 0) {
+            qaMetrics.guard_trigger_count++
+            qaMetrics.p1_retry_count++
+            console.log(`\n  ❌ [QA] P1_VALIDATION_FAILED`)
+            violations.forEach(r => console.log(`     reason: ${r}`))
+            console.log(`     → P1 NÃO registrada. SpeechProgress NÃO avança. Solicitando nova tentativa.\n`)
+            result = {
+              error: `P1_VALIDATION_FAILED. Problemas: ${violations.join('; ')}. Reescreva a Parte 1 respeitando: exatamente 2 frases, somente dados da memória autorizada, sem frases de transição, sem conteúdo de P2/P3/P4.`,
+            }
+          } else {
+            if (qaMetrics.p1_retry_count === 0) qaMetrics.p1_first_pass_success++
+            console.log(`  ✅ [QA] P1_VALID — first_pass=${qaMetrics.p1_retry_count === 0}`)
+            result = handleRegistrarParteSpeech(args)
+            if (result.aguardando === 'turno_da_lead' || result.aguardando === 'resposta_final_da_lead') {
+              waitingForLead = true
+            }
+          }
+        }
+        else {
           result = handleRegistrarParteSpeech(args)
           if (result.aguardando === 'turno_da_lead' || result.aguardando === 'resposta_final_da_lead') {
             waitingForLead = true
@@ -685,29 +765,45 @@ async function callAna(userMessage) {
     !speechProgress.parte_interrompida &&                                  // guard 5
     !speechProgress.partes_entregues.includes(parte)                       // guard 6
 
-  if (currentStage === 'speech' && speechProgress.state === 'DELIVERING_PART') {
-    // Diagnostic log before every AUTO-REGISTRO evaluation
-    console.log(`  [AUTO-REG DIAG] content="${msg.content?.trim()?.slice(0, 60) ?? ''}" len=${msg.content?.trim()?.length ?? 0} state=${speechProgress.state} parte_em_execucao=${speechProgress.parte_em_execucao} parte_atual=${speechProgress.parte_atual} interrompida=${speechProgress.parte_interrompida} entregues=[${speechProgress.partes_entregues}] explicitReg=${explicitRegistrarCalled}`)
-  }
-
   if (autoRegisterEligible) {
-    autoRegisterCount++
-    const fakeId = `auto_${Date.now()}`
-    // Truncate P1 to 2 sentences before displaying and storing
-    let autoContent = msg.content?.trim() || ''
+    const autoContent = msg.content?.trim() || ''
+
+    // P1 QA validation before auto-registering
     if (parte === 1) {
-      const truncated = truncateToSentences(autoContent, 2)
-      if (truncated !== autoContent) {
-        console.log(`  ✂️  P1 truncada: removido trailing text após 2ª frase`)
-        autoContent = truncated
+      qaMetrics.p1_attempt_count++
+      const violations = validateP1Content(autoContent)
+      if (violations.length > 0) {
+        qaMetrics.guard_trigger_count++
+        qaMetrics.p1_retry_count++
+        console.log(`\n  ❌ [QA] P1_VALIDATION_FAILED (auto-registro bloqueado)`)
+        violations.forEach(r => console.log(`     reason: ${r}`))
+        console.log(`     → P1 NÃO registrada. SpeechProgress NÃO avança.\n`)
+        // Return error to model for retry — content already displayed above
+        messages.pop()
+        messages.push({
+          ...msg,
+          tool_calls: [{
+            id: `auto_block_${Date.now()}`,
+            type: 'function',
+            function: { name: 'registrar_parte_speech', arguments: JSON.stringify({ parte }) },
+          }],
+        })
+        messages.push({
+          role: 'tool',
+          tool_call_id: `auto_block_${Date.now()}`,
+          content: JSON.stringify({ error: `P1_VALIDATION_FAILED: ${violations.join('; ')}. Reescreva P1 com exatamente 2 frases, somente dados da memória autorizada, sem frases de transição.` }),
+        })
+        return callAna(null)
       }
+      if (qaMetrics.p1_retry_count === 0) qaMetrics.p1_first_pass_success++
+      console.log(`  ✅ [QA] P1_VALID — first_pass=${qaMetrics.p1_retry_count === 0}`)
     }
-    console.log(`\x1b[35mANA:\x1b[0m ${autoContent}\n`)
-    // Replace the content-only message with one that also carries the tool call (truncated content)
+
+    qaMetrics.auto_register_count++
+    const fakeId = `auto_${Date.now()}`
     messages.pop()
     messages.push({
       ...msg,
-      content: autoContent,
       tool_calls: [{
         id: fakeId,
         type: 'function',
@@ -716,28 +812,20 @@ async function callAna(userMessage) {
     })
     const result = handleRegistrarParteSpeech({ parte })
     messages.push({ role: 'tool', tool_call_id: fakeId, content: JSON.stringify(result) })
-    console.log(`\n  🤖 AUTO-REGISTRO: registrar_parte_speech(${parte}) injetado automaticamente [total: ${autoRegisterCount}]\n`)
+    console.log(`\n  🤖 AUTO-REGISTRO: registrar_parte_speech(${parte}) [total: ${qaMetrics.auto_register_count}]\n`)
     if (result.aguardando === 'turno_da_lead') return null
     return callAna(null)  // parte 4 → injeta final_question
   }
 
-  // Model verbalized speech content without calling tool and guards failed → log only, safe state maintained
+  // Model verbalized speech content without calling tool and guards failed → log, safe state
   if (
     currentStage === 'speech' &&
     speechProgress.state === 'DELIVERING_PART' &&
     msg.content?.trim() &&
     !explicitRegistrarCalled
   ) {
-    console.log(`  ⚠️  speech_tool_missing: parte ${parte} verbalizada sem registrar_parte_speech (guards não atendidos)`)
-  }
-
-  // Truncate P1 trailing text in pure-content path as well
-  if (currentStage === 'speech' && speechProgress.parte_atual === 1 && speechProgress.state === 'DELIVERING_PART' && msg.content?.trim()) {
-    const truncated = truncateToSentences(msg.content.trim(), 2)
-    if (truncated !== msg.content.trim()) {
-      console.log(`  ✂️  P1 truncada: removido trailing text após 2ª frase`)
-    }
-    return truncated
+    qaMetrics.tool_missing_count++
+    console.log(`  ⚠️  [QA] speech_tool_missing: parte ${parte} verbalizada sem registrar_parte_speech (guards não atendidos) [total: ${qaMetrics.tool_missing_count}]`)
   }
 
   return msg.content
@@ -752,7 +840,7 @@ function printHeader() {
   console.log('╔══════════════════════════════════════════════════════════════╗')
   console.log('║           SIMULADOR ANA — HORMONE ECOSYSTEM                 ║')
   console.log('║  Modelo: gpt-4o  |  Speech Progress Control ativo           ║')
-  console.log('║  /gates /speech /memory /reset /save  |  Ctrl+C encerra     ║')
+  console.log('║  /gates /speech /memory /qa /reset /save  |  Ctrl+C encerra  ║')
   console.log('╚══════════════════════════════════════════════════════════════╝')
 }
 
@@ -884,6 +972,30 @@ async function main() {
       if (saved) {
         console.log(`\n📋 Sessão: ${saved.session_id} | ${saved.ana_version}`)
         console.log(`   Etapa: ${currentStage} | Messages: ${messages.length}`)
+      }
+      console.log()
+      continue
+    }
+
+    if (input.trim() === '/qa') {
+      console.log('\n📊 QA METRICS')
+      console.log(`   P1 attempts:          ${qaMetrics.p1_attempt_count}`)
+      console.log(`   P1 first-pass GOLD:   ${qaMetrics.p1_first_pass_success}`)
+      console.log(`   P1 retries (RECOVERED):${qaMetrics.p1_retry_count}`)
+      console.log(`   Guard triggers:       ${qaMetrics.guard_trigger_count}`)
+      console.log(`   Tool missing:         ${qaMetrics.tool_missing_count}`)
+      console.log(`   Auto-register:        ${qaMetrics.auto_register_count}`)
+      console.log(`   Memory violations:    ${qaMetrics.memory_violation_count}`)
+      console.log(`   Scope violations:     ${qaMetrics.scope_violation_count}`)
+      console.log(`   Trailing text:        ${qaMetrics.trailing_text_count}`)
+      const total = qaMetrics.p1_attempt_count
+      if (total > 0) {
+        const gold = qaMetrics.p1_first_pass_success
+        const recovered = total - gold - (total - qaMetrics.p1_first_pass_success - qaMetrics.p1_retry_count > 0 ? 0 : 0)
+        console.log(`\n   Resultado P1:`)
+        console.log(`   → GOLD (1ª tentativa):    ${gold}/${total}`)
+        console.log(`   → RECOVERED (retry OK):   ${Math.max(0, total - gold - (qaMetrics.guard_trigger_count > 0 ? 1 : 0))}/${total}`)
+        console.log(`   → FAILED (não recuperou): calculado no /speech`)
       }
       console.log()
       continue
