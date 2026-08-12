@@ -51,7 +51,10 @@ REGRAS ABSOLUTAS:
 4. GANHO só é registrado após GATE_VALIDACAO — o servidor faz isso.
 5. Não encerre antes da Etapa 8 concluída.
 
-BASE CIENTÍFICA: disponível somente quando a instrução ativa da etapa atual incluir explicitamente o conteúdo técnico. Não use dados científicos do implante fora da instrução ativa.`
+BASE CIENTÍFICA — CONHECIMENTO DE SUPORTE:
+Implante hormonal = pellet do tamanho de um grão de arroz, inserido sob a pele, liberação hormonal contínua por até 6 meses. Benefícios possíveis: melhora do sono, energia, libido, fogachos (2-4 semanas), proteção cardiovascular e óssea.
+
+REGRA DE USO: Este conhecimento existe para você responder perguntas legítimas da lead a qualquer momento. A entrega PROATIVA desse conteúdo é controlada pelo backend — siga exclusivamente a instrução ativa da etapa atual. Nunca despeje conteúdo futuro por iniciativa própria.`
 
 // ── Speech Progress (espelho de speech-progress.ts) ──────────────────────────
 
@@ -515,7 +518,7 @@ const TOOLS = [
     type: 'function',
     function: {
       name: 'registrar_parte_speech',
-      description: 'Registra que uma parte do Speech foi concluída. SOMENTE chame depois de entregar completamente a parte. Nunca chame partes fora de ordem.',
+      description: 'Registra que uma parte do Speech foi concluída. SOMENTE chame depois de entregar completamente a parte. Nunca chame partes fora de ordem. NUNCA verbalize esta ação — proibido dizer "vou registrar", "vou salvar", "vou avançar", "agora vou para a próxima parte" ou qualquer referência ao mecanismo interno.',
       parameters: {
         type: 'object',
         properties: {
@@ -612,6 +615,33 @@ async function callAna(userMessage) {
     if (waitingForLead) return null
 
     return callAna(null)
+  }
+
+  // Deterministic registration: if model generated content in DELIVERING_PART
+  // without calling registrar_parte_speech, inject it automatically.
+  if (
+    msg.content?.trim() &&
+    currentStage === 'speech' &&
+    speechProgress.state === 'DELIVERING_PART' &&
+    typeof speechProgress.parte_atual === 'number'
+  ) {
+    const parte = speechProgress.parte_atual
+    const fakeId = `auto_${Date.now()}`
+    // Replace the content-only message with one that also carries the tool call
+    messages.pop()
+    messages.push({
+      ...msg,
+      tool_calls: [{
+        id: fakeId,
+        type: 'function',
+        function: { name: 'registrar_parte_speech', arguments: JSON.stringify({ parte }) },
+      }],
+    })
+    const result = handleRegistrarParteSpeech({ parte })
+    messages.push({ role: 'tool', tool_call_id: fakeId, content: JSON.stringify(result) })
+    console.log(`\n  🤖 AUTO-REGISTRO: registrar_parte_speech(${parte}) injetado automaticamente\n`)
+    if (result.aguardando === 'turno_da_lead') return null
+    return callAna(null)  // parte 4 → injeta final_question
   }
 
   return msg.content

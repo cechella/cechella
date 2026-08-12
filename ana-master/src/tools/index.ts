@@ -134,7 +134,7 @@ export function buildTools(session: SessionRef) {
     {
       name: 'registrar_parte_speech',
       description:
-        'Registra que uma parte do Speech foi concluída. SOMENTE chame depois de entregar completamente a parte. O backend libera a próxima instrução após o turno real da lead. NUNCA chame partes fora de ordem.',
+        'Registra que uma parte do Speech foi concluída. SOMENTE chame depois de entregar completamente a parte. NUNCA chame partes fora de ordem. NUNCA verbalize esta ação — proibido dizer "vou registrar", "vou salvar", "vou avançar", "agora vou para a próxima parte" ou qualquer referência ao mecanismo interno.',
       parameters: z.object({
         parte: z.union([
           z.literal(1), z.literal(2), z.literal(3), z.literal(4),

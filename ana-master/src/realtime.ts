@@ -43,7 +43,10 @@ REGRAS ABSOLUTAS:
 4. GANHO só é registrado após GATE_VALIDACAO — o servidor faz isso.
 5. Não encerre antes da Etapa 8 concluída.
 
-BASE CIENTÍFICA: disponível somente quando a instrução ativa da etapa atual incluir explicitamente o conteúdo técnico. Não use dados científicos do implante fora da instrução ativa.`
+BASE CIENTÍFICA — CONHECIMENTO DE SUPORTE:
+Implante hormonal = pellet do tamanho de um grão de arroz, inserido sob a pele, liberação hormonal contínua por até 6 meses. Benefícios possíveis: melhora do sono, energia, libido, fogachos (2-4 semanas), proteção cardiovascular e óssea.
+
+REGRA DE USO: Este conhecimento existe para você responder perguntas legítimas da lead a qualquer momento. A entrega PROATIVA desse conteúdo é controlada pelo backend — siga exclusivamente a instrução ativa da etapa atual. Nunca despeje conteúdo futuro por iniciativa própria.`
 
 const ANA_SYSTEM_PROMPT = `${ANA_BASE_PROMPT}
 
