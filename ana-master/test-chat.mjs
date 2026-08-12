@@ -219,8 +219,42 @@ let speechProgress = initialSpeechProgress()
 const memoryStore = new Map()  // tracks save_memory calls within session
 let autoRegisterCount = 0
 
+function buildSpeechP1Instruction() {
+  const dor = memoryStore.get('dor_principal') || '(não registrado)'
+  const impacto = memoryStore.get('impacto') || '(não registrado)'
+  const sintomas = memoryStore.get('sintomas') || '(não registrado)'
+  return `SPEECH — PARTE 1: PERSONALIZAÇÃO + PONTE. Exatamente 2 frases, sem mais.
+
+DADOS AUTORIZADOS DESTA LEAD (use SOMENTE estes):
+  dor_principal: "${dor}"
+  impacto: "${impacto}"
+  sintomas: "${sintomas}"
+
+QUALQUER dado não listado acima não pode ser atribuído a esta lead.
+
+ESTRUTURA OBRIGATÓRIA:
+  Frase 1: "[Nome], você me contou que [dor_principal ou impacto real acima]."
+  Frase 2: "Quando os hormônios estão em desequilíbrio, é comum aparecerem sintomas como os que você mencionou."
+
+PROIBIDO nesta parte:
+✗ pellet, grão de arroz, inserção, liberação contínua
+✗ duração, 6 meses, prazo de resultado
+✗ benefícios específicos, proteção cardiovascular, óssea
+✗ falta de energia, treinos, energia (se não estão acima)
+✗ qualquer dado que não veio dos DADOS AUTORIZADOS acima
+✗ terceira frase ou qualquer conteúdo além das 2 frases
+✗ "Vou registrar", "próxima parte", "continuo", qualquer referência a ferramentas ou etapas
+
+Após as 2 frases: chame registrar_parte_speech(parte=1) silenciosamente e encerre o turno.
+NÃO diga nada mais. NÃO verbalize o registro.`
+}
+
 function systemPrompt() {
-  const stageInstruction = currentInstruction || STAGE_INSTRUCTIONS[currentStage]
+  let stageInstruction = currentInstruction || STAGE_INSTRUCTIONS[currentStage]
+  // For Speech Part 1, always interpolate real memory values into the instruction
+  if (currentStage === 'speech' && speechProgress.state === 'DELIVERING_PART' && speechProgress.parte_atual === 1 && !currentInstruction) {
+    stageInstruction = buildSpeechP1Instruction()
+  }
   return `${ANA_BASE_PROMPT}\n\nINÍCIO: Você recebe a ligação e fala PRIMEIRO. Comece agora pela Etapa 1.\n\n${stageInstruction}`
 }
 
@@ -246,6 +280,8 @@ function processSpeechTurn(userInput) {
       if (typeof speechProgress.parte_atual === 'number') {
         speechProgress.parte_em_execucao = speechProgress.parte_atual
       }
+      // Part 1 always uses interpolated real memory values
+      if (next === '1') return buildSpeechP1Instruction()
       return SPEECH_PART_INSTRUCTIONS[next] || null
     }
     case 'QUESTION':
@@ -293,9 +329,6 @@ Quando a lead falar espontaneamente sobre rotina, sintomas ou dificuldades:
 → APROFUNDE somente o que ainda falta compreender.
 → NUNCA pergunte novamente algo que a lead já explicou claramente.
 
-Exemplo comportamental (NÃO fixo — adapte ao que ela disse):
-"Com uma rotina dessas, dá pra entender por que essa falta de energia está pesando tanto. Dessas coisas que você me contou, o que mais está te incomodando hoje?"
-
 Antes de chamar o gate, você precisa ter compreendido: rotina e trabalho, sintomas relatados, sintoma principal, impacto na vida dela, contexto para personalizar o Speech.
 
 Salve: save_memory(key="rotina"), save_memory(key="sintomas"), save_memory(key="dor_principal"), save_memory(key="impacto"). Só salve o que foi realmente mencionado.
@@ -341,22 +374,7 @@ Energia: média-alta, crescendo naturalmente | Tom: especialista, segura, didát
 O Speech é entregue em 4 partes sequenciais. O backend controla qual parte está liberada.
 Cada parte é liberada somente após o turno real da lead.
 
-AGORA — ENTREGUE APENAS A PARTE 1:
-
-Demonstre que lembra da pessoa antes de qualquer explicação.
-Conecte: dor_principal → impacto → contexto de vida dela.
-Use as memórias: dor_principal / impacto / rotina / atividade_fisica / sintomas.
-
-Exemplo comportamental (NÃO fixo — adapte à lead real):
-"[Nome], você me contou que sempre foi muito ativa e que hoje essa falta de energia está até atrapalhando seus treinos. Deixa eu te explicar como o equilíbrio hormonal pode entrar nessa história."
-
-Evite diagnóstico individual categórico:
-✗ "A causa raiz dos seus sintomas é..."
-✓ "Quando os hormônios estão em desequilíbrio, é comum aparecerem sintomas como..."
-
-Após concluir a Parte 1: chame registrar_parte_speech(parte=1).
-PARE. Aguarde a lead reagir. O backend liberará a Parte 2 após o turno dela.
-NÃO antecipe partes futuras. NÃO fale preço. NÃO antecipe fechamento.`,
+AGORA — ENTREGUE APENAS A PARTE 1. Instrução detalhada será injetada pelo backend com os dados reais desta lead.`,
 
   fechamento: `ETAPA ATUAL: 5 de 8 — Fechamento
 Energia: média-alta | Ritmo: curto | Tom: convicto, firme, sem pressão
