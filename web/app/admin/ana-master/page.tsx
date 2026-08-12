@@ -71,7 +71,7 @@ interface AnaCall {
   gates_passed: string[]; memories: Record<string, unknown>; created_at: string; updated_at: string
 }
 
-type Tab = 'central' | 'dna' | 'recovery' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog' | 'disparar' | 'ligacoes' | 'monitor' | 'script' | 'config' | 'voz'
+type Tab = 'central' | 'dna' | 'recovery' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog' | 'disparar' | 'ligacoes' | 'monitor' | 'script' | 'config' | 'voz' | 'simulador' | 'sessoes'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -3048,6 +3048,193 @@ function VozTab() {
   )
 }
 
+// ─── Sessões inline tab ───────────────────────────────────────────────────────
+
+const GATE_ORDER_S = ['GATE_ABERTURA','GATE_CONEXAO','GATE_COMBINADO','GATE_SPEECH','GATE_FECHAMENTO','GATE_PAGAMENTO','GATE_REFERIDOS','GATE_VALIDACAO']
+const GATE_SHORT_S: Record<string,string> = {
+  GATE_ABERTURA:'Aber.',GATE_CONEXAO:'Conex.',GATE_COMBINADO:'Comb.',
+  GATE_SPEECH:'Speech',GATE_FECHAMENTO:'Fech.',GATE_PAGAMENTO:'Pag.',
+  GATE_REFERIDOS:'Ref.',GATE_VALIDACAO:'Valid.',
+}
+const STAGE_LBL: Record<string,string> = {
+  apresentacao:'Abertura',conexao:'Conexão',combinado:'Combinado',speech:'Speech',
+  fechamento:'Fechamento',pagamento:'Pagamento',referidos:'Referidos',validacao:'Validação',ganho:'Ganho',
+}
+function fmtTime(iso: string) {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})
+}
+
+function SessoesInlineTab() {
+  const [sessions, setSessions] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<string|null>(null)
+  const [detail, setDetail] = useState<any>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    try {
+      const r = await fetch('/api/admin/ana-master/simulador/sessions')
+      const data = await r.json()
+      setSessions(data.sessions ?? [])
+    } catch {}
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { load() }, [load])
+
+  async function expand(callSid: string) {
+    if (expanded === callSid) { setExpanded(null); setDetail(null); return }
+    setExpanded(callSid)
+    setLoadingDetail(true)
+    try {
+      const r = await fetch(`/api/admin/ana-master/simulador/sessions?callSid=${callSid}`)
+      const data = await r.json()
+      setDetail(data.session)
+    } catch {}
+    setLoadingDetail(false)
+  }
+
+  const detailTranscript: any[] = detail?.memories?.transcript ?? []
+  const detailCheckpoints: Record<string,any> = detail?.memories?.checkpoints ?? {}
+  const detailAudio: string|null = detail?.memories?.audio_url ?? null
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 0 16px' }}>
+        <div>
+          <p style={{ color: '#fff', fontWeight: 700, fontSize: 15, margin: 0 }}>Sessões gravadas</p>
+          <p style={{ color: '#52525B', fontSize: 12, margin: '2px 0 0' }}>Transcrição + áudio + checkpoints por gate</p>
+        </div>
+        <button onClick={load} style={{ background: '#1C1C1E', border: '1px solid #3A3A3C', borderRadius: 8, padding: '6px 14px', color: '#9CA3AF', fontSize: 12, cursor: 'pointer' }}>↻ Atualizar</button>
+      </div>
+
+      {loading && <p style={{ color: '#52525B', textAlign: 'center', padding: 40, fontSize: 13 }}>Carregando sessões...</p>}
+      {!loading && sessions.length === 0 && (
+        <div style={{ textAlign: 'center', padding: 60, color: '#52525B' }}>
+          <p style={{ fontSize: 20, marginBottom: 8 }}>🎙️</p>
+          <p style={{ fontSize: 13 }}>Nenhuma sessão gravada ainda. Use o Simulador de Voz.</p>
+        </div>
+      )}
+
+      {sessions.map((s: any) => {
+        const isOpen = expanded === s.callSid
+        const gatesPassed = new Set((s.gates ?? []).map((g: any) => g.gate))
+        const progress = GATE_ORDER_S.filter(g => gatesPassed.has(g)).length
+        return (
+          <div key={s.callSid} style={{ borderRadius: 12, border: `1px solid ${isOpen ? C.purple : '#27272A'}`, marginBottom: 8, overflow: 'hidden', background: '#111113' }}>
+            <button onClick={() => expand(s.callSid)} style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#1C1C1E', border: `2px solid ${progress === 8 ? C.green : '#3A3A3C'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: progress === 8 ? C.green : C.purple }}>{progress}/8</span>
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{s.telefone ?? 'sem telefone'}</span>
+                  <span style={{ fontSize: 11, color: '#52525B' }}>{fmtTime(s.updatedAt)}</span>
+                  {s.hasAudio && <span style={{ fontSize: 10, color: '#38BDF8', border: '1px solid rgba(56,189,248,0.2)', borderRadius: 4, padding: '1px 6px' }}>🎙 áudio</span>}
+                  {s.stage === 'ganho' && <span style={{ fontSize: 10, color: C.green, background: 'rgba(52,211,153,0.1)', borderRadius: 4, padding: '1px 6px' }}>🏆 GANHO</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 3, marginTop: 6, flexWrap: 'wrap' }}>
+                  {GATE_ORDER_S.map(g => {
+                    const passed = gatesPassed.has(g)
+                    return (
+                      <span key={g} style={{ fontSize: 9, fontWeight: 700, padding: '2px 5px', borderRadius: 4, background: passed ? 'rgba(52,211,153,0.12)' : '#1C1C1E', color: passed ? C.green : '#3A3A3C', border: `1px solid ${passed ? 'rgba(52,211,153,0.25)' : '#27272A'}` }}>
+                        {passed ? '✓ ' : ''}{GATE_SHORT_S[g]}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+              <span style={{ color: '#52525B', fontSize: 16 }}>{isOpen ? '▲' : '▼'}</span>
+            </button>
+
+            {isOpen && (
+              <div style={{ borderTop: '1px solid #1C1C1E', padding: 16 }}>
+                {loadingDetail && <p style={{ color: '#52525B', fontSize: 12, textAlign: 'center', padding: 20 }}>Carregando...</p>}
+                {!loadingDetail && detail && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                    {/* Transcript */}
+                    <div>
+                      <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' }}>Transcrição ({detailTranscript.length} turnos)</p>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 340, overflowY: 'auto' }}>
+                        {detailTranscript.length === 0 && <p style={{ color: '#3A3A3C', fontSize: 12 }}>Sem transcrição salva.</p>}
+                        {detailTranscript.map((t: any, i: number) => (
+                          <div key={i} style={{ borderRadius: 8, padding: '8px 12px', fontSize: 12, lineHeight: 1.5, background: t.role === 'ana' ? 'rgba(123,63,228,0.08)' : t.role === 'lead' ? '#1C1C1E' : 'transparent', border: `1px solid ${t.role === 'ana' ? 'rgba(123,63,228,0.2)' : t.role === 'lead' ? '#27272A' : 'transparent'}`, color: t.role === 'ana' ? '#fff' : t.role === 'lead' ? '#A1A1AA' : '#52525B' }}>
+                            {(t.role === 'ana' || t.role === 'lead') && (
+                              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 3px', color: t.role === 'ana' ? C.purple : '#52525B' }}>
+                                {t.role === 'ana' ? 'ANA' : 'LEAD'}
+                              </p>
+                            )}
+                            {t.text}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Timeline + audio */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      <div>
+                        <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 10px' }}>Linha do tempo</p>
+                        <div style={{ position: 'relative', paddingLeft: 20 }}>
+                          <div style={{ position: 'absolute', left: 6, top: 8, bottom: 8, width: 1, background: '#27272A' }} />
+                          {GATE_ORDER_S.map(gate => {
+                            const cp = detailCheckpoints[gate]
+                            const passed = !!cp
+                            return (
+                              <div key={gate} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10, position: 'relative' }}>
+                                <div style={{ position: 'absolute', left: -14, top: 3, width: 10, height: 10, borderRadius: '50%', background: passed ? C.green : '#27272A', border: `2px solid ${passed ? C.green : '#3A3A3C'}` }} />
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                    <span style={{ fontSize: 11, fontWeight: 700, color: passed ? C.green : '#3A3A3C' }}>{GATE_SHORT_S[gate]}</span>
+                                    {cp && <span style={{ fontSize: 10, color: '#52525B' }}>→ {STAGE_LBL[cp.stage] ?? cp.stage}</span>}
+                                    {cp && <span style={{ fontSize: 10, color: '#3A3A3C' }}>{fmtTime(cp.ts)}</span>}
+                                  </div>
+                                  {cp && (
+                                    <a href={`/admin/ana-master/simulador?checkpoint=${gate}&resumeFrom=${s.callSid}`} style={{ fontSize: 10, color: C.purple, textDecoration: 'none', marginTop: 2, display: 'inline-block' }}>
+                                      ↩ Retomar daqui
+                                    </a>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {detailAudio && (
+                        <div>
+                          <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' }}>🎙 Gravação de áudio</p>
+                          <audio controls src={detailAudio} style={{ width: '100%', borderRadius: 8 }} />
+                        </div>
+                      )}
+
+                      <div style={{ background: '#1C1C1E', borderRadius: 10, padding: 12 }}>
+                        <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' }}>Resumo</p>
+                        {[
+                          ['Gates passados', `${progress}/8`],
+                          ['Etapa final', STAGE_LBL[detail.current_stage ?? ''] ?? '—'],
+                          ['Turnos', String(detailTranscript.length)],
+                          ['Áudio', detailAudio ? '✓ Sim' : '✕ Não'],
+                        ].map(([k, v]) => (
+                          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
+                            <span style={{ color: '#71717A' }}>{k}</span>
+                            <span style={{ color: '#fff', fontWeight: 600 }}>{v}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ─── TABS CONFIG ──────────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] = [
@@ -3059,6 +3246,8 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] =
   { id: 'voz',       label: '🎙️ Voz',          icon: <span style={{ fontSize: 12 }}>🎙️</span>,       color: '#A78BFA' },
   { id: 'central',    label: 'Central',       icon: <Sparkles style={{ width: 12, height: 12 }} />,  color: C.purple },
   { id: 'dna',        label: 'DNA v1',        icon: <span style={{ fontSize: 12 }}>🧬</span>,        color: '#A855F7' },
+  { id: 'simulador',  label: '🎙️ Simulador',  icon: <span style={{ fontSize: 12 }}>🎙️</span>,        color: '#A78BFA' },
+  { id: 'sessoes',    label: 'Sessões',       icon: <span style={{ fontSize: 12 }}>▶</span>,          color: '#38BDF8' },
   { id: 'recovery',   label: 'Recovery',      icon: <span style={{ fontSize: 12 }}>🛡️</span>,        color: '#6366F1' },
   { id: 'simulacoes', label: 'Simulações',    icon: <Brain style={{ width: 12, height: 12 }} />,    color: C.purple },
   { id: 'gold',       label: 'Gold ✦',        icon: <Star style={{ width: 12, height: 12 }} />,     color: C.gold },
@@ -3162,6 +3351,12 @@ export default function AnaMasterPage() {
               {tab === 'voz'       && <VozTab />}
               {tab === 'central'    && <CentralTab sims={sims} gold={gold} antiGold={antiGold} scorecard={scorecard} matriz={matriz} changelog={changelog} />}
               {tab === 'dna'        && <DnaTab />}
+              {tab === 'simulador'  && (
+                <div style={{ height: 'calc(100vh - 120px)', borderRadius: 12, overflow: 'hidden', border: '1px solid #27272A' }}>
+                  <iframe src="/admin/ana-master/simulador" style={{ width: '100%', height: '100%', border: 'none' }} allow="microphone" />
+                </div>
+              )}
+              {tab === 'sessoes'    && <SessoesInlineTab />}
               {tab === 'recovery'   && <RecoveryTab />}
               {tab === 'simulacoes' && <SimulacoesTab sims={sims} gold={gold} antiGold={antiGold} scorecard={scorecard} onRefresh={refresh} />}
               {tab === 'gold'       && <GoldTab items={gold} onRefresh={refresh} />}
