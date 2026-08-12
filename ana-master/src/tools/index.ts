@@ -159,7 +159,7 @@ export function buildTools(session: SessionRef) {
           sp.state = 'WAITING_LEAD'
           sp.waiting_for_lead = true
           await saveSpeechProgress(session.callSid, sp as any)
-          return `{"ok":true,"parte_registrada":${parte},"aguardando":"turno_da_lead","instrucao":"PARE aqui. Aguarde a lead reagir. O backend liberará a próxima parte após o turno dela."}`
+          return `{"ok":true,"parte_registrada":${parte},"aguardando":"turno_da_lead","instrucao":"ENCERRE SEU TURNO AGORA. NÃO adicione perguntas, NÃO peça feedback, NÃO diga 'faz sentido?', NÃO diga 'está acompanhando?', NÃO diga 'pode continuar?'. Sua última frase já foi a última frase. A lead falará quando quiser. O backend liberará a próxima parte após o turno dela."}`
         }
 
         if (parte === 'pergunta_feita') {

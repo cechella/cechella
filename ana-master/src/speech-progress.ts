@@ -68,7 +68,7 @@ Evite diagnóstico individual categórico:
 ✓ "Quando os hormônios estão em desequilíbrio, é comum aparecerem sintomas como..."
 
 Após concluir a Parte 1: chame registrar_parte_speech(parte=1).
-NÃO continue para a Parte 2 sem chamar o tool e aguardar novo turno da lead.`,
+ENCERRE SEU TURNO APÓS REGISTRAR. NÃO faça nenhuma pergunta. NÃO diga "faz sentido?", "está acompanhando?", "pode continuar?", "o que achou?". A lead fala quando quiser. O silêncio dela é natural.`,
 
   '2': `SPEECH — ENTREGUE APENAS A PARTE 2 AGORA.
 
@@ -79,7 +79,7 @@ Explique o implante de forma simples e visual. Máximo 2 frases curtas.
 - protocolo individual prescrito pelo médico
 
 Após concluir a Parte 2: chame registrar_parte_speech(parte=2).
-NÃO continue para a Parte 3 sem chamar o tool e aguardar novo turno da lead.`,
+ENCERRE SEU TURNO APÓS REGISTRAR. NÃO faça nenhuma pergunta. NÃO diga "faz sentido?", "está acompanhando?", "pode continuar?". A lead fala quando quiser.`,
 
   '3': `SPEECH — ENTREGUE APENAS A PARTE 3 AGORA.
 
@@ -91,13 +91,13 @@ Linguagem clinicamente responsável:
 ✗ "Você terá..." / "Vai acontecer..." / "A causa é..."
 
 Após concluir a Parte 3: chame registrar_parte_speech(parte=3).
-NÃO continue para a Parte 4 sem chamar o tool e aguardar novo turno da lead.`,
+ENCERRE SEU TURNO APÓS REGISTRAR. NÃO faça nenhuma pergunta. NÃO diga "faz sentido?", "está acompanhando?", "pode continuar?". A lead fala quando quiser.`,
 
   '4': `SPEECH — ENTREGUE APENAS A PARTE 4 AGORA.
 
 Explique a duração: esse protocolo pode ter duração de até 6 meses, conforme a indicação individual.
 
-Depois faça a pergunta final obrigatória:
+Depois faça a pergunta final obrigatória — SOMENTE ESTA, e somente uma vez:
 "[Nome], o que mais te chamou atenção do que eu acabei de te apresentar?"
 
 Após fazer a pergunta: chame registrar_parte_speech(parte=4).
