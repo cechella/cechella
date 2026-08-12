@@ -8,8 +8,11 @@ export interface GateEvidence {
   referida_confirmada?: boolean
   disponibilidade_confirmada?: boolean
   // GATE_CONEXAO
-  contexto_vida_capturado?: boolean
-  rapport_estabelecido?: boolean
+  rotina_compreendida?: boolean
+  sintomas_identificados?: boolean
+  dor_prioritaria?: boolean
+  personalizacao_possivel?: boolean
+  interesse_confirmado?: boolean
   // GATE_COMBINADO
   intencao_avanco?: 'sim' | 'talvez'
   // GATE_SPEECH
@@ -54,8 +57,11 @@ export async function validateGate(
     }
 
     case 'GATE_CONEXAO': {
-      if (!evidence.contexto_vida_capturado) return { approved: false, reason: 'Contexto de vida não foi capturado — continue ouvindo a lead.' }
-      if (!evidence.rapport_estabelecido) return { approved: false, reason: 'Rapport ainda não estabelecido.' }
+      if (!evidence.rotina_compreendida) return { approved: false, reason: 'Contexto de vida/rotina não foi compreendido — continue ouvindo.' }
+      if (!evidence.sintomas_identificados) return { approved: false, reason: 'Sintomas ou queixas da lead não foram identificados.' }
+      if (!evidence.dor_prioritaria) return { approved: false, reason: 'ANA ainda não identificou o que mais incomoda a lead hoje.' }
+      if (!evidence.personalizacao_possivel) return { approved: false, reason: 'Não há contexto suficiente para personalizar a apresentação.' }
+      if (!evidence.interesse_confirmado) return { approved: false, reason: 'Lead ainda não confirmou que quer entender como funciona o implante.' }
       break
     }
 

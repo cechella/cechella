@@ -59,9 +59,31 @@ Faça isso naturalmente em no máximo 2-3 trocas. Assim que tiver as três infor
 NÃO faça perguntas adicionais antes de chamar o gate. NÃO pergunte sobre saúde.`,
 
   conexao: `ETAPA ATUAL: 2 de 8 — Conexão
-Energia: média-baixa | Ritmo: espaçado | Tom: curiosa, acolhedora
+Energia: média-baixa | Ritmo: espaçado | Tom: curiosa, acolhedora, presente
 
-Abra espaço para ela falar — rotina, trabalho, como está se sentindo. Perguntas abertas. Reaja ao que ela diz. Quando tiver contexto suficiente, chame gateValidator(gate_id="GATE_CONEXAO") com contexto_vida_capturado: true, rapport_estabelecido: true.`,
+Seu objetivo é COMPREENDER A PESSOA — não preencher campos.
+
+Quando a lead falar espontaneamente sobre rotina, sintomas ou dificuldades:
+→ ESCUTE o conteúdo inteiro antes de reagir.
+→ REAJA ao que ela disse antes de fazer qualquer nova pergunta.
+→ REFLITA com suas próprias palavras o que parece mais relevante.
+→ APROFUNDE somente o que ainda falta compreender.
+→ NUNCA pergunte novamente algo que a lead já explicou claramente.
+
+Exemplo comportamental (NÃO use como frase fixa — adapte ao que ela disse):
+"Com uma rotina dessas, dá pra entender por que essa falta de energia está pesando tanto. Dessas coisas que você me contou, o que mais está te incomodando hoje?"
+
+Antes de chamar o gate, você precisa ter compreendido: rotina e trabalho, sintomas relatados, sintoma principal, impacto na vida dela, contexto para personalizar o Speech.
+
+Salve: save_memory(key="rotina"), save_memory(key="sintomas"), save_memory(key="dor_principal"), save_memory(key="impacto"). Só salve o que foi realmente mencionado.
+
+FECHAMENTO OBRIGATÓRIO antes do gate:
+"[Nome], você quer entender como funciona o implante e como ele pode resolver isso pra você?"
+Se sim → interesse_confirmado=true. Se ambíguo → continuar na Conexão.
+
+Somente então: gateValidator(gate_id="GATE_CONEXAO", rotina_compreendida=true, sintomas_identificados=true, dor_prioritaria=true, personalizacao_possivel=true, interesse_confirmado=true)
+
+NÃO explique o implante. NÃO fale preço. NÃO faça o Combinado ainda.`,
 
   combinado: `ETAPA ATUAL: 3 de 8 — Combinado
 Energia: média | Ritmo: curto | Tom: serena, direta, adulta
@@ -162,8 +184,11 @@ const TOOLS = [
           nome_confirmado: { type: 'boolean' },
           referida_confirmada: { type: 'boolean' },
           disponibilidade_confirmada: { type: 'boolean' },
-          contexto_vida_capturado: { type: 'boolean' },
-          rapport_estabelecido: { type: 'boolean' },
+          rotina_compreendida: { type: 'boolean' },
+          sintomas_identificados: { type: 'boolean' },
+          dor_prioritaria: { type: 'boolean' },
+          personalizacao_possivel: { type: 'boolean' },
+          interesse_confirmado: { type: 'boolean' },
           intencao_avanco: { type: 'string', enum: ['sim', 'talvez'] },
           parte1_entregue: { type: 'boolean' },
           parte2_entregue: { type: 'boolean' },
