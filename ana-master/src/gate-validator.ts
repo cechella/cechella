@@ -1,4 +1,4 @@
-import { verifyPayment, checkReferidos, setCallStatusGanho, recordGatePassed, atomicTransitionStage, saveMemory, getMemories, getCallStage } from './supabase.js'
+import { verifyPayment, checkReferidos, updateLeadsGanho, executeGateTransition, saveMemory, getMemories, getCallStage } from './supabase.js'
 import { GateId, GATE_TRANSITIONS, STAGE_INSTRUCTIONS, Stage } from './state-machine.js'
 import { sendWelcome } from './tools/whatsapp.js'
 
@@ -159,26 +159,24 @@ export async function validateGate(
           return { approved: false, reason: `Referidos incompletos. semDados=${ref.semDados}. Missão não concluída.` }
         }
       }
-      // C3+C4: Set GANHO — this is the ONLY point in the system that writes GANHO
-      await setCallStatusGanho(callSid)
-      // C5: Send welcome message
-      const memories = await getMemories(callSid)
-      const telefoneRaw = (memories.telefone as string) ?? ''
-      if (telefoneRaw) await sendWelcome(telefoneRaw)
       break
     }
   }
 
-  // Atomic transition: only write new stage if still in fromStage (race-condition safe)
-  const transitioned = await atomicTransitionStage(callSid, requiredStage, nextStage)
-  if (!transitioned) {
-    return {
-      approved: false,
-      reason: `${gateId} bloqueado — transição atômica falhou. Stage já havia mudado (possível race condition). Stage atual preservado.`,
-    }
+  // Single door: stage + gate_passed + trace executed as one DB transaction via RPC
+  const rpcResult = await executeGateTransition(callSid, gateId, requiredStage, nextStage, evidence as Record<string, unknown>)
+  if (!rpcResult.transitioned) {
+    return { approved: false, reason: rpcResult.reason }
   }
 
-  await recordGatePassed(callSid, gateId)
+  // Post-transition side effects (outside transaction — non-critical)
+  if (gateId === 'GATE_VALIDACAO') {
+    // Update leads table and send welcome (GANHO status written by RPC)
+    await updateLeadsGanho(callSid)
+    const memories = await getMemories(callSid)
+    const telefoneRaw = (memories.telefone as string) ?? ''
+    if (telefoneRaw) await sendWelcome(telefoneRaw)
+  }
 
   return {
     approved: true,

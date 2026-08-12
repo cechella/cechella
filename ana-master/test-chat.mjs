@@ -10,8 +10,34 @@ import OpenAI from 'openai'
 import * as readline from 'readline'
 import * as fs from 'fs'
 import * as path from 'path'
+import { createHash } from 'crypto'
 // Canonical source of truth for gate transitions — same definition used by production server
 import { GATE_TRANSITIONS as _GATE_TRANSITIONS } from './dist/state-machine.js'
+
+// ── Stale dist guard ──────────────────────────────────────────────────────────
+// Verifies that dist/state-machine.js is in sync with src/state-machine.ts.
+// If src was modified after dist, the simulator would use an outdated definition.
+function checkDistFreshness() {
+  try {
+    const srcPath  = new URL('./src/state-machine.ts', import.meta.url).pathname
+    const distPath = new URL('./dist/state-machine.js', import.meta.url).pathname
+    const srcStat  = fs.statSync(srcPath)
+    const distStat = fs.statSync(distPath)
+    if (srcStat.mtimeMs > distStat.mtimeMs) {
+      console.error('\n⚠️  AVISO: src/state-machine.ts foi modificado após o último build.')
+      console.error('   O simulador pode estar usando GATE_TRANSITIONS desatualizado.')
+      console.error('   Execute: npm run build\n')
+      process.exit(1)
+    }
+    // Also verify GATE_TRANSITIONS hash matches expected shape
+    const keys = Object.keys(_GATE_TRANSITIONS).sort().join(',')
+    const hash = createHash('sha256').update(keys).digest('hex').slice(0, 8)
+    console.log(`  ✓ GATE_TRANSITIONS carregado do dist/ [gates=${Object.keys(_GATE_TRANSITIONS).length} hash=${hash}]`)
+  } catch (e) {
+    console.error('  ⚠️  Não foi possível verificar dist freshness:', e.message)
+  }
+}
+checkDistFreshness()
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 

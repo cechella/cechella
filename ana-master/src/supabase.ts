@@ -34,43 +34,32 @@ export async function getCallStage(callSid: string): Promise<string | null> {
   return (data as any)?.stage ?? null
 }
 
-// Atomic conditional transition: only updates if current stage matches fromStage.
-// Returns true if transition succeeded, false if stage had already changed (race condition).
-export async function atomicTransitionStage(
+// ── Single door for stage transitions ────────────────────────────────────────
+// All gate transitions go through this RPC — stage + gate_passed + trace in one transaction.
+// The SQL function (supabase/gate_transition_rpc.sql) must be deployed to Supabase first.
+export async function executeGateTransition(
   callSid: string,
+  gateId: string,
   fromStage: string,
   toStage: string,
-): Promise<boolean> {
-  const { count } = await supabase
-    .from('ana_calls')
-    .update({ stage: toStage, updated_at: new Date().toISOString() })
-    .eq('call_sid', callSid)
-    .eq('stage', fromStage)  // conditional: only update if still in fromStage
-    .select()
-  return (count ?? 0) > 0
+  evidence: Record<string, unknown> = {},
+): Promise<{ transitioned: boolean; reason: string; next_stage?: string }> {
+  const { data, error } = await supabase.rpc('gate_transition', {
+    p_call_sid:   callSid,
+    p_gate_id:    gateId,
+    p_from_stage: fromStage,
+    p_to_stage:   toStage,
+    p_evidence:   evidence,
+  })
+  if (error) {
+    return { transitioned: false, reason: `RPC error: ${error.message}` }
+  }
+  return data as { transitioned: boolean; reason: string; next_stage?: string }
 }
 
-// Kept for internal non-gate use (e.g. setCallStatusGanho writes stage directly)
-export async function updateCallStage(callSid: string, stage: string) {
-  await supabase
-    .from('ana_calls')
-    .update({ stage, updated_at: new Date().toISOString() })
-    .eq('call_sid', callSid)
-}
-
-export async function recordGatePassed(callSid: string, gateId: string) {
-  const { data } = await supabase.from('ana_calls').select('gates_passed').eq('call_sid', callSid).single()
-  const gates = [...((data?.gates_passed as string[]) ?? []), gateId]
-  await supabase.from('ana_calls').update({ gates_passed: gates, updated_at: new Date().toISOString() }).eq('call_sid', callSid)
-}
-
-export async function setCallStatusGanho(callSid: string) {
-  await supabase
-    .from('ana_calls')
-    .update({ status: 'ganho', stage: 'ganho', updated_at: new Date().toISOString() })
-    .eq('call_sid', callSid)
-
-  // Also update leads table to match
+// setCallStatusGanho is now handled inside gate_transition RPC for GATE_VALIDACAO.
+// This function remains only to update the leads table after GATE_VALIDACAO passes.
+export async function updateLeadsGanho(callSid: string) {
   const { data } = await supabase.from('ana_calls').select('telefone').eq('call_sid', callSid).single()
   if (data?.telefone) {
     const t = data.telefone as string
