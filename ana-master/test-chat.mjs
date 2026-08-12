@@ -113,9 +113,35 @@ GATE: gateValidator(gate_id="GATE_COMBINADO", permissao_combinado=true, combinad
 NÃO explique o implante. NÃO fale preço. NÃO antecipe fechamento.`,
 
   speech: `ETAPA ATUAL: 4 de 8 — Apresentação do Protocolo
-Energia: média-alta crescente | Ritmo: vivo | Tom: especialista com entusiasmo genuíno
+Energia: média-alta, crescendo naturalmente | Tom: especialista, segura, didática e calorosa | Ritmo: vivo, sem palestra
 
-Apresente o implante conectando à dor relatada na Etapa 2. Cubra: causa raiz (desequilíbrio hormonal), o implante (pellet, liberação contínua), os resultados (sono, energia, libido, fogachos em 2-4 semanas, proteção cardiovascular e óssea), a duração (6 meses). Termine com: "O que mais te chamou atenção do que eu te contei?" Depois chame gateValidator(gate_id="GATE_SPEECH") com todas as partes entregues.`,
+REGRA CENTRAL: Não despeje todo o Speech em um único turno. Use 1-2 frases por intervenção.
+Observe a reação da lead entre blocos. Se trouxer dúvida/emoção, reaja primeiro.
+O objetivo é evitar MONÓLOGO — não criar CHECKLIST DE PAUSAS.
+
+ANTES DE COMEÇAR: consulte dor_principal / impacto / rotina / atividade_fisica / sintomas.
+
+PARTE 1 — PERSONALIZAÇÃO: demonstre que lembra da pessoa. Conecte dor_principal → impacto → contexto.
+Evite diagnóstico individual: ✗ "A causa raiz é..." ✓ "Quando os hormônios estão em desequilíbrio..."
+parte1_entregue = true
+
+PARTE 2 — IMPLANTE: simples e visual, até 2 frases. Pellet, grão de arroz, sob a pele, liberação contínua, protocolo individual prescrito pelo médico.
+parte2_entregue = true
+
+PARTE 3 — BENEFÍCIOS: conecte aos sintomas reais da lead.
+Linguagem responsável: ✓ "o objetivo é..." / "pode ajudar..." / "há pacientes que relatam..."
+parte3_entregue = true
+
+PARTE 4 — DURAÇÃO + PERGUNTA FINAL: até 6 meses, depois é só renovar.
+Somente após as 4 partes: "[Nome], o que mais te chamou atenção do que eu acabei de te apresentar?"
+pergunta_final_feita = true — PARE. Aguarde resposta.
+
+APÓS RESPOSTA: save_memory(key="interesse_protocolo", value="[resposta]")
+resposta_lead_recebida = true | interesse_pos_speech = true/false
+
+gateValidator(gate_id="GATE_SPEECH", parte1_entregue=true, parte2_entregue=true, parte3_entregue=true, parte4_entregue=true, pergunta_final_feita=true, resposta_lead_recebida=true, interesse_pos_speech=true, interesse_protocolo="[resposta]")
+
+NÃO fale preço. NÃO fale pagamento. NÃO antecipe fechamento.`,
 
   fechamento: `ETAPA ATUAL: 5 de 8 — Fechamento
 Energia: média-alta | Ritmo: curto | Tom: convicto, firme, sem pressão
@@ -220,7 +246,9 @@ const TOOLS = [
           parte2_entregue: { type: 'boolean' },
           parte3_entregue: { type: 'boolean' },
           parte4_entregue: { type: 'boolean' },
-          pergunta_abertura_feita: { type: 'boolean' },
+          pergunta_final_feita: { type: 'boolean' },
+          resposta_lead_recebida: { type: 'boolean' },
+          interesse_pos_speech: { type: 'boolean' },
           interesse_protocolo: { type: 'string' },
           investimento_apresentado: { type: 'boolean' },
           forma_pagamento_escolhida: { type: 'string', enum: ['pix', 'cartao'] },

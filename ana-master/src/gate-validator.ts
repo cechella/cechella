@@ -24,7 +24,9 @@ export interface GateEvidence {
   parte2_entregue?: boolean
   parte3_entregue?: boolean
   parte4_entregue?: boolean
-  pergunta_abertura_feita?: boolean
+  pergunta_final_feita?: boolean
+  resposta_lead_recebida?: boolean
+  interesse_pos_speech?: boolean
   interesse_protocolo?: string
   // GATE_FECHAMENTO
   investimento_apresentado?: boolean
@@ -84,14 +86,20 @@ export async function validateGate(
     }
 
     case 'GATE_SPEECH': {
-      if (!evidence.parte1_entregue) return { approved: false, reason: 'Parte 1 do speech (âncora na dor) não entregue.' }
-      if (!evidence.parte2_entregue) return { approved: false, reason: 'Parte 2 (implante físico — grão de arroz, liberação contínua) não entregue.' }
-      if (!evidence.parte3_entregue) return { approved: false, reason: 'Parte 3 (resultados: sono, energia, libido, fogachos, proteção) não entregue.' }
-      if (!evidence.parte4_entregue) return { approved: false, reason: 'Parte 4 (duração 6 meses) não entregue.' }
-      if (!evidence.pergunta_abertura_feita) return { approved: false, reason: 'Pergunta obrigatória não feita: "O que mais te chamou atenção?"' }
-      if (evidence.interesse_protocolo) {
-        await saveMemory(callSid, 'interesse_protocolo', evidence.interesse_protocolo)
-      }
+      if (!evidence.parte1_entregue)
+        return { approved: false, reason: 'Parte 1 não entregue — personalização com dor/impacto da lead.' }
+      if (!evidence.parte2_entregue)
+        return { approved: false, reason: 'Parte 2 não entregue — explicação do implante.' }
+      if (!evidence.parte3_entregue)
+        return { approved: false, reason: 'Parte 3 não entregue — benefícios conectados ao contexto da lead.' }
+      if (!evidence.parte4_entregue)
+        return { approved: false, reason: 'Parte 4 não entregue — duração/continuidade do protocolo.' }
+      if (!evidence.pergunta_final_feita)
+        return { approved: false, reason: 'Pergunta final obrigatória não foi feita.' }
+      if (!evidence.resposta_lead_recebida)
+        return { approved: false, reason: 'A resposta da lead à pergunta final ainda não foi recebida.' }
+      if (!evidence.interesse_pos_speech)
+        return { approved: false, reason: 'Lead ainda não demonstrou interesse suficiente para avançar.' }
       break
     }
 
