@@ -3,13 +3,14 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
-import { Phone, Zap, Activity, BarChart3, Settings, GitBranch, RefreshCw, PhoneCall } from 'lucide-react'
+import { Phone, Zap, Activity, BarChart3, Settings, GitBranch, RefreshCw, PhoneCall, Mic } from 'lucide-react'
 
 const TABS = [
   { key: 'disparar', label: 'Disparar', icon: <Zap className="w-4 h-4" /> },
   { key: 'ligacoes', label: 'Ligações', icon: <Phone className="w-4 h-4" /> },
   { key: 'monitor', label: 'Live Monitor', icon: <Activity className="w-4 h-4" /> },
   { key: 'simulacoes', label: 'Simulações', icon: <BarChart3 className="w-4 h-4" /> },
+  { key: 'simulador', label: 'Simulador de Voz', icon: <Mic className="w-4 h-4" /> },
   { key: 'config', label: 'Realtime Config', icon: <Settings className="w-4 h-4" /> },
   { key: 'state', label: 'State Machine', icon: <GitBranch className="w-4 h-4" /> },
 ]
@@ -245,6 +246,20 @@ function TabSimulacoes() {
   )
 }
 
+// ─── Tab: Simulador ───────────────────────────────────────────────────────────
+
+function TabSimulador() {
+  return (
+    <div style={{ height: 'calc(100vh - 220px)', borderRadius: 12, overflow: 'hidden', border: '1px solid #27272A' }}>
+      <iframe
+        src="/admin/ana-master/simulador"
+        style={{ width: '100%', height: '100%', border: 'none' }}
+        allow="microphone"
+      />
+    </div>
+  )
+}
+
 // ─── Tab: Config ──────────────────────────────────────────────────────────────
 
 function TabConfig() {
@@ -332,6 +347,7 @@ export default function AnaDNANuclearPage() {
           {tab === 'monitor' && <TabMonitor />}
           {tab === 'simulacoes' && <TabSimulacoes />}
           {tab === 'config' && <TabConfig />}
+          {tab === 'simulador' && <TabSimulador />}
           {tab === 'state' && (
             <div style={{ textAlign: 'center', padding: 60, color: '#52525B' }}>
               <GitBranch className="w-12 h-12" style={{ margin: '0 auto 12px', opacity: 0.3 }} />
