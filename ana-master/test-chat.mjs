@@ -219,11 +219,20 @@ let speechProgress = initialSpeechProgress()
 const memoryStore = new Map()  // tracks save_memory calls within session
 let autoRegisterCount = 0
 
+// Truncate text to at most maxSentences sentences (splits on ". " / ".\n" / "! " / "? ")
+function truncateToSentences(text, maxSentences) {
+  if (!text) return text
+  const parts = text.match(/[^.!?]+[.!?]+[\s]*/g) || [text]
+  return parts.slice(0, maxSentences).join('').trim()
+}
+
 function buildSpeechP1Instruction() {
   const dor = memoryStore.get('dor_principal') || '(não registrado)'
   const impacto = memoryStore.get('impacto') || '(não registrado)'
   const sintomas = memoryStore.get('sintomas') || '(não registrado)'
-  return `SPEECH — PARTE 1: PERSONALIZAÇÃO + PONTE. Exatamente 2 frases, sem mais.
+  return `SPEECH — PARTE 1: PERSONALIZAÇÃO + PONTE.
+
+ORÇAMENTO: EXATAMENTE 2 FRASES. Nada antes. Nada depois.
 
 DADOS AUTORIZADOS DESTA LEAD (use SOMENTE estes):
   dor_principal: "${dor}"
@@ -232,21 +241,24 @@ DADOS AUTORIZADOS DESTA LEAD (use SOMENTE estes):
 
 QUALQUER dado não listado acima não pode ser atribuído a esta lead.
 
-ESTRUTURA OBRIGATÓRIA:
-  Frase 1: "[Nome], você me contou que [dor_principal ou impacto real acima]."
+SAÍDA OBRIGATÓRIA — escreva exatamente estas 2 frases adaptando os colchetes:
+  Frase 1: "[Nome], você me contou que [use dor_principal ou impacto acima, palavra por palavra]."
   Frase 2: "Quando os hormônios estão em desequilíbrio, é comum aparecerem sintomas como os que você mencionou."
 
-PROIBIDO nesta parte:
+APÓS A FRASE 2: chame registrar_parte_speech(parte=1) e PARE COMPLETAMENTE.
+NÃO escreva uma terceira frase. NÃO escreva nenhuma transição. NÃO escreva nada mais.
+Exemplos do que NÃO escrever após a frase 2:
+✗ "Vou explicar como podemos ajudar."
+✗ "Deixa eu te contar mais."
+✗ "Agora vou te mostrar..."
+✗ "Na próxima parte..."
+✗ qualquer outra frase de qualquer tipo
+
+PROIBIDO no conteúdo:
 ✗ pellet, grão de arroz, inserção, liberação contínua
 ✗ duração, 6 meses, prazo de resultado
 ✗ benefícios específicos, proteção cardiovascular, óssea
-✗ falta de energia, treinos, energia (se não estão acima)
-✗ qualquer dado que não veio dos DADOS AUTORIZADOS acima
-✗ terceira frase ou qualquer conteúdo além das 2 frases
-✗ "Vou registrar", "próxima parte", "continuo", qualquer referência a ferramentas ou etapas
-
-Após as 2 frases: chame registrar_parte_speech(parte=1) silenciosamente e encerre o turno.
-NÃO diga nada mais. NÃO verbalize o registro.`
+✗ qualquer dado que não veio dos DADOS AUTORIZADOS acima`
 }
 
 function systemPrompt() {
@@ -603,7 +615,15 @@ async function callAna(userMessage) {
   if (msg.tool_calls && msg.tool_calls.length > 0) {
     // If the model generated text AND tool_calls in the same response,
     // display the text first — it is ANA's verbal delivery before the tool fires.
-    const spokenContent = msg.content?.trim()
+    let spokenContent = msg.content?.trim()
+    // Speech P1 budget: max 2 sentences. Truncate trailing text silently.
+    if (spokenContent && currentStage === 'speech' && speechProgress.parte_atual === 1 && speechProgress.state === 'DELIVERING_PART') {
+      const truncated = truncateToSentences(spokenContent, 2)
+      if (truncated !== spokenContent) {
+        console.log(`  ✂️  P1 truncada: removido trailing text após 2ª frase`)
+        spokenContent = truncated
+      }
+    }
     if (spokenContent) {
       console.log(`\x1b[35mANA:\x1b[0m ${spokenContent}\n`)
     }
@@ -673,10 +693,21 @@ async function callAna(userMessage) {
   if (autoRegisterEligible) {
     autoRegisterCount++
     const fakeId = `auto_${Date.now()}`
-    // Replace the content-only message with one that also carries the tool call
+    // Truncate P1 to 2 sentences before displaying and storing
+    let autoContent = msg.content?.trim() || ''
+    if (parte === 1) {
+      const truncated = truncateToSentences(autoContent, 2)
+      if (truncated !== autoContent) {
+        console.log(`  ✂️  P1 truncada: removido trailing text após 2ª frase`)
+        autoContent = truncated
+      }
+    }
+    console.log(`\x1b[35mANA:\x1b[0m ${autoContent}\n`)
+    // Replace the content-only message with one that also carries the tool call (truncated content)
     messages.pop()
     messages.push({
       ...msg,
+      content: autoContent,
       tool_calls: [{
         id: fakeId,
         type: 'function',
@@ -698,6 +729,15 @@ async function callAna(userMessage) {
     !explicitRegistrarCalled
   ) {
     console.log(`  ⚠️  speech_tool_missing: parte ${parte} verbalizada sem registrar_parte_speech (guards não atendidos)`)
+  }
+
+  // Truncate P1 trailing text in pure-content path as well
+  if (currentStage === 'speech' && speechProgress.parte_atual === 1 && speechProgress.state === 'DELIVERING_PART' && msg.content?.trim()) {
+    const truncated = truncateToSentences(msg.content.trim(), 2)
+    if (truncated !== msg.content.trim()) {
+      console.log(`  ✂️  P1 truncada: removido trailing text após 2ª frase`)
+    }
+    return truncated
   }
 
   return msg.content
