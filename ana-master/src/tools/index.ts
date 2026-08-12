@@ -158,11 +158,23 @@ export function buildTools(session: SessionRef) {
           sp.partes_entregues.push(parte as any)
           sp.parte_em_execucao = undefined
           sp.parte_interrompida = false
-          sp.parte_atual = (parte < 4 ? parte + 1 : 'final_question') as any
-          sp.state = 'WAITING_LEAD'
-          sp.waiting_for_lead = true
-          await saveSpeechProgress(session.callSid, sp as any)
-          return `{"ok":true,"parte_registrada":${parte},"aguardando":"turno_da_lead","instrucao":"ENCERRE SEU TURNO AGORA. NÃO adicione perguntas, NÃO peça feedback, NÃO diga 'faz sentido?', NÃO diga 'está acompanhando?', NÃO diga 'pode continuar?'. Sua última frase já foi a última frase. A lead falará quando quiser. O backend liberará a próxima parte após o turno dela."}`
+
+          if (parte < 4) {
+            // Parts 1-3: wait for lead turn before next part
+            sp.parte_atual = (parte + 1) as any
+            sp.state = 'WAITING_LEAD'
+            sp.waiting_for_lead = true
+            await saveSpeechProgress(session.callSid, sp as any)
+            return `{"ok":true,"parte_registrada":${parte},"aguardando":"turno_da_lead","instrucao":"ENCERRE SEU TURNO AGORA. NÃO adicione perguntas. A lead falará quando quiser. O backend liberará a próxima parte após o turno dela."}`
+          } else {
+            // Part 4: immediately inject final_question instruction — no lead turn needed
+            sp.parte_atual = 'final_question' as any
+            sp.state = 'WAITING_LEAD'
+            sp.waiting_for_lead = false
+            await saveSpeechProgress(session.callSid, sp as any)
+            await session.updateInstructions(getPartInstruction('final_question'))
+            return `{"ok":true,"parte_registrada":4,"proximo":"pergunta_final","instrucao":"Faça agora a pergunta final Gold: '[Nome], o que mais te chamou atenção do que eu acabei de te apresentar?' Depois chame registrar_parte_speech(parte='pergunta_feita')."}`
+          }
         }
 
         if (parte === 'pergunta_feita') {

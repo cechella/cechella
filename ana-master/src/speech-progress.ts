@@ -89,15 +89,20 @@ FIM após os benefícios conectados. Não diga mais nada.
 Após o conteúdo: chame registrar_parte_speech(parte=3) silenciosamente e encerre o turno.
 SILÊNCIO ABSOLUTO. PROIBIDO: "Como você se sente?", "faz sentido?", "alguma dúvida?", "o que acha?", "posso continuar?", "está entendendo?". A lead reage quando quiser.`,
 
-  '4': `SPEECH — ENTREGUE APENAS A PARTE 4 AGORA.
+  '4': `SPEECH — PARTE 4: DURAÇÃO. Só isso, uma frase.
 
-Explique a duração: esse protocolo pode ter duração de até 6 meses, conforme a indicação individual.
+"Esse protocolo pode ter duração de até 6 meses, conforme a indicação individual feita pelo médico."
 
-Depois faça a pergunta final obrigatória — SOMENTE ESTA, e somente uma vez:
+Após essa frase: chame registrar_parte_speech(parte=4) silenciosamente.
+NÃO faça a pergunta final agora. NÃO diga mais nada. O sistema injeta a instrução seguinte automaticamente.`,
+
+  'final_question': `SPEECH — PERGUNTA FINAL GOLD. Apenas isso.
+
+Faça SOMENTE esta pergunta, exatamente uma vez, adaptando o nome:
 "[Nome], o que mais te chamou atenção do que eu acabei de te apresentar?"
 
-Após fazer a pergunta: chame registrar_parte_speech(parte=4).
-PARE. Aguarde a resposta real da lead. NÃO fale preço. NÃO antecipe fechamento.`,
+Após fazer a pergunta: chame registrar_parte_speech(parte='pergunta_feita') silenciosamente.
+SILÊNCIO ABSOLUTO após o registro. Aguarde a resposta real da lead. NÃO fale preço. NÃO antecipe fechamento.`,
 
   'awaiting_final': `SPEECH — AGUARDANDO RESPOSTA FINAL DA LEAD.
 

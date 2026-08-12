@@ -93,15 +93,20 @@ FIM após os benefícios conectados. Não diga mais nada.
 Após o conteúdo: chame registrar_parte_speech(parte=3) silenciosamente e encerre o turno.
 SILÊNCIO ABSOLUTO. PROIBIDO: "Como você se sente?", "faz sentido?", "alguma dúvida?", "o que acha?", "posso continuar?", "está entendendo?". A lead reage quando quiser.`,
 
-  '4': `SPEECH — ENTREGUE APENAS A PARTE 4 AGORA.
+  '4': `SPEECH — PARTE 4: DURAÇÃO. Só isso, uma frase.
 
-Explique a duração: esse protocolo pode ter duração de até 6 meses, conforme a indicação individual.
+"Esse protocolo pode ter duração de até 6 meses, conforme a indicação individual feita pelo médico."
 
-Depois faça a pergunta final obrigatória:
+Após essa frase: chame registrar_parte_speech(parte=4) silenciosamente.
+NÃO faça a pergunta final agora. NÃO diga mais nada. O sistema injeta a instrução seguinte automaticamente.`,
+
+  'final_question': `SPEECH — PERGUNTA FINAL GOLD. Apenas isso.
+
+Faça SOMENTE esta pergunta, exatamente uma vez, adaptando o nome:
 "[Nome], o que mais te chamou atenção do que eu acabei de te apresentar?"
 
-Após fazer a pergunta: chame registrar_parte_speech(parte=4).
-PARE. Aguarde a resposta real da lead. NÃO fale preço. NÃO antecipe fechamento.`,
+Após fazer a pergunta: chame registrar_parte_speech(parte='pergunta_feita') silenciosamente.
+SILÊNCIO ABSOLUTO após o registro. Aguarde a resposta real da lead. NÃO fale preço. NÃO antecipe fechamento.`,
 
   'awaiting_final': `SPEECH — AGUARDANDO RESPOSTA FINAL DA LEAD.
 
@@ -412,12 +417,22 @@ function handleRegistrarParteSpeech(args) {
     }
     sp.partes_entregues.push(parte)
     sp.parte_em_execucao = undefined
-    sp.parte_atual = parte < 4 ? parte + 1 : 'final_question'
-    sp.state = 'WAITING_LEAD'
-    sp.waiting_for_lead = true
 
-    console.log(`\n  📊 SPEECH PROGRESS: parte ${parte} registrada | próxima=${sp.parte_atual} | aguardando turno da lead\n`)
-    return { ok: true, parte_registrada: parte, aguardando: 'turno_da_lead' }
+    if (parte < 4) {
+      sp.parte_atual = parte + 1
+      sp.state = 'WAITING_LEAD'
+      sp.waiting_for_lead = true
+      console.log(`\n  📊 SPEECH PROGRESS: parte ${parte} registrada | próxima=${sp.parte_atual} | aguardando turno da lead\n`)
+      return { ok: true, parte_registrada: parte, aguardando: 'turno_da_lead' }
+    } else {
+      // Part 4: inject final_question instruction immediately, no lead turn needed
+      sp.parte_atual = 'final_question'
+      sp.state = 'WAITING_LEAD'
+      sp.waiting_for_lead = false
+      currentInstruction = SPEECH_PART_INSTRUCTIONS['final_question']
+      console.log(`\n  📊 SPEECH PROGRESS: parte 4 registrada | pergunta final a ser feita\n`)
+      return { ok: true, parte_registrada: 4, proximo: 'pergunta_final' }
+    }
   }
 
   if (parte === 'pergunta_feita') {
@@ -706,7 +721,9 @@ async function main() {
 
   while (true) {
     const speechInfo = currentStage === 'speech'
-      ? ` | Speech P${speechProgress.parte_atual} ${speechProgress.state}`
+      ? (typeof speechProgress.parte_atual === 'number'
+          ? ` | Speech P${speechProgress.parte_atual} ${speechProgress.state}`
+          : ` | FINAL ${speechProgress.state}`)
       : ''
     const label = `[${currentStage.toUpperCase()}${speechInfo}]`
     const input = await prompt(`\x1b[36m${label} Você:\x1b[0m `)

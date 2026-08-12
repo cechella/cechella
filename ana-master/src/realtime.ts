@@ -197,7 +197,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
       switch (disposition) {
         case 'BACKCHANNEL':
         case 'CONTINUE': {
-          // Lead confirmed — unlock next part
+          // Lead confirmed — unlock next part (parts 1-3 only; part 4 injects final_question directly)
           const next = String(sp.parte_atual)
           sp.waiting_for_lead = false
           if (typeof sp.parte_atual === 'number') sp.parte_em_execucao = sp.parte_atual
