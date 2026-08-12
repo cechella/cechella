@@ -4,6 +4,7 @@ import { OPENAI_API_KEY, REALTIME_DEFAULTS } from './config.js'
 import { STAGE_INSTRUCTIONS } from './state-machine.js'
 import { buildTools, SessionRef } from './tools/index.js'
 import { upsertCall, saveMemory, appendTranscript } from './supabase.js'
+import { initialSpeechProgress, classifyLeadTurn, getPartInstruction, LeadTurnDisposition } from './speech-progress.js'
 
 const ANA_BASE_PROMPT = `Você é ANA — consultora de saúde hormonal da Hormone Ecosystem. Sua missão: reproduzir o modelo mental comercial do fundador Dr. Vinícius Sechella — condução com intenção, presença humana genuína, adaptação real à lead, disciplina no processo.
 
@@ -168,10 +169,56 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
   const sessionRef: SessionRef = {
     callSid: 'unknown',
     telefone: '',
+    speechProgress: initialSpeechProgress(),
     updateInstructions: async (instructions: string) => {
       await (realtimeSession as any).updateSession({
         instructions: `${ANA_BASE_PROMPT}\n\n${instructions}`,
       })
+    },
+    onLeadTurn: async (transcript: string) => {
+      const sp = sessionRef.speechProgress
+      if (!sp.waiting_for_lead) return
+
+      const disposition: LeadTurnDisposition = classifyLeadTurn(transcript, sp.state)
+      sp.last_lead_disposition = disposition
+      console.log(`[SPEECH PROGRESS] lead turn — disposition=${disposition} parte_atual=${sp.parte_atual} state=${sp.state}`)
+
+      if (sp.state === 'WAITING_FINAL_RESPONSE') {
+        // Final question response — always inject awaiting_final instruction
+        sp.waiting_for_lead = false
+        await sessionRef.updateInstructions(getPartInstruction('awaiting_final'))
+        return
+      }
+
+      if (sp.state !== 'WAITING_LEAD') return
+
+      switch (disposition) {
+        case 'BACKCHANNEL':
+        case 'CONTINUE': {
+          // Lead confirmed — unlock next part
+          const next = typeof sp.parte_atual === 'number' ? String(sp.parte_atual) : String(sp.parte_atual)
+          sp.waiting_for_lead = false
+          await sessionRef.updateInstructions(getPartInstruction(next))
+          break
+        }
+        case 'QUESTION': {
+          // ANA answers, then backend re-evaluates on next turn
+          // Keep waiting_for_lead=true so after ANA answers, next lead turn is classified again
+          // But also allow ANA to continue if question is resolved (ANA calls registrar_parte after)
+          // No instruction change — ANA handles naturally with current context
+          break
+        }
+        case 'INTERRUPTION': {
+          sp.parte_interrompida = true
+          // No instruction change — ANA must complete interrupted part before registering
+          break
+        }
+        case 'CONFUSION':
+        case 'OBJECTION':
+        case 'UNKNOWN':
+          // Stay in current state — ANA handles naturally
+          break
+      }
     },
   }
 
@@ -270,6 +317,10 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
       console.log('[ANA MASTER] 📝 user:', text)
       if (text && sessionRef.callSid !== 'unknown') {
         appendTranscript(sessionRef.callSid, 'user', text).catch(() => {})
+        // Speech progress: classify lead turn and potentially unlock next part
+        if (sessionRef.speechProgress.waiting_for_lead) {
+          sessionRef.onLeadTurn(text).catch(() => {})
+        }
       }
     }
     if (event?.type === 'response.done') {

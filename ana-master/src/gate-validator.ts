@@ -20,6 +20,7 @@ export interface GateEvidence {
   viagem_respondida?: boolean
   pendencia_decisor?: boolean
   // GATE_SPEECH
+  speech_progress_complete?: boolean
   parte1_entregue?: boolean
   parte2_entregue?: boolean
   parte3_entregue?: boolean
@@ -86,6 +87,10 @@ export async function validateGate(
     }
 
     case 'GATE_SPEECH': {
+      // Primary guard: speech progress must be COMPLETE (set by registrar_parte_speech)
+      if (!evidence.speech_progress_complete) {
+        return { approved: false, reason: 'Speech Progress incompleto. Todas as partes devem ser entregues sequencialmente com turno real da lead entre cada uma.' }
+      }
       if (!evidence.parte1_entregue)
         return { approved: false, reason: 'Parte 1 não entregue — personalização com dor/impacto da lead.' }
       if (!evidence.parte2_entregue)

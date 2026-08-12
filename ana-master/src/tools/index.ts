@@ -1,13 +1,19 @@
 import { z } from 'zod'
 import { validateGate } from '../gate-validator.js'
 import { GateId, GATES } from '../state-machine.js'
-import { getLeadByPhone, getMemories, saveMemory, verifyPayment, checkReferidos } from '../supabase.js'
+import { getLeadByPhone, getMemories, saveMemory, verifyPayment, checkReferidos, saveSpeechProgress } from '../supabase.js'
 import { sendWhatsApp, iniciarColetaReferidos } from './whatsapp.js'
+import {
+  SpeechProgress, initialSpeechProgress, isComplete,
+  getPartInstruction, classifyLeadTurn, LeadTurnDisposition,
+} from '../speech-progress.js'
 
 export type SessionRef = {
   callSid: string
   telefone: string
+  speechProgress: SpeechProgress
   updateInstructions: (instructions: string) => Promise<void>
+  onLeadTurn: (transcript: string) => Promise<void>
 }
 
 export function buildTools(session: SessionRef) {
@@ -33,7 +39,11 @@ export function buildTools(session: SessionRef) {
       }) => {
         const result = await validateGate(
           gate_id as GateId,
-          { ...evidence, telefone: session.telefone } as any,
+          {
+            ...evidence,
+            telefone: session.telefone,
+            speech_progress_complete: isComplete(session.speechProgress),
+          } as any,
           session.callSid,
         )
 
@@ -118,6 +128,59 @@ export function buildTools(session: SessionRef) {
           return `⏳ ${ref.semDados} indicadas ainda sem profissão/hobby. Peça para a lead completar no formulário.`
         }
         return `⏳ Formulário em andamento. completo=${ref.completo}, semDados=${ref.semDados}`
+      },
+    },
+
+    {
+      name: 'registrar_parte_speech',
+      description:
+        'Registra que uma parte do Speech foi concluída. SOMENTE chame depois de entregar completamente a parte. O backend libera a próxima instrução após o turno real da lead. NUNCA chame partes fora de ordem.',
+      parameters: z.object({
+        parte: z.union([
+          z.literal(1), z.literal(2), z.literal(3), z.literal(4),
+          z.literal('pergunta_feita'), z.literal('resposta_recebida'),
+        ]).describe('Qual parte ou marco foi concluído'),
+      }),
+      execute: async ({ parte }: { parte: number | string }) => {
+        const sp = session.speechProgress
+
+        // Validate ordering
+        if (typeof parte === 'number') {
+          if (parte !== sp.parte_atual) {
+            return `{"error":"Ordem incorreta. parte_atual=${sp.parte_atual}, tentou registrar parte=${parte}. Não pule partes."}`
+          }
+          if (sp.parte_interrompida) {
+            return `{"error":"Parte ${parte} foi interrompida — conclua o conteúdo restante antes de registrar."}`
+          }
+          sp.partes_entregues.push(parte as any)
+          sp.parte_em_execucao = undefined
+          sp.parte_interrompida = false
+          sp.parte_atual = (parte < 4 ? parte + 1 : 'final_question') as any
+          sp.state = 'WAITING_LEAD'
+          sp.waiting_for_lead = true
+          await saveSpeechProgress(session.callSid, sp as any)
+          return `{"ok":true,"parte_registrada":${parte},"aguardando":"turno_da_lead","instrucao":"PARE aqui. Aguarde a lead reagir. O backend liberará a próxima parte após o turno dela."}`
+        }
+
+        if (parte === 'pergunta_feita') {
+          sp.pergunta_final_feita = true
+          sp.state = 'WAITING_FINAL_RESPONSE'
+          sp.waiting_for_lead = true
+          await saveSpeechProgress(session.callSid, sp as any)
+          return `{"ok":true,"pergunta_final":"registrada","aguardando":"resposta_final_da_lead","instrucao":"PARE. Aguarde a resposta real da lead à pergunta final."}`
+        }
+
+        if (parte === 'resposta_recebida') {
+          sp.resposta_final_recebida = true
+          sp.parte_atual = 'complete'
+          sp.state = 'COMPLETE'
+          sp.waiting_for_lead = false
+          await saveSpeechProgress(session.callSid, sp as any)
+          await session.updateInstructions(getPartInstruction('complete'))
+          return `{"ok":true,"speech_progress":"COMPLETE","instrucao":"Pode chamar gateValidator GATE_SPEECH agora com todas as evidências."}`
+        }
+
+        return `{"error":"parte inválida: ${parte}"}`
       },
     },
 

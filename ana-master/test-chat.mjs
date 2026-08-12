@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Simulador de conversa com ANA — modo texto (sem voz, sem Twilio)
- * Usa os mesmos prompts e lógica de etapas da ligação real.
+ * Usa os mesmos prompts, gates e speech progress control da ligação real.
  *
  * Uso: node test-chat.mjs
  */
@@ -50,12 +50,171 @@ REGRAS ABSOLUTAS:
 BASE CIENTÍFICA (USE SOMENTE NA ETAPA 4):
 Implante hormonal = pellet do tamanho de um grão de arroz, inserido sob a pele, liberação hormonal contínua por até 6 meses. Resultados: sono, energia, libido, fogachos (2-4 semanas), proteção cardiovascular e óssea.`
 
+// ── Speech Progress (espelho de speech-progress.ts) ──────────────────────────
+
+const SPEECH_PART_INSTRUCTIONS = {
+  '1': `SPEECH — ENTREGUE APENAS A PARTE 1 AGORA.
+
+Demonstre que lembra da pessoa antes de qualquer explicação.
+Conecte: dor_principal → impacto → contexto de vida dela.
+Use as memórias: dor_principal / impacto / rotina / atividade_fisica / sintomas.
+
+Exemplo comportamental (NÃO fixo — adapte à lead real):
+"[Nome], você me contou que sempre foi muito ativa e que hoje essa falta de energia está até atrapalhando seus treinos. Deixa eu te explicar como o equilíbrio hormonal pode entrar nessa história."
+
+Evite diagnóstico individual categórico:
+✗ "A causa raiz dos seus sintomas é..."
+✓ "Quando os hormônios estão em desequilíbrio, é comum aparecerem sintomas como..."
+
+Após concluir a Parte 1: chame registrar_parte_speech(parte=1).
+PARE. Aguarde a lead reagir. O backend liberará a Parte 2 após o turno dela.`,
+
+  '2': `SPEECH — ENTREGUE APENAS A PARTE 2 AGORA.
+
+Explique o implante de forma simples e visual. Máximo 2 frases curtas.
+- pequeno pellet, aproximadamente do tamanho de um grão de arroz
+- inserido sob a pele
+- liberação contínua dos hormônios
+- protocolo individual prescrito pelo médico
+
+Após concluir a Parte 2: chame registrar_parte_speech(parte=2).
+PARE. Aguarde a lead reagir. O backend liberará a Parte 3 após o turno dela.`,
+
+  '3': `SPEECH — ENTREGUE APENAS A PARTE 3 AGORA.
+
+Relacione os benefícios aos sintomas REAIS que a lead relatou.
+Use as memórias: sintomas / dor_principal / impacto.
+
+Linguagem clinicamente responsável:
+✓ "o objetivo é..." / "pode ajudar..." / "há pacientes que relatam..." / "a resposta individual é avaliada pelo médico"
+✗ "Você terá..." / "Vai acontecer..." / "A causa é..."
+
+Após concluir a Parte 3: chame registrar_parte_speech(parte=3).
+PARE. Aguarde a lead reagir. O backend liberará a Parte 4 após o turno dela.`,
+
+  '4': `SPEECH — ENTREGUE APENAS A PARTE 4 AGORA.
+
+Explique a duração: esse protocolo pode ter duração de até 6 meses, conforme a indicação individual.
+
+Depois faça a pergunta final obrigatória:
+"[Nome], o que mais te chamou atenção do que eu acabei de te apresentar?"
+
+Após fazer a pergunta: chame registrar_parte_speech(parte=4).
+PARE. Aguarde a resposta real da lead. NÃO fale preço. NÃO antecipe fechamento.`,
+
+  'awaiting_final': `SPEECH — AGUARDANDO RESPOSTA FINAL DA LEAD.
+
+A lead acabou de responder à pergunta final. Processe a resposta:
+
+Se interesse positivo (ficou empolgada, perguntou próximos passos, quer avançar):
+→ save_memory(key="interesse_protocolo", value="[resposta real]")
+→ chame registrar_parte_speech(parte="resposta_recebida")
+→ GATE_SPEECH estará liberado
+
+Se dúvida técnica ou clínica:
+→ responda naturalmente dentro do conteúdo aprovado
+→ NÃO avance até a lead demonstrar interesse claro
+
+Se objeção:
+→ siga o DNA: OUVIR → ISOLAR → CONFIRMAR → OFERECER
+→ NÃO passe o gate
+
+Se ambígua:
+→ aprofunde naturalmente antes de avançar`,
+
+  'complete': `SPEECH CONCLUÍDO. Pode chamar gateValidator(gate_id="GATE_SPEECH") agora com todas as evidências:
+speech_progress_complete=true, parte1_entregue=true, parte2_entregue=true, parte3_entregue=true, parte4_entregue=true, pergunta_final_feita=true, resposta_lead_recebida=true, interesse_pos_speech=true, interesse_protocolo="[resposta da lead]"`,
+}
+
+function classifyLeadTurn(transcript, state) {
+  if (!transcript || transcript.trim().length < 2) return 'UNKNOWN'
+  const t = transcript.toLowerCase().trim()
+
+  if (state === 'WAITING_FINAL_RESPONSE') return 'FINAL_INTEREST_RESPONSE'
+  if (t.length < 5 && ['hã', 'oi', 'ã', 'ei'].some(w => t.includes(w))) return 'INTERRUPTION'
+  if (['não entendi', 'repete', 'pode repetir', 'como assim', 'não compreendi'].some(p => t.includes(p))) return 'CONFUSION'
+  if (['aham', 'entendi', 'certo', 'sim', 'pode continuar', 'tá', 'ok', 'claro', 'vai', 'uhum', 'hm'].some(p => t.includes(p))) return 'BACKCHANNEL'
+  if (t.includes('?') || ['como', 'onde', 'quanto', 'quando', 'é seguro', 'dói', 'qual', 'por que'].some(p => t.includes(p))) return 'QUESTION'
+  if (['não quero', 'não tenho interesse', 'não posso', 'não vou', 'deixa pra depois'].some(p => t.includes(p))) return 'OBJECTION'
+  if (t.length > 10) return 'CONTINUE'
+  return 'UNKNOWN'
+}
+
+// ── Estado da simulação ───────────────────────────────────────────────────────
+
+let currentStage = 'apresentacao'
+let currentInstruction = null  // injected speech part instruction
+const messages = []
+const gateLog = []
+
+// Speech progress (simulado localmente)
+let speechProgress = {
+  parte_atual: 1,
+  partes_entregues: [],
+  parte_interrompida: false,
+  state: 'DELIVERING_PART',
+  waiting_for_lead: false,
+  pergunta_final_feita: false,
+  resposta_final_recebida: false,
+}
+
+function systemPrompt() {
+  const stageInstruction = currentInstruction || STAGE_INSTRUCTIONS[currentStage]
+  return `${ANA_BASE_PROMPT}\n\nINÍCIO: Você recebe a ligação e fala PRIMEIRO. Comece agora pela Etapa 1.\n\n${stageInstruction}`
+}
+
+// Called after user input when in speech stage
+function processSpeechTurn(userInput) {
+  if (currentStage !== 'speech' || !speechProgress.waiting_for_lead) return null
+
+  const disposition = classifyLeadTurn(userInput, speechProgress.state)
+  console.log(`\n  🧠 SPEECH TURN: disposition=${disposition} parte_atual=${speechProgress.parte_atual} state=${speechProgress.state}\n`)
+
+  if (speechProgress.state === 'WAITING_FINAL_RESPONSE') {
+    speechProgress.waiting_for_lead = false
+    return SPEECH_PART_INSTRUCTIONS['awaiting_final']
+  }
+
+  if (speechProgress.state !== 'WAITING_LEAD') return null
+
+  switch (disposition) {
+    case 'BACKCHANNEL':
+    case 'CONTINUE': {
+      speechProgress.waiting_for_lead = false
+      const next = String(speechProgress.parte_atual)
+      return SPEECH_PART_INSTRUCTIONS[next] || null
+    }
+    case 'QUESTION':
+      // Keep waiting — ANA answers, then next turn re-classifies
+      // If question is simple, ANA can continue after answering (no forced re-prompt)
+      return null
+    case 'INTERRUPTION':
+      speechProgress.parte_interrompida = true
+      return null
+    default:
+      return null
+  }
+}
+
+// ── Gates ─────────────────────────────────────────────────────────────────────
+
+const GATE_TRANSITIONS = {
+  GATE_ABERTURA:   { from: 'apresentacao', to: 'conexao' },
+  GATE_CONEXAO:    { from: 'conexao',      to: 'combinado' },
+  GATE_COMBINADO:  { from: 'combinado',    to: 'speech' },
+  GATE_SPEECH:     { from: 'speech',       to: 'fechamento' },
+  GATE_FECHAMENTO: { from: 'fechamento',   to: 'pagamento' },
+  GATE_PAGAMENTO:  { from: 'pagamento',    to: 'referidos' },
+  GATE_REFERIDOS:  { from: 'referidos',    to: 'validacao' },
+  GATE_VALIDACAO:  { from: 'validacao',    to: 'ganho' },
+}
+
 const STAGE_INSTRUCTIONS = {
   apresentacao: `ETAPA ATUAL: 1 de 8 — Abertura
 Energia: leve | Tom: calorosa, humana
 
 Abra com calor e leveza. Objetivo: confirmar nome, quem indicou, e disponibilidade.
-Faça isso naturalmente em no máximo 2-3 trocas. Assim que tiver as três informações, chame gateValidator IMEDIATAMENTE com gate_id="GATE_ABERTURA" e evidências: nome_confirmado: true, referida_confirmada: true, disponibilidade_confirmada: true.
+Faça isso naturalmente em no máximo 2-3 trocas. Assim que tiver as três informações confirmadas, chame gateValidator IMEDIATAMENTE com gate_id="GATE_ABERTURA" e evidências: nome_confirmado: true, referida_confirmada: true, disponibilidade_confirmada: true.
 NÃO faça perguntas adicionais antes de chamar o gate. NÃO pergunte sobre saúde.`,
 
   conexao: `ETAPA ATUAL: 2 de 8 — Conexão
@@ -70,7 +229,7 @@ Quando a lead falar espontaneamente sobre rotina, sintomas ou dificuldades:
 → APROFUNDE somente o que ainda falta compreender.
 → NUNCA pergunte novamente algo que a lead já explicou claramente.
 
-Exemplo comportamental (NÃO use como frase fixa — adapte ao que ela disse):
+Exemplo comportamental (NÃO fixo — adapte ao que ela disse):
 "Com uma rotina dessas, dá pra entender por que essa falta de energia está pesando tanto. Dessas coisas que você me contou, o que mais está te incomodando hoje?"
 
 Antes de chamar o gate, você precisa ter compreendido: rotina e trabalho, sintomas relatados, sintoma principal, impacto na vida dela, contexto para personalizar o Speech.
@@ -115,33 +274,25 @@ NÃO explique o implante. NÃO fale preço. NÃO antecipe fechamento.`,
   speech: `ETAPA ATUAL: 4 de 8 — Apresentação do Protocolo
 Energia: média-alta, crescendo naturalmente | Tom: especialista, segura, didática e calorosa | Ritmo: vivo, sem palestra
 
-REGRA CENTRAL: Não despeje todo o Speech em um único turno. Use 1-2 frases por intervenção.
-Observe a reação da lead entre blocos. Se trouxer dúvida/emoção, reaja primeiro.
-O objetivo é evitar MONÓLOGO — não criar CHECKLIST DE PAUSAS.
+O Speech é entregue em 4 partes sequenciais. O backend controla qual parte está liberada.
+Cada parte é liberada somente após o turno real da lead.
 
-ANTES DE COMEÇAR: consulte dor_principal / impacto / rotina / atividade_fisica / sintomas.
+AGORA — ENTREGUE APENAS A PARTE 1:
 
-PARTE 1 — PERSONALIZAÇÃO: demonstre que lembra da pessoa. Conecte dor_principal → impacto → contexto.
-Evite diagnóstico individual: ✗ "A causa raiz é..." ✓ "Quando os hormônios estão em desequilíbrio..."
-parte1_entregue = true
+Demonstre que lembra da pessoa antes de qualquer explicação.
+Conecte: dor_principal → impacto → contexto de vida dela.
+Use as memórias: dor_principal / impacto / rotina / atividade_fisica / sintomas.
 
-PARTE 2 — IMPLANTE: simples e visual, até 2 frases. Pellet, grão de arroz, sob a pele, liberação contínua, protocolo individual prescrito pelo médico.
-parte2_entregue = true
+Exemplo comportamental (NÃO fixo — adapte à lead real):
+"[Nome], você me contou que sempre foi muito ativa e que hoje essa falta de energia está até atrapalhando seus treinos. Deixa eu te explicar como o equilíbrio hormonal pode entrar nessa história."
 
-PARTE 3 — BENEFÍCIOS: conecte aos sintomas reais da lead.
-Linguagem responsável: ✓ "o objetivo é..." / "pode ajudar..." / "há pacientes que relatam..."
-parte3_entregue = true
+Evite diagnóstico individual categórico:
+✗ "A causa raiz dos seus sintomas é..."
+✓ "Quando os hormônios estão em desequilíbrio, é comum aparecerem sintomas como..."
 
-PARTE 4 — DURAÇÃO + PERGUNTA FINAL: até 6 meses, depois é só renovar.
-Somente após as 4 partes: "[Nome], o que mais te chamou atenção do que eu acabei de te apresentar?"
-pergunta_final_feita = true — PARE. Aguarde resposta.
-
-APÓS RESPOSTA: save_memory(key="interesse_protocolo", value="[resposta]")
-resposta_lead_recebida = true | interesse_pos_speech = true/false
-
-gateValidator(gate_id="GATE_SPEECH", parte1_entregue=true, parte2_entregue=true, parte3_entregue=true, parte4_entregue=true, pergunta_final_feita=true, resposta_lead_recebida=true, interesse_pos_speech=true, interesse_protocolo="[resposta]")
-
-NÃO fale preço. NÃO fale pagamento. NÃO antecipe fechamento.`,
+Após concluir a Parte 1: chame registrar_parte_speech(parte=1).
+PARE. Aguarde a lead reagir. O backend liberará a Parte 2 após o turno dela.
+NÃO antecipe partes futuras. NÃO fale preço. NÃO antecipe fechamento.`,
 
   fechamento: `ETAPA ATUAL: 5 de 8 — Fechamento
 Energia: média-alta | Ritmo: curto | Tom: convicto, firme, sem pressão
@@ -160,40 +311,26 @@ Verifique negativas e semDados=0. Chame gateValidator(gate_id="GATE_VALIDACAO").
   ganho: `ETAPA CONCLUÍDA — Ganho confirmado! Despeça-se com calor genuíno.`,
 }
 
-// ── Estado da simulação ───────────────────────────────────────────────────────
-
-let currentStage = 'apresentacao'
-const messages = []
-const gateLog = []
-
-function systemPrompt() {
-  return `${ANA_BASE_PROMPT}
-
-INÍCIO: Você recebe a ligação e fala PRIMEIRO. Comece agora pela Etapa 1.
-
-${STAGE_INSTRUCTIONS[currentStage]}`
-}
-
-// ── Tools simulados ───────────────────────────────────────────────────────────
-
-const GATE_TRANSITIONS = {
-  GATE_ABERTURA:   { from: 'apresentacao', to: 'conexao' },
-  GATE_CONEXAO:    { from: 'conexao',      to: 'combinado' },
-  GATE_COMBINADO:  { from: 'combinado',    to: 'speech' },
-  GATE_SPEECH:     { from: 'speech',       to: 'fechamento' },
-  GATE_FECHAMENTO: { from: 'fechamento',   to: 'pagamento' },
-  GATE_PAGAMENTO:  { from: 'pagamento',    to: 'referidos' },
-  GATE_REFERIDOS:  { from: 'referidos',    to: 'validacao' },
-  GATE_VALIDACAO:  { from: 'validacao',    to: 'ganho' },
-}
+// ── Tool handlers ─────────────────────────────────────────────────────────────
 
 function handleGateValidator(args) {
   const { gate_id, ...evidence } = args
   const transition = GATE_TRANSITIONS[gate_id]
   if (!transition) return { approved: false, reason: `Gate desconhecido: ${gate_id}` }
 
+  // GATE_SPEECH requires speech_progress_complete
+  if (gate_id === 'GATE_SPEECH' && speechProgress.state !== 'COMPLETE') {
+    return { approved: false, reason: `GATE_SPEECH bloqueado — Speech Progress incompleto. state=${speechProgress.state} parte_atual=${speechProgress.parte_atual}` }
+  }
+
   gateLog.push({ gate: gate_id, evidence, ts: new Date().toISOString() })
   currentStage = transition.to
+  currentInstruction = null
+
+  // Reset speech progress when leaving speech stage
+  if (gate_id === 'GATE_SPEECH') {
+    speechProgress = { parte_atual: 1, partes_entregues: [], parte_interrompida: false, state: 'DELIVERING_PART', waiting_for_lead: false, pergunta_final_feita: false, resposta_final_recebida: false }
+  }
 
   console.log(`\n${'─'.repeat(60)}`)
   console.log(`  🚪 GATE PASSOU: ${gate_id}`)
@@ -201,12 +338,48 @@ function handleGateValidator(args) {
   console.log(`  📋 Evidências: ${JSON.stringify(evidence)}`)
   console.log(`${'─'.repeat(60)}\n`)
 
-  return {
-    approved: true,
-    reason: `${gate_id} aprovado.`,
-    next_stage: transition.to,
-    next_instructions: STAGE_INSTRUCTIONS[transition.to],
+  return { approved: true, reason: `${gate_id} aprovado.`, next_stage: transition.to }
+}
+
+function handleRegistrarParteSpeech(args) {
+  const { parte } = args
+  const sp = speechProgress
+
+  if (typeof parte === 'number') {
+    if (parte !== sp.parte_atual) {
+      return { error: `Ordem incorreta. parte_atual=${sp.parte_atual}, tentou registrar parte=${parte}. Não pule partes.` }
+    }
+    if (sp.parte_interrompida) {
+      return { error: `Parte ${parte} foi interrompida — conclua o conteúdo restante antes de registrar.` }
+    }
+    sp.partes_entregues.push(parte)
+    sp.parte_atual = parte < 4 ? parte + 1 : 'final_question'
+    sp.state = 'WAITING_LEAD'
+    sp.waiting_for_lead = true
+
+    console.log(`\n  📊 SPEECH PROGRESS: parte ${parte} registrada | próxima=${sp.parte_atual} | aguardando turno da lead\n`)
+    return { ok: true, parte_registrada: parte, aguardando: 'turno_da_lead', instrucao: 'PARE aqui. Aguarde a lead reagir. O backend liberará a próxima parte após o turno dela.' }
   }
+
+  if (parte === 'pergunta_feita') {
+    sp.pergunta_final_feita = true
+    sp.state = 'WAITING_FINAL_RESPONSE'
+    sp.waiting_for_lead = true
+    console.log(`\n  📊 SPEECH PROGRESS: pergunta final registrada | aguardando resposta da lead\n`)
+    return { ok: true, pergunta_final: 'registrada', aguardando: 'resposta_final_da_lead' }
+  }
+
+  if (parte === 'resposta_recebida') {
+    sp.resposta_final_recebida = true
+    sp.parte_atual = 'complete'
+    sp.state = 'COMPLETE'
+    sp.waiting_for_lead = false
+    currentInstruction = SPEECH_PART_INSTRUCTIONS['complete']
+    console.log(`\n  📊 SPEECH PROGRESS: COMPLETO ✅ — GATE_SPEECH liberado\n`)
+    return { ok: true, speech_progress: 'COMPLETE', instrucao: 'Pode chamar gateValidator GATE_SPEECH agora.' }
+  }
+
+  return { error: `parte inválida: ${parte}` }
 }
 
 function handleSaveMemory(args) {
@@ -214,10 +387,7 @@ function handleSaveMemory(args) {
   return { ok: true }
 }
 
-function handleVerificarPagamento() {
-  // Em simulação, sempre retorna não pago — você pode mudar para true para testar
-  return { pago: false, message: '[SIMULAÇÃO] Pagamento ainda não confirmado.' }
-}
+// ── Tools definition ──────────────────────────────────────────────────────────
 
 const TOOLS = [
   {
@@ -242,6 +412,7 @@ const TOOLS = [
           decisao_saude_respondida: { type: 'boolean' },
           viagem_respondida: { type: 'boolean' },
           pendencia_decisor: { type: 'boolean' },
+          speech_progress_complete: { type: 'boolean' },
           parte1_entregue: { type: 'boolean' },
           parte2_entregue: { type: 'boolean' },
           parte3_entregue: { type: 'boolean' },
@@ -264,6 +435,25 @@ const TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'registrar_parte_speech',
+      description: 'Registra que uma parte do Speech foi concluída. SOMENTE chame depois de entregar completamente a parte. Nunca chame partes fora de ordem.',
+      parameters: {
+        type: 'object',
+        properties: {
+          parte: {
+            oneOf: [
+              { type: 'integer', enum: [1, 2, 3, 4] },
+              { type: 'string', enum: ['pergunta_feita', 'resposta_recebida'] },
+            ],
+          },
+        },
+        required: ['parte'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'save_memory',
       description: 'Salva uma informação importante sobre a lead.',
       parameters: {
@@ -276,21 +466,23 @@ const TOOLS = [
       },
     },
   },
-  {
-    type: 'function',
-    function: {
-      name: 'verificar_pagamento',
-      description: 'Verifica se o pagamento foi confirmado.',
-      parameters: { type: 'object', properties: {} },
-    },
-  },
 ]
 
 // ── Loop de chat ──────────────────────────────────────────────────────────────
 
 async function callAna(userMessage) {
-  if (userMessage) {
-    messages.push({ role: 'user', content: userMessage })
+  if (userMessage !== null) {
+    // Inject speech progress instruction if needed
+    if (currentStage === 'speech') {
+      const nextInstruction = processSpeechTurn(userMessage)
+      if (nextInstruction) {
+        currentInstruction = nextInstruction
+        messages.push({ role: 'system', content: `[SISTEMA — BACKEND] ${nextInstruction}` })
+      }
+    }
+    if (userMessage !== '') {
+      messages.push({ role: 'user', content: userMessage })
+    }
   }
 
   const response = await openai.chat.completions.create({
@@ -307,7 +499,6 @@ async function callAna(userMessage) {
   const msg = response.choices[0].message
   messages.push(msg)
 
-  // Processar tool calls
   if (msg.tool_calls && msg.tool_calls.length > 0) {
     const toolResults = []
     for (const tc of msg.tool_calls) {
@@ -315,20 +506,14 @@ async function callAna(userMessage) {
       let result
 
       if (tc.function.name === 'gateValidator') result = handleGateValidator(args)
+      else if (tc.function.name === 'registrar_parte_speech') result = handleRegistrarParteSpeech(args)
       else if (tc.function.name === 'save_memory') result = handleSaveMemory(args)
-      else if (tc.function.name === 'verificar_pagamento') result = handleVerificarPagamento()
       else result = { ok: true }
 
-      toolResults.push({
-        role: 'tool',
-        tool_call_id: tc.id,
-        content: JSON.stringify(result),
-      })
+      toolResults.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) })
     }
 
     messages.push(...toolResults)
-
-    // ANA continua depois dos tools com as novas instruções de etapa
     return callAna(null)
   }
 
@@ -338,37 +523,42 @@ async function callAna(userMessage) {
 // ── Interface de terminal ─────────────────────────────────────────────────────
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout })
-
-function prompt(q) {
-  return new Promise(resolve => rl.question(q, resolve))
-}
+function prompt(q) { return new Promise(resolve => rl.question(q, resolve)) }
 
 async function main() {
   console.clear()
-  console.log('╔══════════════════════════════════════════════════════════╗')
-  console.log('║          SIMULADOR ANA — HORMONE ECOSYSTEM               ║')
-  console.log('║  Modelo: gpt-4o  |  Mesmos prompts da ligação real       ║')
-  console.log('║  Digite sua resposta e pressione Enter                   ║')
-  console.log('║  Ctrl+C para encerrar  |  /gates para ver gates passados ║')
-  console.log('╚══════════════════════════════════════════════════════════╝')
+  console.log('╔══════════════════════════════════════════════════════════════╗')
+  console.log('║           SIMULADOR ANA — HORMONE ECOSYSTEM                 ║')
+  console.log('║  Modelo: gpt-4o  |  Speech Progress Control ativo           ║')
+  console.log('║  Digite sua resposta e pressione Enter                      ║')
+  console.log('║  /gates — ver gates passados  |  /speech — ver progresso   ║')
+  console.log('║  Ctrl+C para encerrar                                       ║')
+  console.log('╚══════════════════════════════════════════════════════════════╝')
   console.log()
 
   if (!process.env.OPENAI_API_KEY) {
-    console.error('❌ OPENAI_API_KEY não encontrada. Verifique o ambiente.')
+    console.error('❌ OPENAI_API_KEY não encontrada.')
     process.exit(1)
   }
 
   console.log('⏳ ANA está iniciando...\n')
-  const abertura = await callAna('iniciar')
+  const abertura = await callAna('')
   console.log(`\x1b[35mANA:\x1b[0m ${abertura}\n`)
 
   while (true) {
-    const etapaLabel = `[Etapa: ${currentStage.toUpperCase()}]`
-    const input = await prompt(`\x1b[36m${etapaLabel} Você:\x1b[0m `)
+    const speechInfo = currentStage === 'speech' ? ` | Speech P${speechProgress.parte_atual} ${speechProgress.state}` : ''
+    const label = `[${currentStage.toUpperCase()}${speechInfo}]`
+    const input = await prompt(`\x1b[36m${label} Você:\x1b[0m `)
 
     if (input.trim() === '/gates') {
       console.log('\n📋 Gates passados:', gateLog.length === 0 ? 'nenhum ainda' : '')
       gateLog.forEach(g => console.log(`  ✓ ${g.gate} — ${g.ts}`))
+      console.log()
+      continue
+    }
+
+    if (input.trim() === '/speech') {
+      console.log('\n📊 Speech Progress:', JSON.stringify(speechProgress, null, 2))
       console.log()
       continue
     }

@@ -87,6 +87,18 @@ export async function appendTranscript(callSid: string, role: 'user' | 'assistan
   }).eq('call_sid', callSid)
 }
 
+export async function saveSpeechProgress(callSid: string, progress: Record<string, unknown>) {
+  const { data } = await supabase.from('ana_calls').select('memories').eq('call_sid', callSid).single()
+  const memories = { ...((data?.memories as Record<string, unknown>) ?? {}), speech_progress: progress }
+  await supabase.from('ana_calls').update({ memories, updated_at: new Date().toISOString() }).eq('call_sid', callSid)
+}
+
+export async function loadSpeechProgress(callSid: string): Promise<Record<string, unknown> | null> {
+  const { data } = await supabase.from('ana_calls').select('memories').eq('call_sid', callSid).single()
+  const memories = (data?.memories as Record<string, unknown>) ?? {}
+  return (memories.speech_progress as Record<string, unknown>) ?? null
+}
+
 export async function getLeadByPhone(telefone: string) {
   const digits = String(telefone).replace(/\D/g, '')
   const { data } = await supabase
