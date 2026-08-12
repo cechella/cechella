@@ -29,6 +29,11 @@ export async function upsertCall(callSid: string, telefone: string) {
   return data as AnaCall | null
 }
 
+export async function getCallStage(callSid: string): Promise<string | null> {
+  const { data } = await supabase.from('ana_calls').select('stage').eq('call_sid', callSid).single()
+  return (data as any)?.stage ?? null
+}
+
 export async function updateCallStage(callSid: string, stage: string) {
   await supabase
     .from('ana_calls')

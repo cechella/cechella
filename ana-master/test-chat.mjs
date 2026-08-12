@@ -499,7 +499,14 @@ function handleGateValidator(args) {
   const transition = GATE_TRANSITIONS[gate_id]
   if (!transition) return { approved: false, reason: `Gate desconhecido: ${gate_id}` }
 
-  // GATE_SPEECH requires speech_progress_complete
+  // INVARIANTE: cada gate só pode ser avaliado a partir do stage de origem correto
+  if (currentStage !== transition.from) {
+    const reason = `${gate_id} bloqueado — stage atual é "${currentStage}", mas este gate exige "${transition.from}". Salto de etapa é impossível.`
+    console.log(`\n  🚫 [GATE BLOQUEADO] ${reason}\n`)
+    return { approved: false, reason }
+  }
+
+  // GATE_SPEECH requer SpeechProgress completo
   if (gate_id === 'GATE_SPEECH' && speechProgress.state !== 'COMPLETE') {
     return { approved: false, reason: `GATE_SPEECH bloqueado — Speech Progress incompleto. state=${speechProgress.state} parte_atual=${speechProgress.parte_atual}` }
   }

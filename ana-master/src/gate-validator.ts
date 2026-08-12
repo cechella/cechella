@@ -1,4 +1,4 @@
-import { verifyPayment, checkReferidos, setCallStatusGanho, recordGatePassed, updateCallStage, saveMemory, getMemories } from './supabase.js'
+import { verifyPayment, checkReferidos, setCallStatusGanho, recordGatePassed, updateCallStage, saveMemory, getMemories, getCallStage } from './supabase.js'
 import { GateId, GATE_TRANSITIONS, STAGE_INSTRUCTIONS, Stage } from './state-machine.js'
 import { sendWelcome } from './tools/whatsapp.js'
 
@@ -53,7 +53,16 @@ export async function validateGate(
   evidence: GateEvidence,
   callSid: string,
 ): Promise<GateResult> {
-  const { to: nextStage } = GATE_TRANSITIONS[gateId]
+  const { from: requiredStage, to: nextStage } = GATE_TRANSITIONS[gateId]
+
+  // INVARIANTE: gate só pode ser avaliado a partir do stage de origem correto
+  const currentStage = await getCallStage(callSid)
+  if (currentStage !== requiredStage) {
+    return {
+      approved: false,
+      reason: `${gateId} bloqueado — stage atual é "${currentStage}", mas este gate exige "${requiredStage}". Salto de etapa é impossível.`,
+    }
+  }
 
   switch (gateId) {
     case 'GATE_ABERTURA': {
