@@ -599,9 +599,22 @@ async function callAna(userMessage) {
 
       if (tc.function.name === 'gateValidator') result = handleGateValidator(args)
       else if (tc.function.name === 'registrar_parte_speech') {
-        result = handleRegistrarParteSpeech(args)
-        if (result.aguardando === 'turno_da_lead' || result.aguardando === 'resposta_final_da_lead') {
-          waitingForLead = true
+        const parte = args.parte
+        // GUARD: numeric part registration requires verbal content in the same turn.
+        // If model called registrar_parte_speech without speaking first, reject and force delivery.
+        const isNumericPart = typeof parte === 'number'
+        const hasVerbalContent = !!spokenContent
+        if (isNumericPart && !hasVerbalContent) {
+          const sp = speechProgress
+          console.log(`  ⚠️  speech_content_missing: modelo tentou registrar parte ${parte} sem verbalizar conteúdo. Rejeitando.`)
+          result = {
+            error: `Conteúdo não verbalizado. Você DEVE falar o conteúdo da Parte ${parte} antes de chamar registrar_parte_speech. Entregue agora as frases da Parte ${parte} e chame o registro após.`,
+          }
+        } else {
+          result = handleRegistrarParteSpeech(args)
+          if (result.aguardando === 'turno_da_lead' || result.aguardando === 'resposta_final_da_lead') {
+            waitingForLead = true
+          }
         }
       }
       else if (tc.function.name === 'save_memory') result = handleSaveMemory(args)
@@ -633,6 +646,11 @@ async function callAna(userMessage) {
     !explicitRegistrarCalled &&                                            // guard 4
     !speechProgress.parte_interrompida &&                                  // guard 5
     !speechProgress.partes_entregues.includes(parte)                       // guard 6
+
+  if (currentStage === 'speech' && speechProgress.state === 'DELIVERING_PART') {
+    // Diagnostic log before every AUTO-REGISTRO evaluation
+    console.log(`  [AUTO-REG DIAG] content="${msg.content?.trim()?.slice(0, 60) ?? ''}" len=${msg.content?.trim()?.length ?? 0} state=${speechProgress.state} parte_em_execucao=${speechProgress.parte_em_execucao} parte_atual=${speechProgress.parte_atual} interrompida=${speechProgress.parte_interrompida} entregues=[${speechProgress.partes_entregues}] explicitReg=${explicitRegistrarCalled}`)
+  }
 
   if (autoRegisterEligible) {
     autoRegisterCount++
