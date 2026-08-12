@@ -21,8 +21,15 @@ CREATE INDEX IF NOT EXISTS idx_gate_trace_call ON ana_gate_trace(call_sid);
 CREATE INDEX IF NOT EXISTS idx_gate_trace_gate ON ana_gate_trace(gate_id);
 
 ALTER TABLE ana_gate_trace ENABLE ROW LEVEL SECURITY;
-CREATE POLICY IF NOT EXISTS "service_full_gate_trace"
-  ON ana_gate_trace FOR ALL USING (true);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_policies WHERE tablename = 'ana_gate_trace' AND policyname = 'service_full_gate_trace'
+  ) THEN
+    CREATE POLICY "service_full_gate_trace" ON ana_gate_trace FOR ALL USING (true);
+  END IF;
+END
+$$;
 
 -- Função principal: executa transição completa em uma única transação
 -- Retorna: { transitioned: boolean, reason: text }
