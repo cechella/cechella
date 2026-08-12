@@ -53,18 +53,23 @@ export function isComplete(sp: SpeechProgress): boolean {
 // ── Instrução injetada por parte ──────────────────────────────────────────────
 
 const PART_INSTRUCTIONS: Record<string, string> = {
-  '1': `SPEECH — PARTE 1: PERSONALIZAÇÃO + PONTE. Só isso.
+  '1': `SPEECH — PARTE 1: PERSONALIZAÇÃO + PONTE. Máximo 2 frases.
 
-Objetivo: 1-2 frases que mostram que você lembra da lead e criam a ponte para o que vem a seguir.
+Use SOMENTE o que está na memória desta sessão: dor_principal, impacto, sintomas.
+NÃO use exemplos do treinamento como se fossem dados da lead.
+NÃO invente sintomas que a lead não relatou (ex: "falta de energia", "treinos" se não foram mencionados).
 
-Use as memórias: dor_principal / impacto / rotina / sintomas.
+Frase 1: "[Nome], você me contou que [dor_principal real da memória]."
+Frase 2: "Quando os hormônios estão em desequilíbrio, é comum aparecerem sintomas como os que você mencionou."
 
-Estrutura: "[Nome], você me contou que [sintoma/dor real]. Quando os hormônios estão em desequilíbrio, é comum aparecerem sintomas como os que você descreveu."
+PROIBIDO nesta parte:
+✗ pellet, grão de arroz, inserção, liberação contínua
+✗ duração, 6 meses, prazo de resultado
+✗ benefícios específicos, proteção cardiovascular, óssea
+✗ qualquer dado que não veio da memória desta lead
 
-FIM. Não explique o implante. Não fale de benefícios. Não diga o que vem a seguir. Não anuncie nada.
-
-Após as 1-2 frases: chame registrar_parte_speech(parte=1) silenciosamente e encerre o turno.
-NÃO diga "vou registrar", "já volto", "vou continuar", "agora vou explicar". Simplesmente pare.`,
+Após as 2 frases: chame registrar_parte_speech(parte=1) silenciosamente e encerre o turno.
+NÃO diga nada mais. NÃO verbalize o registro.`,
 
   '2': `SPEECH — PARTE 2: O QUE É O IMPLANTE. Só isso, 2 frases.
 
