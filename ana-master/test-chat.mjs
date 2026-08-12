@@ -239,42 +239,64 @@ function countSentences(text) {
   return parts.length || (text.trim().length > 0 ? 1 : 0)
 }
 
-const P1_PROHIBITED_CONTENT = [
-  'pellet', 'grão de arroz', 'inserção', 'liberação contínua',
-  '6 meses', 'prazo de resultado', 'proteção cardiovascular', 'proteção óssea',
-]
-const P1_TRANSITION_PHRASES = [
-  'vou explicar', 'vou te contar', 'agora vou', 'na próxima parte',
-  'vou te mostrar', 'deixa eu te', 'já continuo', 'vou registrar',
-  'próxima parte', 'parte 2', 'parte dois',
+// Invariantes estruturais — sempre bloqueiam progressão
+const P1_STRUCTURAL_VIOLATIONS = [
+  // Conteúdo clínico/comercial indevido (pertence a P2/P3/P4)
+  { pattern: 'pellet',                  reason: 'conteúdo_p2_antecipado="pellet"' },
+  { pattern: 'grão de arroz',           reason: 'conteúdo_p2_antecipado="grão de arroz"' },
+  { pattern: 'inserção',                reason: 'conteúdo_p2_antecipado="inserção"' },
+  { pattern: 'liberação contínua',      reason: 'conteúdo_p2_antecipado="liberação contínua"' },
+  { pattern: '6 meses',                 reason: 'conteúdo_p4_antecipado="6 meses"' },
+  { pattern: 'proteção cardiovascular', reason: 'conteúdo_p3_antecipado="proteção cardiovascular"' },
+  { pattern: 'proteção óssea',          reason: 'conteúdo_p3_antecipado="proteção óssea"' },
+  // Revelar infraestrutura interna
+  { pattern: 'parte 1',   reason: 'revelou_infra="parte 1"' },
+  { pattern: 'parte 2',   reason: 'revelou_infra="parte 2"' },
+  { pattern: 'vou registrar', reason: 'revelou_infra="vou registrar"' },
+  { pattern: 'vou salvar',    reason: 'revelou_infra="vou salvar"' },
+  { pattern: 'próxima parte', reason: 'revelou_infra="próxima parte"' },
 ]
 
+// Desvios de expressão — QA registra, conversa não é bloqueada
+const P1_EXPRESSION_DEVIATIONS = [
+  { pattern: 'vou explicar',   label: 'trailing_transition' },
+  { pattern: 'vou te contar',  label: 'trailing_transition' },
+  { pattern: 'agora vou',      label: 'trailing_transition' },
+  { pattern: 'vou te mostrar', label: 'trailing_transition' },
+  { pattern: 'deixa eu te',    label: 'trailing_transition' },
+  { pattern: 'já continuo',    label: 'trailing_transition' },
+]
+
+// Returns { blocking: string[], warnings: string[] }
 function validateP1Content(content) {
-  const reasons = []
+  const blocking = []
+  const warnings = []
   const text = content.toLowerCase()
 
+  // Sentence count — warning only, not a block
   const sentenceCount = countSentences(content)
   if (sentenceCount > 2) {
-    reasons.push(`sentence_count=${sentenceCount} (máximo=2)`)
+    warnings.push(`sentence_count=${sentenceCount} (desejado=2)`)
     qaMetrics.trailing_text_count++
   }
 
-  for (const phrase of P1_PROHIBITED_CONTENT) {
-    if (text.includes(phrase)) {
-      reasons.push(`conteúdo_proibido="${phrase}"`)
+  // Structural violations — block
+  for (const { pattern, reason } of P1_STRUCTURAL_VIOLATIONS) {
+    if (text.includes(pattern)) {
+      blocking.push(reason)
       qaMetrics.scope_violation_count++
     }
   }
 
-  for (const phrase of P1_TRANSITION_PHRASES) {
-    if (text.includes(phrase)) {
-      reasons.push(`transição_indevida="${phrase}"`)
+  // Expression deviations — warn only
+  for (const { pattern, label } of P1_EXPRESSION_DEVIATIONS) {
+    if (text.includes(pattern)) {
+      warnings.push(`${label}="${pattern}"`)
       qaMetrics.trailing_text_count++
     }
   }
 
-  // Check for memory violations: only flag if specific known-fake data appears
-  // and is NOT in the authorized memory
+  // Memory violations — always block (inventing lead facts)
   const authorizedDor = (memoryStore.get('dor_principal') || '').toLowerCase()
   const authorizedImpacto = (memoryStore.get('impacto') || '').toLowerCase()
   const authorizedSintomas = (memoryStore.get('sintomas') || '').toLowerCase()
@@ -283,12 +305,12 @@ function validateP1Content(content) {
   const knownFakeData = ['falta de energia', 'atrapalhando seus treinos', 'sempre foi muito ativa']
   for (const fake of knownFakeData) {
     if (text.includes(fake) && !authorizedText.includes(fake)) {
-      reasons.push(`dado_inventado="${fake}"`)
+      blocking.push(`dado_inventado="${fake}"`)
       qaMetrics.memory_violation_count++
     }
   }
 
-  return reasons
+  return { blocking, warnings }
 }
 
 function buildSpeechP1Instruction() {
@@ -709,19 +731,24 @@ async function callAna(userMessage) {
         // GUARD 2: P1 content validation
         else if (isNumericPart && parte === 1 && hasVerbalContent) {
           qaMetrics.p1_attempt_count++
-          const violations = validateP1Content(spokenContent)
-          if (violations.length > 0) {
+          const { blocking, warnings } = validateP1Content(spokenContent)
+          if (warnings.length > 0) {
+            console.log(`  ⚠️  [QA] P1_EXPRESSION_DEVIATION (conversa continua):`)
+            warnings.forEach(w => console.log(`     • ${w}`))
+          }
+          if (blocking.length > 0) {
             qaMetrics.guard_trigger_count++
             qaMetrics.p1_retry_count++
-            console.log(`\n  ❌ [QA] P1_VALIDATION_FAILED`)
-            violations.forEach(r => console.log(`     reason: ${r}`))
-            console.log(`     → P1 NÃO registrada. SpeechProgress NÃO avança. Solicitando nova tentativa.\n`)
+            console.log(`\n  ❌ [QA] P1_STRUCTURAL_VIOLATION — NÃO registrada, NÃO avança`)
+            blocking.forEach(r => console.log(`     • ${r}`))
+            console.log()
             result = {
-              error: `P1_VALIDATION_FAILED. Problemas: ${violations.join('; ')}. Reescreva a Parte 1 respeitando: exatamente 2 frases, somente dados da memória autorizada, sem frases de transição, sem conteúdo de P2/P3/P4.`,
+              error: `P1_STRUCTURAL_VIOLATION: ${blocking.join('; ')}. Reescreva P1 usando SOMENTE dados da memória autorizada, sem conteúdo de P2/P3/P4, sem revelar infraestrutura interna.`,
             }
           } else {
             if (qaMetrics.p1_retry_count === 0) qaMetrics.p1_first_pass_success++
-            console.log(`  ✅ [QA] P1_VALID — first_pass=${qaMetrics.p1_retry_count === 0}`)
+            const label = qaMetrics.p1_retry_count === 0 ? 'GOLD' : 'RECOVERED'
+            console.log(`  ✅ [QA] P1_VALID — ${label}${warnings.length > 0 ? ' (com desvios de expressão)' : ''}`)
             result = handleRegistrarParteSpeech(args)
             if (result.aguardando === 'turno_da_lead' || result.aguardando === 'resposta_final_da_lead') {
               waitingForLead = true
@@ -771,32 +798,32 @@ async function callAna(userMessage) {
     // P1 QA validation before auto-registering
     if (parte === 1) {
       qaMetrics.p1_attempt_count++
-      const violations = validateP1Content(autoContent)
-      if (violations.length > 0) {
+      const { blocking, warnings } = validateP1Content(autoContent)
+      if (warnings.length > 0) {
+        console.log(`  ⚠️  [QA] P1_EXPRESSION_DEVIATION (conversa continua):`)
+        warnings.forEach(w => console.log(`     • ${w}`))
+      }
+      if (blocking.length > 0) {
         qaMetrics.guard_trigger_count++
         qaMetrics.p1_retry_count++
-        console.log(`\n  ❌ [QA] P1_VALIDATION_FAILED (auto-registro bloqueado)`)
-        violations.forEach(r => console.log(`     reason: ${r}`))
+        console.log(`\n  ❌ [QA] P1_STRUCTURAL_VIOLATION (auto-registro bloqueado)`)
+        blocking.forEach(r => console.log(`     • ${r}`))
         console.log(`     → P1 NÃO registrada. SpeechProgress NÃO avança.\n`)
-        // Return error to model for retry — content already displayed above
+        const blockId = `auto_block_${Date.now()}`
         messages.pop()
         messages.push({
           ...msg,
-          tool_calls: [{
-            id: `auto_block_${Date.now()}`,
-            type: 'function',
-            function: { name: 'registrar_parte_speech', arguments: JSON.stringify({ parte }) },
-          }],
+          tool_calls: [{ id: blockId, type: 'function', function: { name: 'registrar_parte_speech', arguments: JSON.stringify({ parte }) } }],
         })
         messages.push({
-          role: 'tool',
-          tool_call_id: `auto_block_${Date.now()}`,
-          content: JSON.stringify({ error: `P1_VALIDATION_FAILED: ${violations.join('; ')}. Reescreva P1 com exatamente 2 frases, somente dados da memória autorizada, sem frases de transição.` }),
+          role: 'tool', tool_call_id: blockId,
+          content: JSON.stringify({ error: `P1_STRUCTURAL_VIOLATION: ${blocking.join('; ')}. Reescreva P1 usando SOMENTE dados da memória autorizada, sem conteúdo de P2/P3/P4, sem revelar infraestrutura.` }),
         })
         return callAna(null)
       }
       if (qaMetrics.p1_retry_count === 0) qaMetrics.p1_first_pass_success++
-      console.log(`  ✅ [QA] P1_VALID — first_pass=${qaMetrics.p1_retry_count === 0}`)
+      const label = qaMetrics.p1_retry_count === 0 ? 'GOLD' : 'RECOVERED'
+      console.log(`  ✅ [QA] P1_VALID — ${label}${warnings.length > 0 ? ' (com desvios de expressão)' : ''}`)
     }
 
     qaMetrics.auto_register_count++
