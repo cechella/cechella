@@ -3363,7 +3363,10 @@ function SessoesInlineTab() {
 
                       {detailAudio && (
                         <div>
-                          <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' }}>🎙 Gravação de áudio</p>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                            <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>🎙 Gravação de áudio</p>
+                            <a href={detailAudio} download={`${detail.callSid}.webm`} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: '#38BDF8', border: '1px solid rgba(56,189,248,0.3)', borderRadius: 6, padding: '3px 8px', textDecoration: 'none' }}>⬇ Download</a>
+                          </div>
                           <audio controls src={detailAudio} style={{ width: '100%', borderRadius: 8 }} />
                         </div>
                       )}
