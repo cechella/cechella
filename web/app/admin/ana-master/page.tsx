@@ -3239,6 +3239,7 @@ function SessoesInlineTab() {
 // ─── TABS CONFIG ──────────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] = [
+  { id: 'central',    label: 'Central',       icon: <Sparkles style={{ width: 12, height: 12 }} />,  color: C.purple },
   { id: 'simulador',  label: '🎙️ Simulador',  icon: <span style={{ fontSize: 12 }}>🎙️</span>,        color: '#A78BFA' },
   { id: 'sessoes',    label: 'Sessões',       icon: <span style={{ fontSize: 12 }}>▶</span>,          color: '#38BDF8' },
   { id: 'ligacoes',   label: 'Ligações',      icon: <span style={{ fontSize: 12 }}>📞</span>,        color: '#38BDF8' },
@@ -3247,7 +3248,6 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] =
   { id: 'script',     label: 'Script',        icon: <BookOpen style={{ width: 12, height: 12 }} />,  color: '#F59E0B' },
   { id: 'config',     label: 'Realtime Config', icon: <span style={{ fontSize: 12 }}>⚙️</span>,      color: '#10B981' },
   { id: 'voz',        label: '🎙️ Voz',        icon: <span style={{ fontSize: 12 }}>🎙️</span>,        color: '#A78BFA' },
-  { id: 'central',    label: 'Central',       icon: <Sparkles style={{ width: 12, height: 12 }} />,  color: C.purple },
   { id: 'dna',        label: 'DNA v1',        icon: <span style={{ fontSize: 12 }}>🧬</span>,        color: '#A855F7' },
   { id: 'recovery',   label: 'Recovery',      icon: <span style={{ fontSize: 12 }}>🛡️</span>,        color: '#6366F1' },
   { id: 'simulacoes', label: 'Simulações',    icon: <Brain style={{ width: 12, height: 12 }} />,     color: C.purple },
@@ -3261,7 +3261,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] =
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
 export default function AnaMasterPage() {
-  const [tab, setTab] = useState<Tab>('simulador')
+  const [tab, setTab] = useState<Tab>('central')
   const [sims, setSims] = useState<Simulacao[]>([])
   const [gold, setGold] = useState<GoldItem[]>([])
   const [antiGold, setAntiGold] = useState<AntiGoldItem[]>([])
