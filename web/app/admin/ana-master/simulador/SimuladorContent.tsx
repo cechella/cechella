@@ -240,6 +240,19 @@ function SimuladorInner() {
   useEffect(() => { transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [transcript, streamingAnaText])
 
   // Auto-restore checkpoint from URL params (?checkpoint=GATE_X&resumeFrom=sim-browser-...)
+  // Upload audio via sendBeacon if page closes/crashes before stopSession
+  useEffect(() => {
+    const handleUnload = () => {
+      const chunks = audioChunksRef.current
+      const callSid = callSidRef.current
+      if (chunks.length === 0 || !callSid) return
+      const blob = new Blob(chunks, { type: 'audio/webm' })
+      navigator.sendBeacon(`/api/admin/ana-master/simulador/audio?callSid=${callSid}`, blob)
+    }
+    window.addEventListener('beforeunload', handleUnload)
+    return () => window.removeEventListener('beforeunload', handleUnload)
+  }, [])
+
   useEffect(() => {
     const gate = searchParams.get('checkpoint')
     const resumeCallSid = searchParams.get('resumeFrom')
@@ -851,7 +864,13 @@ function SimuladorInner() {
     if (stageRef.current === 'speech') saveSpeechState(speechRef.current, 'session_ended')
 
     const recorder = mediaRecorderRef.current
-    if (recorder && recorder.state !== 'inactive') { recorder.onstop = () => uploadAudio(); recorder.stop() }
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.onstop = () => uploadAudio()
+      recorder.stop()
+    } else if (recorder && recorder.state === 'inactive') {
+      // recorder already stopped (e.g. ended by browser) — upload whatever was collected
+      uploadAudio()
+    }
     mediaRecorderRef.current = null; setIsRecording(false)
 
     pcRef.current?.close(); pcRef.current = null; dcRef.current = null
