@@ -2262,95 +2262,53 @@ function LigacoesTab() {
                   {transcript.length > 0 && <span style={{ fontSize: 11, color: '#38BDF8' }}>💬 {transcript.length} mensagens</span>}
                 </div>
               </div>
-              {isExpanded && (() => {
-                const mem = (c.memories ?? {}) as Record<string, unknown>
-                const audioUrl = mem.audio_url as string | undefined
-                const checkpoints = (mem.checkpoints ?? {}) as Record<string, {stage: string; ts: string}>
-                const STAGES_S = ['apresentacao','conexao','combinado','speech','fechamento','pagamento','referidos','validacao']
-                const STAGE_TO_GATE: Record<string, string> = { conexao:'GATE_ABERTURA', combinado:'GATE_CONEXAO', speech:'GATE_COMBINADO', fechamento:'GATE_SPEECH', pagamento:'GATE_FECHAMENTO', referidos:'GATE_PAGAMENTO', validacao:'GATE_REFERIDOS', ganho:'GATE_VALIDACAO' }
-                const HIDDEN_MEM_KEYS = ['telefone','nome','sim_browser','transcript','speech_progress','speech_state_log','checkpoints','audio_url','profile_version']
-                const visibleMem = Object.entries(mem).filter(([k]) => !HIDDEN_MEM_KEYS.includes(k))
-                return (
-                <div style={{ borderTop: `1px solid ${C.border}`, display: 'flex', minHeight: 360 }}>
-                  {/* Left panel — info */}
-                  <div style={{ width: 220, flexShrink: 0, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', background: '#0A0A0B' }}>
-                    {/* Etapas */}
-                    <div style={{ padding: 12, borderBottom: `1px solid ${C.border}` }}>
-                      <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', margin: '0 0 8px' }}>Etapas</p>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                        {STAGES_S.map(stage => {
-                          const gateForStage = STAGE_TO_GATE[stage]
-                          const done = gateForStage ? (c.gates_passed ?? []).includes(gateForStage) : false
-                          const active = stage === c.stage && !done
-                          return (
-                            <span key={stage} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 700, background: done ? 'rgba(52,211,153,0.1)' : active ? 'rgba(123,63,228,0.2)' : '#111113', color: done ? '#34D399' : active ? '#A78BFA' : '#52525E', border: `1px solid ${done ? 'rgba(52,211,153,0.2)' : active ? 'rgba(123,63,228,0.4)' : '#1C1C1E'}` }}>
-                              {done ? '✓ ' : ''}{STAGE_LABELS[stage]}
-                            </span>
-                          )
-                        })}
-                      </div>
-                    </div>
-                    {/* Memórias */}
-                    <div style={{ padding: 12, borderBottom: `1px solid ${C.border}`, flex: 1, overflowY: 'auto' }}>
-                      <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', margin: '0 0 8px' }}>Memórias</p>
-                      {visibleMem.length === 0
-                        ? <p style={{ fontSize: 11, color: '#52525E' }}>Nenhuma salva.</p>
-                        : visibleMem.map(([k, v]) => (
-                          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11, marginBottom: 4 }}>
-                            <span style={{ color: '#52525E', flexShrink: 0 }}>{k}</span>
-                            <span style={{ color: '#fff', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }} title={String(v)}>{String(v)}</span>
-                          </div>
-                        ))
-                      }
-                    </div>
-                    {/* Audio */}
-                    {audioUrl && (
-                      <div style={{ padding: 12 }}>
-                        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', margin: '0 0 8px' }}>Áudio</p>
-                        <audio controls src={audioUrl} style={{ width: '100%', height: 28 }} />
-                        <a href={audioUrl} download style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 11, color: '#A78BFA', textDecoration: 'none' }}>
-                          ⬇ Baixar áudio
-                        </a>
-                      </div>
+              {isExpanded && (
+                <div style={{ borderTop: `1px solid ${C.border}`, padding: '14px 18px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Transcrição</div>
+                    {transcript.length > 0 && (
+                      <button onClick={() => {
+                        const text = transcript.map(m => `${(m.role === 'assistant' || m.role === 'ana') ? 'ANA' : 'Lead'}: ${m.text}`).join('\n')
+                        navigator.clipboard.writeText(text)
+                      }} style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.textFaint, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <Copy style={{ width: 11, height: 11 }} /> Copiar
+                      </button>
                     )}
                   </div>
-                  {/* Right panel — transcript */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                    <div style={{ padding: '10px 16px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', margin: 0 }}>Transcrição</p>
-                      {transcript.length > 0 && (
-                        <button onClick={() => {
-                          const text = transcript.map(m => `${(m.role === 'ana' || m.role === 'assistant') ? 'ANA' : m.role === 'tool' ? '[ferramenta]' : m.role === 'system' ? '[sistema]' : 'Lead'}: ${m.text}`).join('\n')
-                          navigator.clipboard.writeText(text)
-                        }} style={{ padding: '3px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.textFaint, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <Copy style={{ width: 11, height: 11 }} /> Copiar
-                        </button>
-                      )}
+                  {transcript.length === 0 ? (
+                    <div style={{ color: C.textFaint, fontSize: 12, padding: '12px 0', fontStyle: 'italic' }}>Sem transcrição — ligação anterior ao sistema de transcrição ou ANA não ouviu nada.</div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {transcript.map((m, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: (m.role === 'assistant' || m.role === 'ana') ? 'row' : 'row-reverse' }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: (m.role === 'assistant' || m.role === 'ana') ? '#7C3AED20' : '#0EA5E920', border: `1px solid ${(m.role === 'assistant' || m.role === 'ana') ? '#7C3AED40' : '#0EA5E940'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>
+                            {(m.role === 'assistant' || m.role === 'ana') ? '🤖' : '👤'}
+                          </div>
+                          <div style={{ maxWidth: '80%', background: (m.role === 'assistant' || m.role === 'ana') ? '#7C3AED15' : '#0EA5E915', border: `1px solid ${(m.role === 'assistant' || m.role === 'ana') ? '#7C3AED30' : '#0EA5E930'}`, borderRadius: 10, padding: '8px 12px' }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: (m.role === 'assistant' || m.role === 'ana') ? '#A78BFA' : '#38BDF8', marginBottom: 3 }}>{(m.role === 'assistant' || m.role === 'ana') ? 'ANA' : 'Lead'}</div>
+                            <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{m.text}</div>
+                            <div style={{ fontSize: 10, color: C.textFaint, marginTop: 4 }}>{new Date(m.ts).toLocaleTimeString('pt-BR')}</div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420 }}>
-                      {transcript.length === 0
-                        ? <p style={{ color: '#52525E', fontSize: 12, fontStyle: 'italic' }}>Sem transcrição gravada.</p>
-                        : transcript.map((m, i) => {
-                            const isAna = m.role === 'ana' || m.role === 'assistant'
-                            const isLead = m.role === 'lead'
-                            const isTool = m.role === 'tool'
-                            return (
-                              <div key={i} style={{ borderRadius: 10, padding: '10px 14px', lineHeight: 1.6, background: isAna ? 'rgba(123,63,228,0.1)' : isLead ? '#1C1C1E' : isTool ? 'rgba(249,115,22,0.05)' : 'transparent', border: `1px solid ${isAna ? 'rgba(123,63,228,0.2)' : isLead ? '#27272A' : isTool ? 'rgba(249,115,22,0.1)' : 'transparent'}`, color: isAna ? '#fff' : isLead ? '#A1A1AA' : isTool ? '#FB923C' : '#52525E', fontFamily: isTool ? 'monospace' : 'inherit', fontSize: isTool || m.role === 'system' ? 11 : 13, fontStyle: m.role === 'system' ? 'italic' : 'normal' }}>
-                                {(isAna || isLead) && (
-                                  <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 3px', color: isAna ? '#A78BFA' : '#52525E' }}>
-                                    {isAna ? 'ANA' : 'VOCÊ'}
-                                  </p>
-                                )}
-                                {m.text}
-                              </div>
-                            )
-                          })
-                      }
+                  )}
+                  {/* Memórias */}
+                  {Object.keys(c.memories ?? {}).filter(k => k !== 'transcript' && k !== 'telefone').length > 0 && (
+                    <div style={{ marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Memórias salvas</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {Object.entries(c.memories ?? {}).filter(([k]) => k !== 'transcript' && k !== 'telefone').map(([k, v]) => (
+                          <div key={k} style={{ display: 'flex', gap: 8, fontSize: 11 }}>
+                            <span style={{ color: '#A78BFA', fontWeight: 700, minWidth: 160 }}>{k}</span>
+                            <span style={{ color: C.textMuted }}>{typeof v === 'string' ? v : JSON.stringify(v)}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
-                )
-              })()}
+              )}
             </div>
             )
           })}
@@ -3342,69 +3300,91 @@ function SessoesInlineTab() {
             {isOpen && (
               <div style={{ borderTop: '1px solid #1C1C1E' }}>
                 {loadingDetail && <p style={{ color: '#52525B', fontSize: 12, textAlign: 'center', padding: 20 }}>Carregando...</p>}
-                {!loadingDetail && detail && (
-                  <>
-                    {/* Gate timeline strip */}
-                    <div style={{ padding: '12px 16px', borderBottom: '1px solid #1C1C1E', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-                      {GATE_ORDER_S.map(gate => {
-                        const cp = detailCheckpoints[gate]
-                        const passed = !!cp
-                        return passed ? (
-                          <a key={gate} href={`/admin/ana-master/simulador?checkpoint=${gate}&resumeFrom=${s.callSid}`}
-                            title={`Retomar daqui — ${fmtTime(cp.ts)}`}
-                            style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: 'rgba(52,211,153,0.1)', color: C.green, border: '1px solid rgba(52,211,153,0.3)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>
-                            ✓ {GATE_SHORT_S[gate]} <span style={{ opacity: 0.5, fontSize: 9 }}>↩</span>
+                {!loadingDetail && detail && (() => {
+                  const mem = (detail.memories ?? {}) as Record<string, unknown>
+                  const HIDDEN_KEYS = ['telefone','nome','sim_browser','transcript','speech_progress','speech_state_log','checkpoints','audio_url','profile_version']
+                  const visibleMem = Object.entries(mem).filter(([k]) => !HIDDEN_KEYS.includes(k))
+                  const STAGES_S = ['apresentacao','conexao','combinado','speech','fechamento','pagamento','referidos','validacao']
+                  const STAGE_TO_GATE: Record<string,string> = { conexao:'GATE_ABERTURA', combinado:'GATE_CONEXAO', speech:'GATE_COMBINADO', fechamento:'GATE_SPEECH', pagamento:'GATE_FECHAMENTO', referidos:'GATE_PAGAMENTO', validacao:'GATE_REFERIDOS', ganho:'GATE_VALIDACAO' }
+                  return (
+                  <div style={{ display: 'flex', minHeight: 360 }}>
+                    {/* Left panel */}
+                    <div style={{ width: 220, flexShrink: 0, borderRight: '1px solid #1C1C1E', display: 'flex', flexDirection: 'column', background: '#0A0A0B' }}>
+                      {/* Etapas */}
+                      <div style={{ padding: 12, borderBottom: '1px solid #1C1C1E' }}>
+                        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', margin: '0 0 8px' }}>Etapas</p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                          {STAGES_S.map(stage => {
+                            const gateForStage = STAGE_TO_GATE[stage]
+                            const done = gateForStage ? gatesPassed.has(gateForStage) : false
+                            const active = stage === s.stage && !done
+                            return (
+                              <span key={stage} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 700, background: done ? 'rgba(52,211,153,0.1)' : active ? 'rgba(123,63,228,0.2)' : '#111113', color: done ? '#34D399' : active ? '#A78BFA' : '#52525E', border: `1px solid ${done ? 'rgba(52,211,153,0.2)' : active ? 'rgba(123,63,228,0.4)' : '#1C1C1E'}` }}>
+                                {done ? '✓ ' : ''}{STAGE_LBL[stage] ?? stage}
+                              </span>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      {/* Memórias */}
+                      <div style={{ padding: 12, borderBottom: '1px solid #1C1C1E', flex: 1, overflowY: 'auto' }}>
+                        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', margin: '0 0 8px' }}>Memórias</p>
+                        {visibleMem.length === 0
+                          ? <p style={{ fontSize: 11, color: '#52525E' }}>Nenhuma salva.</p>
+                          : visibleMem.map(([k, v]) => (
+                            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11, marginBottom: 4 }}>
+                              <span style={{ color: '#52525E', flexShrink: 0 }}>{k}</span>
+                              <span style={{ color: '#fff', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 100 }} title={String(v)}>{String(v)}</span>
+                            </div>
+                          ))
+                        }
+                      </div>
+                      {/* Áudio */}
+                      {detailAudio && (
+                        <div style={{ padding: 12 }}>
+                          <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', margin: '0 0 8px' }}>Áudio</p>
+                          <audio controls src={detailAudio} style={{ width: '100%', height: 28 }} />
+                          <a href={detailAudio} download={`${s.callSid}.webm`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 11, color: '#A78BFA', textDecoration: 'none' }}>
+                            ⬇ Baixar áudio
                           </a>
-                        ) : (
-                          <span key={gate} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: '#1C1C1E', color: '#3A3A3C', border: '1px solid #27272A' }}>
-                            {GATE_SHORT_S[gate]}
-                          </span>
-                        )
-                      })}
-                      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
-                        {detailAudio && <a href={detailAudio} download={`${s.callSid}.webm`} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: '#38BDF8', border: '1px solid rgba(56,189,248,0.3)', borderRadius: 6, padding: '3px 8px', textDecoration: 'none' }}>⬇ Áudio</a>}
+                        </div>
+                      )}
+                    </div>
+                    {/* Right panel — transcript */}
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                      <div style={{ padding: '10px 16px', borderBottom: '1px solid #1C1C1E', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', margin: 0 }}>Transcrição</p>
                         {detailTranscript.length > 0 && (
-                          <button onClick={() => { const text = detailTranscript.map((t: any) => `${t.role === 'ana' ? 'ANA' : 'LEAD'}: ${t.text}`).join('\n'); navigator.clipboard.writeText(text) }}
-                            style={{ fontSize: 10, color: '#A1A1AA', border: '1px solid #3A3A3C', borderRadius: 6, padding: '3px 8px', background: 'none', cursor: 'pointer' }}>
+                          <button onClick={() => { const text = detailTranscript.map((t: any) => `${t.role === 'ana' ? 'ANA' : t.role === 'tool' ? '[ferramenta]' : t.role === 'system' ? '[sistema]' : 'VOCÊ'}: ${t.text}`).join('\n'); navigator.clipboard.writeText(text) }}
+                            style={{ fontSize: 10, color: '#A1A1AA', border: '1px solid #3A3A3C', borderRadius: 6, padding: '3px 8px', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                             Copiar transcrição
                           </button>
                         )}
                       </div>
-                    </div>
-
-                    {/* Audio player */}
-                    {detailAudio && (
-                      <div style={{ padding: '10px 16px', borderBottom: '1px solid #1C1C1E' }}>
-                        <audio controls src={detailAudio} style={{ width: '100%', height: 32, borderRadius: 8 }} />
+                      <div style={{ flex: 1, overflowY: 'auto', padding: 16, display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 420 }}>
+                        {detailTranscript.length === 0
+                          ? <p style={{ color: '#3A3A3C', fontSize: 12, textAlign: 'center', padding: '20px 0', fontStyle: 'italic' }}>Sem transcrição salva nesta sessão.</p>
+                          : detailTranscript.map((t: any, i: number) => {
+                              const isAna = t.role === 'ana' || t.role === 'assistant'
+                              const isLead = t.role === 'lead'
+                              const isTool = t.role === 'tool'
+                              return (
+                                <div key={i} style={{ borderRadius: 10, padding: '10px 14px', lineHeight: 1.6, background: isAna ? 'rgba(123,63,228,0.1)' : isLead ? '#1C1C1E' : isTool ? 'rgba(249,115,22,0.05)' : 'transparent', border: `1px solid ${isAna ? 'rgba(123,63,228,0.2)' : isLead ? '#27272A' : isTool ? 'rgba(249,115,22,0.1)' : 'transparent'}`, color: isAna ? '#fff' : isLead ? '#A1A1AA' : isTool ? '#FB923C' : '#52525E', fontFamily: isTool ? 'monospace' : 'inherit', fontSize: isTool || t.role === 'system' ? 11 : 13, fontStyle: t.role === 'system' ? 'italic' : 'normal' }}>
+                                  {(isAna || isLead) && (
+                                    <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 3px', color: isAna ? '#A78BFA' : '#52525E' }}>
+                                      {isAna ? 'ANA' : 'VOCÊ'}
+                                    </p>
+                                  )}
+                                  {t.text}
+                                </div>
+                              )
+                            })
+                        }
                       </div>
-                    )}
-
-                    {/* Chat transcript — same style as Ligações */}
-                    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 520, overflowY: 'auto' }}>
-                      {detailTranscript.length === 0 && (
-                        <p style={{ color: '#3A3A3C', fontSize: 12, textAlign: 'center', padding: '20px 0', fontStyle: 'italic' }}>
-                          Sem transcrição salva nesta sessão.
-                        </p>
-                      )}
-                      {detailTranscript.map((t: any, i: number) => {
-                        const isAna = t.role === 'ana' || t.role === 'assistant'
-                        if (!isAna && t.role !== 'lead') return null
-                        return (
-                          <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: isAna ? 'row' : 'row-reverse' }}>
-                            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isAna ? '#7C3AED20' : '#0EA5E920', border: `1px solid ${isAna ? '#7C3AED40' : '#0EA5E940'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>
-                              {isAna ? '🤖' : '👤'}
-                            </div>
-                            <div style={{ maxWidth: '75%', background: isAna ? '#7C3AED15' : '#0EA5E915', border: `1px solid ${isAna ? '#7C3AED30' : '#0EA5E930'}`, borderRadius: isAna ? '4px 12px 12px 12px' : '12px 4px 12px 12px', padding: '8px 12px' }}>
-                              <div style={{ fontSize: 10, fontWeight: 700, color: isAna ? '#A78BFA' : '#38BDF8', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{isAna ? 'ANA' : 'Lead'}</div>
-                              <div style={{ fontSize: 12, color: '#E4E4E7', lineHeight: 1.55 }}>{t.text}</div>
-                              {t.ts && <div style={{ fontSize: 9, color: '#52525B', marginTop: 4 }}>{new Date(t.ts).toLocaleTimeString('pt-BR')}</div>}
-                            </div>
-                          </div>
-                        )
-                      })}
                     </div>
-                  </>
-                )}
+                  </div>
+                  )
+                })()}
               </div>
             )}
           </div>
