@@ -30,8 +30,9 @@ export async function GET(req: NextRequest) {
   const { data } = await supabase
     .from('ana_calls')
     .select('call_sid, memories, created_at, updated_at, stage')
-    .order('created_at', { ascending: false })
-    .limit(200)
+    .like('call_sid', 'sim-browser-%')
+    .order('updated_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false, nullsFirst: false })
 
   const filtered = (data ?? []).filter((row: any) =>
     typeof row.call_sid === 'string' && row.call_sid.startsWith('sim-browser-')
