@@ -30,12 +30,14 @@ export async function GET(req: NextRequest) {
   const { data } = await supabase
     .from('ana_calls')
     .select('call_sid, memories, created_at, updated_at, stage')
-    .like('call_sid', 'sim-browser-%')
-    .order('updated_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
-    .limit(100)
+    .limit(200)
 
-  const sessions = (data ?? []).map((row: any) => {
+  const filtered = (data ?? []).filter((row: any) =>
+    typeof row.call_sid === 'string' && row.call_sid.startsWith('sim-browser-')
+  )
+
+  const sessions = filtered.map((row: any) => {
     const mem = (row.memories ?? {}) as Record<string, any>
     const checkpoints = (mem.checkpoints ?? {}) as Record<string, any>
     const transcript = (mem.transcript ?? []) as any[]
