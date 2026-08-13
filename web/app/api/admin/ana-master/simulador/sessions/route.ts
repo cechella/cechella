@@ -60,5 +60,8 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  return NextResponse.json({ sessions })
+  const res = NextResponse.json({ sessions })
+  res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+  res.headers.set('Pragma', 'no-cache')
+  return res
 }
