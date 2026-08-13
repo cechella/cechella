@@ -3225,7 +3225,9 @@ function SessoesInlineTab() {
     try {
       const r = await fetch('/api/admin/ana-master/simulador/sessions')
       const data = await r.json()
-      setSessions(data.sessions ?? [])
+      const raw = data.sessions ?? []
+      raw.sort((a: any, b: any) => new Date(b.updatedAt ?? b.createdAt ?? 0).getTime() - new Date(a.updatedAt ?? a.createdAt ?? 0).getTime())
+      setSessions(raw)
     } catch {}
     setLoading(false)
   }, [])
