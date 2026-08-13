@@ -920,19 +920,21 @@ function SimuladorInner() {
                 <p style={{ fontSize: 10, color: '#38BDF8', fontWeight: 700, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sessão anterior</p>
                 {recentSessions.map((s: any) => {
                   const gates = Object.keys(s.checkpoints ?? {})
-                  return gates.map(gate => (
-                    <button key={`${s.callSid}-${gate}`} onClick={() => {
-                      const cp = s.checkpoints[gate]
-                      setShowStartPicker(false)
-                      startSession({ stage: cp.stage, speech_progress: cp.speech_progress, gate_log: cp.gate_log ?? [], ts: cp.ts })
-                    }} style={{ width: '100%', textAlign: 'left', background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: 8, padding: '7px 12px', marginBottom: 4, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <p style={{ fontSize: 11, fontWeight: 700, color: '#38BDF8', margin: 0 }}>{GATE_LABELS[gate] ?? gate}</p>
-                        <p style={{ fontSize: 10, color: '#52525E', margin: 0 }}>{s.callSid?.slice(0, 22)} · {new Date(cp.ts).toLocaleTimeString('pt-BR')}</p>
-                      </div>
-                      <RotateCcw size={11} style={{ color: '#38BDF8', opacity: 0.5 }} />
-                    </button>
-                  ))
+                  return gates.map(gate => {
+                    const cp = s.checkpoints[gate]
+                    return (
+                      <button key={`${s.callSid}-${gate}`} onClick={() => {
+                        setShowStartPicker(false)
+                        startSession({ stage: cp.stage, speech_progress: cp.speech_progress, gate_log: cp.gate_log ?? [], ts: cp.ts })
+                      }} style={{ width: '100%', textAlign: 'left', background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: 8, padding: '7px 12px', marginBottom: 4, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <p style={{ fontSize: 11, fontWeight: 700, color: '#38BDF8', margin: 0 }}>{GATE_LABELS[gate] ?? gate}</p>
+                          <p style={{ fontSize: 10, color: '#52525E', margin: 0 }}>{s.callSid?.slice(0, 22)} · {new Date(cp.ts).toLocaleTimeString('pt-BR')}</p>
+                        </div>
+                        <RotateCcw size={11} style={{ color: '#38BDF8', opacity: 0.5 }} />
+                      </button>
+                    )
+                  })
                 })}
               </div>
             )}
