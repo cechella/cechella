@@ -3346,9 +3346,23 @@ function SessoesInlineTab() {
                         <div style={{ padding: 12 }}>
                           <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', margin: '0 0 8px' }}>Áudio</p>
                           <audio controls src={detailAudio} style={{ width: '100%', height: 28 }} />
-                          <a href={detailAudio} download={`${s.callSid}.webm`} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 11, color: '#A78BFA', textDecoration: 'none' }}>
+                          <button
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(detailAudio)
+                                const blob = await res.blob()
+                                const url = URL.createObjectURL(blob)
+                                const a = document.createElement('a')
+                                a.href = url
+                                a.download = `${s.callSid}.webm`
+                                a.click()
+                                URL.revokeObjectURL(url)
+                              } catch { window.open(detailAudio, '_blank') }
+                            }}
+                            style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 6, fontSize: 11, color: '#A78BFA', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                          >
                             ⬇ Baixar áudio
-                          </a>
+                          </button>
                         </div>
                       )}
                     </div>
