@@ -173,6 +173,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ approved: false, reason: rpc.reason })
     }
 
+    // Save checkpoint to memories so Sessões tab can show gate timeline
+    {
+      const { data: memRow } = await supabase.from('ana_calls').select('memories').eq('call_sid', callSid).single()
+      const mem = ((memRow?.memories ?? {}) as Record<string, unknown>)
+      const checkpoints = ((mem.checkpoints ?? {}) as Record<string, unknown>)
+      checkpoints[gateId] = { stage: transition.to, ts: new Date().toISOString(), evidence: ev }
+      mem.checkpoints = checkpoints
+      await supabase.from('ana_calls').update({ memories: mem }).eq('call_sid', callSid)
+    }
+
     // Post-transition: update leads table for GANHO
     if (gateId === 'GATE_VALIDACAO') {
       const { data: callData } = await supabase.from('ana_calls').select('telefone').eq('call_sid', callSid).single()
