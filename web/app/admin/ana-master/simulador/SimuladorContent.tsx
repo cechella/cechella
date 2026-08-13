@@ -2,15 +2,18 @@
 
 import { useState, useRef, useCallback, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Mic, MicOff, Phone, PhoneOff, Copy, Check, RefreshCw, Link, RotateCcw } from 'lucide-react'
+import { Mic, MicOff, Phone, PhoneOff, Copy, Check, RefreshCw, Link, RotateCcw, Activity } from 'lucide-react'
 import { SPEECH_PART_INSTRUCTIONS, ANA_BASE_PROMPT, STAGE_INSTRUCTIONS } from '@/lib/ana-master/constants'
+import { VOICE_BEHAVIOR_PROFILES } from '@/lib/ana-master/runtime-profile'
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 
 interface TranscriptLine {
   role: 'ana' | 'lead' | 'tool' | 'system'
   text: string
   ts: number
+  streaming?: boolean
+  disposition?: LeadTurnDisposition
 }
 
 interface SpeechProgress {
@@ -22,6 +25,28 @@ interface SpeechProgress {
   pergunta_final_feita: boolean
   resposta_final_recebida: boolean
 }
+
+// FASE 1 — AnaDeliveryState: Transport fornece evidência. Core mantém decisão.
+interface AnaDeliveryState {
+  responseId: string
+  generated: boolean
+  audio_started: boolean
+  interrupted: boolean
+  truncated: boolean
+  response_status: string | null  // 'completed' | 'cancelled' | null
+  delivery_complete: boolean
+}
+
+// FASE 1 — LeadTurnDisposition: classifyLeadTurn() output
+type LeadTurnDisposition =
+  | 'BACKCHANNEL'
+  | 'CONTINUE'
+  | 'QUESTION'
+  | 'CONFUSION'
+  | 'INTERRUPTION'
+  | 'OBJECTION'
+  | 'FINAL_INTEREST_RESPONSE'
+  | 'UNKNOWN'
 
 interface GateEntry {
   gate: string
@@ -40,7 +65,16 @@ interface Memory {
   [key: string]: unknown
 }
 
+// FASE 2 — Latency metrics
+interface LatencyMetrics {
+  lastResponseMs: number | null
+  interruptionCount: number
+  turnCount: number
+}
+
 type SessionStatus = 'idle' | 'connecting' | 'active' | 'error' | 'ended'
+
+// ── Constants ──────────────────────────────────────────────────────────────────
 
 const STAGES_ORDER = ['apresentacao', 'conexao', 'combinado', 'speech', 'fechamento', 'pagamento', 'referidos', 'validacao', 'ganho']
 const STAGE_LABELS: Record<string, string> = {
@@ -53,6 +87,18 @@ const GATE_LABELS: Record<string, string> = {
   GATE_SPEECH: 'Speech', GATE_FECHAMENTO: 'Fechamento', GATE_PAGAMENTO: 'Pagamento',
   GATE_REFERIDOS: 'Referidos', GATE_VALIDACAO: 'Validação',
 }
+const DISPOSITION_LABELS: Record<LeadTurnDisposition, string> = {
+  BACKCHANNEL: 'Backchannel', CONTINUE: 'Continuar', QUESTION: 'Pergunta',
+  CONFUSION: 'Confusão', INTERRUPTION: 'Interrupção', OBJECTION: 'Objeção',
+  FINAL_INTEREST_RESPONSE: 'Resp. Final', UNKNOWN: 'Desconhecido',
+}
+const DISPOSITION_COLORS: Record<LeadTurnDisposition, string> = {
+  BACKCHANNEL: '#52525E', CONTINUE: '#34D399', QUESTION: '#60A5FA',
+  CONFUSION: '#F59E0B', INTERRUPTION: '#F87171', OBJECTION: '#EF4444',
+  FINAL_INTEREST_RESPONSE: '#A78BFA', UNKNOWN: '#3F3F46',
+}
+
+// ── Pure helpers ───────────────────────────────────────────────────────────────
 
 function initialSpeechProgress(): SpeechProgress {
   return {
@@ -62,16 +108,69 @@ function initialSpeechProgress(): SpeechProgress {
   }
 }
 
+function initialDelivery(responseId = ''): AnaDeliveryState {
+  return { responseId, generated: true, audio_started: false, interrupted: false, truncated: false, response_status: null, delivery_complete: false }
+}
+
+// FASE 1 — classifyLeadTurn: heuristic classifier, no API call (latency-sensitive)
+function classifyLeadTurn(
+  text: string,
+  stage: string,
+  sp: SpeechProgress,
+  wasInterrupted: boolean
+): LeadTurnDisposition {
+  const t = text.toLowerCase().trim()
+  const words = t.split(/\s+/).filter(Boolean).length
+
+  // Short affirmatives = backchannel
+  if (
+    words <= 4 &&
+    /^(sim|s|tá|ta|ok|entendi|uhm+|mm+|ah+|é|é mesmo|certo|claro|bom|boa|legal|ótimo|pode|vai|prossiga|continue|pode sim|tá bom|tudo bem|perfeito|maravilha|certo certo|sim sim|hm+)/.test(t)
+  ) return 'BACKCHANNEL'
+
+  // Explicit continue
+  if (/^(continue|pode continuar|prossiga|fala mais|me conta mais|conta|fale|pode falar|vá em frente|pode ir|vai)/i.test(t)) return 'CONTINUE'
+
+  // Confusion
+  if (/não (entendi|entendo|compreendi)|pode repetir|o que (você |vc )?disse|como assim|não ficou claro|repete|repita|pode (re)?explicar/i.test(t)) return 'CONFUSION'
+
+  // Question
+  if (/\?/.test(text) || /^(o que|quando|como|onde|por qu[eê]|quanto|qual|quais|quem|me diga|me conta|pode (me )?explicar|e se|mas e|mas (o que|como|quando)|e (o que|como|quando)|qual o|quanto (é|custa|fica))/i.test(t)) return 'QUESTION'
+
+  // Objection
+  if (/(é caro|muito caro|não tenho (dinheiro|grana)|sem dinheiro|meu marido|preciso pensar|vou pesquisar|meu médico|causa câncer|é perigoso|tenho medo|não sei se|vou esperar|não posso agora|não tem condição)/i.test(t)) return 'OBJECTION'
+
+  // Final interest response — when we're waiting for the lead's answer to the final question
+  if (stage === 'speech' && (sp.state === 'WAITING_FINAL_RESPONSE' || sp.pergunta_final_feita)) return 'FINAL_INTEREST_RESPONSE'
+
+  // Was an interruption (VAD-triggered barge-in confirmed)
+  if (wasInterrupted) return 'INTERRUPTION'
+
+  return 'UNKNOWN'
+}
+
+// Build full instruction string for a stage (base + stage + voice behavior profile)
+function buildInstructions(stage: string, speechPart?: string | number): string {
+  const base = ANA_BASE_PROMPT
+  const stageInst = speechPart
+    ? SPEECH_PART_INSTRUCTIONS[String(speechPart)] ?? STAGE_INSTRUCTIONS[stage] ?? ''
+    : STAGE_INSTRUCTIONS[stage] ?? ''
+  const vbp = VOICE_BEHAVIOR_PROFILES[stage] ?? ''
+  return `${base}\n\n${stageInst}${vbp ? '\n\n' + vbp : ''}`
+}
+
 // ── Inner component ────────────────────────────────────────────────────────────
 
 function SimuladorInner() {
   const searchParams = useSearchParams()
 
+  // ── State ──────────────────────────────────────────────────────────────────
   const [telefone, setTelefone] = useState('')
   const [status, setStatus] = useState<SessionStatus>('idle')
   const [currentStage, setCurrentStage] = useState('apresentacao')
   const [speechProgress, setSpeechProgress] = useState<SpeechProgress>(initialSpeechProgress())
   const [transcript, setTranscript] = useState<TranscriptLine[]>([])
+  const [streamingAnaText, setStreamingAnaText] = useState('')
   const [memories, setMemories] = useState<Memory>({})
   const [gateLog, setGateLog] = useState<GateEntry[]>([])
   const [savedCheckpoints, setSavedCheckpoints] = useState<Record<string, CheckpointData>>({})
@@ -81,13 +180,18 @@ function SimuladorInner() {
   const [errorMsg, setErrorMsg] = useState('')
   const [isMuted, setIsMuted] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
+  const [audioUploading, setAudioUploading] = useState(false)
   const [profileVersion, setProfileVersion] = useState('')
   const [activeModel, setActiveModel] = useState('')
-  const [audioUploading, setAudioUploading] = useState(false)
+  const [metrics, setMetrics] = useState<LatencyMetrics>({ lastResponseMs: null, interruptionCount: 0, turnCount: 0 })
+  const [lastDisposition, setLastDisposition] = useState<LeadTurnDisposition | null>(null)
 
+  // ── Refs ───────────────────────────────────────────────────────────────────
   const pcRef = useRef<RTCPeerConnection | null>(null)
   const dcRef = useRef<RTCDataChannel | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const mixDestRef = useRef<MediaStreamAudioDestinationNode | null>(null)
   const callSidRef = useRef('')
   const telefoneRef = useRef('')
   const speechRef = useRef<SpeechProgress>(initialSpeechProgress())
@@ -99,14 +203,20 @@ function SimuladorInner() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const pendingInstructionsRef = useRef<string | null>(null)
+  // FASE 1 — delivery tracking
+  const currentDeliveryRef = useRef<AnaDeliveryState>(initialDelivery())
+  const wasInterruptedRef = useRef(false)
+  // FASE 2 — latency tracking
+  const speechStoppedAtRef = useRef<number | null>(null)
+  const metricsRef = useRef<LatencyMetrics>({ lastResponseMs: null, interruptionCount: 0, turnCount: 0 })
 
   useEffect(() => { speechRef.current = speechProgress }, [speechProgress])
   useEffect(() => { stageRef.current = currentStage }, [currentStage])
   useEffect(() => { gateLogRef.current = gateLog }, [gateLog])
-  useEffect(() => { transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [transcript])
+  useEffect(() => { transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [transcript, streamingAnaText])
 
-  const addTranscript = useCallback((role: TranscriptLine['role'], text: string) => {
-    setTranscript(prev => [...prev, { role, text, ts: Date.now() }])
+  const addTranscript = useCallback((role: TranscriptLine['role'], text: string, extra?: Partial<TranscriptLine>) => {
+    setTranscript(prev => [...prev, { role, text, ts: Date.now(), ...extra }])
   }, [])
 
   const sendEvent = useCallback((event: unknown) => {
@@ -117,11 +227,25 @@ function SimuladorInner() {
     sendEvent({ type: 'session.update', session: { instructions } })
   }, [sendEvent])
 
+  // ── Persistence ────────────────────────────────────────────────────────────
+
   const saveTranscriptTurn = useCallback((role: string, text: string) => {
     if (!callSidRef.current || !text.trim()) return
     fetch('/api/admin/ana-master/simulador/transcript', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ callSid: callSidRef.current, role, text }),
+    }).catch(() => {})
+  }, [])
+
+  // FASE 2B — persist SpeechProgress on each relevant event (not just gate transitions)
+  const saveSpeechState = useCallback((sp: SpeechProgress, event: string) => {
+    if (!callSidRef.current) return
+    fetch('/api/admin/ana-master/simulador/transcript', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        callSid: callSidRef.current,
+        speech_state: { event, speech_progress: sp, stage: stageRef.current },
+      }),
     }).catch(() => {})
   }, [])
 
@@ -180,8 +304,13 @@ function SimuladorInner() {
           setGateLog(prev => { const u = [...prev, entry]; gateLogRef.current = u; return u })
           saveCheckpoint(gate_id, data.next_stage)
           addTranscript('system', `✓ ${gate_id} → ${data.next_stage.toUpperCase()}`)
-          if (data.next_stage === 'speech') setSpeechProgress(initialSpeechProgress())
-          updateInstructions(data.next_instructions)
+          if (data.next_stage === 'speech') {
+            const sp0 = initialSpeechProgress()
+            setSpeechProgress(sp0); speechRef.current = sp0
+          }
+          // FASE 3 — inject Voice Behavior Profile at gate transition
+          const inst = buildInstructions(data.next_stage)
+          updateInstructions(inst)
           return '{"gate":"aprovado"}'
         }
         return `{"gate":"bloqueado","sistema":"${data.reason?.replace(/"/g, "'")}"}`
@@ -226,67 +355,209 @@ function SimuladorInner() {
         if (data.semDados > 0) return `⏳ ${data.semDados} indicadas sem dados.`
         return `⏳ total=${data.total ?? 0}, semDados=${data.semDados ?? 0}`
       }
-      case 'registrar_parte_speech': {
+      case 'registrar_parte_speech':
         return handleRegistrarParteSpeech(args.parte as number | string)
-      }
-      case 'send_whatsapp': {
+      case 'send_whatsapp':
         addTranscript('tool', `📱 WhatsApp (simulador — não enviado): ${args.mensagem}`)
         return 'Mensagem enviada.'
-      }
       default:
         return JSON.stringify({ error: `Tool desconhecida: ${name}` })
     }
   }, [memories, addTranscript, updateInstructions, saveCheckpoint])
 
+  // FASE 1 — SpeechProgress guard: só avança se delivery_complete === true
   function handleRegistrarParteSpeech(parte: number | string): string {
     const sp = speechRef.current
+    const delivery = currentDeliveryRef.current
+
+    // Guard: reject if the current delivery was interrupted or truncated
+    if (!delivery.delivery_complete && (delivery.interrupted || delivery.truncated)) {
+      return JSON.stringify({ error: 'delivery_incomplete — parte interrompida, não pode ser registrada', delivery_state: delivery })
+    }
+
     if (typeof parte === 'number') {
       if (parte !== sp.parte_atual) return JSON.stringify({ error: `Ordem incorreta. parte_atual=${sp.parte_atual}` })
       const newPartes = [...sp.partes_entregues, parte as never]
       if (parte < 4) {
         const newSp: SpeechProgress = { ...sp, partes_entregues: newPartes, parte_atual: parte + 1, parte_em_execucao: undefined, state: 'WAITING_LEAD', waiting_for_lead: true }
         setSpeechProgress(newSp); speechRef.current = newSp
+        saveSpeechState(newSp, `parte_${parte}_concluida`)  // FASE 2B
         return JSON.stringify({ ok: true, parte_registrada: parte, aguardando: 'turno_da_lead' })
       } else {
         const newSp: SpeechProgress = { ...sp, partes_entregues: newPartes, parte_atual: 'final_question', parte_em_execucao: undefined, state: 'WAITING_LEAD', waiting_for_lead: false }
         setSpeechProgress(newSp); speechRef.current = newSp
-        updateInstructions(`${ANA_BASE_PROMPT}\n\n${SPEECH_PART_INSTRUCTIONS['final_question']}`)
+        updateInstructions(buildInstructions('speech', 'final_question'))
+        saveSpeechState(newSp, 'parte_4_concluida')  // FASE 2B
         return JSON.stringify({ ok: true, parte_registrada: 4, proximo: 'pergunta_final' })
       }
     }
     if (parte === 'pergunta_feita') {
       const newSp: SpeechProgress = { ...sp, pergunta_final_feita: true, state: 'WAITING_FINAL_RESPONSE', waiting_for_lead: true }
       setSpeechProgress(newSp); speechRef.current = newSp
+      saveSpeechState(newSp, 'pergunta_final_feita')  // FASE 2B
       return JSON.stringify({ ok: true, pergunta_final: 'registrada' })
     }
     if (parte === 'resposta_recebida') {
       const newSp: SpeechProgress = { ...sp, resposta_final_recebida: true, parte_atual: 'complete', state: 'COMPLETE', waiting_for_lead: false }
       setSpeechProgress(newSp); speechRef.current = newSp
-      updateInstructions(`${ANA_BASE_PROMPT}\n\n${SPEECH_PART_INSTRUCTIONS['complete']}`)
+      updateInstructions(buildInstructions('speech', 'complete'))
+      saveSpeechState(newSp, 'resposta_final_recebida')  // FASE 2B
       return JSON.stringify({ ok: true, speech_progress: 'COMPLETE' })
     }
     return JSON.stringify({ error: `parte inválida: ${parte}` })
   }
 
-  const onLeadTurn = useCallback(() => {
+  // FASE 1 — controller: decide what to do with each lead turn disposition
+  const handleLeadTurnDisposition = useCallback((text: string, disposition: LeadTurnDisposition) => {
     const sp = speechRef.current
-    if (!sp.waiting_for_lead || sp.state !== 'WAITING_LEAD') return
-    const newSp = { ...sp, waiting_for_lead: false, parte_em_execucao: typeof sp.parte_atual === 'number' ? sp.parte_atual : undefined }
-    setSpeechProgress(newSp); speechRef.current = newSp
-    const instruction = SPEECH_PART_INSTRUCTIONS[String(sp.parte_atual)]
-    if (instruction) updateInstructions(`${ANA_BASE_PROMPT}\n\n${instruction}`)
-  }, [updateInstructions])
+    const stage = stageRef.current
+
+    setLastDisposition(disposition)
+    setMetrics(prev => {
+      const m = { ...prev, turnCount: prev.turnCount + 1 }
+      metricsRef.current = m; return m
+    })
+
+    switch (disposition) {
+      case 'BACKCHANNEL':
+        // Lead acknowledged — don't advance SpeechProgress if we're still waiting for a real response
+        // In WAITING_LEAD state, backchannels don't count as the lead's substantive turn
+        if (sp.state === 'WAITING_LEAD' && sp.waiting_for_lead) {
+          // Stay in WAITING_LEAD — ANA should prompt again or continue naturally
+          return
+        }
+        // Otherwise treat as implicit continue
+        break
+
+      case 'CONTINUE':
+        // Lead explicitly asks to continue — advance if we were WAITING_LEAD
+        if (sp.state === 'WAITING_LEAD' && sp.waiting_for_lead && stage === 'speech') {
+          const newSp = { ...sp, waiting_for_lead: false, parte_em_execucao: typeof sp.parte_atual === 'number' ? sp.parte_atual : undefined }
+          setSpeechProgress(newSp); speechRef.current = newSp
+          saveSpeechState(newSp, 'lead_continue')  // FASE 2B
+          const inst = buildInstructions('speech', sp.parte_atual)
+          updateInstructions(inst)
+        }
+        break
+
+      case 'QUESTION':
+        // ANA answers but does NOT advance SpeechProgress — no state change
+        // Let the model handle it naturally via its instructions
+        break
+
+      case 'CONFUSION':
+        // ANA re-explains the same part — no state change, no advancement
+        // If there was a streaming part hint, ANA will stay at current parte
+        break
+
+      case 'INTERRUPTION': {
+        // Mark parte as interrupted — don't advance
+        const m = { ...metricsRef.current, interruptionCount: metricsRef.current.interruptionCount + 1 }
+        setMetrics(m); metricsRef.current = m
+        if (stage === 'speech' && typeof sp.parte_atual === 'number') {
+          const newSp = { ...sp, parte_em_execucao: undefined }
+          setSpeechProgress(newSp); speechRef.current = newSp
+          saveSpeechState(newSp, 'parte_interrompida')  // FASE 2B
+        }
+        break
+      }
+
+      case 'OBJECTION':
+        // ANA handles via ISOLA instructions — no SpeechProgress change
+        // The model will use the objection handling from ANA_BASE_PROMPT
+        break
+
+      case 'FINAL_INTEREST_RESPONSE':
+        // Lead gave their answer to the final question
+        // registrar_parte_speech('resposta_recebida') will be called by the model
+        break
+
+      case 'UNKNOWN':
+        // Don't advance — wait for clearer signal
+        break
+    }
+
+    // For non-blocking dispositions during WAITING_LEAD in speech, let ANA continue
+    if (stage === 'speech' && sp.state === 'WAITING_LEAD' && sp.waiting_for_lead &&
+        disposition !== 'BACKCHANNEL' && disposition !== 'QUESTION' && disposition !== 'CONFUSION') {
+      const newSp = { ...sp, waiting_for_lead: false, parte_em_execucao: typeof sp.parte_atual === 'number' ? sp.parte_atual : undefined }
+      setSpeechProgress(newSp); speechRef.current = newSp
+      const inst = buildInstructions('speech', sp.parte_atual)
+      updateInstructions(inst)
+    }
+  }, [updateInstructions, saveSpeechState])
+
+  // ── DataChannel message handler ────────────────────────────────────────────
 
   const handleDCMessage = useCallback(async (event: MessageEvent) => {
     let msg: any
     try { msg = JSON.parse(event.data) } catch { return }
+
     switch (msg.type) {
+
+      // ── FASE 1 — AnaDeliveryState tracking ──────────────────────────────────
+
+      case 'response.created': {
+        // New response starting — reset delivery state
+        currentDeliveryRef.current = initialDelivery(msg.response?.id ?? '')
+        wasInterruptedRef.current = false
+        break
+      }
+
+      case 'response.audio.delta': {
+        // FASE 1: mark audio as started (generated audio is now being streamed)
+        if (!currentDeliveryRef.current.audio_started) {
+          currentDeliveryRef.current.audio_started = true
+          // FASE 2 — latency: measure speech_stopped → first audio delta
+          if (speechStoppedAtRef.current) {
+            const latencyMs = Date.now() - speechStoppedAtRef.current
+            speechStoppedAtRef.current = null
+            setMetrics(prev => {
+              const m = { ...prev, lastResponseMs: latencyMs }
+              metricsRef.current = m; return m
+            })
+          }
+        }
+        break
+      }
+
+      // FASE 2 — Streaming transcript (response.audio_transcript.delta)
+      case 'response.audio_transcript.delta': {
+        setStreamingAnaText(prev => prev + (msg.delta ?? ''))
+        break
+      }
+
+      case 'response.audio_transcript.done': {
+        // Streaming text finalized — will be committed in response.done
+        break
+      }
+
       case 'response.done': {
+        const responseStatus = msg.response?.status ?? null
+        currentDeliveryRef.current.response_status = responseStatus
+
+        if (responseStatus === 'cancelled') {
+          // Barge-in confirmed: ANA's response was interrupted
+          currentDeliveryRef.current.interrupted = true
+          currentDeliveryRef.current.delivery_complete = false
+          wasInterruptedRef.current = true
+          addTranscript('system', `⚡ Turno interrompido pela lead`)
+        } else {
+          // Normal completion: delivery is complete if audio started and not truncated
+          currentDeliveryRef.current.delivery_complete = currentDeliveryRef.current.audio_started && !currentDeliveryRef.current.truncated
+        }
+
+        // Clear streaming text
+        setStreamingAnaText('')
+
+        // Commit transcript from response.done output
         const audioItem = msg.response?.output?.find((o: any) => o.type === 'message' && o.role === 'assistant')
         if (audioItem) {
           const text = audioItem.content?.find((c: any) => c.type === 'audio')?.transcript
           if (text) { addTranscript('ana', text); saveTranscriptTurn('ana', text) }
         }
+
+        // Execute function calls
         const funcCalls = (msg.response?.output ?? []).filter((o: any) => o.type === 'function_call')
         for (const call of funcCalls) {
           let parsedArgs: Record<string, unknown> = {}
@@ -298,27 +569,66 @@ function SimuladorInner() {
         }
         break
       }
-      case 'conversation.item.input_audio_transcription.completed': {
-        const text = msg.transcript
-        if (text) { addTranscript('lead', text); saveTranscriptTurn('lead', text); onLeadTurn() }
+
+      // FASE 1 — barge-in: VAD detected lead speech during ANA's turn
+      case 'input_audio_buffer.speech_started': {
+        // Mark current delivery as interrupted
+        if (!currentDeliveryRef.current.interrupted) {
+          currentDeliveryRef.current.interrupted = true
+          currentDeliveryRef.current.delivery_complete = false
+        }
         break
       }
+
+      // FASE 2 — latency: record when lead stops speaking
+      case 'input_audio_buffer.speech_stopped': {
+        speechStoppedAtRef.current = Date.now()
+        break
+      }
+
+      // FASE 1 — truncation: audio item was cut at barge-in point
+      case 'conversation.item.truncated': {
+        currentDeliveryRef.current.truncated = true
+        currentDeliveryRef.current.delivery_complete = false
+        // FASE 2B — persist truncation state
+        if (stageRef.current === 'speech') {
+          saveSpeechState(speechRef.current, 'audio_truncated')
+        }
+        break
+      }
+
+      // FASE 1 — lead turn with disposition classification
+      case 'conversation.item.input_audio_transcription.completed': {
+        const text = msg.transcript
+        if (!text) break
+        const disposition = classifyLeadTurn(text, stageRef.current, speechRef.current, wasInterruptedRef.current)
+        addTranscript('lead', text, { disposition })
+        saveTranscriptTurn('lead', text)
+        handleLeadTurnDisposition(text, disposition)
+        wasInterruptedRef.current = false  // reset after processing
+        break
+      }
+
       case 'error':
         setErrorMsg(`Erro OpenAI: ${msg.error?.message ?? JSON.stringify(msg.error)}`)
         break
     }
-  }, [executeTool, addTranscript, sendEvent, onLeadTurn, saveTranscriptTurn])
+  }, [executeTool, addTranscript, sendEvent, handleLeadTurnDisposition, saveTranscriptTurn, saveSpeechState])
+
+  // ── Checkpoint restore ─────────────────────────────────────────────────────
 
   const restoreCheckpoint = useCallback((cp: CheckpointData) => {
     setCurrentStage(cp.stage); stageRef.current = cp.stage
     if (cp.speech_progress) { setSpeechProgress(cp.speech_progress); speechRef.current = cp.speech_progress }
     if (cp.gate_log) { setGateLog(cp.gate_log); gateLogRef.current = cp.gate_log }
-    const instructions = cp.stage === 'speech'
-      ? `${ANA_BASE_PROMPT}\n\n${SPEECH_PART_INSTRUCTIONS[String(cp.speech_progress?.parte_atual ?? 1)]}`
-      : `${ANA_BASE_PROMPT}\n\n${STAGE_INSTRUCTIONS[cp.stage] ?? ''}`
-    pendingInstructionsRef.current = instructions
+    const inst = cp.stage === 'speech'
+      ? buildInstructions('speech', cp.speech_progress?.parte_atual ?? 1)
+      : buildInstructions(cp.stage)
+    pendingInstructionsRef.current = inst
     addTranscript('system', `🔄 Retomando → ${(STAGE_LABELS[cp.stage] ?? cp.stage).toUpperCase()}`)
   }, [addTranscript])
+
+  // ── Session start ──────────────────────────────────────────────────────────
 
   const startSession = useCallback(async (checkpointOverride?: CheckpointData) => {
     if (!telefone.trim()) { setErrorMsg('Digite o telefone de teste antes de iniciar.'); return }
@@ -327,6 +637,9 @@ function SimuladorInner() {
     setMemories({}); setReferidosLink(null); setReferidosStatus(null)
     setSpeechProgress(initialSpeechProgress()); setCurrentStage('apresentacao')
     checkpointsRef.current = {}; setSavedCheckpoints({}); audioChunksRef.current = []
+    setStreamingAnaText(''); setLastDisposition(null)
+    const m0 = { lastResponseMs: null, interruptionCount: 0, turnCount: 0 }
+    setMetrics(m0); metricsRef.current = m0
 
     try {
       const sessionRes = await fetch('/api/admin/ana-master/simulador/session', {
@@ -342,23 +655,63 @@ function SimuladorInner() {
       if (checkpointOverride) restoreCheckpoint(checkpointOverride)
 
       const pc = new RTCPeerConnection(); pcRef.current = pc
-      const audio = document.createElement('audio'); audio.autoplay = true; audioRef.current = audio
-      pc.ontrack = (e) => { audio.srcObject = e.streams[0] }
 
+      // Get local mic stream
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       localStreamRef.current = stream
       stream.getTracks().forEach(track => pc.addTrack(track, stream))
 
+      // FASE 2 — AudioContext: create mixing graph (local mic → dest)
       try {
+        const audioCtx = new AudioContext()
+        audioCtxRef.current = audioCtx
+        const dest = audioCtx.createMediaStreamDestination()
+        mixDestRef.current = dest
+        const localSource = audioCtx.createMediaStreamSource(stream)
+        localSource.connect(dest)
+
+        // Start MediaRecorder on the mixed stream (ANA will be added when remote track arrives)
         const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm'
-        const recorder = new MediaRecorder(stream, { mimeType })
+        const recorder = new MediaRecorder(dest.stream, { mimeType })
         audioChunksRef.current = []
         recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
         recorder.start(2000); mediaRecorderRef.current = recorder; setIsRecording(true)
-      } catch {}
+      } catch {
+        // Fallback: record mic only if AudioContext fails
+        try {
+          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm'
+          const recorder = new MediaRecorder(stream, { mimeType })
+          audioChunksRef.current = []
+          recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+          recorder.start(2000); mediaRecorderRef.current = recorder; setIsRecording(true)
+        } catch {}
+      }
+
+      pc.ontrack = (e) => {
+        // Play ANA's remote audio
+        const audio = document.createElement('audio')
+        audio.autoplay = true; audio.srcObject = e.streams[0]
+        document.body.appendChild(audio); audioRef.current = audio
+
+        // FASE 2 — Mix ANA's remote track into the recording
+        if (audioCtxRef.current && mixDestRef.current) {
+          try {
+            const remoteSource = audioCtxRef.current.createMediaStreamSource(e.streams[0])
+            remoteSource.connect(mixDestRef.current)
+          } catch {}
+        }
+      }
 
       const dc = pc.createDataChannel('oai-events'); dcRef.current = dc
       dc.onmessage = handleDCMessage
+
+      // FASE 2B — persist SpeechProgress on DataChannel close (session drop)
+      dc.onclose = () => {
+        if (stageRef.current === 'speech') {
+          saveSpeechState(speechRef.current, 'datachannel_closed')
+        }
+      }
+
       dc.onopen = () => {
         addTranscript('system', '🎙️ Conectado — ANA está iniciando...')
         if (pendingInstructionsRef.current) {
@@ -366,6 +719,10 @@ function SimuladorInner() {
           pendingInstructionsRef.current = null
         }
       }
+
+      // FASE 2B — persist SpeechProgress on page unload
+      const handleUnload = () => { if (stageRef.current === 'speech') saveSpeechState(speechRef.current, 'page_unload') }
+      window.addEventListener('beforeunload', handleUnload)
 
       const offer = await pc.createOffer(); await pc.setLocalDescription(offer)
       const oaiRes = await fetch(`https://api.openai.com/v1/realtime?model=${mdl ?? 'gpt-4o-realtime-preview-2025-06-03'}`, {
@@ -377,22 +734,31 @@ function SimuladorInner() {
       await pc.setRemoteDescription({ type: 'answer', sdp: await oaiRes.text() })
       setStatus('active')
     } catch (e: any) { setStatus('error'); setErrorMsg(e.message) }
-  }, [telefone, handleDCMessage, addTranscript, sendEvent, restoreCheckpoint])
+  }, [telefone, handleDCMessage, addTranscript, sendEvent, restoreCheckpoint, saveSpeechState])
 
   const stopSession = useCallback(() => {
+    // FASE 2B — persist speech state on explicit end
+    if (stageRef.current === 'speech') saveSpeechState(speechRef.current, 'session_ended')
+
     const recorder = mediaRecorderRef.current
     if (recorder && recorder.state !== 'inactive') { recorder.onstop = () => uploadAudio(); recorder.stop() }
     mediaRecorderRef.current = null; setIsRecording(false)
+
     pcRef.current?.close(); pcRef.current = null; dcRef.current = null
     localStreamRef.current?.getTracks().forEach(t => t.stop()); localStreamRef.current = null
-    if (audioRef.current) audioRef.current.srcObject = null
-    setStatus('ended'); addTranscript('system', '⏹ Sessão encerrada.')
-  }, [addTranscript, uploadAudio])
+
+    audioCtxRef.current?.close().catch(() => {}); audioCtxRef.current = null; mixDestRef.current = null
+    if (audioRef.current) { audioRef.current.srcObject = null; audioRef.current.remove(); audioRef.current = null }
+
+    setStatus('ended'); setStreamingAnaText(''); addTranscript('system', '⏹ Sessão encerrada.')
+  }, [addTranscript, uploadAudio, saveSpeechState])
 
   const toggleMute = useCallback(() => {
     localStreamRef.current?.getTracks().forEach(t => { t.enabled = isMuted })
     setIsMuted(!isMuted)
   }, [isMuted])
+
+  // ── UI helpers ─────────────────────────────────────────────────────────────
 
   const speechBadge = () => {
     if (currentStage !== 'speech') return null
@@ -406,11 +772,15 @@ function SimuladorInner() {
 
   const checkpointEntries = Object.entries(savedCheckpoints).sort(([, a], [, b]) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
 
+  // ── Render ─────────────────────────────────────────────────────────────────
+
   return (
     <div style={{ display: 'flex', height: '100%', background: '#0A0A0B', color: '#fff', overflow: 'hidden' }}>
-      {/* Left panel */}
-      <div style={{ width: 260, flexShrink: 0, borderRight: '1px solid #1C1C1E', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
 
+      {/* Left panel */}
+      <div style={{ width: 272, flexShrink: 0, borderRight: '1px solid #1C1C1E', display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+
+        {/* Header */}
         <div style={{ padding: '12px 16px', borderBottom: '1px solid #1C1C1E' }}>
           <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: '#7B3FE4', textTransform: 'uppercase', margin: '0 0 2px' }}>ANA MASTER</p>
           <p style={{ fontSize: 14, fontWeight: 700, color: '#fff', margin: 0 }}>Simulador de Voz</p>
@@ -419,11 +789,17 @@ function SimuladorInner() {
             {profileVersion
               ? <span style={{ color: '#7B3FE4', fontWeight: 700 }}>{profileVersion}</span>
               : <span>· gpt-4o-realtime</span>}
-            {isRecording && <span style={{ color: '#F87171', display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F87171', display: 'inline-block', animation: 'pulse 1s infinite' }} />REC</span>}
+            {isRecording && (
+              <span style={{ color: '#F87171', display: 'flex', alignItems: 'center', gap: 3 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F87171', display: 'inline-block', animation: 'pulse 1s infinite' }} />
+                REC {audioCtxRef.current ? '(ANA+lead)' : ''}
+              </span>
+            )}
             {audioUploading && <span style={{ color: '#F59E0B' }}>↑ áudio...</span>}
           </p>
         </div>
 
+        {/* Phone input */}
         <div style={{ padding: 12, borderBottom: '1px solid #1C1C1E' }}>
           <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', display: 'block', marginBottom: 6 }}>Telefone</label>
           <input
@@ -435,6 +811,7 @@ function SimuladorInner() {
           {errorMsg && <p style={{ fontSize: 11, color: '#F87171', marginTop: 6 }}>{errorMsg}</p>}
         </div>
 
+        {/* Controls */}
         <div style={{ padding: 12, borderBottom: '1px solid #1C1C1E', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {status === 'idle' || status === 'ended' || status === 'error' ? (
             <button onClick={() => startSession()} style={btnStyle('#7B3FE4', '#6D35CC')}>
@@ -456,11 +833,54 @@ function SimuladorInner() {
           )}
         </div>
 
+        {/* FASE 2 — Metrics panel */}
+        {(status === 'active' || status === 'ended') && (
+          <div style={{ padding: 12, borderBottom: '1px solid #1C1C1E' }}>
+            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', margin: '0 0 8px', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <Activity size={9} style={{ opacity: 0.6 }} /> Métricas
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+              <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 7, padding: '6px 8px' }}>
+                <p style={{ fontSize: 9, color: '#52525E', margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Latência</p>
+                <p style={{ fontSize: 13, fontWeight: 800, color: metrics.lastResponseMs === null ? '#3F3F46' : metrics.lastResponseMs < 800 ? '#34D399' : metrics.lastResponseMs < 1500 ? '#F59E0B' : '#F87171', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                  {metrics.lastResponseMs === null ? '—' : `${metrics.lastResponseMs}ms`}
+                </p>
+              </div>
+              <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 7, padding: '6px 8px' }}>
+                <p style={{ fontSize: 9, color: '#52525E', margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Interrupções</p>
+                <p style={{ fontSize: 13, fontWeight: 800, color: metrics.interruptionCount === 0 ? '#3F3F46' : '#F87171', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                  {metrics.interruptionCount}
+                </p>
+              </div>
+              <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 7, padding: '6px 8px' }}>
+                <p style={{ fontSize: 9, color: '#52525E', margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Turnos</p>
+                <p style={{ fontSize: 13, fontWeight: 800, color: '#A78BFA', margin: 0, fontVariantNumeric: 'tabular-nums' }}>
+                  {metrics.turnCount}
+                </p>
+              </div>
+              <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 7, padding: '6px 8px' }}>
+                <p style={{ fontSize: 9, color: '#52525E', margin: '0 0 2px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Disposição</p>
+                <p style={{ fontSize: 10, fontWeight: 800, color: lastDisposition ? DISPOSITION_COLORS[lastDisposition] : '#3F3F46', margin: 0 }}>
+                  {lastDisposition ? DISPOSITION_LABELS[lastDisposition] : '—'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Checkpoints */}
         {checkpointEntries.length > 0 && (
           <div style={{ padding: 12, borderBottom: '1px solid #1C1C1E' }}>
             <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#F59E0B', textTransform: 'uppercase', margin: '0 0 8px' }}>Checkpoints</p>
             {checkpointEntries.map(([gate, cp]) => (
-              <button key={gate} onClick={() => { if (status === 'active') { restoreCheckpoint(cp); updateInstructions(cp.stage === 'speech' ? `${ANA_BASE_PROMPT}\n\n${SPEECH_PART_INSTRUCTIONS[String(cp.speech_progress?.parte_atual ?? 1)]}` : `${ANA_BASE_PROMPT}\n\n${STAGE_INSTRUCTIONS[cp.stage] ?? ''}`) } else { startSession(cp) } }}
+              <button key={gate} onClick={() => {
+                if (status === 'active') {
+                  restoreCheckpoint(cp)
+                  updateInstructions(cp.stage === 'speech' ? buildInstructions('speech', cp.speech_progress?.parte_atual ?? 1) : buildInstructions(cp.stage))
+                } else {
+                  startSession(cp)
+                }
+              }}
                 style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '7px 10px', marginBottom: 5, cursor: 'pointer' }}>
                 <div style={{ textAlign: 'left' }}>
                   <p style={{ fontSize: 10, fontWeight: 700, color: '#F59E0B', margin: 0 }}>{GATE_LABELS[gate] ?? gate}</p>
@@ -473,6 +893,7 @@ function SimuladorInner() {
           </div>
         )}
 
+        {/* Stage progress */}
         <div style={{ padding: 12, borderBottom: '1px solid #1C1C1E' }}>
           <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', margin: '0 0 8px' }}>Etapas</p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
@@ -488,13 +909,28 @@ function SimuladorInner() {
             {currentStage === 'ganho' && <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 4, fontWeight: 700, background: 'rgba(52,211,153,0.2)', color: '#34D399', border: '1px solid rgba(52,211,153,0.4)' }}>🏆 GANHO</span>}
           </div>
           {currentStage === 'speech' && <div style={{ marginTop: 8 }}>{speechBadge()}</div>}
+
+          {/* FASE 3 — Voice Behavior Profile tag for current stage */}
+          {status === 'active' && VOICE_BEHAVIOR_PROFILES[currentStage] && (
+            <div style={{ marginTop: 8, fontSize: 10, color: '#52525E', background: 'rgba(139,92,246,0.06)', border: '1px solid rgba(139,92,246,0.15)', borderRadius: 6, padding: '4px 8px' }}>
+              🎭 {currentStage === 'speech' ? 'Energia crescente P1→P4' :
+                  currentStage === 'apresentacao' ? 'Calorosa · pausada' :
+                  currentStage === 'conexao' ? 'Curiosidade genuína' :
+                  currentStage === 'combinado' ? 'Colaborativo' :
+                  currentStage === 'fechamento' ? 'Autoridade calma' :
+                  currentStage === 'pagamento' ? 'Direto · confiante' :
+                  currentStage === 'referidos' ? 'Gratidão · narrativa' :
+                  currentStage === 'validacao' ? 'Encerramento caloroso' : ''}
+            </div>
+          )}
         </div>
 
+        {/* Memories */}
         <div style={{ padding: 12, borderBottom: '1px solid #1C1C1E' }}>
           <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', margin: '0 0 8px' }}>Memórias</p>
-          {Object.keys(memories).filter(k => !['telefone','nome','sim_browser','transcript','speech_progress','checkpoints','audio_url'].includes(k)).length === 0
+          {Object.keys(memories).filter(k => !['telefone','nome','sim_browser','transcript','speech_progress','speech_state_log','checkpoints','audio_url','profile_version'].includes(k)).length === 0
             ? <p style={{ fontSize: 11, color: '#52525E' }}>Nenhuma salva.</p>
-            : Object.entries(memories).filter(([k]) => !['telefone','nome','sim_browser','transcript','speech_progress','checkpoints','audio_url'].includes(k)).map(([k, v]) => (
+            : Object.entries(memories).filter(([k]) => !['telefone','nome','sim_browser','transcript','speech_progress','speech_state_log','checkpoints','audio_url','profile_version'].includes(k)).map(([k, v]) => (
                 <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11, marginBottom: 4 }}>
                   <span style={{ color: '#52525E', flexShrink: 0 }}>{k}</span>
                   <span style={{ color: '#fff', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }} title={String(v)}>{String(v)}</span>
@@ -503,6 +939,7 @@ function SimuladorInner() {
           }
         </div>
 
+        {/* Referidos link */}
         {referidosLink && (
           <div style={{ padding: 12 }}>
             <p style={{ fontSize: 10, fontWeight: 700, color: '#34D399', textTransform: 'uppercase', letterSpacing: '0.08em', margin: '0 0 6px', display: 'flex', alignItems: 'center', gap: 4 }}><Link size={10} /> Referidos</p>
@@ -521,7 +958,7 @@ function SimuladorInner() {
         )}
       </div>
 
-      {/* Right panel */}
+      {/* Right panel — Transcript */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         <div style={{ padding: '10px 20px', borderBottom: '1px solid #1C1C1E', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
@@ -534,7 +971,12 @@ function SimuladorInner() {
             </p>
           </div>
           {status === 'active' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {metrics.lastResponseMs !== null && (
+                <span style={{ fontSize: 10, color: metrics.lastResponseMs < 800 ? '#34D399' : metrics.lastResponseMs < 1500 ? '#F59E0B' : '#F87171', fontVariantNumeric: 'tabular-nums' }}>
+                  {metrics.lastResponseMs}ms
+                </span>
+              )}
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#34D399', display: 'inline-block' }} />
               <span style={{ fontSize: 10, color: '#34D399' }}>AO VIVO</span>
             </div>
@@ -542,7 +984,7 @@ function SimuladorInner() {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {transcript.length === 0 && (
+          {transcript.length === 0 && !streamingAnaText && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, textAlign: 'center' }}>
               <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(123,63,228,0.1)', border: '1px solid rgba(123,63,228,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <Mic size={22} style={{ color: '#7B3FE4' }} />
@@ -550,20 +992,42 @@ function SimuladorInner() {
               <div>
                 <p style={{ fontSize: 14, fontWeight: 700, color: '#fff', margin: 0 }}>Simulador de Voz ANA</p>
                 <p style={{ fontSize: 12, color: '#52525E', margin: '4px 0 0' }}>Digite o telefone e clique em Iniciar Simulação</p>
-                <p style={{ fontSize: 11, color: '#3A3A3C', margin: '2px 0 0' }}>Áudio gravado automaticamente · Checkpoints por gate</p>
+                <p style={{ fontSize: 11, color: '#3A3A3C', margin: '2px 0 0' }}>
+                  ANA+lead gravados · Streaming transcript · Métricas de latência · Recovery sub-gate
+                </p>
               </div>
             </div>
           )}
+
           {transcript.map((line, i) => (
             <div key={i} style={{ borderRadius: 10, padding: '10px 14px', lineHeight: 1.6, background: line.role === 'ana' ? 'rgba(123,63,228,0.1)' : line.role === 'lead' ? '#1C1C1E' : line.role === 'tool' ? 'rgba(249,115,22,0.05)' : 'transparent', border: `1px solid ${line.role === 'ana' ? 'rgba(123,63,228,0.2)' : line.role === 'lead' ? '#27272A' : line.role === 'tool' ? 'rgba(249,115,22,0.1)' : 'transparent'}`, color: line.role === 'ana' ? '#fff' : line.role === 'lead' ? '#A1A1AA' : line.role === 'tool' ? '#FB923C' : '#52525E', fontFamily: line.role === 'tool' ? 'monospace' : 'inherit', fontSize: line.role === 'tool' || line.role === 'system' ? 11 : 13, fontStyle: line.role === 'system' ? 'italic' : 'normal' }}>
               {(line.role === 'ana' || line.role === 'lead') && (
-                <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 3px', color: line.role === 'ana' ? '#A78BFA' : '#52525E' }}>
-                  {line.role === 'ana' ? 'ANA' : 'VOCÊ'}
-                </p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                  <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', margin: 0, color: line.role === 'ana' ? '#A78BFA' : '#52525E' }}>
+                    {line.role === 'ana' ? 'ANA' : 'VOCÊ'}
+                  </p>
+                  {/* FASE 1 — show disposition badge on lead turns */}
+                  {line.role === 'lead' && line.disposition && (
+                    <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: DISPOSITION_COLORS[line.disposition], background: DISPOSITION_COLORS[line.disposition] + '18', border: `1px solid ${DISPOSITION_COLORS[line.disposition]}30`, borderRadius: 4, padding: '1px 5px' }}>
+                      {DISPOSITION_LABELS[line.disposition]}
+                    </span>
+                  )}
+                </div>
               )}
               {line.text}
             </div>
           ))}
+
+          {/* FASE 2 — Streaming transcript: live ANA text as it's generated */}
+          {streamingAnaText && (
+            <div style={{ borderRadius: 10, padding: '10px 14px', lineHeight: 1.6, background: 'rgba(123,63,228,0.06)', border: '1px dashed rgba(123,63,228,0.25)', color: 'rgba(255,255,255,0.7)', fontSize: 13 }}>
+              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 3px', color: '#7B3FE4', display: 'flex', alignItems: 'center', gap: 4 }}>
+                ANA <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#7B3FE4', display: 'inline-block', animation: 'pulse 0.8s infinite' }} />
+              </p>
+              {streamingAnaText}
+            </div>
+          )}
+
           <div ref={transcriptEndRef} />
         </div>
       </div>
@@ -580,7 +1044,7 @@ function badgeStyle(color: string): React.CSSProperties {
   return { fontSize: 10, padding: '2px 8px', borderRadius: 4, fontWeight: 700, background: `${color}22`, color, border: `1px solid ${color}44`, display: 'inline-block' }
 }
 
-function btnStyle(bg: string, hover: string): React.CSSProperties {
+function btnStyle(bg: string, _hover: string): React.CSSProperties {
   return { display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, background: bg, color: '#fff', border: 'none', borderRadius: 8, padding: '9px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', width: '100%' }
 }
 

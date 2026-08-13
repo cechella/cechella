@@ -9,10 +9,10 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-// POST: append turn and/or save checkpoint
+// POST: append turn, save checkpoint, and/or persist sub-gate SpeechProgress
 export async function POST(req: NextRequest) {
   try {
-    const { callSid, role, text, checkpoint } = await req.json()
+    const { callSid, role, text, checkpoint, speech_state } = await req.json()
     if (!callSid) return NextResponse.json({ error: 'callSid obrigatório' }, { status: 400 })
 
     const { data: call } = await supabase
@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
 
     const memories = (call?.memories as Record<string, unknown>) ?? {}
 
+    // Gate checkpoint (after each gate)
     if (checkpoint) {
       const checkpoints = ((memories.checkpoints ?? {}) as Record<string, unknown>)
       checkpoints[checkpoint.gate] = {
@@ -34,6 +35,19 @@ export async function POST(req: NextRequest) {
       memories.checkpoints = checkpoints
     }
 
+    // Sub-gate SpeechProgress event (FASE 2B — recovery between gates)
+    if (speech_state) {
+      const log = ((memories.speech_state_log ?? []) as unknown[])
+      log.push({ ...speech_state, ts: new Date().toISOString() })
+      // Keep only last 100 events to avoid unbounded growth
+      memories.speech_state_log = log.slice(-100)
+      // Also overwrite the current speech_progress for fast restore
+      if (speech_state.speech_progress) {
+        memories.speech_progress = speech_state.speech_progress
+      }
+    }
+
+    // Transcript turn
     if (role && text) {
       const transcript = ((memories.transcript ?? []) as unknown[])
       transcript.push({ role, text, ts: new Date().toISOString() })

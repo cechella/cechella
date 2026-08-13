@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { ANA_BASE_PROMPT, STAGE_INSTRUCTIONS } from '@/lib/ana-master/constants'
-import { ACTIVE_PROFILE } from '@/lib/ana-master/runtime-profile'
+import { ACTIVE_PROFILE, VOICE_BEHAVIOR_PROFILES } from '@/lib/ana-master/runtime-profile'
 
 export const dynamic = 'force-dynamic'
 
@@ -115,7 +115,8 @@ export async function POST(req: NextRequest) {
     })
 
     // Create OpenAI Realtime ephemeral session
-    const systemPrompt = `${ANA_BASE_PROMPT}\n\nINÍCIO: Você inicia a conversa. Comece agora pela Etapa 1.\n\n${STAGE_INSTRUCTIONS.apresentacao}`
+    const vbp = VOICE_BEHAVIOR_PROFILES['apresentacao'] ?? ''
+    const systemPrompt = `${ANA_BASE_PROMPT}\n\nINÍCIO: Você inicia a conversa. Comece agora pela Etapa 1.\n\n${STAGE_INSTRUCTIONS.apresentacao}\n\n${vbp}`
 
     const oaiRes = await fetch('https://api.openai.com/v1/realtime/sessions', {
       method: 'POST',
