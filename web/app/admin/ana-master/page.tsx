@@ -2267,27 +2267,29 @@ function LigacoesTab() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Transcrição</div>
                     {transcript.length > 0 && (
-                      <button onClick={async (e) => {
+                      <button onClick={(e) => {
+                        const btn = e.currentTarget
                         const text = transcript.map(m => `${(m.role === 'assistant' || m.role === 'ana') ? 'ANA' : 'Lead'}: ${m.text}`).join('\n')
-                        let ok = false
-                        try { await navigator.clipboard.writeText(text); ok = true } catch {}
-                        if (!ok) {
+                        const feedback = (ok: boolean) => {
+                          btn.textContent = ok ? '✓ Copiado!' : '✗ Erro'
+                          btn.style.color = ok ? '#4ADE80' : '#F87171'
+                          setTimeout(() => { btn.textContent = 'Copiar'; btn.style.color = '' }, 1800)
+                        }
+                        const fallback = () => {
                           try {
                             const ta = document.createElement('textarea')
                             ta.value = text
                             ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0'
                             document.body.appendChild(ta)
                             ta.focus(); ta.select()
-                            ok = document.execCommand('copy')
+                            const ok = document.execCommand('copy')
                             document.body.removeChild(ta)
-                          } catch {}
+                            feedback(ok)
+                          } catch { feedback(false) }
                         }
-                        if (ok) {
-                          const btn = e.currentTarget
-                          const orig = btn.innerHTML
-                          btn.textContent = '✓ Copiado!'
-                          setTimeout(() => { btn.innerHTML = orig }, 1500)
-                        }
+                        if (navigator.clipboard) {
+                          navigator.clipboard.writeText(text).then(() => feedback(true)).catch(fallback)
+                        } else { fallback() }
                       }} style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.textFaint, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Copy style={{ width: 11, height: 11 }} /> Copiar
                       </button>
@@ -3396,25 +3398,29 @@ function SessoesInlineTab() {
                       <div style={{ padding: '10px 16px', borderBottom: '1px solid #1C1C1E', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', margin: 0 }}>Transcrição</p>
                         {detailTranscript.length > 0 && (
-                          <button onClick={async (e) => {
+                          <button onClick={(e) => {
                             const btn = e.currentTarget
                             const text = detailTranscript.map((t: any) => `${t.role === 'ana' ? 'ANA' : t.role === 'tool' ? '[ferramenta]' : t.role === 'system' ? '[sistema]' : 'VOCÊ'}: ${t.text}`).join('\n')
-                            let ok = false
-                            try { await navigator.clipboard.writeText(text); ok = true } catch {}
-                            if (!ok) {
+                            const feedback = (ok: boolean) => {
+                              btn.textContent = ok ? '✓ Copiado!' : '✗ Erro'
+                              btn.style.color = ok ? '#4ADE80' : '#F87171'
+                              setTimeout(() => { btn.textContent = 'Copiar transcrição'; btn.style.color = '' }, 1800)
+                            }
+                            const fallback = () => {
                               try {
                                 const ta = document.createElement('textarea')
                                 ta.value = text
                                 ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0'
                                 document.body.appendChild(ta)
                                 ta.focus(); ta.select()
-                                ok = document.execCommand('copy')
+                                const ok = document.execCommand('copy')
                                 document.body.removeChild(ta)
-                              } catch {}
+                                feedback(ok)
+                              } catch { feedback(false) }
                             }
-                            btn.textContent = ok ? '✓ Copiado!' : '✗ Erro'
-                            btn.style.color = ok ? '#4ADE80' : '#F87171'
-                            setTimeout(() => { btn.textContent = 'Copiar transcrição'; btn.style.color = '' }, 1800)
+                            if (navigator.clipboard) {
+                              navigator.clipboard.writeText(text).then(() => feedback(true)).catch(fallback)
+                            } else { fallback() }
                           }}
                             style={{ fontSize: 10, color: '#A1A1AA', border: '1px solid #3A3A3C', borderRadius: 6, padding: '3px 8px', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                             Copiar transcrição
