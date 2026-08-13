@@ -215,6 +215,25 @@ function SimuladorInner() {
   useEffect(() => { gateLogRef.current = gateLog }, [gateLog])
   useEffect(() => { transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [transcript, streamingAnaText])
 
+  // Auto-restore checkpoint from URL params (?checkpoint=GATE_X&resumeFrom=sim-browser-...)
+  useEffect(() => {
+    const gate = searchParams.get('checkpoint')
+    const resumeCallSid = searchParams.get('resumeFrom')
+    if (!gate || !resumeCallSid) return
+    fetch(`/api/admin/ana-master/simulador/sessions?callSid=${resumeCallSid}`)
+      .then(r => r.json())
+      .then(data => {
+        const cp = data.session?.memories?.checkpoints?.[gate]
+        if (cp) {
+          setSavedCheckpoints({ [gate]: cp })
+          checkpointsRef.current = { [gate]: cp }
+          addTranscript('system', `📂 Checkpoint carregado: ${gate} → ${cp.stage?.toUpperCase()}. Clique em Iniciar para retomar.`)
+        }
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const addTranscript = useCallback((role: TranscriptLine['role'], text: string, extra?: Partial<TranscriptLine>) => {
     setTranscript(prev => [...prev, { role, text, ts: Date.now(), ...extra }])
   }, [])

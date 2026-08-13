@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   if (callSid) {
     const { data } = await supabase
       .from('ana_calls')
-      .select('call_sid, memories, created_at, updated_at, current_stage')
+      .select('call_sid, memories, stage, created_at, updated_at')
       .eq('call_sid', callSid)
       .single()
     return NextResponse.json({ session: data ?? null })
