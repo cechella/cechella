@@ -166,6 +166,7 @@ function SimuladorInner() {
 
   // ── State ──────────────────────────────────────────────────────────────────
   const [telefone, setTelefone] = useState('5548988416899')
+  const [nome, setNome] = useState('')
   const [status, setStatus] = useState<SessionStatus>('idle')
   const [currentStage, setCurrentStage] = useState('apresentacao')
   const [speechProgress, setSpeechProgress] = useState<SpeechProgress>(initialSpeechProgress())
@@ -180,6 +181,8 @@ function SimuladorInner() {
   const [errorMsg, setErrorMsg] = useState('')
   const [isMuted, setIsMuted] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
+  const [showStartPicker, setShowStartPicker] = useState(false)
+  const [recentSessions, setRecentSessions] = useState<any[]>([])
   const [audioUploading, setAudioUploading] = useState(false)
   const [profileVersion, setProfileVersion] = useState('')
   const [activeModel, setActiveModel] = useState('')
@@ -682,7 +685,7 @@ function SimuladorInner() {
     try {
       const sessionRes = await fetch('/api/admin/ana-master/simulador/session', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telefone, nome: 'Lead Teste' }),
+        body: JSON.stringify({ telefone, nome: nome.trim() || undefined }),
       })
       if (!sessionRes.ok) throw new Error('Falha ao criar sessão')
       const { callSid, clientSecret, telefone: normPhone, profileVersion: pv, model: mdl } = await sessionRes.json()
@@ -848,12 +851,24 @@ function SimuladorInner() {
             style={{ width: '100%', background: '#111113', border: '1px solid #27272F', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: '#fff', outline: 'none', boxSizing: 'border-box' }}
           />
           {errorMsg && <p style={{ fontSize: 11, color: '#F87171', marginTop: 6 }}>{errorMsg}</p>}
+          <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', display: 'block', marginTop: 8, marginBottom: 6 }}>Nome (opcional)</label>
+          <input
+            type="text" value={nome} onChange={e => setNome(e.target.value)}
+            placeholder="Ex: Ana, Maria..."
+            disabled={status === 'active' || status === 'connecting'}
+            style={{ width: '100%', background: '#111113', border: '1px solid #27272F', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: '#fff', outline: 'none', boxSizing: 'border-box' }}
+          />
         </div>
 
         {/* Controls */}
         <div style={{ padding: 12, borderBottom: '1px solid #1C1C1E', display: 'flex', flexDirection: 'column', gap: 8 }}>
           {status === 'idle' || status === 'ended' || status === 'error' ? (
-            <button onClick={() => startSession()} style={btnStyle('#7B3FE4', '#6D35CC')}>
+            <button onClick={() => {
+              setShowStartPicker(p => {
+                if (!p) fetch('/api/admin/ana-master/simulador/sessions').then(r => r.json()).then(d => setRecentSessions((d.sessions ?? []).filter((s: any) => Object.keys(s.checkpoints ?? {}).length > 0).slice(0, 5)))
+                return !p
+              })
+            }} style={btnStyle('#7B3FE4', '#6D35CC')}>
               <Phone size={14} /> Iniciar Simulação
             </button>
           ) : status === 'connecting' ? (
@@ -871,6 +886,62 @@ function SimuladorInner() {
             </div>
           )}
         </div>
+
+        {/* Start picker */}
+        {showStartPicker && (status === 'idle' || status === 'ended' || status === 'error') && (
+          <div style={{ padding: 12, borderBottom: '1px solid #1C1C1E', background: '#0D0D0F' }}>
+            <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', margin: '0 0 10px' }}>Como iniciar?</p>
+
+            {/* Opção 1: do zero */}
+            <button onClick={() => { setShowStartPicker(false); startSession() }} style={{ width: '100%', textAlign: 'left', background: 'rgba(123,63,228,0.08)', border: '1px solid rgba(123,63,228,0.25)', borderRadius: 8, padding: '8px 12px', marginBottom: 6, cursor: 'pointer' }}>
+              <p style={{ fontSize: 11, fontWeight: 700, color: '#A78BFA', margin: 0 }}>▶ Começar do zero</p>
+              <p style={{ fontSize: 10, color: '#52525E', margin: '2px 0 0' }}>ANA inicia pela Etapa 1 — Abertura</p>
+            </button>
+
+            {/* Opção 2: checkpoint da sessão atual */}
+            {checkpointEntries.length > 0 && (
+              <div style={{ marginBottom: 6 }}>
+                <p style={{ fontSize: 10, color: '#F59E0B', fontWeight: 700, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Checkpoint desta sessão</p>
+                {checkpointEntries.map(([gate, cp]) => (
+                  <button key={gate} onClick={() => { setShowStartPicker(false); startSession(cp) }} style={{ width: '100%', textAlign: 'left', background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '7px 12px', marginBottom: 4, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div>
+                      <p style={{ fontSize: 11, fontWeight: 700, color: '#F59E0B', margin: 0 }}>{GATE_LABELS[gate] ?? gate}</p>
+                      <p style={{ fontSize: 10, color: '#52525E', margin: 0 }}>→ {STAGE_LABELS[cp.stage] ?? cp.stage}</p>
+                    </div>
+                    <RotateCcw size={11} style={{ color: '#F59E0B', opacity: 0.5 }} />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Opção 3: sessão anterior */}
+            {recentSessions.length > 0 && (
+              <div>
+                <p style={{ fontSize: 10, color: '#38BDF8', fontWeight: 700, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Sessão anterior</p>
+                {recentSessions.map((s: any) => {
+                  const gates = Object.keys(s.checkpoints ?? {})
+                  return gates.map(gate => (
+                    <button key={`${s.callSid}-${gate}`} onClick={() => {
+                      const cp = s.checkpoints[gate]
+                      setShowStartPicker(false)
+                      startSession({ stage: cp.stage, speech_progress: cp.speech_progress, gate_log: cp.gate_log ?? [], ts: cp.ts })
+                    }} style={{ width: '100%', textAlign: 'left', background: 'rgba(56,189,248,0.06)', border: '1px solid rgba(56,189,248,0.2)', borderRadius: 8, padding: '7px 12px', marginBottom: 4, cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: '#38BDF8', margin: 0 }}>{GATE_LABELS[gate] ?? gate}</p>
+                        <p style={{ fontSize: 10, color: '#52525E', margin: 0 }}>{s.callSid?.slice(0, 22)} · {new Date(cp.ts).toLocaleTimeString('pt-BR')}</p>
+                      </div>
+                      <RotateCcw size={11} style={{ color: '#38BDF8', opacity: 0.5 }} />
+                    </button>
+                  ))
+                })}
+              </div>
+            )}
+
+            {recentSessions.length === 0 && checkpointEntries.length === 0 && (
+              <p style={{ fontSize: 11, color: '#3A3A3C', fontStyle: 'italic' }}>Nenhum checkpoint salvo ainda.</p>
+            )}
+          </div>
+        )}
 
         {/* FASE 2 — Metrics panel */}
         {(status === 'active' || status === 'ended') && (

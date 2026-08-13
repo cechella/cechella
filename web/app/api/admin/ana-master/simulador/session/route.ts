@@ -113,7 +113,8 @@ export async function POST(req: NextRequest) {
     // Docs: https://developers.openai.com/api/docs/guides/realtime-webrtc
     // Legacy /v1/realtime/sessions + OpenAI-Beta: realtime=v1 was retired 2026-05-07
     const vbp = VOICE_BEHAVIOR_PROFILES['apresentacao'] ?? ''
-    const systemPrompt = `${ANA_BASE_PROMPT}\n\nINÍCIO: Você inicia a conversa. Comece agora pela Etapa 1.\n\n${STAGE_INSTRUCTIONS.apresentacao}\n\n${vbp}`
+    const nomeHint = nome ? `\nDADOS DO CADASTRO: nome="${nome}". Use este nome para confirmar — não invente outro.` : ''
+    const systemPrompt = `${ANA_BASE_PROMPT}\n\nINÍCIO: Você inicia a conversa. Comece agora pela Etapa 1.${nomeHint}\n\n${STAGE_INSTRUCTIONS.apresentacao}\n\n${vbp}`
 
     const oaiRes = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
