@@ -2275,21 +2275,11 @@ function LigacoesTab() {
                           btn.style.color = ok ? '#4ADE80' : '#F87171'
                           setTimeout(() => { btn.textContent = 'Copiar'; btn.style.color = '' }, 1800)
                         }
-                        const fallback = () => {
-                          try {
-                            const ta = document.createElement('textarea')
-                            ta.value = text
-                            ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0'
-                            document.body.appendChild(ta)
-                            ta.focus(); ta.select()
-                            const ok = document.execCommand('copy')
-                            document.body.removeChild(ta)
-                            feedback(ok)
-                          } catch { feedback(false) }
-                        }
-                        if (navigator.clipboard) {
-                          navigator.clipboard.writeText(text).then(() => feedback(true)).catch(fallback)
-                        } else { fallback() }
+                        if ((navigator as any).share) {
+                          ;(navigator as any).share({ text }).then(() => feedback(true)).catch(() => feedback(false))
+                        } else if (navigator.clipboard) {
+                          navigator.clipboard.writeText(text).then(() => feedback(true)).catch(() => feedback(false))
+                        } else { feedback(false) }
                       }} style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.textFaint, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Copy style={{ width: 11, height: 11 }} /> Copiar
                       </button>
@@ -3406,21 +3396,11 @@ function SessoesInlineTab() {
                               btn.style.color = ok ? '#4ADE80' : '#F87171'
                               setTimeout(() => { btn.textContent = 'Copiar transcrição'; btn.style.color = '' }, 1800)
                             }
-                            const fallback = () => {
-                              try {
-                                const ta = document.createElement('textarea')
-                                ta.value = text
-                                ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px;opacity:0'
-                                document.body.appendChild(ta)
-                                ta.focus(); ta.select()
-                                const ok = document.execCommand('copy')
-                                document.body.removeChild(ta)
-                                feedback(ok)
-                              } catch { feedback(false) }
-                            }
-                            if (navigator.clipboard) {
-                              navigator.clipboard.writeText(text).then(() => feedback(true)).catch(fallback)
-                            } else { fallback() }
+                            if ((navigator as any).share) {
+                              ;(navigator as any).share({ text }).then(() => feedback(true)).catch(() => feedback(false))
+                            } else if (navigator.clipboard) {
+                              navigator.clipboard.writeText(text).then(() => feedback(true)).catch(() => feedback(false))
+                            } else { feedback(false) }
                           }}
                             style={{ fontSize: 10, color: '#A1A1AA', border: '1px solid #3A3A3C', borderRadius: 6, padding: '3px 8px', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                             Copiar transcrição
