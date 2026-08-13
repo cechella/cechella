@@ -31,7 +31,7 @@ export interface AnaRuntimeProfile {
 
 export const ANA_PROFILE_V1: AnaRuntimeProfile = {
   version: 'ANA-v1.0.0',
-  model: 'gpt-4o-realtime-preview-2025-06-03',
+  model: 'gpt-4o-realtime-preview',
   voice: 'marin',
   vad: {
     type: 'server_vad',
