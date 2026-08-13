@@ -2267,15 +2267,16 @@ function LigacoesTab() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Transcrição</div>
                     {transcript.length > 0 && (
-                      <button onClick={() => {
-                        const key = s.callSid + '-list'
+                      <button onClick={(e) => {
+                        const btn = e.currentTarget
                         const text = transcript.map(m => `${(m.role === 'assistant' || m.role === 'ana') ? 'ANA' : 'Lead'}: ${m.text}`).join('\n')
                         navigator.clipboard.writeText(text).then(() => {
-                          setCopiedTranscript(key)
-                          setTimeout(() => setCopiedTranscript(null), 2000)
+                          btn.setAttribute('data-copied', '1')
+                          btn.style.color = '#4ADE80'
+                          setTimeout(() => { btn.removeAttribute('data-copied'); btn.style.color = '' }, 2000)
                         })
-                      }} style={{ marginLeft: 'auto', padding: '6px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: copiedTranscript === s.callSid + '-list' ? '#4ADE80' : C.textFaint, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                        {copiedTranscript === s.callSid + '-list' ? <Check style={{ width: 14, height: 14 }} /> : <Copy style={{ width: 14, height: 14 }} />}
+                      }} style={{ marginLeft: 'auto', padding: '6px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.textFaint, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                        <Copy style={{ width: 14, height: 14 }} />
                       </button>
                     )}
                   </div>
