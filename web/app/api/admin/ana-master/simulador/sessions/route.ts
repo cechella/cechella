@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
     .from('ana_calls')
     .select('call_sid, memories, created_at, updated_at, stage')
     .like('call_sid', 'sim-browser-%')
-    .order('updated_at', { ascending: false })
+    .order('updated_at', { ascending: false, nullsFirst: false })
     .limit(50)
 
   const sessions = (data ?? []).map((row: any) => {
