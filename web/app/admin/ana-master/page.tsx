@@ -3396,7 +3396,8 @@ function SessoesInlineTab() {
                       <div style={{ padding: '10px 16px', borderBottom: '1px solid #1C1C1E', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', margin: 0 }}>Transcrição</p>
                         {detailTranscript.length > 0 && (
-                          <button onClick={async () => {
+                          <button onClick={async (e) => {
+                            const btn = e.currentTarget
                             const text = detailTranscript.map((t: any) => `${t.role === 'ana' ? 'ANA' : t.role === 'tool' ? '[ferramenta]' : t.role === 'system' ? '[sistema]' : 'VOCÊ'}: ${t.text}`).join('\n')
                             let ok = false
                             try { await navigator.clipboard.writeText(text); ok = true } catch {}
@@ -3411,11 +3412,9 @@ function SessoesInlineTab() {
                                 document.body.removeChild(ta)
                               } catch {}
                             }
-                            if (ok) {
-                              const btn = document.activeElement as HTMLButtonElement
-                              const orig = btn?.textContent ?? ''
-                              if (btn) { btn.textContent = '✓ Copiado!'; setTimeout(() => { btn.textContent = orig }, 1500) }
-                            }
+                            btn.textContent = ok ? '✓ Copiado!' : '✗ Erro'
+                            btn.style.color = ok ? '#4ADE80' : '#F87171'
+                            setTimeout(() => { btn.textContent = 'Copiar transcrição'; btn.style.color = '' }, 1800)
                           }}
                             style={{ fontSize: 10, color: '#A1A1AA', border: '1px solid #3A3A3C', borderRadius: 6, padding: '3px 8px', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                             Copiar transcrição
