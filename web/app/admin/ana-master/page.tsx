@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
+import { SimuladorContent } from './simulador/SimuladorContent'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import {
@@ -3238,29 +3239,29 @@ function SessoesInlineTab() {
 // ─── TABS CONFIG ──────────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] = [
+  { id: 'simulador',  label: '🎙️ Simulador',  icon: <span style={{ fontSize: 12 }}>🎙️</span>,        color: '#A78BFA' },
+  { id: 'sessoes',    label: 'Sessões',       icon: <span style={{ fontSize: 12 }}>▶</span>,          color: '#38BDF8' },
   { id: 'ligacoes',   label: 'Ligações',      icon: <span style={{ fontSize: 12 }}>📞</span>,        color: '#38BDF8' },
   { id: 'monitor',    label: 'Live Monitor',  icon: <span style={{ fontSize: 12 }}>🔴</span>,        color: '#EF4444' },
   { id: 'disparar',   label: '⚡ Disparar',   icon: <Zap style={{ width: 12, height: 12 }} />,       color: '#38BDF8' },
   { id: 'script',     label: 'Script',        icon: <BookOpen style={{ width: 12, height: 12 }} />,  color: '#F59E0B' },
   { id: 'config',     label: 'Realtime Config', icon: <span style={{ fontSize: 12 }}>⚙️</span>,      color: '#10B981' },
-  { id: 'voz',       label: '🎙️ Voz',          icon: <span style={{ fontSize: 12 }}>🎙️</span>,       color: '#A78BFA' },
+  { id: 'voz',        label: '🎙️ Voz',        icon: <span style={{ fontSize: 12 }}>🎙️</span>,        color: '#A78BFA' },
   { id: 'central',    label: 'Central',       icon: <Sparkles style={{ width: 12, height: 12 }} />,  color: C.purple },
   { id: 'dna',        label: 'DNA v1',        icon: <span style={{ fontSize: 12 }}>🧬</span>,        color: '#A855F7' },
-  { id: 'simulador',  label: '🎙️ Simulador',  icon: <span style={{ fontSize: 12 }}>🎙️</span>,        color: '#A78BFA' },
-  { id: 'sessoes',    label: 'Sessões',       icon: <span style={{ fontSize: 12 }}>▶</span>,          color: '#38BDF8' },
   { id: 'recovery',   label: 'Recovery',      icon: <span style={{ fontSize: 12 }}>🛡️</span>,        color: '#6366F1' },
-  { id: 'simulacoes', label: 'Simulações',    icon: <Brain style={{ width: 12, height: 12 }} />,    color: C.purple },
-  { id: 'gold',       label: 'Gold ✦',        icon: <Star style={{ width: 12, height: 12 }} />,     color: C.gold },
-  { id: 'anti-gold',  label: 'Anti-Gold',     icon: <XCircle style={{ width: 12, height: 12 }} />,  color: C.red },
+  { id: 'simulacoes', label: 'Simulações',    icon: <Brain style={{ width: 12, height: 12 }} />,     color: C.purple },
+  { id: 'gold',       label: 'Gold ✦',        icon: <Star style={{ width: 12, height: 12 }} />,      color: C.gold },
+  { id: 'anti-gold',  label: 'Anti-Gold',     icon: <XCircle style={{ width: 12, height: 12 }} />,   color: C.red },
   { id: 'scorecard',  label: 'Scorecard',     icon: <BarChart3 style={{ width: 12, height: 12 }} />, color: C.green },
-  { id: 'matriz',     label: 'Matriz',        icon: <Grid3X3 style={{ width: 12, height: 12 }} />,  color: C.blue },
-  { id: 'changelog',  label: 'Changelog',     icon: <Clock style={{ width: 12, height: 12 }} />,    color: C.textMuted },
+  { id: 'matriz',     label: 'Matriz',        icon: <Grid3X3 style={{ width: 12, height: 12 }} />,   color: C.blue },
+  { id: 'changelog',  label: 'Changelog',     icon: <Clock style={{ width: 12, height: 12 }} />,     color: C.textMuted },
 ]
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
 export default function AnaMasterPage() {
-  const [tab, setTab] = useState<Tab>('central')
+  const [tab, setTab] = useState<Tab>('simulador')
   const [sims, setSims] = useState<Simulacao[]>([])
   const [gold, setGold] = useState<GoldItem[]>([])
   const [antiGold, setAntiGold] = useState<AntiGoldItem[]>([])
@@ -3353,7 +3354,7 @@ export default function AnaMasterPage() {
               {tab === 'dna'        && <DnaTab />}
               {tab === 'simulador'  && (
                 <div style={{ height: 'calc(100vh - 120px)', borderRadius: 12, overflow: 'hidden', border: '1px solid #27272A' }}>
-                  <iframe src="/admin/ana-master/simulador" style={{ width: '100%', height: '100%', border: 'none' }} allow="microphone" />
+                  <SimuladorContent />
                 </div>
               )}
               {tab === 'sessoes'    && <SessoesInlineTab />}
