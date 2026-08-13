@@ -2268,7 +2268,7 @@ function LigacoesTab() {
                     <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Transcrição</div>
                     {transcript.length > 0 && (
                       <button onClick={() => {
-                        const text = transcript.map(m => `${m.role === 'assistant' ? 'ANA' : 'Lead'}: ${m.text}`).join('\n')
+                        const text = transcript.map(m => `${(m.role === 'assistant' || m.role === 'ana') ? 'ANA' : 'Lead'}: ${m.text}`).join('\n')
                         navigator.clipboard.writeText(text)
                       }} style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.textFaint, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Copy style={{ width: 11, height: 11 }} /> Copiar
@@ -2280,12 +2280,12 @@ function LigacoesTab() {
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {transcript.map((m, i) => (
-                        <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: m.role === 'assistant' ? 'row' : 'row-reverse' }}>
-                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: m.role === 'assistant' ? '#7C3AED20' : '#0EA5E920', border: `1px solid ${m.role === 'assistant' ? '#7C3AED40' : '#0EA5E940'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>
-                            {m.role === 'assistant' ? '🤖' : '👤'}
+                        <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: (m.role === 'assistant' || m.role === 'ana') ? 'row' : 'row-reverse' }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: (m.role === 'assistant' || m.role === 'ana') ? '#7C3AED20' : '#0EA5E920', border: `1px solid ${(m.role === 'assistant' || m.role === 'ana') ? '#7C3AED40' : '#0EA5E940'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>
+                            {(m.role === 'assistant' || m.role === 'ana') ? '🤖' : '👤'}
                           </div>
-                          <div style={{ maxWidth: '80%', background: m.role === 'assistant' ? '#7C3AED15' : '#0EA5E915', border: `1px solid ${m.role === 'assistant' ? '#7C3AED30' : '#0EA5E930'}`, borderRadius: 10, padding: '8px 12px' }}>
-                            <div style={{ fontSize: 11, fontWeight: 700, color: m.role === 'assistant' ? '#A78BFA' : '#38BDF8', marginBottom: 3 }}>{m.role === 'assistant' ? 'ANA' : 'Lead'}</div>
+                          <div style={{ maxWidth: '80%', background: (m.role === 'assistant' || m.role === 'ana') ? '#7C3AED15' : '#0EA5E915', border: `1px solid ${(m.role === 'assistant' || m.role === 'ana') ? '#7C3AED30' : '#0EA5E930'}`, borderRadius: 10, padding: '8px 12px' }}>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: (m.role === 'assistant' || m.role === 'ana') ? '#A78BFA' : '#38BDF8', marginBottom: 3 }}>{(m.role === 'assistant' || m.role === 'ana') ? 'ANA' : 'Lead'}</div>
                             <div style={{ fontSize: 12, color: C.text, lineHeight: 1.5 }}>{m.text}</div>
                             <div style={{ fontSize: 10, color: C.textFaint, marginTop: 4 }}>{new Date(m.ts).toLocaleTimeString('pt-BR')}</div>
                           </div>
