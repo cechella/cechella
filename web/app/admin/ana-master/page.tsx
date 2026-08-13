@@ -3304,7 +3304,18 @@ function SessoesInlineTab() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                     {/* Transcript */}
                     <div>
-                      <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' }}>Transcrição ({detailTranscript.length} turnos)</p>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>Transcrição ({detailTranscript.length} turnos)</p>
+                        {detailTranscript.length > 0 && (
+                          <button
+                            onClick={() => {
+                              const text = detailTranscript.map((t: any) => `${t.role === 'ana' ? 'ANA' : 'LEAD'}: ${t.text}`).join('\n')
+                              navigator.clipboard.writeText(text)
+                            }}
+                            style={{ background: 'none', border: '1px solid #3A3A3C', borderRadius: 6, color: '#A1A1AA', fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}
+                          >Copiar</button>
+                        )}
+                      </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 340, overflowY: 'auto' }}>
                         {detailTranscript.length === 0 && <p style={{ color: '#3A3A3C', fontSize: 12 }}>Sem transcrição salva.</p>}
                         {detailTranscript.map((t: any, i: number) => (
