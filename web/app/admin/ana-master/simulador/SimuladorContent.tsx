@@ -419,6 +419,8 @@ function SimuladorInner() {
         const newSp: SpeechProgress = { ...sp, partes_entregues: newPartes, parte_atual: parte + 1, parte_em_execucao: undefined, state: 'WAITING_LEAD', waiting_for_lead: true }
         setSpeechProgress(newSp); speechRef.current = newSp
         saveSpeechState(newSp, `parte_${parte}_concluida`)  // FASE 2B
+        // Send next part instructions immediately so ANA has them when she responds to lead's turn
+        updateInstructions(buildInstructions('speech', parte + 1))
         return JSON.stringify({ ok: true, parte_registrada: parte, aguardando: 'turno_da_lead' })
       } else {
         const newSp: SpeechProgress = { ...sp, partes_entregues: newPartes, parte_atual: 'final_question', parte_em_execucao: undefined, state: 'WAITING_LEAD', waiting_for_lead: false }
