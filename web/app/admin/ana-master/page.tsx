@@ -3298,95 +3298,70 @@ function SessoesInlineTab() {
             </button>
 
             {isOpen && (
-              <div style={{ borderTop: '1px solid #1C1C1E', padding: 16 }}>
+              <div style={{ borderTop: '1px solid #1C1C1E' }}>
                 {loadingDetail && <p style={{ color: '#52525B', fontSize: 12, textAlign: 'center', padding: 20 }}>Carregando...</p>}
                 {!loadingDetail && detail && (
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
-                    {/* Transcript */}
-                    <div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                        <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>Transcrição ({detailTranscript.length} turnos)</p>
+                  <>
+                    {/* Gate timeline strip */}
+                    <div style={{ padding: '12px 16px', borderBottom: '1px solid #1C1C1E', display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                      {GATE_ORDER_S.map(gate => {
+                        const cp = detailCheckpoints[gate]
+                        const passed = !!cp
+                        return passed ? (
+                          <a key={gate} href={`/admin/ana-master/simulador?checkpoint=${gate}&resumeFrom=${s.callSid}`}
+                            title={`Retomar daqui — ${fmtTime(cp.ts)}`}
+                            style={{ fontSize: 10, fontWeight: 700, padding: '3px 8px', borderRadius: 6, background: 'rgba(52,211,153,0.1)', color: C.green, border: '1px solid rgba(52,211,153,0.3)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>
+                            ✓ {GATE_SHORT_S[gate]} <span style={{ opacity: 0.5, fontSize: 9 }}>↩</span>
+                          </a>
+                        ) : (
+                          <span key={gate} style={{ fontSize: 10, padding: '3px 8px', borderRadius: 6, background: '#1C1C1E', color: '#3A3A3C', border: '1px solid #27272A' }}>
+                            {GATE_SHORT_S[gate]}
+                          </span>
+                        )
+                      })}
+                      <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
+                        {detailAudio && <a href={detailAudio} download={`${s.callSid}.webm`} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: '#38BDF8', border: '1px solid rgba(56,189,248,0.3)', borderRadius: 6, padding: '3px 8px', textDecoration: 'none' }}>⬇ Áudio</a>}
                         {detailTranscript.length > 0 && (
-                          <button
-                            onClick={() => {
-                              const text = detailTranscript.map((t: any) => `${t.role === 'ana' ? 'ANA' : 'LEAD'}: ${t.text}`).join('\n')
-                              navigator.clipboard.writeText(text)
-                            }}
-                            style={{ background: 'none', border: '1px solid #3A3A3C', borderRadius: 6, color: '#A1A1AA', fontSize: 10, padding: '3px 8px', cursor: 'pointer' }}
-                          >Copiar</button>
+                          <button onClick={() => { const text = detailTranscript.map((t: any) => `${t.role === 'ana' ? 'ANA' : 'LEAD'}: ${t.text}`).join('\n'); navigator.clipboard.writeText(text) }}
+                            style={{ fontSize: 10, color: '#A1A1AA', border: '1px solid #3A3A3C', borderRadius: 6, padding: '3px 8px', background: 'none', cursor: 'pointer' }}>
+                            Copiar transcrição
+                          </button>
                         )}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 340, overflowY: 'auto' }}>
-                        {detailTranscript.length === 0 && <p style={{ color: '#3A3A3C', fontSize: 12 }}>Sem transcrição salva.</p>}
-                        {detailTranscript.map((t: any, i: number) => (
-                          <div key={i} style={{ borderRadius: 8, padding: '8px 12px', fontSize: 12, lineHeight: 1.5, background: t.role === 'ana' ? 'rgba(123,63,228,0.08)' : t.role === 'lead' ? '#1C1C1E' : 'transparent', border: `1px solid ${t.role === 'ana' ? 'rgba(123,63,228,0.2)' : t.role === 'lead' ? '#27272A' : 'transparent'}`, color: t.role === 'ana' ? '#fff' : t.role === 'lead' ? '#A1A1AA' : '#52525B' }}>
-                            {(t.role === 'ana' || t.role === 'lead') && (
-                              <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 3px', color: t.role === 'ana' ? C.purple : '#52525B' }}>
-                                {t.role === 'ana' ? 'ANA' : 'LEAD'}
-                              </p>
-                            )}
-                            {t.text}
-                          </div>
-                        ))}
-                      </div>
                     </div>
 
-                    {/* Timeline + audio */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                      <div>
-                        <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 10px' }}>Linha do tempo</p>
-                        <div style={{ position: 'relative', paddingLeft: 20 }}>
-                          <div style={{ position: 'absolute', left: 6, top: 8, bottom: 8, width: 1, background: '#27272A' }} />
-                          {GATE_ORDER_S.map(gate => {
-                            const cp = detailCheckpoints[gate]
-                            const passed = !!cp
-                            return (
-                              <div key={gate} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10, position: 'relative' }}>
-                                <div style={{ position: 'absolute', left: -14, top: 3, width: 10, height: 10, borderRadius: '50%', background: passed ? C.green : '#27272A', border: `2px solid ${passed ? C.green : '#3A3A3C'}` }} />
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                                    <span style={{ fontSize: 11, fontWeight: 700, color: passed ? C.green : '#3A3A3C' }}>{GATE_SHORT_S[gate]}</span>
-                                    {cp && <span style={{ fontSize: 10, color: '#52525B' }}>→ {STAGE_LBL[cp.stage] ?? cp.stage}</span>}
-                                    {cp && <span style={{ fontSize: 10, color: '#3A3A3C' }}>{fmtTime(cp.ts)}</span>}
-                                  </div>
-                                  {cp && (
-                                    <a href={`/admin/ana-master/simulador?checkpoint=${gate}&resumeFrom=${s.callSid}`} style={{ fontSize: 10, color: C.purple, textDecoration: 'none', marginTop: 2, display: 'inline-block' }}>
-                                      ↩ Retomar daqui
-                                    </a>
-                                  )}
-                                </div>
-                              </div>
-                            )
-                          })}
-                        </div>
+                    {/* Audio player */}
+                    {detailAudio && (
+                      <div style={{ padding: '10px 16px', borderBottom: '1px solid #1C1C1E' }}>
+                        <audio controls src={detailAudio} style={{ width: '100%', height: 32, borderRadius: 8 }} />
                       </div>
+                    )}
 
-                      {detailAudio && (
-                        <div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                            <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: 0 }}>🎙 Gravação de áudio</p>
-                            <a href={detailAudio} download={`${detail.callSid}.webm`} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: '#38BDF8', border: '1px solid rgba(56,189,248,0.3)', borderRadius: 6, padding: '3px 8px', textDecoration: 'none' }}>⬇ Download</a>
-                          </div>
-                          <audio controls src={detailAudio} style={{ width: '100%', borderRadius: 8 }} />
-                        </div>
+                    {/* Chat transcript — same style as Ligações */}
+                    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10, maxHeight: 520, overflowY: 'auto' }}>
+                      {detailTranscript.length === 0 && (
+                        <p style={{ color: '#3A3A3C', fontSize: 12, textAlign: 'center', padding: '20px 0', fontStyle: 'italic' }}>
+                          Sem transcrição salva nesta sessão.
+                        </p>
                       )}
-
-                      <div style={{ background: '#1C1C1E', borderRadius: 10, padding: 12 }}>
-                        <p style={{ color: '#52525B', fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', margin: '0 0 8px' }}>Resumo</p>
-                        {[
-                          ['Gates passados', `${progress}/8`],
-                          ['Etapa final', STAGE_LBL[detail.current_stage ?? ''] ?? '—'],
-                          ['Turnos', String(detailTranscript.length)],
-                          ['Áudio', detailAudio ? '✓ Sim' : '✕ Não'],
-                        ].map(([k, v]) => (
-                          <div key={k} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 4 }}>
-                            <span style={{ color: '#71717A' }}>{k}</span>
-                            <span style={{ color: '#fff', fontWeight: 600 }}>{v}</span>
+                      {detailTranscript.map((t: any, i: number) => {
+                        const isAna = t.role === 'ana' || t.role === 'assistant'
+                        if (!isAna && t.role !== 'lead') return null
+                        return (
+                          <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', flexDirection: isAna ? 'row' : 'row-reverse' }}>
+                            <div style={{ width: 28, height: 28, borderRadius: '50%', background: isAna ? '#7C3AED20' : '#0EA5E920', border: `1px solid ${isAna ? '#7C3AED40' : '#0EA5E940'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>
+                              {isAna ? '🤖' : '👤'}
+                            </div>
+                            <div style={{ maxWidth: '75%', background: isAna ? '#7C3AED15' : '#0EA5E915', border: `1px solid ${isAna ? '#7C3AED30' : '#0EA5E930'}`, borderRadius: isAna ? '4px 12px 12px 12px' : '12px 4px 12px 12px', padding: '8px 12px' }}>
+                              <div style={{ fontSize: 10, fontWeight: 700, color: isAna ? '#A78BFA' : '#38BDF8', marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{isAna ? 'ANA' : 'Lead'}</div>
+                              <div style={{ fontSize: 12, color: '#E4E4E7', lineHeight: 1.55 }}>{t.text}</div>
+                              {t.ts && <div style={{ fontSize: 9, color: '#52525B', marginTop: 4 }}>{new Date(t.ts).toLocaleTimeString('pt-BR')}</div>}
+                            </div>
                           </div>
-                        ))}
-                      </div>
+                        )
+                      })}
                     </div>
-                  </div>
+                  </>
                 )}
               </div>
             )}
