@@ -109,26 +109,33 @@ export async function POST(req: NextRequest) {
       memories: { nome: nome ?? '', telefone: norm, sim_browser: true, profile_version: ACTIVE_PROFILE.version },
     })
 
-    // Create OpenAI Realtime ephemeral session
+    // Create ephemeral client secret via GA Realtime API
+    // Docs: https://developers.openai.com/api/docs/guides/realtime-webrtc
+    // Legacy /v1/realtime/sessions + OpenAI-Beta: realtime=v1 was retired 2026-05-07
     const vbp = VOICE_BEHAVIOR_PROFILES['apresentacao'] ?? ''
     const systemPrompt = `${ANA_BASE_PROMPT}\n\nINÍCIO: Você inicia a conversa. Comece agora pela Etapa 1.\n\n${STAGE_INSTRUCTIONS.apresentacao}\n\n${vbp}`
 
-    const oaiRes = await fetch('https://api.openai.com/v1/realtime/sessions', {
+    const oaiRes = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
-        'OpenAI-Beta': 'realtime=v1',
       },
       body: JSON.stringify({
-        model: ACTIVE_PROFILE.model,
-        voice: ACTIVE_PROFILE.voice,
-        instructions: systemPrompt,
-        tools: TOOLS,
-        tool_choice: 'auto',
-        modalities: ['audio', 'text'],
-        input_audio_transcription: { model: ACTIVE_PROFILE.transcription_model },
-        turn_detection: ACTIVE_PROFILE.vad,
+        session: {
+          type: 'realtime',
+          model: ACTIVE_PROFILE.model,
+          instructions: systemPrompt,
+          tools: TOOLS,
+          tool_choice: 'auto',
+          audio: {
+            output: { voice: ACTIVE_PROFILE.voice },
+            input: {
+              transcription: { model: ACTIVE_PROFILE.transcription_model },
+              turn_detection: ACTIVE_PROFILE.vad,
+            },
+          },
+        },
       }),
     })
 
@@ -138,12 +145,14 @@ export async function POST(req: NextRequest) {
     }
 
     const session = await oaiRes.json()
+    // GA protocol returns ephemeral key at top-level `value` (not client_secret.value)
+    const clientSecret = session.value ?? session.client_secret?.value
 
     return NextResponse.json({
       callSid,
       telefone: norm,
-      clientSecret: session.client_secret?.value,
-      sessionId: session.id,
+      clientSecret,
+      sessionId: session.session?.id ?? session.id,
       model: ACTIVE_PROFILE.model,
       profileVersion: ACTIVE_PROFILE.version,
     })

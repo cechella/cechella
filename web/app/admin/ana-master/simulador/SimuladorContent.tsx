@@ -224,7 +224,8 @@ function SimuladorInner() {
   }, [])
 
   const updateInstructions = useCallback((instructions: string) => {
-    sendEvent({ type: 'session.update', session: { instructions } })
+    // GA protocol: session.update must include type: 'realtime'
+    sendEvent({ type: 'session.update', session: { type: 'realtime', instructions } })
   }, [sendEvent])
 
   // ── Persistence ────────────────────────────────────────────────────────────
@@ -729,7 +730,7 @@ function SimuladorInner() {
       dc.onopen = () => {
         addTranscript('system', '🎙️ Conectado — ANA está iniciando...')
         if (pendingInstructionsRef.current) {
-          sendEvent({ type: 'session.update', session: { instructions: pendingInstructionsRef.current } })
+          sendEvent({ type: 'session.update', session: { type: 'realtime', instructions: pendingInstructionsRef.current } })
           pendingInstructionsRef.current = null
         }
       }
@@ -739,12 +740,13 @@ function SimuladorInner() {
       window.addEventListener('beforeunload', handleUnload)
 
       const offer = await pc.createOffer(); await pc.setLocalDescription(offer)
-      const oaiRes = await fetch(`https://api.openai.com/v1/realtime?model=${mdl ?? 'gpt-4o-realtime-preview-2025-06-03'}`, {
+      // GA Realtime API: POST SDP offer to /v1/realtime/calls (replaced /v1/realtime?model=...)
+      const oaiRes = await fetch('https://api.openai.com/v1/realtime/calls', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${clientSecret}`, 'Content-Type': 'application/sdp' },
         body: offer.sdp,
       })
-      if (!oaiRes.ok) throw new Error('Falha ao conectar ao OpenAI Realtime')
+      if (!oaiRes.ok) throw new Error(`Falha ao conectar ao OpenAI Realtime: ${await oaiRes.text()}`)
       await pc.setRemoteDescription({ type: 'answer', sdp: await oaiRes.text() })
       setStatus('active')
     } catch (e: any) { setStatus('error'); setErrorMsg(e.message) }

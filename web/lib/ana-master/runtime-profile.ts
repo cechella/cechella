@@ -12,39 +12,42 @@
 export interface AnaRuntimeProfile {
   /** Semantic version — bump on any change that affects ANA behavior */
   version: string
-  /** OpenAI Realtime model ID — must be exact snapshot, not an alias */
+  /** OpenAI Realtime model ID — GA family: gpt-realtime, gpt-realtime-2, gpt-realtime-2.1 */
   model: string
-  /** OpenAI TTS voice */
+  /** OpenAI Realtime voice — goes under audio.output.voice in GA protocol */
   voice: string
-  /** VAD configuration */
+  /** Transport layer — webrtc uses /v1/realtime/client_secrets + /v1/realtime/calls */
+  transport: 'webrtc'
+  /** VAD configuration — goes under audio.input.turn_detection in GA protocol */
   vad: {
     type: 'server_vad'
     silence_duration_ms: number
     threshold: number
     prefix_padding_ms: number
   }
-  /** Transcription model for lead audio */
+  /** Transcription model for lead audio — goes under audio.input.transcription in GA protocol */
   transcription_model: string
   /** ISO timestamp when this profile was defined */
   defined_at: string
 }
 
-export const ANA_PROFILE_V1: AnaRuntimeProfile = {
-  version: 'ANA-v1.0.0',
-  model: 'gpt-4o-realtime-preview',
+export const ANA_PROFILE_V2: AnaRuntimeProfile = {
+  version: 'ANA-v2.0.0',
+  model: 'gpt-realtime',
   voice: 'marin',
+  transport: 'webrtc',
   vad: {
     type: 'server_vad',
     silence_duration_ms: 600,
     threshold: 0.5,
     prefix_padding_ms: 300,
   },
-  transcription_model: 'gpt-4o-transcribe',
+  transcription_model: 'gpt-4o-mini-transcribe',
   defined_at: '2026-08-13',
 }
 
 /** The active profile — import this everywhere instead of hardcoding constants */
-export const ACTIVE_PROFILE: AnaRuntimeProfile = ANA_PROFILE_V1
+export const ACTIVE_PROFILE: AnaRuntimeProfile = ANA_PROFILE_V2
 
 // ── FASE 3 — Voice Behavior Profile per stage ─────────────────────────────────
 // Injected as a suffix to STAGE_INSTRUCTIONS at each gate transition.
