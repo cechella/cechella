@@ -281,10 +281,11 @@ function SimuladorInner() {
     const base = '/api/admin/ana-master/simulador'
     switch (name) {
       case 'gateValidator': {
-        const { gate_id, evidence } = args as { gate_id: string; evidence: Record<string, unknown> }
+        // Model now sends flat args (gate_id + evidence fields at top level)
+        const { gate_id, ...flatEvidence } = args as { gate_id: string } & Record<string, unknown>
         const sp = speechRef.current
         const enriched = {
-          ...evidence,
+          ...flatEvidence,
           speech_progress_complete: sp.state === 'COMPLETE',
           parte1_entregue: sp.partes_entregues.includes(1),
           parte2_entregue: sp.partes_entregues.includes(2),
@@ -307,6 +308,19 @@ function SimuladorInner() {
           if (data.next_stage === 'speech') {
             const sp0 = initialSpeechProgress()
             setSpeechProgress(sp0); speechRef.current = sp0
+          }
+          // After GATE_FECHAMENTO: auto-generate referidos link (real infrastructure)
+          if (gate_id === 'GATE_FECHAMENTO') {
+            fetch(`${base}/referidos`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ telefone: telefoneRef.current, callSid: callSidRef.current }),
+            }).then(r => r.json()).then(d => {
+              if (d.link) {
+                setReferidosLink(d.link)
+                setMemories(prev => ({ ...prev, token_indicacao: d.token }))
+                addTranscript('system', `🔗 Link referidos gerado: ${d.link}`)
+              }
+            }).catch(() => {})
           }
           // FASE 3 — inject Voice Behavior Profile at gate transition
           const inst = buildInstructions(data.next_stage)

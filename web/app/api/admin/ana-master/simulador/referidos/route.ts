@@ -16,21 +16,34 @@ function normalizePhone(telefone: string) {
   return digits.startsWith('55') ? digits : `55${digits}`
 }
 
-// GET: verificar progresso dos referidos
+// GET: verificar progresso dos referidos via contatos_referidos (salvo por /api/indicar)
+// Aceita ?token= (lookup via leads) ou ?telefone= (lookup direto)
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token')
-  if (!token) return NextResponse.json({ error: 'token obrigatório' }, { status: 400 })
+  const telParam = req.nextUrl.searchParams.get('telefone')
+
+  let phone: string | null = null
+
+  if (token) {
+    // Resolve phone from leads table via token
+    const { data: lead } = await supabase.from('leads').select('telefone').eq('token_indicacao', token).maybeSingle()
+    phone = lead?.telefone ? String(lead.telefone).replace(/\D/g, '') : null
+  } else if (telParam) {
+    phone = String(telParam).replace(/\D/g, '')
+  }
+
+  if (!phone) return NextResponse.json({ completo: false, semDados: 20, missaoCompleta: false, total: 0 })
 
   const { data } = await supabase
-    .from('indicacoes')
-    .select('id, profissao, hobby, recusou')
-    .eq('token_origem', token)
+    .from('contatos_referidos')
+    .select('id, profissao, hobby, status')
+    .or(`indicado_por_telefone.eq.${phone},indicado_por_telefone.eq.55${phone},indicado_por_telefone.eq.${phone.replace(/^55/, '')}`)
 
   if (!data || data.length === 0) {
     return NextResponse.json({ completo: false, semDados: 20, missaoCompleta: false, total: 0 })
   }
 
-  const ativos = data.filter((r: any) => !r.recusou)
+  const ativos = data.filter((r: any) => r.status !== 'recusou')
   const semDados = ativos.filter((r: any) => !r.profissao || !r.hobby).length
   const completo = ativos.length >= 20
   const missaoCompleta = completo && semDados === 0

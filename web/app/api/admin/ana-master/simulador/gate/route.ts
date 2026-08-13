@@ -30,17 +30,19 @@ async function verifyPayment(telefone: string): Promise<boolean> {
   return data?.status_pagamento === 'pago'
 }
 
-async function checkReferidos(token: string) {
+// Queries contatos_referidos (saved by /api/indicar) by lead phone
+async function checkReferidosByPhone(phone: string) {
+  const digits = String(phone).replace(/\D/g, '')
   const { data } = await supabase
-    .from('indicacoes')
-    .select('id, profissao, hobby, recusou')
-    .eq('token_origem', token)
+    .from('contatos_referidos')
+    .select('id, profissao, hobby, status')
+    .or(`indicado_por_telefone.eq.${digits},indicado_por_telefone.eq.55${digits},indicado_por_telefone.eq.${digits.replace(/^55/, '')}`)
 
-  if (!data || data.length === 0) return { completo: false, semDados: 20, missaoCompleta: false }
-  const ativos = data.filter((r: any) => !r.recusou)
+  if (!data || data.length === 0) return { completo: false, semDados: 20, missaoCompleta: false, total: 0 }
+  const ativos = data.filter((r: any) => r.status !== 'recusou')
   const semDados = ativos.filter((r: any) => !r.profissao || !r.hobby).length
   const completo = ativos.length >= 20
-  return { completo, semDados, missaoCompleta: completo && semDados === 0 }
+  return { completo, semDados, missaoCompleta: completo && semDados === 0, total: ativos.length }
 }
 
 export async function POST(req: NextRequest) {
@@ -119,6 +121,8 @@ export async function POST(req: NextRequest) {
         break
 
       case 'GATE_PAGAMENTO': {
+        // Sim bypass — browser simulator sessions skip real payment check
+        if (callSid.startsWith('sim-browser-')) break
         const tel = telefone || ev.telefone
         if (!tel) return NextResponse.json({ approved: false, reason: 'Telefone necessário para verificar pagamento.' })
         const pago = await verifyPayment(tel)
@@ -127,20 +131,25 @@ export async function POST(req: NextRequest) {
       }
 
       case 'GATE_REFERIDOS': {
-        if (!ev.token_indicacao) return NextResponse.json({ approved: false, reason: 'Token de indicação não encontrado.' })
-        const ref = await checkReferidos(ev.token_indicacao)
+        // Use contatos_referidos table (saved by /api/indicar) keyed by phone
+        const { data: callRow } = await supabase.from('ana_calls').select('telefone').eq('call_sid', callSid).single()
+        const phone = String(callRow?.telefone || ev.telefone || telefone || '').replace(/\D/g, '')
+        if (!phone) return NextResponse.json({ approved: false, reason: 'Telefone não encontrado para verificar referidos.' })
+        const ref = await checkReferidosByPhone(phone)
         if (!ref.missaoCompleta) {
-          if (ref.semDados > 0) return NextResponse.json({ approved: false, reason: `${ref.semDados} indicadas ainda sem profissão/hobby.` })
-          return NextResponse.json({ approved: false, reason: 'Meta de 20 indicadas ainda não atingida.' })
+          if (ref.semDados > 0) return NextResponse.json({ approved: false, reason: `${ref.semDados} indicadas ainda sem profissão/hobby. Total ativas: ${ref.total}.` })
+          return NextResponse.json({ approved: false, reason: `Meta de 20 indicadas ainda não atingida. Total ativas: ${ref.total}.` })
         }
         break
       }
 
       case 'GATE_VALIDACAO': {
         if (!ev.negativas_verificadas) return NextResponse.json({ approved: false, reason: 'Verificação de negativas não executada.' })
-        if (ev.token_indicacao) {
-          const ref = await checkReferidos(ev.token_indicacao)
-          if (!ref.missaoCompleta) return NextResponse.json({ approved: false, reason: `Referidos incompletos. semDados=${ref.semDados}.` })
+        const { data: callRowV } = await supabase.from('ana_calls').select('telefone').eq('call_sid', callSid).single()
+        const phoneV = String(callRowV?.telefone || ev.telefone || telefone || '').replace(/\D/g, '')
+        if (phoneV) {
+          const ref = await checkReferidosByPhone(phoneV)
+          if (!ref.missaoCompleta) return NextResponse.json({ approved: false, reason: `Referidos incompletos. semDados=${ref.semDados}, total=${ref.total}.` })
         }
         break
       }
