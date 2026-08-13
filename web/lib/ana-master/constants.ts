@@ -234,5 +234,8 @@ Após receber a resposta: chame registrar_parte_speech(parte="resposta_recebida"
 speech_progress_complete=true, parte1_entregue=true, parte2_entregue=true, parte3_entregue=true, parte4_entregue=true, pergunta_final_feita=true, resposta_lead_recebida=true, interesse_pos_speech=true, interesse_protocolo="[resposta da lead]"`,
 }
 
-export const REALTIME_MODEL = 'gpt-4o-realtime-preview'
+// Re-exported from runtime-profile for backward compatibility.
+// Import ACTIVE_PROFILE directly for new code.
+export { ACTIVE_PROFILE } from './runtime-profile'
+export const REALTIME_MODEL = 'gpt-4o-realtime-preview-2025-06-03'
 export const REALTIME_VOICE = 'marin'

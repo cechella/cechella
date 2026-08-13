@@ -81,6 +81,8 @@ function SimuladorInner() {
   const [errorMsg, setErrorMsg] = useState('')
   const [isMuted, setIsMuted] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
+  const [profileVersion, setProfileVersion] = useState('')
+  const [activeModel, setActiveModel] = useState('')
   const [audioUploading, setAudioUploading] = useState(false)
 
   const pcRef = useRef<RTCPeerConnection | null>(null)
@@ -332,8 +334,10 @@ function SimuladorInner() {
         body: JSON.stringify({ telefone, nome: 'Lead Teste' }),
       })
       if (!sessionRes.ok) throw new Error('Falha ao criar sessão')
-      const { callSid, clientSecret, telefone: normPhone } = await sessionRes.json()
+      const { callSid, clientSecret, telefone: normPhone, profileVersion: pv, model: mdl } = await sessionRes.json()
       callSidRef.current = callSid; telefoneRef.current = normPhone
+      if (pv) setProfileVersion(pv)
+      if (mdl) setActiveModel(mdl)
 
       if (checkpointOverride) restoreCheckpoint(checkpointOverride)
 
@@ -364,7 +368,7 @@ function SimuladorInner() {
       }
 
       const offer = await pc.createOffer(); await pc.setLocalDescription(offer)
-      const oaiRes = await fetch('https://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview', {
+      const oaiRes = await fetch(`https://api.openai.com/v1/realtime?model=${mdl ?? 'gpt-4o-realtime-preview-2025-06-03'}`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${clientSecret}`, 'Content-Type': 'application/sdp' },
         body: offer.sdp,
@@ -410,8 +414,11 @@ function SimuladorInner() {
         <div style={{ padding: '12px 16px', borderBottom: '1px solid #1C1C1E' }}>
           <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', color: '#7B3FE4', textTransform: 'uppercase', margin: '0 0 2px' }}>ANA MASTER</p>
           <p style={{ fontSize: 14, fontWeight: 700, color: '#fff', margin: 0 }}>Simulador de Voz</p>
-          <p style={{ fontSize: 10, color: '#52525E', margin: '2px 0 0', display: 'flex', alignItems: 'center', gap: 6 }}>
-            WebRTC · gpt-4o-realtime
+          <p style={{ fontSize: 10, color: '#52525E', margin: '2px 0 0', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            WebRTC
+            {profileVersion
+              ? <span style={{ color: '#7B3FE4', fontWeight: 700 }}>{profileVersion}</span>
+              : <span>· gpt-4o-realtime</span>}
             {isRecording && <span style={{ color: '#F87171', display: 'flex', alignItems: 'center', gap: 3 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F87171', display: 'inline-block', animation: 'pulse 1s infinite' }} />REC</span>}
             {audioUploading && <span style={{ color: '#F59E0B' }}>↑ áudio...</span>}
           </p>

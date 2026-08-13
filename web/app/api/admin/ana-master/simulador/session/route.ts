@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { ANA_BASE_PROMPT, STAGE_INSTRUCTIONS, REALTIME_MODEL, REALTIME_VOICE } from '@/lib/ana-master/constants'
+import { ANA_BASE_PROMPT, STAGE_INSTRUCTIONS } from '@/lib/ana-master/constants'
+import { ACTIVE_PROFILE } from '@/lib/ana-master/runtime-profile'
 
 export const dynamic = 'force-dynamic'
 
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
       stage: 'apresentacao',
       status: 'active',
       gates_passed: [],
-      memories: { nome: nome ?? '', telefone: norm, sim_browser: true },
+      memories: { nome: nome ?? '', telefone: norm, sim_browser: true, profile_version: ACTIVE_PROFILE.version },
     })
 
     // Create OpenAI Realtime ephemeral session
@@ -123,19 +124,14 @@ export async function POST(req: NextRequest) {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: REALTIME_MODEL,
-        voice: REALTIME_VOICE,
+        model: ACTIVE_PROFILE.model,
+        voice: ACTIVE_PROFILE.voice,
         instructions: systemPrompt,
         tools: TOOLS,
         tool_choice: 'auto',
         modalities: ['audio', 'text'],
-        input_audio_transcription: { model: 'gpt-4o-transcribe' },
-        turn_detection: {
-          type: 'server_vad',
-          silence_duration_ms: 600,
-          threshold: 0.5,
-          prefix_padding_ms: 300,
-        },
+        input_audio_transcription: { model: ACTIVE_PROFILE.transcription_model },
+        turn_detection: ACTIVE_PROFILE.vad,
       }),
     })
 
@@ -151,7 +147,8 @@ export async function POST(req: NextRequest) {
       telefone: norm,
       clientSecret: session.client_secret?.value,
       sessionId: session.id,
-      model: REALTIME_MODEL,
+      model: ACTIVE_PROFILE.model,
+      profileVersion: ACTIVE_PROFILE.version,
     })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
