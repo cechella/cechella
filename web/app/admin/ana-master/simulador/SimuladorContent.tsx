@@ -76,6 +76,19 @@ type SessionStatus = 'idle' | 'connecting' | 'active' | 'error' | 'ended'
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
+// PASSO 2A — Tool response policy: silent = no response.create after tool output
+//            controller_decides = response.create is sent (behavior unchanged in 2A)
+const TOOL_RESPONSE_POLICY: Record<string, 'silent' | 'controller_decides'> = {
+  save_memory:              'silent',
+  send_whatsapp:            'silent',
+  gateValidator:            'controller_decides',
+  registrar_parte_speech:   'controller_decides',
+  verificar_pagamento:      'controller_decides',
+  verificar_referidos:      'controller_decides',
+  iniciar_coleta_referidos: 'controller_decides',
+  get_lead_context:         'controller_decides',
+}
+
 const STAGES_ORDER = ['apresentacao', 'conexao', 'combinado', 'speech', 'fechamento', 'pagamento', 'referidos', 'validacao', 'ganho']
 const STAGE_LABELS: Record<string, string> = {
   apresentacao: 'Abertura', conexao: 'Conexão', combinado: 'Combinado',
@@ -188,6 +201,9 @@ function SimuladorInner() {
   const [activeModel, setActiveModel] = useState('')
   const [metrics, setMetrics] = useState<LatencyMetrics>({ lastResponseMs: null, interruptionCount: 0, turnCount: 0 })
   const [lastDisposition, setLastDisposition] = useState<LeadTurnDisposition | null>(null)
+  // PASSO 2A
+  const [timeline, setTimeline] = useState<{ts: number; event: string; detail?: string}[]>([])
+  const [showTimeline, setShowTimeline] = useState(false)
 
   // ── Refs ───────────────────────────────────────────────────────────────────
   const pcRef = useRef<RTCPeerConnection | null>(null)
@@ -212,6 +228,11 @@ function SimuladorInner() {
   // FASE 2 — latency tracking
   const speechStoppedAtRef = useRef<number | null>(null)
   const metricsRef = useRef<LatencyMetrics>({ lastResponseMs: null, interruptionCount: 0, turnCount: 0 })
+  // PASSO 2A — response authority tracking
+  const timelineRef = useRef<{ts: number; event: string; detail?: string}[]>([])
+  const sessionStartTsRef = useRef<number>(0)
+  const pendingManualResponseRef = useRef(false)
+  const lastResponseOriginRef = useRef<string>('unknown')
 
   useEffect(() => { speechRef.current = speechProgress }, [speechProgress])
   useEffect(() => { stageRef.current = currentStage }, [currentStage])
@@ -245,10 +266,26 @@ function SimuladorInner() {
     if (dcRef.current?.readyState === 'open') dcRef.current.send(JSON.stringify(event))
   }, [])
 
+  // PASSO 2A — timeline logger (stable identity, no deps)
+  const logTimeline = useCallback((event: string, detail?: string) => {
+    const entry = { ts: Date.now(), event, detail }
+    timelineRef.current = [...timelineRef.current, entry]
+    setTimeline(prev => [...prev.slice(-150), entry])
+  }, [])
+
+  // PASSO 2A — send response.create with origin tracking
+  const sendResponseCreate = useCallback((origin: string) => {
+    pendingManualResponseRef.current = true
+    lastResponseOriginRef.current = origin
+    logTimeline('RESPONSE_CREATE_SENT', `origin=${origin}`)
+    sendEvent({ type: 'response.create' })
+  }, [sendEvent, logTimeline])
+
   const updateInstructions = useCallback((instructions: string) => {
     // GA protocol: session.update must include type: 'realtime'
+    logTimeline('SESSION_UPDATE_SENT', `chars=${instructions.length}`)
     sendEvent({ type: 'session.update', session: { type: 'realtime', instructions } })
-  }, [sendEvent])
+  }, [sendEvent, logTimeline])
 
   // ── Persistence ────────────────────────────────────────────────────────────
 
@@ -537,9 +574,21 @@ function SimuladorInner() {
       // ── FASE 1 — AnaDeliveryState tracking ──────────────────────────────────
 
       case 'response.created': {
+        // PASSO 2A — detect automatic (VAD) vs manual (controller) response creation
+        const isAutomatic = !pendingManualResponseRef.current
+        pendingManualResponseRef.current = false
+        logTimeline('RESPONSE_CREATED', isAutomatic
+          ? 'AUTOMATIC — VAD/server (no local response.create sent)'
+          : `manual origin=${lastResponseOriginRef.current}`)
         // New response starting — reset delivery state
         currentDeliveryRef.current = initialDelivery(msg.response?.id ?? '')
         wasInterruptedRef.current = false
+        break
+      }
+
+      case 'session.updated': {
+        // PASSO 2A — confirm server processed session.update
+        logTimeline('SESSION_UPDATED')
         break
       }
 
@@ -547,6 +596,7 @@ function SimuladorInner() {
         // FASE 1: mark audio as started (generated audio is now being streamed)
         if (!currentDeliveryRef.current.audio_started) {
           currentDeliveryRef.current.audio_started = true
+          logTimeline('FIRST_AUDIO_DELTA')
           // FASE 2 — latency: measure speech_stopped → first audio delta
           if (speechStoppedAtRef.current) {
             const latencyMs = Date.now() - speechStoppedAtRef.current
@@ -575,6 +625,7 @@ function SimuladorInner() {
 
       case 'response.done': {
         const responseStatus = msg.response?.status ?? null
+        logTimeline('RESPONSE_DONE', `status=${responseStatus}`)
         currentDeliveryRef.current.response_status = responseStatus
 
         if (responseStatus === 'cancelled') {
@@ -605,16 +656,22 @@ function SimuladorInner() {
         for (const call of funcCalls) {
           let parsedArgs: Record<string, unknown> = {}
           try { parsedArgs = JSON.parse(call.arguments ?? '{}') } catch {}
-          addTranscript('tool', `→ ${call.name}(${JSON.stringify(parsedArgs).slice(0, 80)})`)
+          const policy = TOOL_RESPONSE_POLICY[call.name] ?? 'controller_decides'
+          addTranscript('tool', `→ ${call.name}(${JSON.stringify(parsedArgs).slice(0, 80)}) [${policy}]`)
+          logTimeline('TOOL_CALL', `${call.name} policy=${policy}`)
           const result = await executeTool(call.name, parsedArgs)
           sendEvent({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: call.call_id, output: result } })
-          sendEvent({ type: 'response.create' })
+          logTimeline('FUNCTION_CALL_OUTPUT_SENT', call.name)
+          // PASSO 2A: log policy decision — behavior unchanged (response.create sent for all)
+          logTimeline('RESPONSE_CREATE_DECISION', `tool=${call.name} policy=${policy} → sending (2A: behavior unchanged)`)
+          sendResponseCreate(`tool:${call.name}`)
         }
         break
       }
 
       // FASE 1 — barge-in: VAD detected lead speech during ANA's turn
       case 'input_audio_buffer.speech_started': {
+        logTimeline('LEAD_SPEECH_STARTED')
         // Mark current delivery as interrupted
         if (!currentDeliveryRef.current.interrupted) {
           currentDeliveryRef.current.interrupted = true
@@ -625,6 +682,7 @@ function SimuladorInner() {
 
       // FASE 2 — latency: record when lead stops speaking
       case 'input_audio_buffer.speech_stopped': {
+        logTimeline('LEAD_SPEECH_STOPPED')
         speechStoppedAtRef.current = Date.now()
         break
       }
@@ -644,6 +702,7 @@ function SimuladorInner() {
       case 'conversation.item.input_audio_transcription.completed': {
         const text = msg.transcript
         if (!text) break
+        logTimeline('LEAD_TRANSCRIPTION_COMPLETED', `chars=${text.length}`)
         const disposition = classifyLeadTurn(text, stageRef.current, speechRef.current, wasInterruptedRef.current)
         addTranscript('lead', text, { disposition })
         saveTranscriptTurn('lead', text)
@@ -656,7 +715,7 @@ function SimuladorInner() {
         setErrorMsg(`Erro OpenAI: ${msg.error?.message ?? JSON.stringify(msg.error)}`)
         break
     }
-  }, [executeTool, addTranscript, sendEvent, handleLeadTurnDisposition, saveTranscriptTurn, saveSpeechState])
+  }, [executeTool, addTranscript, sendEvent, sendResponseCreate, logTimeline, handleLeadTurnDisposition, saveTranscriptTurn, saveSpeechState])
 
   // ── Checkpoint restore ─────────────────────────────────────────────────────
 
@@ -683,6 +742,11 @@ function SimuladorInner() {
     setStreamingAnaText(''); setLastDisposition(null)
     const m0 = { lastResponseMs: null, interruptionCount: 0, turnCount: 0 }
     setMetrics(m0); metricsRef.current = m0
+    // PASSO 2A — reset timeline
+    timelineRef.current = []; setTimeline([])
+    sessionStartTsRef.current = Date.now()
+    pendingManualResponseRef.current = false
+    lastResponseOriginRef.current = 'unknown'
 
     try {
       const sessionRes = await fetch('/api/admin/ana-master/simulador/session', {
@@ -756,8 +820,10 @@ function SimuladorInner() {
       }
 
       dc.onopen = () => {
+        logTimeline('SESSION_START', 'DataChannel open — no response.create sent, ANA response will be AUTOMATIC')
         addTranscript('system', '🎙️ Conectado — ANA está iniciando...')
         if (pendingInstructionsRef.current) {
+          logTimeline('SESSION_UPDATE_SENT', `checkpoint restore chars=${pendingInstructionsRef.current.length}`)
           sendEvent({ type: 'session.update', session: { type: 'realtime', instructions: pendingInstructionsRef.current } })
           pendingInstructionsRef.current = null
         }
@@ -778,7 +844,7 @@ function SimuladorInner() {
       await pc.setRemoteDescription({ type: 'answer', sdp: await oaiRes.text() })
       setStatus('active')
     } catch (e: any) { setStatus('error'); setErrorMsg(e.message) }
-  }, [telefone, handleDCMessage, addTranscript, sendEvent, restoreCheckpoint, saveSpeechState])
+  }, [telefone, nome, handleDCMessage, addTranscript, sendEvent, logTimeline, restoreCheckpoint, saveSpeechState])
 
   const stopSession = useCallback(() => {
     // FASE 2B — persist speech state on explicit end
@@ -979,6 +1045,34 @@ function SimuladorInner() {
                 </p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* PASSO 2A — Timeline panel */}
+        {(status === 'active' || status === 'ended') && (
+          <div style={{ borderBottom: '1px solid #1C1C1E' }}>
+            <button onClick={() => setShowTimeline(p => !p)} style={{ width: '100%', padding: '8px 12px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase' }}>📋 Timeline</span>
+              <span style={{ fontSize: 10, color: '#3A3A3C' }}>{showTimeline ? '▲' : '▼'} {timeline.length}</span>
+            </button>
+            {showTimeline && (
+              <div style={{ maxHeight: 260, overflowY: 'auto', padding: '0 12px 8px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {timeline.map((e, i) => {
+                  const rel = ((e.ts - sessionStartTsRef.current) / 1000).toFixed(2)
+                  const isAuto = e.event === 'RESPONSE_CREATED' && e.detail?.includes('AUTOMATIC')
+                  const isSent = e.event === 'RESPONSE_CREATE_SENT'
+                  const isSession = e.event === 'SESSION_UPDATE_SENT' || e.event === 'SESSION_UPDATED'
+                  const color = isAuto ? '#F87171' : isSent ? '#34D399' : isSession ? '#A78BFA' : '#52525E'
+                  return (
+                    <div key={i} style={{ fontSize: 9, fontFamily: 'monospace', color, lineHeight: 1.4 }}>
+                      <span style={{ color: '#3A3A3C', marginRight: 4 }}>{rel}s</span>
+                      <span style={{ fontWeight: 700 }}>{e.event}</span>
+                      {e.detail && <span style={{ color: '#3A3A3C', marginLeft: 4 }}>{e.detail}</span>}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 
