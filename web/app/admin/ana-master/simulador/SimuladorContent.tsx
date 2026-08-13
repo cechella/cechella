@@ -536,12 +536,14 @@ function SimuladorInner() {
         break
       }
 
-      // FASE 2 — Streaming transcript (response.audio_transcript.delta)
+      // Streaming transcript — GA protocol renamed to output_audio_transcript
+      case 'response.output_audio_transcript.delta':
       case 'response.audio_transcript.delta': {
         setStreamingAnaText(prev => prev + (msg.delta ?? ''))
         break
       }
 
+      case 'response.output_audio_transcript.done':
       case 'response.audio_transcript.done': {
         // Streaming text finalized — will be committed in response.done
         break
@@ -566,9 +568,11 @@ function SimuladorInner() {
         setStreamingAnaText('')
 
         // Commit transcript from response.done output
+        // GA protocol: content type is 'output_audio' or 'audio', transcript in .transcript
         const audioItem = msg.response?.output?.find((o: any) => o.type === 'message' && o.role === 'assistant')
         if (audioItem) {
-          const text = audioItem.content?.find((c: any) => c.type === 'audio')?.transcript
+          const audioContent = audioItem.content?.find((c: any) => c.type === 'output_audio' || c.type === 'audio')
+          const text = audioContent?.transcript
           if (text) { addTranscript('ana', text); saveTranscriptTurn('ana', text) }
         }
 

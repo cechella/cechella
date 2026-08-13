@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
 
   const { data } = await supabase
     .from('ana_calls')
-    .select('call_sid, memories, created_at, updated_at, current_stage')
+    .select('call_sid, memories, created_at, updated_at, stage')
     .like('call_sid', 'sim-browser-%')
     .order('updated_at', { ascending: false })
     .limit(50)
@@ -47,8 +47,8 @@ export async function GET(req: NextRequest) {
     return {
       callSid: row.call_sid,
       telefone: mem.telefone ?? null,
-      stage: row.current_stage ?? 'apresentacao',
-      stageLabel: STAGE_LABELS[row.current_stage ?? 'apresentacao'] ?? row.current_stage,
+      stage: row.stage ?? 'apresentacao',
+      stageLabel: STAGE_LABELS[row.stage ?? 'apresentacao'] ?? row.stage,
       gates: gateLog,
       transcriptCount: transcript.length,
       hasAudio: !!mem.audio_url,
