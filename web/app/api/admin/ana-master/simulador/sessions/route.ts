@@ -32,7 +32,8 @@ export async function GET(req: NextRequest) {
     .select('call_sid, memories, created_at, updated_at, stage')
     .like('call_sid', 'sim-browser-%')
     .order('updated_at', { ascending: false, nullsFirst: false })
-    .limit(50)
+    .order('created_at', { ascending: false })
+    .limit(100)
 
   const sessions = (data ?? []).map((row: any) => {
     const mem = (row.memories ?? {}) as Record<string, any>
