@@ -2267,21 +2267,15 @@ function LigacoesTab() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
                     <div style={{ fontSize: 12, fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Transcrição</div>
                     {transcript.length > 0 && (
-                      <button onClick={(e) => {
-                        const btn = e.currentTarget
-                        const icon = btn.querySelector('svg')
+                      <button onClick={() => {
+                        const key = s.callSid + '-list'
                         const text = transcript.map(m => `${(m.role === 'assistant' || m.role === 'ana') ? 'ANA' : 'Lead'}: ${m.text}`).join('\n')
-                        const feedback = (ok: boolean) => {
-                          if (icon) icon.style.color = ok ? '#4ADE80' : '#F87171'
-                          setTimeout(() => { if (icon) icon.style.color = '' }, 1800)
-                        }
-                        if ((navigator as any).share) {
-                          ;(navigator as any).share({ text }).then(() => feedback(true)).catch(() => feedback(false))
-                        } else if (navigator.clipboard) {
-                          navigator.clipboard.writeText(text).then(() => feedback(true)).catch(() => feedback(false))
-                        } else { feedback(false) }
-                      }} style={{ marginLeft: 'auto', padding: '6px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.textFaint, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                        <Copy style={{ width: 14, height: 14 }} />
+                        navigator.clipboard.writeText(text).then(() => {
+                          setCopiedTranscript(key)
+                          setTimeout(() => setCopiedTranscript(null), 2000)
+                        })
+                      }} style={{ marginLeft: 'auto', padding: '6px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: copiedTranscript === s.callSid + '-list' ? '#4ADE80' : C.textFaint, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                        {copiedTranscript === s.callSid + '-list' ? <Check style={{ width: 14, height: 14 }} /> : <Copy style={{ width: 14, height: 14 }} />}
                       </button>
                     )}
                   </div>
@@ -3229,6 +3223,7 @@ function SessoesInlineTab() {
   const [expanded, setExpanded] = useState<string|null>(null)
   const [detail, setDetail] = useState<any>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
+  const [copiedTranscript, setCopiedTranscript] = useState<string|null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -3388,22 +3383,16 @@ function SessoesInlineTab() {
                       <div style={{ padding: '10px 16px', borderBottom: '1px solid #1C1C1E', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <p style={{ fontSize: 12, fontWeight: 700, color: '#fff', margin: 0 }}>Transcrição</p>
                         {detailTranscript.length > 0 && (
-                          <button onClick={(e) => {
-                            const btn = e.currentTarget
-                            const icon = btn.querySelector('svg')
+                          <button onClick={() => {
+                            const key = 'detail'
                             const text = detailTranscript.map((t: any) => `${t.role === 'ana' ? 'ANA' : t.role === 'tool' ? '[ferramenta]' : t.role === 'system' ? '[sistema]' : 'VOCÊ'}: ${t.text}`).join('\n')
-                            const feedback = (ok: boolean) => {
-                              if (icon) icon.style.color = ok ? '#4ADE80' : '#F87171'
-                              setTimeout(() => { if (icon) icon.style.color = '' }, 1800)
-                            }
-                            if ((navigator as any).share) {
-                              ;(navigator as any).share({ text }).then(() => feedback(true)).catch(() => feedback(false))
-                            } else if (navigator.clipboard) {
-                              navigator.clipboard.writeText(text).then(() => feedback(true)).catch(() => feedback(false))
-                            } else { feedback(false) }
+                            navigator.clipboard.writeText(text).then(() => {
+                              setCopiedTranscript(key)
+                              setTimeout(() => setCopiedTranscript(null), 2000)
+                            })
                           }}
-                            style={{ border: '1px solid #3A3A3C', borderRadius: 6, padding: '5px 6px', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#A1A1AA' }}>
-                            <Copy style={{ width: 13, height: 13 }} />
+                            style={{ border: '1px solid #3A3A3C', borderRadius: 6, padding: '5px 6px', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: copiedTranscript === 'detail' ? '#4ADE80' : '#A1A1AA' }}>
+                            {copiedTranscript === 'detail' ? <Check style={{ width: 13, height: 13 }} /> : <Copy style={{ width: 13, height: 13 }} />}
                           </button>
                         )}
                       </div>
