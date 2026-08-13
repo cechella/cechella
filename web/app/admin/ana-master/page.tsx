@@ -2269,19 +2269,19 @@ function LigacoesTab() {
                     {transcript.length > 0 && (
                       <button onClick={(e) => {
                         const btn = e.currentTarget
+                        const icon = btn.querySelector('svg')
                         const text = transcript.map(m => `${(m.role === 'assistant' || m.role === 'ana') ? 'ANA' : 'Lead'}: ${m.text}`).join('\n')
                         const feedback = (ok: boolean) => {
-                          btn.textContent = ok ? '✓ Copiado!' : '✗ Erro'
-                          btn.style.color = ok ? '#4ADE80' : '#F87171'
-                          setTimeout(() => { btn.textContent = 'Copiar'; btn.style.color = '' }, 1800)
+                          if (icon) icon.style.color = ok ? '#4ADE80' : '#F87171'
+                          setTimeout(() => { if (icon) icon.style.color = '' }, 1800)
                         }
                         if ((navigator as any).share) {
                           ;(navigator as any).share({ text }).then(() => feedback(true)).catch(() => feedback(false))
                         } else if (navigator.clipboard) {
                           navigator.clipboard.writeText(text).then(() => feedback(true)).catch(() => feedback(false))
                         } else { feedback(false) }
-                      }} style={{ marginLeft: 'auto', padding: '3px 10px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.textFaint, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Copy style={{ width: 11, height: 11 }} /> Copiar
+                      }} style={{ marginLeft: 'auto', padding: '6px', borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.textFaint, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                        <Copy style={{ width: 14, height: 14 }} />
                       </button>
                     )}
                   </div>
@@ -3390,11 +3390,11 @@ function SessoesInlineTab() {
                         {detailTranscript.length > 0 && (
                           <button onClick={(e) => {
                             const btn = e.currentTarget
+                            const icon = btn.querySelector('svg')
                             const text = detailTranscript.map((t: any) => `${t.role === 'ana' ? 'ANA' : t.role === 'tool' ? '[ferramenta]' : t.role === 'system' ? '[sistema]' : 'VOCÊ'}: ${t.text}`).join('\n')
                             const feedback = (ok: boolean) => {
-                              btn.textContent = ok ? '✓ Copiado!' : '✗ Erro'
-                              btn.style.color = ok ? '#4ADE80' : '#F87171'
-                              setTimeout(() => { btn.textContent = 'Copiar transcrição'; btn.style.color = '' }, 1800)
+                              if (icon) icon.style.color = ok ? '#4ADE80' : '#F87171'
+                              setTimeout(() => { if (icon) icon.style.color = '' }, 1800)
                             }
                             if ((navigator as any).share) {
                               ;(navigator as any).share({ text }).then(() => feedback(true)).catch(() => feedback(false))
@@ -3402,8 +3402,8 @@ function SessoesInlineTab() {
                               navigator.clipboard.writeText(text).then(() => feedback(true)).catch(() => feedback(false))
                             } else { feedback(false) }
                           }}
-                            style={{ fontSize: 10, color: '#A1A1AA', border: '1px solid #3A3A3C', borderRadius: 6, padding: '3px 8px', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            Copiar transcrição
+                            style={{ border: '1px solid #3A3A3C', borderRadius: 6, padding: '5px 6px', background: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#A1A1AA' }}>
+                            <Copy style={{ width: 13, height: 13 }} />
                           </button>
                         )}
                       </div>
