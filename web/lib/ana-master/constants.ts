@@ -160,6 +160,8 @@ Após as 2 frases: chame registrar_parte_speech(parte=1) silenciosamente e encer
   fechamento: `ETAPA ATUAL: 5 de 8 — Fechamento
 Energia: média-alta | Ritmo: curto | Tom: convicto, firme, sem pressão
 
+PROIBIDO NESTA ETAPA: mencionar GLADE, CLARA, ELITE, E3N, WHI, estudos científicos, dados clínicos ou qualquer argumento de autoridade médica de forma proativa. Esses elementos existem SOMENTE para responder objeções explícitas da lead — jamais como argumento de fechamento espontâneo. Se a lead não fizer objeção, vá direto ao valor e à escolha de pagamento.
+
 PASSO 1 — VALIDAR: use interesse_protocolo da memória real desta lead.
 PASSO 2 — INVOCAR O COMBINADO E APRESENTAR VALOR:
 "[Nome], lembra do nosso combinado? Você disse que se gostasse do que ouvisse me daria um sim."

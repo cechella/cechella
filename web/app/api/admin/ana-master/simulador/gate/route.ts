@@ -10,6 +10,34 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
+const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text'
+const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
+const APP_URL = 'https://www.hormoneecosystem.com'
+
+async function zapiSend(phone: string, message: string) {
+  const digits = String(phone).replace(/\D/g, '')
+  const normalized = digits.startsWith('55') ? digits : `55${digits}`
+  try {
+    await fetch(ZAPI_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+      body: JSON.stringify({ phone: normalized, message }),
+    })
+  } catch {}
+}
+
+async function getOrCreateReferidosToken(telefone: string, callSid: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${APP_URL}/api/admin/ana-master/simulador/referidos`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ telefone, callSid }),
+    })
+    const data = await res.json()
+    return data.token ?? null
+  } catch { return null }
+}
+
 async function getMemories(callSid: string): Promise<Record<string, unknown>> {
   const { data } = await supabase.from('ana_calls').select('memories').eq('call_sid', callSid).single()
   return (data?.memories as Record<string, unknown>) ?? {}
@@ -183,11 +211,42 @@ export async function POST(req: NextRequest) {
       await supabase.from('ana_calls').update({ memories: mem }).eq('call_sid', callSid)
     }
 
+    // Post-transition: WhatsApp sends
+    const { data: callData } = await supabase.from('ana_calls').select('telefone, memories').eq('call_sid', callSid).single()
+    const leadTelefone = (callData?.telefone as string) || telefone || ''
+    const leadMem = ((callData?.memories ?? {}) as Record<string, unknown>)
+
+    if (gateId === 'GATE_FECHAMENTO' && leadTelefone) {
+      const forma = String(ev.forma_pagamento_escolhida || leadMem.forma_pagamento_escolhida || 'pix').toLowerCase()
+      if (forma === 'pix') {
+        await zapiSend(leadTelefone,
+          `💳 *Pagamento via PIX*\n\nAdriana, aqui está seu link de pagamento seguro:\n\n👉 ${APP_URL}/pagamento/pix?telefone=${encodeURIComponent(leadTelefone)}\n\n🔒 Ambiente 100% seguro. Após o PIX, me avise aqui! 🎯`
+        )
+      } else {
+        await zapiSend(leadTelefone,
+          `💳 *Pagamento via Cartão*\n\nAqui está seu link de pagamento seguro 👇\n\n👉 ${APP_URL}/pagamento/cartao?telefone=${encodeURIComponent(leadTelefone)}\n\n🔒 Ambiente 100% seguro — Mercado Pago`
+        )
+      }
+    }
+
+    if (gateId === 'GATE_PAGAMENTO' && leadTelefone) {
+      const token = await getOrCreateReferidosToken(leadTelefone, callSid)
+      if (token) {
+        const link = `${APP_URL}/indicar/${token}`
+        // Save token to memories
+        const mem = ((callData?.memories ?? {}) as Record<string, unknown>)
+        mem.token_indicacao = token
+        await supabase.from('ana_calls').update({ memories: mem }).eq('call_sid', callSid)
+        await zapiSend(leadTelefone,
+          `✨ *Seu link especial de indicações chegou!* 💜\n\n👉 ${link}\n\nCompartilhe com suas amigas e ganhe benefícios especiais! 🎁`
+        )
+      }
+    }
+
     // Post-transition: update leads table for GANHO
     if (gateId === 'GATE_VALIDACAO') {
-      const { data: callData } = await supabase.from('ana_calls').select('telefone').eq('call_sid', callSid).single()
-      if (callData?.telefone) {
-        const t = callData.telefone as string
+      if (leadTelefone) {
+        const t = leadTelefone
         await supabase
           .from('leads')
           .update({ etapa: 'ganho', etapa_agente: 8, updated_at: new Date().toISOString() })
