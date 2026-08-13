@@ -165,7 +165,7 @@ function SimuladorInner() {
   const searchParams = useSearchParams()
 
   // ── State ──────────────────────────────────────────────────────────────────
-  const [telefone, setTelefone] = useState('')
+  const [telefone, setTelefone] = useState('5548988416899')
   const [status, setStatus] = useState<SessionStatus>('idle')
   const [currentStage, setCurrentStage] = useState('apresentacao')
   const [speechProgress, setSpeechProgress] = useState<SpeechProgress>(initialSpeechProgress())
