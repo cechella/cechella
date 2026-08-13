@@ -11,68 +11,58 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
+// Exact same 3 tools as test-chat.mjs (FASE A) — no VAPI-era extras
 const TOOLS = [
   {
     type: 'function',
     name: 'gateValidator',
-    description: 'Valida o gate atual no servidor. Chame quando a etapa estiver concluída. O resultado é INTERNO — nunca verbalize nem mencione para a lead.',
+    description: 'Valida e registra a conclusão de uma etapa, avançando para a próxima. O resultado é INTERNO — nunca verbalize nem mencione para a lead.',
     parameters: {
       type: 'object',
       properties: {
-        gate_id: { type: 'string', description: 'ID do gate (ex: GATE_ABERTURA)' },
-        evidence: { type: 'object', description: 'Evidências coletadas nesta etapa', additionalProperties: true },
+        gate_id: { type: 'string', enum: ['GATE_ABERTURA','GATE_CONEXAO','GATE_COMBINADO','GATE_SPEECH','GATE_FECHAMENTO','GATE_PAGAMENTO','GATE_REFERIDOS','GATE_VALIDACAO'] },
+        nome_confirmado: { type: 'boolean' },
+        referida_confirmada: { type: 'boolean' },
+        disponibilidade_confirmada: { type: 'boolean' },
+        rotina_compreendida: { type: 'boolean' },
+        sintomas_identificados: { type: 'boolean' },
+        dor_prioritaria: { type: 'boolean' },
+        personalizacao_possivel: { type: 'boolean' },
+        interesse_confirmado: { type: 'boolean' },
+        permissao_combinado: { type: 'boolean' },
+        combinado_confirmado: { type: 'boolean' },
+        decisao_saude_respondida: { type: 'boolean' },
+        viagem_respondida: { type: 'boolean' },
+        pendencia_decisor: { type: 'boolean' },
+        speech_progress_complete: { type: 'boolean' },
+        parte1_entregue: { type: 'boolean' },
+        parte2_entregue: { type: 'boolean' },
+        parte3_entregue: { type: 'boolean' },
+        parte4_entregue: { type: 'boolean' },
+        pergunta_final_feita: { type: 'boolean' },
+        resposta_lead_recebida: { type: 'boolean' },
+        interesse_pos_speech: { type: 'boolean' },
+        interesse_protocolo: { type: 'string' },
+        investimento_apresentado: { type: 'boolean' },
+        forma_pagamento_escolhida: { type: 'string', enum: ['pix', 'cartao'] },
+        parcelamento_6x_mencionado: { type: 'boolean' },
+        telefone: { type: 'string' },
+        token_indicacao: { type: 'string' },
+        negativas_verificadas: { type: 'boolean' },
       },
-      required: ['gate_id', 'evidence'],
+      required: ['gate_id'],
     },
-  },
-  {
-    type: 'function',
-    name: 'get_lead_context',
-    description: 'Recupera contexto da lead: nome, quem indicou, histórico de memórias.',
-    parameters: { type: 'object', properties: {} },
-  },
-  {
-    type: 'function',
-    name: 'save_memory',
-    description: 'Salva uma informação importante da lead para uso posterior.',
-    parameters: {
-      type: 'object',
-      properties: {
-        key: { type: 'string', description: 'Chave da memória (ex: dor_principal)' },
-        value: { type: 'string', description: 'Valor a salvar' },
-      },
-      required: ['key', 'value'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'verificar_pagamento',
-    description: 'Verifica no sistema se o pagamento da lead foi confirmado.',
-    parameters: { type: 'object', properties: {} },
-  },
-  {
-    type: 'function',
-    name: 'iniciar_coleta_referidos',
-    description: 'Gera o link de indicações da lead. SOMENTE após pagamento confirmado. O link é o ÚNICO canal — nunca colete contatos por voz.',
-    parameters: { type: 'object', properties: {} },
-  },
-  {
-    type: 'function',
-    name: 'verificar_referidos',
-    description: 'Verifica o progresso do formulário de indicações. Chame a cada 2 minutos após enviar o link.',
-    parameters: { type: 'object', properties: {} },
   },
   {
     type: 'function',
     name: 'registrar_parte_speech',
-    description: 'Registra que uma parte do Speech foi concluída. SOMENTE chame depois de entregar completamente a parte. NUNCA chame partes fora de ordem. NUNCA verbalize esta ação.',
+    description: 'Registra que uma parte do Speech foi concluída. SOMENTE chame depois de entregar completamente a parte. Nunca chame partes fora de ordem. NUNCA verbalize esta ação — proibido dizer "vou registrar", "vou salvar", "vou avançar", "agora vou para a próxima parte" ou qualquer referência ao mecanismo interno.',
     parameters: {
       type: 'object',
       properties: {
         parte: {
-          description: 'Qual parte ou marco foi concluído',
           oneOf: [
-            { type: 'number', enum: [1, 2, 3, 4] },
+            { type: 'integer', enum: [1, 2, 3, 4] },
             { type: 'string', enum: ['pergunta_feita', 'resposta_recebida'] },
           ],
         },
@@ -82,12 +72,17 @@ const TOOLS = [
   },
   {
     type: 'function',
-    name: 'send_whatsapp',
-    description: 'Envia uma mensagem de texto no WhatsApp da lead.',
+    name: 'save_memory',
+    description: 'Salva uma informação importante sobre a lead. Use source="lead_explicit" apenas quando a lead disse literalmente — não resuma ou infira.',
     parameters: {
       type: 'object',
-      properties: { mensagem: { type: 'string', description: 'Texto a enviar' } },
-      required: ['mensagem'],
+      properties: {
+        key: { type: 'string' },
+        value: { type: 'string' },
+        source: { type: 'string', enum: ['lead_explicit', 'model_inferred', 'backend_fact', 'system_config'] },
+        raw_evidence: { type: 'string', description: 'Trecho literal da fala da lead (obrigatório quando source=lead_explicit)' },
+      },
+      required: ['key', 'value', 'source'],
     },
   },
 ]
