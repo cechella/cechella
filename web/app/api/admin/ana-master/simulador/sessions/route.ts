@@ -27,13 +27,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ session: data ?? null })
   }
 
-  // Filter at DB level + use range() to bypass PostgREST db-max-rows cap
+  // Filter at DB level, explicit limit to ensure all sim-browser rows are fetched
   const { data } = await supabase
     .from('ana_calls')
     .select('call_sid, memories, created_at, updated_at, stage')
     .like('call_sid', 'sim-browser-%')
     .order('created_at', { ascending: false })
-    .range(0, 999)
+    .limit(500)
 
   const totalRaw = (data ?? []).length
   const firstCallSids = (data ?? []).slice(0, 5).map((r: any) => r.call_sid)
