@@ -3225,23 +3225,32 @@ function SessoesInlineTab() {
   const [detail, setDetail] = useState<any>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
   const [copiedTranscript, setCopiedTranscript] = useState<string|null>(null)
+  const [debugInfo, setDebugInfo] = useState<string>('')
 
   const load = useCallback(async () => {
     setLoading(true)
+    setDebugInfo('buscando...')
     try {
-      const r = await fetch(`/api/admin/ana-master/simulador/sessions?_t=${Date.now()}`, { cache: 'no-store' })
+      const url = `/api/admin/ana-master/simulador/sessions?_t=${Date.now()}`
+      const r = await fetch(url, { cache: 'no-store' })
+      if (!r.ok) { setDebugInfo(`erro HTTP ${r.status}`); setLoading(false); return }
       const data = await r.json()
       const raw = data.sessions ?? []
+      // Sort: sessions with updatedAt first, then by createdAt for 0-gate sessions
       raw.sort((a: any, b: any) => {
         const ta = a.updatedAt ?? a.createdAt
         const tb = b.updatedAt ?? b.createdAt
         if (!ta && !tb) return 0
-        if (!ta) return 1   // nulls last
+        if (!ta) return 1
         if (!tb) return -1
         return new Date(tb).getTime() - new Date(ta).getTime()
       })
+      const newest = raw[0] ? (raw[0].updatedAt ?? raw[0].createdAt ?? '—') : '—'
+      setDebugInfo(`API retornou ${raw.length} sessões · mais recente: ${newest?.slice(11,16) ?? '—'}`)
       setSessions(raw)
-    } catch {}
+    } catch (e: any) {
+      setDebugInfo(`erro: ${e?.message ?? 'desconhecido'}`)
+    }
     setLoading(false)
   }, [])
 
@@ -3270,7 +3279,10 @@ function SessoesInlineTab() {
           <p style={{ color: '#fff', fontWeight: 700, fontSize: 15, margin: 0 }}>Sessões gravadas</p>
           <p style={{ color: '#52525B', fontSize: 12, margin: '2px 0 0' }}>Transcrição + áudio + checkpoints por gate</p>
         </div>
-        <button onClick={load} style={{ background: '#1C1C1E', border: '1px solid #3A3A3C', borderRadius: 8, padding: '6px 14px', color: '#9CA3AF', fontSize: 12, cursor: 'pointer' }}>↻ Atualizar</button>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <button onClick={load} style={{ background: '#1C1C1E', border: '1px solid #3A3A3C', borderRadius: 8, padding: '6px 14px', color: '#9CA3AF', fontSize: 12, cursor: 'pointer' }}>↻ Atualizar</button>
+          {debugInfo && <span style={{ fontSize: 10, color: '#52525B', fontFamily: 'monospace' }}>{debugInfo}</span>}
+        </div>
       </div>
 
       {loading && <p style={{ color: '#52525B', textAlign: 'center', padding: 40, fontSize: 13 }}>Carregando sessões...</p>}
