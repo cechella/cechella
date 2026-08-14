@@ -57,6 +57,7 @@ type LeadTurnDisposition =
   | 'BACKCHANNEL'
   | 'ANSWER'
   | 'ANSWER_AMBIGUOUS'
+  | 'GENERIC_POSITIVE_RESPONSE'
   | 'CONTINUE'
   | 'QUESTION'
   | 'CONFUSION'
@@ -120,12 +121,14 @@ const GATE_LABELS: Record<string, string> = {
 }
 const DISPOSITION_LABELS: Record<LeadTurnDisposition, string> = {
   BACKCHANNEL: 'Backchannel', ANSWER: 'Resposta', ANSWER_AMBIGUOUS: 'Resp. Ambígua',
+  GENERIC_POSITIVE_RESPONSE: 'Resp. Genérica',
   CONTINUE: 'Continuar', QUESTION: 'Pergunta',
   CONFUSION: 'Confusão', INTERRUPTION: 'Interrupção', OBJECTION: 'Objeção',
   FINAL_INTEREST_RESPONSE: 'Resp. Final', UNKNOWN: 'Desconhecido',
 }
 const DISPOSITION_COLORS: Record<LeadTurnDisposition, string> = {
   BACKCHANNEL: '#52525E', ANSWER: '#34D399', ANSWER_AMBIGUOUS: '#F59E0B',
+  GENERIC_POSITIVE_RESPONSE: '#FB923C',
   CONTINUE: '#34D399', QUESTION: '#60A5FA',
   CONFUSION: '#F59E0B', INTERRUPTION: '#F87171', OBJECTION: '#EF4444',
   FINAL_INTEREST_RESPONSE: '#A78BFA', UNKNOWN: '#3F3F46',
@@ -197,10 +200,14 @@ function classifyLeadTurn(
         if (words >= 2) return 'ANSWER'
         return 'BACKCHANNEL'
 
-      case 'ANSWER_OPEN':
+      case 'ANSWER_OPEN': {
         if (isPureBackchannel) return 'BACKCHANNEL'
+        // In speech stage: generic positives without specific content need aprofundamento
+        const isGenericPositive = /^(gostei de tudo|adorei|muito bom|ótimo|foi ótimo|foi muito bom|achei ótimo|achei muito bom|tudo|gostei|amei|perfeito|incrível|fantástico|maravilhoso|legal|que bom|tá bom|ta bom|bom demais)$/i.test(t)
+        if (stage === 'speech' && isGenericPositive) return 'GENERIC_POSITIVE_RESPONSE'
         if (words >= 2) return 'ANSWER'
         return 'BACKCHANNEL'
+      }
 
       case 'ANSWER_CHOICE': {
         const hasPix = /pix/i.test(t)
@@ -698,6 +705,19 @@ function SimuladorInner() {
         break
       }
 
+      case 'GENERIC_POSITIVE_RESPONSE': {
+        // In speech awaiting_final: do NOT clear expectation — model must aprofundar first
+        // Outside speech: treat as ANSWER (generic positives are valid confirmations elsewhere)
+        if (stage === 'speech') {
+          logTimeline('GENERIC_POSITIVE_BLOCKED', 'speech awaiting_final — aprofundamento required')
+          // Leave expectation active
+        } else {
+          if (exp.waiting) expectationRef.current = resetExpectation()
+          logTimeline('GENERIC_POSITIVE_AS_ANSWER', `stage=${stage}`)
+        }
+        break
+      }
+
       case 'UNKNOWN':
         // Leave expectation active — wait for clearer signal
         break
@@ -705,7 +725,7 @@ function SimuladorInner() {
 
     // For non-blocking dispositions during WAITING_LEAD in speech, let ANA continue
     if (stage === 'speech' && sp.state === 'WAITING_LEAD' && sp.waiting_for_lead &&
-        disposition !== 'BACKCHANNEL' && disposition !== 'QUESTION' && disposition !== 'CONFUSION') {
+        disposition !== 'BACKCHANNEL' && disposition !== 'QUESTION' && disposition !== 'CONFUSION' && disposition !== 'GENERIC_POSITIVE_RESPONSE') {
       const newSp = { ...sp, waiting_for_lead: false, parte_em_execucao: typeof sp.parte_atual === 'number' ? sp.parte_atual : undefined }
       setSpeechProgress(newSp); speechRef.current = newSp
       updateInstructions(buildInstructions('speech', sp.parte_atual))
