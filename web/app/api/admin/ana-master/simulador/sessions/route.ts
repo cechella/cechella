@@ -28,11 +28,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ session: data ?? null })
   }
 
-  // Direct table query — same pattern as /api/admin/ana-calls which reliably returns all rows
+  // Fetch all recent rows without PostgREST LIKE filter — filter in JS to avoid any PostgREST quirks
+  // (Ligações uses the same unfiltered pattern and reliably shows all rows)
   const { data, error } = await supabase
     .from('ana_calls')
     .select('call_sid, created_at, updated_at, stage, memories')
-    .like('call_sid', 'sim-browser-%')
     .order('created_at', { ascending: false })
     .limit(500)
 
@@ -40,10 +40,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const totalRaw = (data ?? []).length
-  const firstCallSids = (data ?? []).slice(0, 5).map((r: any) => r.call_sid)
+  const totalRaw = (data ?? []).filter((r: any) => r.call_sid?.startsWith('sim-browser-')).length
+  const firstCallSids = (data ?? []).filter((r: any) => r.call_sid?.startsWith('sim-browser-')).slice(0, 5).map((r: any) => r.call_sid)
 
-  const filtered = data ?? []
+  const filtered = (data ?? []).filter((r: any) => r.call_sid?.startsWith('sim-browser-'))
 
   const sessions = filtered.map((row: any) => {
     const mem = (row.memories ?? {}) as Record<string, any>
