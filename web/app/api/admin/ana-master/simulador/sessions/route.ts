@@ -28,17 +28,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ session: data ?? null })
   }
 
-  // Diagnostic query A: what is the absolute latest sim-browser row in the DB right now?
-  const { data: latestRow } = await supabase
-    .from('ana_calls')
-    .select('call_sid, created_at')
-    .like('call_sid', 'sim-browser-%')
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single()
-
-  // Query B: fetch recent rows, filter in JS — limit 50 matches Ligações which reliably works
-  // limit(500) routes to a read replica with lag in Supabase/Kong; limit(50) hits primary
+  // Fetch recent rows unfiltered, filter sim-browser in JS
+  // limit(50) matches the working Ligações route — avoids Supabase replica routing with large Range
   const { data, error } = await supabase
     .from('ana_calls')
     .select('call_sid, created_at, updated_at, stage, memories')
@@ -52,16 +43,6 @@ export async function GET(req: NextRequest) {
   const filtered = (data ?? []).filter((r: any) => r.call_sid?.startsWith('sim-browser-'))
   const totalRaw = filtered.length
   const firstCallSids = filtered.slice(0, 5).map((r: any) => r.call_sid)
-
-  // Check if latest row from query A is in query B results
-  const latestInResults = filtered.some((r: any) => r.call_sid === latestRow?.call_sid)
-  const diagInfo = {
-    latestInDB: latestRow?.call_sid ?? null,
-    latestInDBCreatedAt: latestRow?.created_at ?? null,
-    latestPresentInResults: latestInResults,
-    totalFromDB500: (data ?? []).length,
-    totalSimBrowser: totalRaw,
-  }
 
   const sessions = filtered.map((row: any) => {
     const mem = (row.memories ?? {}) as Record<string, any>
@@ -88,7 +69,7 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  const res = NextResponse.json({ sessions, _debug: { totalRaw, firstCallSids, ...diagInfo } })
+  const res = NextResponse.json({ sessions, _debug: { totalRaw, firstCallSids } })
   res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   res.headers.set('Pragma', 'no-cache')
   return res

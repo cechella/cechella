@@ -3254,7 +3254,12 @@ function SessoesInlineTab() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => {
+    load()
+    // Auto-refresh every 8s to catch new sessions despite Supabase replica lag
+    const interval = setInterval(load, 8000)
+    return () => clearInterval(interval)
+  }, [load])
 
   async function expand(callSid: string) {
     if (expanded === callSid) { setExpanded(null); setDetail(null); return }
