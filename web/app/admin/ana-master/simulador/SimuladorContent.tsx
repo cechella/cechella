@@ -38,8 +38,25 @@ interface AnaDeliveryState {
 }
 
 // FASE 1 — LeadTurnDisposition: classifyLeadTurn() output
+// Conversation Intelligence v1 — ConversationExpectation
+type ExpectedResponseType =
+  | 'ANSWER_YES_NO'
+  | 'ANSWER_CHOICE'
+  | 'ANSWER_OPEN'
+  | 'ANSWER_CONFIRMATION'
+  | 'NONE'
+
+interface ConversationExpectation {
+  waiting: boolean
+  expected_type: ExpectedResponseType
+  originating_stage: string
+  originating_turn_id: string
+}
+
 type LeadTurnDisposition =
   | 'BACKCHANNEL'
+  | 'ANSWER'
+  | 'ANSWER_AMBIGUOUS'
   | 'CONTINUE'
   | 'QUESTION'
   | 'CONFUSION'
@@ -81,6 +98,7 @@ type SessionStatus = 'idle' | 'connecting' | 'active' | 'error' | 'ended'
 const TOOL_RESPONSE_POLICY: Record<string, 'silent' | 'controller_decides'> = {
   save_memory:              'silent',
   send_whatsapp:            'silent',
+  set_expectation:          'silent',
   gateValidator:            'controller_decides',
   registrar_parte_speech:   'controller_decides',
   verificar_pagamento:      'controller_decides',
@@ -101,14 +119,31 @@ const GATE_LABELS: Record<string, string> = {
   GATE_REFERIDOS: 'Referidos', GATE_VALIDACAO: 'Validação',
 }
 const DISPOSITION_LABELS: Record<LeadTurnDisposition, string> = {
-  BACKCHANNEL: 'Backchannel', CONTINUE: 'Continuar', QUESTION: 'Pergunta',
+  BACKCHANNEL: 'Backchannel', ANSWER: 'Resposta', ANSWER_AMBIGUOUS: 'Resp. Ambígua',
+  CONTINUE: 'Continuar', QUESTION: 'Pergunta',
   CONFUSION: 'Confusão', INTERRUPTION: 'Interrupção', OBJECTION: 'Objeção',
   FINAL_INTEREST_RESPONSE: 'Resp. Final', UNKNOWN: 'Desconhecido',
 }
 const DISPOSITION_COLORS: Record<LeadTurnDisposition, string> = {
-  BACKCHANNEL: '#52525E', CONTINUE: '#34D399', QUESTION: '#60A5FA',
+  BACKCHANNEL: '#52525E', ANSWER: '#34D399', ANSWER_AMBIGUOUS: '#F59E0B',
+  CONTINUE: '#34D399', QUESTION: '#60A5FA',
   CONFUSION: '#F59E0B', INTERRUPTION: '#F87171', OBJECTION: '#EF4444',
   FINAL_INTEREST_RESPONSE: '#A78BFA', UNKNOWN: '#3F3F46',
+}
+
+// Conversation Intelligence v1 — valid ExpectedResponseType by stage
+const VALID_EXPECTATION_TYPES_BY_STAGE: Record<string, ExpectedResponseType[]> = {
+  apresentacao: ['ANSWER_OPEN', 'ANSWER_YES_NO'],
+  conexao:      ['ANSWER_OPEN', 'ANSWER_YES_NO'],
+  combinado:    ['ANSWER_YES_NO', 'ANSWER_CONFIRMATION'],
+  fechamento:   ['ANSWER_CHOICE', 'ANSWER_YES_NO'],
+  pagamento:    ['ANSWER_OPEN', 'ANSWER_YES_NO'],
+  referidos:    ['ANSWER_OPEN', 'ANSWER_YES_NO', 'ANSWER_CONFIRMATION'],
+  validacao:    ['ANSWER_OPEN', 'ANSWER_YES_NO'],
+}
+
+function resetExpectation(): ConversationExpectation {
+  return { waiting: false, expected_type: 'NONE', originating_stage: '', originating_turn_id: '' }
 }
 
 // ── Pure helpers ───────────────────────────────────────────────────────────────
@@ -125,39 +160,71 @@ function initialDelivery(responseId = ''): AnaDeliveryState {
   return { responseId, generated: true, audio_started: false, interrupted: false, truncated: false, response_status: null, delivery_complete: false }
 }
 
-// FASE 1 — classifyLeadTurn: heuristic classifier, no API call (latency-sensitive)
+// Conversation Intelligence v1 — classifyLeadTurn: context-aware, no API call (latency-sensitive)
 function classifyLeadTurn(
   text: string,
   stage: string,
   sp: SpeechProgress,
-  wasInterrupted: boolean
+  wasInterrupted: boolean,
+  expectation: ConversationExpectation
 ): LeadTurnDisposition {
   const t = text.toLowerCase().trim()
   const words = t.split(/\s+/).filter(Boolean).length
 
-  // Short affirmatives = backchannel
+  // Always-on: detected regardless of expectation state
+  if (wasInterrupted) return 'INTERRUPTION'
+  if (/(é caro|muito caro|não tenho (dinheiro|grana)|sem dinheiro|meu marido|preciso pensar|vou pesquisar|meu médico|causa câncer|é perigoso|tenho medo|não sei se|vou esperar|não posso agora|não tem condição)/i.test(t)) return 'OBJECTION'
+  if (/não (entendi|entendo|compreendi)|pode repetir|o que (você |vc )?disse|como assim|não ficou claro|repete|repita|pode (re)?explicar/i.test(t)) return 'CONFUSION'
+
+  // Speech stage: final interest response always takes precedence
+  if (stage === 'speech' && (sp.state === 'WAITING_FINAL_RESPONSE' || sp.pergunta_final_feita)) return 'FINAL_INTEREST_RESPONSE'
+
+  // With active expectation — interpret relative to what ANA was waiting for
+  if (expectation.waiting && expectation.expected_type !== 'NONE') {
+    const isShortAffirmative = /^(sim|s|não|nao|pode|claro|ok|tá|ta|certo|combinado|exato|é isso|isso|com certeza|verdade|perfeito|pode ser|pode sim|ta bom|tá bom|confirmado|de jeito nenhum|não quero|prefiro não|prefiro nao|isso mesmo|pois é|claro que sim)$/i.test(t)
+    const isPureBackchannel = words <= 2 && /^(hm+|mm+|ah+|ã+|uhm+|uh+|é+)$/i.test(t)
+
+    switch (expectation.expected_type) {
+      case 'ANSWER_YES_NO':
+        if (isShortAffirmative) return 'ANSWER'
+        if (isPureBackchannel) return 'BACKCHANNEL'
+        if (words >= 2) return 'ANSWER'
+        return 'BACKCHANNEL'
+
+      case 'ANSWER_CONFIRMATION':
+        if (isShortAffirmative) return 'ANSWER'
+        if (isPureBackchannel) return 'BACKCHANNEL'
+        if (words >= 2) return 'ANSWER'
+        return 'BACKCHANNEL'
+
+      case 'ANSWER_OPEN':
+        if (isPureBackchannel) return 'BACKCHANNEL'
+        if (words >= 2) return 'ANSWER'
+        return 'BACKCHANNEL'
+
+      case 'ANSWER_CHOICE': {
+        const hasPix = /pix/i.test(t)
+        const hasVistaPhonetic = /à vista|a vista|avista/i.test(t)
+        const hasAmbiguousVista = /pizzas?|biz\b|mix\b/i.test(t) && !hasPix
+        const hasCartao = /cart[aã]o|cartao|parcel|cr[eé]dito|credito|6x|seis vezes/i.test(t)
+        if (hasPix || (hasVistaPhonetic && !hasAmbiguousVista)) return 'ANSWER'
+        if (hasAmbiguousVista) return 'ANSWER_AMBIGUOUS'
+        if (hasCartao) return 'ANSWER'
+        if (isPureBackchannel) return 'BACKCHANNEL'
+        if (words >= 2) return 'ANSWER_AMBIGUOUS'
+        return 'BACKCHANNEL'
+      }
+    }
+  }
+
+  // No active expectation — original logic preserved
   if (
     words <= 4 &&
     /^(sim|s|tá|ta|ok|entendi|uhm+|mm+|ah+|é|é mesmo|certo|claro|bom|boa|legal|ótimo|pode|vai|prossiga|continue|pode sim|tá bom|tudo bem|perfeito|maravilha|certo certo|sim sim|hm+)/.test(t)
   ) return 'BACKCHANNEL'
 
-  // Explicit continue
   if (/^(continue|pode continuar|prossiga|fala mais|me conta mais|conta|fale|pode falar|vá em frente|pode ir|vai)/i.test(t)) return 'CONTINUE'
-
-  // Confusion
-  if (/não (entendi|entendo|compreendi)|pode repetir|o que (você |vc )?disse|como assim|não ficou claro|repete|repita|pode (re)?explicar/i.test(t)) return 'CONFUSION'
-
-  // Question
   if (/\?/.test(text) || /^(o que|quando|como|onde|por qu[eê]|quanto|qual|quais|quem|me diga|me conta|pode (me )?explicar|e se|mas e|mas (o que|como|quando)|e (o que|como|quando)|qual o|quanto (é|custa|fica))/i.test(t)) return 'QUESTION'
-
-  // Objection
-  if (/(é caro|muito caro|não tenho (dinheiro|grana)|sem dinheiro|meu marido|preciso pensar|vou pesquisar|meu médico|causa câncer|é perigoso|tenho medo|não sei se|vou esperar|não posso agora|não tem condição)/i.test(t)) return 'OBJECTION'
-
-  // Final interest response — when we're waiting for the lead's answer to the final question
-  if (stage === 'speech' && (sp.state === 'WAITING_FINAL_RESPONSE' || sp.pergunta_final_feita)) return 'FINAL_INTEREST_RESPONSE'
-
-  // Was an interruption (VAD-triggered barge-in confirmed)
-  if (wasInterrupted) return 'INTERRUPTION'
 
   return 'UNKNOWN'
 }
@@ -226,6 +293,8 @@ function SimuladorInner() {
   // FASE 1 — delivery tracking
   const currentDeliveryRef = useRef<AnaDeliveryState>(initialDelivery())
   const wasInterruptedRef = useRef(false)
+  // Conversation Intelligence v1 — ConversationExpectation
+  const expectationRef = useRef<ConversationExpectation>(resetExpectation())
   // FASE 2 — latency tracking
   const speechStoppedAtRef = useRef<number | null>(null)
   const metricsRef = useRef<LatencyMetrics>({ lastResponseMs: null, interruptionCount: 0, turnCount: 0 })
@@ -448,10 +517,25 @@ function SimuladorInner() {
       case 'send_whatsapp':
         addTranscript('tool', `📱 WhatsApp (simulador — não enviado): ${args.mensagem}`)
         return 'Mensagem enviada.'
+      case 'set_expectation': {
+        // Conversation Intelligence v1 — declarative: model declares, controller validates
+        const { expected_type, turn_id } = args as { expected_type: ExpectedResponseType; turn_id?: string }
+        const stage = stageRef.current
+        if (stage === 'speech') return JSON.stringify({ rejected: true, reason: 'speech stage controlled by SpeechProgress' })
+        const validTypes = VALID_EXPECTATION_TYPES_BY_STAGE[stage] ?? []
+        if (!validTypes.includes(expected_type)) return JSON.stringify({ rejected: true, reason: `${expected_type} invalid for stage=${stage}` })
+        expectationRef.current = {
+          waiting: true, expected_type,
+          originating_stage: stage,
+          originating_turn_id: turn_id ?? `auto-${Date.now()}`,
+        }
+        logTimeline('EXPECTATION_SET', `type=${expected_type} stage=${stage}`)
+        return JSON.stringify({ registered: true, expected_type, stage })
+      }
       default:
         return JSON.stringify({ error: `Tool desconhecida: ${name}` })
     }
-  }, [memories, addTranscript, updateInstructions, saveCheckpoint])
+  }, [memories, addTranscript, updateInstructions, saveCheckpoint, logTimeline])
 
   // FASE 1 — SpeechProgress guard: só avança se delivery_complete === true
   function handleRegistrarParteSpeech(parte: number | string): string {
@@ -497,10 +581,11 @@ function SimuladorInner() {
     return JSON.stringify({ error: `parte inválida: ${parte}` })
   }
 
-  // FASE 1 — controller: decide what to do with each lead turn disposition
+  // Conversation Intelligence v1 — controller decides turn-by-turn based on expectation + disposition
   const handleLeadTurnDisposition = useCallback((text: string, disposition: LeadTurnDisposition) => {
     const sp = speechRef.current
     const stage = stageRef.current
+    const exp = expectationRef.current
 
     setLastDisposition(disposition)
     setMetrics(prev => {
@@ -509,61 +594,112 @@ function SimuladorInner() {
     })
 
     switch (disposition) {
-      case 'BACKCHANNEL':
-        // Lead acknowledged — don't advance SpeechProgress if we're still waiting for a real response
-        // In WAITING_LEAD state, backchannels don't count as the lead's substantive turn
-        if (sp.state === 'WAITING_LEAD' && sp.waiting_for_lead) {
-          // Stay in WAITING_LEAD — ANA should prompt again or continue naturally
-          return
+      case 'ANSWER': {
+        // Lead satisfied the pending expectation — clear it and let ANA continue
+        if (exp.waiting) {
+          expectationRef.current = resetExpectation()
+          logTimeline('EXPECTATION_CLEARED', 'ANSWER received')
         }
-        // Otherwise treat as implicit continue
-        break
-
-      case 'CONTINUE':
-        // Lead explicitly asks to continue — advance if we were WAITING_LEAD
-        if (sp.state === 'WAITING_LEAD' && sp.waiting_for_lead && stage === 'speech') {
+        // Advance SpeechProgress if WAITING_LEAD in speech
+        if (stage === 'speech' && sp.state === 'WAITING_LEAD' && sp.waiting_for_lead) {
           const newSp = { ...sp, waiting_for_lead: false, parte_em_execucao: typeof sp.parte_atual === 'number' ? sp.parte_atual : undefined }
           setSpeechProgress(newSp); speechRef.current = newSp
-          saveSpeechState(newSp, 'lead_continue')  // FASE 2B
-          const inst = buildInstructions('speech', sp.parte_atual)
-          updateInstructions(inst)
+          saveSpeechState(newSp, 'lead_answer')
+          updateInstructions(buildInstructions('speech', sp.parte_atual))
         }
         break
+      }
 
-      case 'QUESTION':
-        // ANA answers but does NOT advance SpeechProgress — no state change
-        // Let the model handle it naturally via its instructions
+      case 'ANSWER_AMBIGUOUS': {
+        // Do NOT satisfy expectation — escalate to ANSWER_CONFIRMATION
+        logTimeline('EXPECTATION_ESCALATED', `ANSWER_AMBIGUOUS stage=${stage}`)
+        expectationRef.current = {
+          waiting: true,
+          expected_type: 'ANSWER_CONFIRMATION',
+          originating_stage: stage,
+          originating_turn_id: `confirm-${Date.now()}`,
+        }
+        updateInstructions(
+          buildInstructions(stage) +
+          '\n\nCONTEXTO IMEDIATO: A resposta da lead foi ambígua. Confirme a interpretação em até 5 palavras antes de qualquer ação. Ex: "PIX à vista, certo?" Não chame gates nem registre decisão antes da confirmação.'
+        )
         break
+      }
+
+      case 'BACKCHANNEL': {
+        // Speech WAITING_LEAD: original behavior — hold
+        if (stage === 'speech' && sp.state === 'WAITING_LEAD' && sp.waiting_for_lead) return
+        // Active expectation outside speech: lead hasn't answered — hold
+        if (exp.waiting && stage !== 'speech') {
+          logTimeline('EXPECTATION_HOLDING', `BACKCHANNEL stage=${stage} type=${exp.expected_type}`)
+          updateInstructions(
+            buildInstructions(stage) +
+            '\n\nCONTEXTO IMEDIATO: AGUARDE — a lead ainda não respondeu sua pergunta. Não avance, não reformule, não faça nova pergunta. Aguarde turno real.'
+          )
+          return
+        }
+        // No expectation — implicit continue (original behavior)
+        break
+      }
+
+      case 'CONTINUE': {
+        // Lead wants ANA to continue — clear expectation and advance if WAITING_LEAD
+        if (exp.waiting) {
+          expectationRef.current = resetExpectation()
+          logTimeline('EXPECTATION_CLEARED', 'CONTINUE received')
+        }
+        if (stage === 'speech' && sp.state === 'WAITING_LEAD' && sp.waiting_for_lead) {
+          const newSp = { ...sp, waiting_for_lead: false, parte_em_execucao: typeof sp.parte_atual === 'number' ? sp.parte_atual : undefined }
+          setSpeechProgress(newSp); speechRef.current = newSp
+          saveSpeechState(newSp, 'lead_continue')
+          updateInstructions(buildInstructions('speech', sp.parte_atual))
+        }
+        break
+      }
+
+      case 'QUESTION': {
+        // Lead asked a question — clear expectation, conversation moved on
+        if (exp.waiting) {
+          expectationRef.current = resetExpectation()
+          logTimeline('EXPECTATION_CLEARED', 'QUESTION received')
+        }
+        break
+      }
 
       case 'CONFUSION':
-        // ANA re-explains the same part — no state change, no advancement
-        // If there was a streaming part hint, ANA will stay at current parte
+        // ANA re-explains — no state change, no advancement
         break
 
       case 'INTERRUPTION': {
-        // Mark parte as interrupted — don't advance
         const m = { ...metricsRef.current, interruptionCount: metricsRef.current.interruptionCount + 1 }
         setMetrics(m); metricsRef.current = m
         if (stage === 'speech' && typeof sp.parte_atual === 'number') {
           const newSp = { ...sp, parte_em_execucao: undefined }
           setSpeechProgress(newSp); speechRef.current = newSp
-          saveSpeechState(newSp, 'parte_interrompida')  // FASE 2B
+          saveSpeechState(newSp, 'parte_interrompida')
         }
         break
       }
 
-      case 'OBJECTION':
-        // ANA handles via ISOLA instructions — no SpeechProgress change
-        // The model will use the objection handling from ANA_BASE_PROMPT
+      case 'OBJECTION': {
+        // ANA handles via ISOLA — clear expectation (conversation interrupted)
+        if (exp.waiting) {
+          expectationRef.current = resetExpectation()
+          logTimeline('EXPECTATION_CLEARED', 'OBJECTION received')
+        }
         break
+      }
 
-      case 'FINAL_INTEREST_RESPONSE':
-        // Lead gave their answer to the final question
-        // registrar_parte_speech('resposta_recebida') will be called by the model
+      case 'FINAL_INTEREST_RESPONSE': {
+        if (exp.waiting) {
+          expectationRef.current = resetExpectation()
+          logTimeline('EXPECTATION_CLEARED', 'FINAL_INTEREST_RESPONSE')
+        }
         break
+      }
 
       case 'UNKNOWN':
-        // Don't advance — wait for clearer signal
+        // Leave expectation active — wait for clearer signal
         break
     }
 
@@ -572,10 +708,9 @@ function SimuladorInner() {
         disposition !== 'BACKCHANNEL' && disposition !== 'QUESTION' && disposition !== 'CONFUSION') {
       const newSp = { ...sp, waiting_for_lead: false, parte_em_execucao: typeof sp.parte_atual === 'number' ? sp.parte_atual : undefined }
       setSpeechProgress(newSp); speechRef.current = newSp
-      const inst = buildInstructions('speech', sp.parte_atual)
-      updateInstructions(inst)
+      updateInstructions(buildInstructions('speech', sp.parte_atual))
     }
-  }, [updateInstructions, saveSpeechState])
+  }, [updateInstructions, saveSpeechState, logTimeline])
 
   // ── DataChannel message handler ────────────────────────────────────────────
 
@@ -717,7 +852,7 @@ function SimuladorInner() {
         const text = msg.transcript
         if (!text) break
         logTimeline('LEAD_TRANSCRIPTION_COMPLETED', `chars=${text.length}`)
-        const disposition = classifyLeadTurn(text, stageRef.current, speechRef.current, wasInterruptedRef.current)
+        const disposition = classifyLeadTurn(text, stageRef.current, speechRef.current, wasInterruptedRef.current, expectationRef.current)
         addTranscript('lead', text, { disposition })
         saveTranscriptTurn('lead', text)
         handleLeadTurnDisposition(text, disposition)

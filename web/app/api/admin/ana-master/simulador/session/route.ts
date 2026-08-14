@@ -72,6 +72,19 @@ const TOOLS = [
   },
   {
     type: 'function',
+    name: 'set_expectation',
+    description: 'Declare o tipo de resposta que você está aguardando da lead. Chame SILENCIOSAMENTE antes de encerrar qualquer turno em que você fizer uma pergunta. O controller validará e registrará. NUNCA verbalize esta chamada.',
+    parameters: {
+      type: 'object',
+      properties: {
+        expected_type: { type: 'string', enum: ['ANSWER_YES_NO', 'ANSWER_CHOICE', 'ANSWER_OPEN', 'ANSWER_CONFIRMATION'] },
+        turn_id: { type: 'string', description: 'Identificador único deste turno (ex: combinado_fala1, fechamento_escolha)' },
+      },
+      required: ['expected_type'],
+    },
+  },
+  {
+    type: 'function',
     name: 'save_memory',
     description: 'Salva uma informação importante sobre a lead. Use source="lead_explicit" apenas quando a lead disse literalmente — não resuma ou infira.',
     parameters: {
