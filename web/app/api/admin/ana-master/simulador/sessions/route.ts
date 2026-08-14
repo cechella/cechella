@@ -3,12 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
-
 const STAGE_LABELS: Record<string, string> = {
   apresentacao: 'Abertura', conexao: 'Conexão', combinado: 'Combinado',
   speech: 'Speech', fechamento: 'Fechamento', pagamento: 'Pagamento',
@@ -16,6 +10,13 @@ const STAGE_LABELS: Record<string, string> = {
 }
 
 export async function GET(req: NextRequest) {
+  // Create client per-request to prevent stale connection reuse in warm Vercel instances
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+
   const callSid = req.nextUrl.searchParams.get('callSid')
 
   if (callSid) {
