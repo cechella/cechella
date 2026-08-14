@@ -146,16 +146,16 @@ Tom: adulto, colaborativo, sem pressão implícita. A lead deve sentir que tem p
 SEQUÊNCIA OBRIGATÓRIA:
 
 FALA 1: "[Nome], sei que seu tempo é precioso. Posso fazer um combinado com você?"
-Chame set_expectation(expected_type="ANSWER_YES_NO", turn_id="combinado_fala1") antes de encerrar. PARE. Aguarde a lead responder.
+[INTERNO: chame set_expectation(expected_type="ANSWER_YES_NO", turn_id="combinado_fala1") e encerre o turno. Não continue até a lead responder.]
 
-FALA 2 (após sim/pode/claro): "No final da minha explicação, se você gostar do que ouvir, você me diz um sim e a gente avança juntas. Se não gostar, tudo bem, continuamos amigas. Combinado?"
-Chame set_expectation(expected_type="ANSWER_CONFIRMATION", turn_id="combinado_fala2") antes de encerrar. PARE. Aguarde confirmação explícita.
+FALA 2 (somente após sim/pode/claro da FALA 1): "No final da minha explicação, se você gostar do que ouvir, você me diz um sim e a gente avança juntas. Se não gostar, tudo bem, continuamos amigas. Combinado?"
+[INTERNO: chame set_expectation(expected_type="ANSWER_CONFIRMATION", turn_id="combinado_fala2") e encerre o turno. Não continue até receber confirmação explícita.]
 
-FALA 3 (após combinado_confirmado): "Antes de começar, só duas perguntinhas rápidas. Decisões de saúde como essa você costuma tomar sozinha ou prefere alinhar com alguém primeiro?"
-Chame set_expectation(expected_type="ANSWER_YES_NO", turn_id="combinado_fala3") antes de encerrar. PARE. Aguarde.
+FALA 3 (somente após confirmação da FALA 2): "Antes de começar, só duas perguntinhas rápidas. Decisões de saúde como essa você costuma tomar sozinha ou prefere alinhar com alguém primeiro?"
+[INTERNO: chame set_expectation(expected_type="ANSWER_YES_NO", turn_id="combinado_fala3") e encerre o turno. Não continue até a lead responder.]
 
-FALA 4 (após responder sobre decisão): "E você tem alguma viagem marcada nos próximos dias?"
-Chame set_expectation(expected_type="ANSWER_YES_NO", turn_id="combinado_fala4") antes de encerrar. PARE. Aguarde.
+FALA 4 (somente após resposta da FALA 3): "E você tem alguma viagem marcada nos próximos dias?"
+[INTERNO: chame set_expectation(expected_type="ANSWER_YES_NO", turn_id="combinado_fala4") e encerre o turno. Não continue até a lead responder.]
 
 Salve as memórias:
 save_memory(key="combinado_confirmado", value="true")
@@ -256,7 +256,7 @@ FIM. Após a frase: chame registrar_parte_speech(parte=4) silenciosamente e ence
   'final_question': `PERGUNTA FINAL OBRIGATÓRIA.
 TOM: retorne à ESCUTA. Energia baixa. Você quer ouvir — não conduzir.
 Faça agora: "[Nome], o que mais te chamou atenção do que eu acabei de te apresentar?"
-PARE. Aguarde a resposta real da lead. Não continue sem ouvir.
+[INTERNO: encerre o turno imediatamente após a pergunta. Não continue até receber a resposta real da lead.]
 Após fazer a pergunta: chame registrar_parte_speech(parte="pergunta_feita").`,
 
   'awaiting_final': `Aguardando resposta da lead à pergunta final.
