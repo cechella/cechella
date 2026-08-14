@@ -3229,7 +3229,7 @@ function SessoesInlineTab() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const r = await fetch('/api/admin/ana-master/simulador/sessions')
+      const r = await fetch(`/api/admin/ana-master/simulador/sessions?_t=${Date.now()}`, { cache: 'no-store' })
       const data = await r.json()
       const raw = data.sessions ?? []
       raw.sort((a: any, b: any) => {

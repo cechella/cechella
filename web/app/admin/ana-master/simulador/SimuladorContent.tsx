@@ -221,6 +221,7 @@ function SimuladorInner() {
   const checkpointsRef = useRef<Record<string, CheckpointData>>({})
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
+  const audioUploadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const pendingInstructionsRef = useRef<string | null>(null)
   // FASE 1 — delivery tracking
   const currentDeliveryRef = useRef<AnaDeliveryState>(initialDelivery())
@@ -796,6 +797,16 @@ function SimuladorInner() {
         audioChunksRef.current = []
         recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
         recorder.start(2000); mediaRecorderRef.current = recorder; setIsRecording(true)
+        // Periodic upload every 60s — survive Safari crashes
+        audioUploadIntervalRef.current = setInterval(() => {
+          const chunks = audioChunksRef.current
+          const sid = callSidRef.current
+          if (chunks.length === 0 || !sid) return
+          const blob = new Blob(chunks, { type: 'audio/webm' })
+          fetch(`/api/admin/ana-master/simulador/audio?callSid=${sid}`, {
+            method: 'POST', body: blob, headers: { 'Content-Type': 'audio/webm' },
+          }).catch(() => {})
+        }, 60000)
       } catch {
         // Fallback: record mic only if AudioContext fails
         try {
@@ -804,6 +815,15 @@ function SimuladorInner() {
           audioChunksRef.current = []
           recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
           recorder.start(2000); mediaRecorderRef.current = recorder; setIsRecording(true)
+          audioUploadIntervalRef.current = setInterval(() => {
+            const chunks = audioChunksRef.current
+            const sid = callSidRef.current
+            if (chunks.length === 0 || !sid) return
+            const blob = new Blob(chunks, { type: 'audio/webm' })
+            fetch(`/api/admin/ana-master/simulador/audio?callSid=${sid}`, {
+              method: 'POST', body: blob, headers: { 'Content-Type': 'audio/webm' },
+            }).catch(() => {})
+          }, 60000)
         } catch {}
       }
 
@@ -862,6 +882,11 @@ function SimuladorInner() {
   const stopSession = useCallback(() => {
     // FASE 2B — persist speech state on explicit end
     if (stageRef.current === 'speech') saveSpeechState(speechRef.current, 'session_ended')
+
+    if (audioUploadIntervalRef.current) {
+      clearInterval(audioUploadIntervalRef.current)
+      audioUploadIntervalRef.current = null
+    }
 
     const recorder = mediaRecorderRef.current
     if (recorder && recorder.state !== 'inactive') {
