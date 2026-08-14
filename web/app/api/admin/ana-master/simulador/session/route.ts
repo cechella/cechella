@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
       stage: 'apresentacao',
       status: 'active',
       gates_passed: [],
-      memories: { nome: nome ?? '', telefone: norm, sim_browser: true, profile_version: ACTIVE_PROFILE.version },
+      memories: { nome: nome ?? '', telefone: norm, sim_browser: true, profile_version: ACTIVE_PROFILE.version, human_voice_profile: 'HV-v1' },
       created_at: now,
       updated_at: now,
     })
