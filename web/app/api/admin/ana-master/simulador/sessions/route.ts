@@ -28,8 +28,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ session: data ?? null })
   }
 
-  // Use RPC to bypass PostgREST REST layer pagination quirks
-  const { data } = await supabase.rpc('get_sim_browser_sessions', { max_count: 500 })
+  // Direct table query — same pattern as /api/admin/ana-calls which reliably returns all rows
+  const { data, error } = await supabase
+    .from('ana_calls')
+    .select('call_sid, created_at, updated_at, stage, memories')
+    .like('call_sid', 'sim-browser-%')
+    .order('created_at', { ascending: false })
+    .limit(500)
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
 
   const totalRaw = (data ?? []).length
   const firstCallSids = (data ?? []).slice(0, 5).map((r: any) => r.call_sid)
