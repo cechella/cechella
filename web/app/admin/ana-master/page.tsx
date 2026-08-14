@@ -3246,7 +3246,9 @@ function SessoesInlineTab() {
         return new Date(tb).getTime() - new Date(ta).getTime()
       })
       const newest = raw[0] ? (raw[0].updatedAt ?? raw[0].createdAt ?? '—') : '—'
-      setDebugInfo(`API retornou ${raw.length} sessões · mais recente: ${newest?.slice(11,16) ?? '—'}`)
+      const totalRaw = data._debug?.totalRaw
+      const rawLabel = totalRaw != null ? ` (raw DB: ${totalRaw})` : ''
+      setDebugInfo(`API retornou ${raw.length} sessões${rawLabel} · mais recente: ${newest?.slice(11,16) ?? '—'}`)
       setSessions(raw)
     } catch (e: any) {
       setDebugInfo(`erro: ${e?.message ?? 'desconhecido'}`)

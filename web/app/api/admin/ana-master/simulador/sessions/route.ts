@@ -30,7 +30,10 @@ export async function GET(req: NextRequest) {
   const { data } = await supabase
     .from('ana_calls')
     .select('call_sid, memories, created_at, updated_at, stage')
-    .order('created_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+
+  const totalRaw = (data ?? []).length
+  const firstCallSids = (data ?? []).slice(0, 5).map((r: any) => r.call_sid)
 
   const filtered = (data ?? []).filter((row: any) =>
     typeof row.call_sid === 'string' && row.call_sid.startsWith('sim-browser-')
@@ -61,7 +64,7 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  const res = NextResponse.json({ sessions })
+  const res = NextResponse.json({ sessions, _debug: { totalRaw, firstCallSids } })
   res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   res.headers.set('Pragma', 'no-cache')
   return res
