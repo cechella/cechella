@@ -3236,16 +3236,14 @@ function SessoesInlineTab() {
       if (!r.ok) { setDebugInfo(`erro HTTP ${r.status}`); setLoading(false); return }
       const data = await r.json()
       const raw = data.sessions ?? []
-      // Sort: sessions with updatedAt first, then by createdAt for 0-gate sessions
-      raw.sort((a: any, b: any) => {
-        const ta = a.updatedAt ?? a.createdAt
-        const tb = b.updatedAt ?? b.createdAt
-        if (!ta && !tb) return 0
-        if (!ta) return 1
-        if (!tb) return -1
-        return new Date(tb).getTime() - new Date(ta).getTime()
-      })
-      const newest = raw[0] ? (raw[0].updatedAt ?? raw[0].createdAt ?? '—') : '—'
+      // Sort by max(updatedAt, createdAt) so newly-created sessions (no gates yet) still sort to top
+      const latestTs = (s: any) => {
+        const a = s.updatedAt ? new Date(s.updatedAt).getTime() : 0
+        const b = s.createdAt ? new Date(s.createdAt).getTime() : 0
+        return Math.max(a, b)
+      }
+      raw.sort((a: any, b: any) => latestTs(b) - latestTs(a))
+      const newest = raw[0] ? (raw[0].createdAt ?? raw[0].updatedAt ?? '—') : '—'
       const totalRaw = data._debug?.totalRaw
       const rawLabel = totalRaw != null ? ` (raw DB: ${totalRaw})` : ''
       setDebugInfo(`API retornou ${raw.length} sessões${rawLabel} · mais recente: ${newest?.slice(11,16) ?? '—'}`)
