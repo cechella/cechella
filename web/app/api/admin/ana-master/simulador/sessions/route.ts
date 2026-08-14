@@ -30,8 +30,6 @@ export async function GET(req: NextRequest) {
   const { data } = await supabase
     .from('ana_calls')
     .select('call_sid, memories, created_at, updated_at, stage')
-    .like('call_sid', 'sim-browser-%')
-    .order('updated_at', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false, nullsFirst: false })
 
   const filtered = (data ?? []).filter((row: any) =>
