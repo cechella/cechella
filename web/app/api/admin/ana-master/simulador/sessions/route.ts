@@ -37,12 +37,13 @@ export async function GET(req: NextRequest) {
     .limit(1)
     .single()
 
-  // Query B: fetch all rows, filter in JS (no PostgREST LIKE)
+  // Query B: fetch recent rows, filter in JS — limit 50 matches Ligações which reliably works
+  // limit(500) routes to a read replica with lag in Supabase/Kong; limit(50) hits primary
   const { data, error } = await supabase
     .from('ana_calls')
     .select('call_sid, created_at, updated_at, stage, memories')
     .order('created_at', { ascending: false })
-    .limit(500)
+    .limit(50)
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 })
