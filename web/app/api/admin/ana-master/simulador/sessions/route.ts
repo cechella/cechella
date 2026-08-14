@@ -28,8 +28,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ session: data ?? null })
   }
 
-  // Fetch all recent rows without PostgREST LIKE filter — filter in JS to avoid any PostgREST quirks
-  // (Ligações uses the same unfiltered pattern and reliably shows all rows)
+  // Diagnostic query A: what is the absolute latest sim-browser row in the DB right now?
+  const { data: latestRow } = await supabase
+    .from('ana_calls')
+    .select('call_sid, created_at')
+    .like('call_sid', 'sim-browser-%')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  // Query B: fetch all rows, filter in JS (no PostgREST LIKE)
   const { data, error } = await supabase
     .from('ana_calls')
     .select('call_sid, created_at, updated_at, stage, memories')
@@ -40,10 +48,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const totalRaw = (data ?? []).filter((r: any) => r.call_sid?.startsWith('sim-browser-')).length
-  const firstCallSids = (data ?? []).filter((r: any) => r.call_sid?.startsWith('sim-browser-')).slice(0, 5).map((r: any) => r.call_sid)
-
   const filtered = (data ?? []).filter((r: any) => r.call_sid?.startsWith('sim-browser-'))
+  const totalRaw = filtered.length
+  const firstCallSids = filtered.slice(0, 5).map((r: any) => r.call_sid)
+
+  // Check if latest row from query A is in query B results
+  const latestInResults = filtered.some((r: any) => r.call_sid === latestRow?.call_sid)
+  const diagInfo = {
+    latestInDB: latestRow?.call_sid ?? null,
+    latestInDBCreatedAt: latestRow?.created_at ?? null,
+    latestPresentInResults: latestInResults,
+    totalFromDB500: (data ?? []).length,
+    totalSimBrowser: totalRaw,
+  }
 
   const sessions = filtered.map((row: any) => {
     const mem = (row.memories ?? {}) as Record<string, any>
@@ -70,7 +87,7 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  const res = NextResponse.json({ sessions, _debug: { totalRaw, firstCallSids } })
+  const res = NextResponse.json({ sessions, _debug: { totalRaw, firstCallSids, ...diagInfo } })
   res.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
   res.headers.set('Pragma', 'no-cache')
   return res
