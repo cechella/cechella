@@ -27,13 +27,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ session: data ?? null })
   }
 
-  // Filter at DB level, explicit limit to ensure all sim-browser rows are fetched
-  const { data } = await supabase
-    .from('ana_calls')
-    .select('call_sid, memories, created_at, updated_at, stage')
-    .like('call_sid', 'sim-browser-%')
-    .order('created_at', { ascending: false })
-    .limit(500)
+  // Use RPC to bypass PostgREST REST layer pagination quirks
+  const { data } = await supabase.rpc('get_sim_browser_sessions', { max_count: 500 })
 
   const totalRaw = (data ?? []).length
   const firstCallSids = (data ?? []).slice(0, 5).map((r: any) => r.call_sid)
