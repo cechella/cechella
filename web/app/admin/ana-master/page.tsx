@@ -3231,22 +3231,47 @@ function SessoesInlineTab() {
     setLoading(true)
     setDebugInfo('buscando...')
     try {
-      const url = `/api/admin/ana-master/simulador/sessions?_t=${Date.now()}`
+      // Use the same /api/admin/ana-calls endpoint as Ligações tab — proven reliable
+      const url = `/api/admin/ana-calls?_t=${Date.now()}`
       const r = await fetch(url, { cache: 'no-store' })
       if (!r.ok) { setDebugInfo(`erro HTTP ${r.status}`); setLoading(false); return }
-      const data = await r.json()
-      const raw = data.sessions ?? []
-      // Sort by max(updatedAt, createdAt) so newly-created sessions (no gates yet) still sort to top
-      const latestTs = (s: any) => {
-        const a = s.updatedAt ? new Date(s.updatedAt).getTime() : 0
-        const b = s.createdAt ? new Date(s.createdAt).getTime() : 0
-        return Math.max(a, b)
+      const allRows: any[] = await r.json()
+      const SLABELS: Record<string,string> = {
+        apresentacao:'Abertura',conexao:'Conexão',combinado:'Combinado',
+        speech:'Speech',fechamento:'Fechamento',pagamento:'Pagamento',
+        referidos:'Referidos',validacao:'Validação',ganho:'Ganho',
       }
+      const raw = allRows
+        .filter((row: any) => row.call_sid?.startsWith('sim-browser-'))
+        .map((row: any) => {
+          const mem = (row.memories ?? {}) as Record<string,any>
+          const checkpoints = (mem.checkpoints ?? {}) as Record<string,any>
+          const transcript = (mem.transcript ?? []) as any[]
+          const gates = Object.entries(checkpoints)
+            .map(([gate, cp]: [string, any]) => ({ gate, stage: cp.stage, ts: cp.ts }))
+            .sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
+          return {
+            callSid: row.call_sid,
+            telefone: mem.telefone ?? row.telefone ?? null,
+            stage: row.stage ?? 'apresentacao',
+            stageLabel: SLABELS[row.stage ?? 'apresentacao'] ?? row.stage,
+            gates,
+            transcriptCount: transcript.length,
+            hasAudio: !!mem.audio_url,
+            audioUrl: mem.audio_url ?? null,
+            checkpoints,
+            memories: row.memories,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+          }
+        })
+      const latestTs = (s: any) => Math.max(
+        s.updatedAt ? new Date(s.updatedAt).getTime() : 0,
+        s.createdAt ? new Date(s.createdAt).getTime() : 0,
+      )
       raw.sort((a: any, b: any) => latestTs(b) - latestTs(a))
-      const newest = raw[0] ? (raw[0].createdAt ?? raw[0].updatedAt ?? '—') : '—'
-      const totalRaw = data._debug?.totalRaw
-      const rawLabel = totalRaw != null ? ` (raw DB: ${totalRaw})` : ''
-      setDebugInfo(`API retornou ${raw.length} sessões${rawLabel} · mais recente: ${newest?.slice(11,16) ?? '—'}`)
+      const newest = raw[0]?.createdAt ?? '—'
+      setDebugInfo(`${raw.length} sessões · mais recente: ${newest?.slice(11,16) ?? '—'}`)
       setSessions(raw)
     } catch (e: any) {
       setDebugInfo(`erro: ${e?.message ?? 'desconhecido'}`)
@@ -3261,16 +3286,12 @@ function SessoesInlineTab() {
     return () => clearInterval(interval)
   }, [load])
 
-  async function expand(callSid: string) {
+  function expand(callSid: string) {
     if (expanded === callSid) { setExpanded(null); setDetail(null); return }
     setExpanded(callSid)
-    setLoadingDetail(true)
-    try {
-      const r = await fetch(`/api/admin/ana-master/simulador/sessions?callSid=${callSid}`)
-      const data = await r.json()
-      setDetail(data.session)
-    } catch {}
-    setLoadingDetail(false)
+    // Use already-loaded data — no extra API call needed
+    const session = sessions.find((s: any) => s.callSid === callSid)
+    setDetail(session ? { memories: session.memories, stage: session.stage, call_sid: callSid } : null)
   }
 
   const detailTranscript: any[] = detail?.memories?.transcript ?? []
