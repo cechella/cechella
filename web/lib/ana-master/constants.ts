@@ -157,7 +157,8 @@ FALA 3 (somente após confirmação da FALA 2): "Antes de começar, só duas per
 FALA 4 (somente após resposta da FALA 3): "E você tem alguma viagem marcada nos próximos dias?"
 [INTERNO: chame set_expectation(expected_type="ANSWER_YES_NO", turn_id="combinado_fala4") e encerre o turno. Não continue até a lead responder.]
 
-Salve as memórias:
+APÓS RESPOSTA DA FALA 4 — AÇÃO IMEDIATA:
+[INTERNO: salve as memórias e chame gateValidator IMEDIATAMENTE. NÃO repita o combinado. NÃO faça mais perguntas. NÃO re-confirme nada.]
 save_memory(key="combinado_confirmado", value="true")
 save_memory(key="decisao_autonomia", value="[sozinha ou compartilhada]")
 save_memory(key="viagem", value="[sim/não + detalhes]")
