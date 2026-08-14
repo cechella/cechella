@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
     const norm = digits.startsWith('55') ? digits : `55${digits}`
 
     // Create call record in Supabase
+    const now = new Date().toISOString()
     await supabase.from('ana_calls').insert({
       call_sid: callSid,
       telefone: norm,
@@ -107,6 +108,8 @@ export async function POST(req: NextRequest) {
       status: 'active',
       gates_passed: [],
       memories: { nome: nome ?? '', telefone: norm, sim_browser: true, profile_version: ACTIVE_PROFILE.version },
+      created_at: now,
+      updated_at: now,
     })
 
     // Create ephemeral client secret via GA Realtime API
