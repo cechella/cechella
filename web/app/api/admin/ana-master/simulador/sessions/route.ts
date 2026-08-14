@@ -27,17 +27,18 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ session: data ?? null })
   }
 
+  // Filter at DB level + use range() to bypass PostgREST db-max-rows cap
   const { data } = await supabase
     .from('ana_calls')
     .select('call_sid, memories, created_at, updated_at, stage')
+    .like('call_sid', 'sim-browser-%')
     .order('created_at', { ascending: false })
+    .range(0, 999)
 
   const totalRaw = (data ?? []).length
   const firstCallSids = (data ?? []).slice(0, 5).map((r: any) => r.call_sid)
 
-  const filtered = (data ?? []).filter((row: any) =>
-    typeof row.call_sid === 'string' && row.call_sid.startsWith('sim-browser-')
-  )
+  const filtered = data ?? []
 
   const sessions = filtered.map((row: any) => {
     const mem = (row.memories ?? {}) as Record<string, any>
