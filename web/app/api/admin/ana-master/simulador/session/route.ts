@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
 
     // Create call record in Supabase
     const now = new Date().toISOString()
-    await supabase.from('ana_calls').insert({
+    const { error: insertError } = await supabase.from('ana_calls').insert({
       call_sid: callSid,
       telefone: norm,
       stage: 'apresentacao',
@@ -111,6 +111,11 @@ export async function POST(req: NextRequest) {
       created_at: now,
       updated_at: now,
     })
+
+    if (insertError) {
+      console.error('[session] insert error:', insertError)
+      return NextResponse.json({ error: `DB insert failed: ${insertError.message}` }, { status: 500 })
+    }
 
     // Create ephemeral client secret via GA Realtime API
     // Docs: https://developers.openai.com/api/docs/guides/realtime-webrtc
