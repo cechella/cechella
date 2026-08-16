@@ -555,6 +555,7 @@ function SimuladorInner() {
           waiting: true, expected_type,
           originating_stage: stage,
           originating_turn_id: turn_id ?? `auto-${Date.now()}`,
+          pendingClarification: null,
         }
         logTimeline('EXPECTATION_SET', `type=${expected_type} stage=${stage}`)
         return JSON.stringify({ registered: true, expected_type, stage })
