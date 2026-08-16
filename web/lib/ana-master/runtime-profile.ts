@@ -19,12 +19,9 @@ export interface AnaRuntimeProfile {
   /** Transport layer — webrtc uses /v1/realtime/client_secrets + /v1/realtime/calls */
   transport: 'webrtc'
   /** VAD configuration — goes under audio.input.turn_detection in GA protocol */
-  vad: {
-    type: 'server_vad'
-    silence_duration_ms: number
-    threshold: number
-    prefix_padding_ms: number
-  }
+  vad:
+    | { type: 'server_vad'; silence_duration_ms: number; threshold: number; prefix_padding_ms: number }
+    | { type: 'semantic_vad'; eagerness: 'low' | 'medium' | 'high' | 'auto' }
   /** Transcription model for lead audio — goes under audio.input.transcription in GA protocol */
   transcription_model: string
   /** ISO timestamp when this profile was defined */
@@ -46,8 +43,24 @@ export const ANA_PROFILE_V2: AnaRuntimeProfile = {
   defined_at: '2026-08-13',
 }
 
+// HV-v3 — semantic_vad: detecta completude semântica do pensamento, não silêncio acústico.
+// eagerness: 'low' = espera mais em áudio trailing-off ("hm...", "então...") antes de encerrar o turno.
+// silence_duration_ms, threshold e prefix_padding_ms são server_vad-only — omitidos aqui.
+export const ANA_PROFILE_V3: AnaRuntimeProfile = {
+  version: 'ANA-v3.0.0',
+  model: 'gpt-realtime',
+  voice: 'marin',
+  transport: 'webrtc',
+  vad: {
+    type: 'semantic_vad',
+    eagerness: 'low',
+  },
+  transcription_model: 'gpt-4o-mini-transcribe',
+  defined_at: '2026-08-16',
+}
+
 /** The active profile — import this everywhere instead of hardcoding constants */
-export const ACTIVE_PROFILE: AnaRuntimeProfile = ANA_PROFILE_V2
+export const ACTIVE_PROFILE: AnaRuntimeProfile = ANA_PROFILE_V3
 
 // ── FASE 3 — Voice Behavior Profile per stage ─────────────────────────────────
 // Injected as a suffix to STAGE_INSTRUCTIONS at each gate transition.

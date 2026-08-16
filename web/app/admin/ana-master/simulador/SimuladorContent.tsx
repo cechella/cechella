@@ -51,6 +51,7 @@ interface ConversationExpectation {
   expected_type: ExpectedResponseType
   originating_stage: string
   originating_turn_id: string
+  pendingClarification: string | null
 }
 
 type LeadTurnDisposition =
@@ -58,6 +59,8 @@ type LeadTurnDisposition =
   | 'ANSWER'
   | 'ANSWER_AMBIGUOUS'
   | 'GENERIC_POSITIVE_RESPONSE'
+  | 'THINKING'
+  | 'UNINTELLIGIBLE'
   | 'CONTINUE'
   | 'QUESTION'
   | 'CONFUSION'
@@ -122,6 +125,7 @@ const GATE_LABELS: Record<string, string> = {
 const DISPOSITION_LABELS: Record<LeadTurnDisposition, string> = {
   BACKCHANNEL: 'Backchannel', ANSWER: 'Resposta', ANSWER_AMBIGUOUS: 'Resp. Ambígua',
   GENERIC_POSITIVE_RESPONSE: 'Resp. Genérica',
+  THINKING: 'Pensando', UNINTELLIGIBLE: 'Ininteligível',
   CONTINUE: 'Continuar', QUESTION: 'Pergunta',
   CONFUSION: 'Confusão', INTERRUPTION: 'Interrupção', OBJECTION: 'Objeção',
   FINAL_INTEREST_RESPONSE: 'Resp. Final', UNKNOWN: 'Desconhecido',
@@ -129,6 +133,7 @@ const DISPOSITION_LABELS: Record<LeadTurnDisposition, string> = {
 const DISPOSITION_COLORS: Record<LeadTurnDisposition, string> = {
   BACKCHANNEL: '#52525E', ANSWER: '#34D399', ANSWER_AMBIGUOUS: '#F59E0B',
   GENERIC_POSITIVE_RESPONSE: '#FB923C',
+  THINKING: '#818CF8', UNINTELLIGIBLE: '#6B7280',
   CONTINUE: '#34D399', QUESTION: '#60A5FA',
   CONFUSION: '#F59E0B', INTERRUPTION: '#F87171', OBJECTION: '#EF4444',
   FINAL_INTEREST_RESPONSE: '#A78BFA', UNKNOWN: '#3F3F46',
@@ -146,7 +151,16 @@ const VALID_EXPECTATION_TYPES_BY_STAGE: Record<string, ExpectedResponseType[]> =
 }
 
 function resetExpectation(): ConversationExpectation {
-  return { waiting: false, expected_type: 'NONE', originating_stage: '', originating_turn_id: '' }
+  return { waiting: false, expected_type: 'NONE', originating_stage: '', originating_turn_id: '', pendingClarification: null }
+}
+
+function inferPendingClarification(exp: ConversationExpectation): string {
+  const tid = exp.originating_turn_id ?? ''
+  if (tid.includes('combinado_fala4')) return 'viagem'
+  if (tid.includes('combinado_fala3')) return 'decisão de saúde'
+  if (tid.includes('fechamento_escolha')) return 'forma de pagamento'
+  if (exp.originating_stage === 'combinado') return 'combinado'
+  return 'última resposta'
 }
 
 // ── Pure helpers ───────────────────────────────────────────────────────────────
@@ -178,6 +192,12 @@ function classifyLeadTurn(
   if (wasInterrupted) return 'INTERRUPTION'
   if (/(é caro|muito caro|não tenho (dinheiro|grana)|sem dinheiro|meu marido|preciso pensar|vou pesquisar|meu médico|causa câncer|é perigoso|tenho medo|não sei se|vou esperar|não posso agora|não tem condição)/i.test(t)) return 'OBJECTION'
   if (/não (entendi|entendo|compreendi)|pode repetir|o que (você |vc )?disse|como assim|não ficou claro|repete|repita|pode (re)?explicar/i.test(t)) return 'CONFUSION'
+
+  // THINKING: fragmento de hesitação — lead ainda está formulando o pensamento
+  if (words <= 3 && /^(então|deixa|hmm|hm|espera|perai|deixa eu|então eu|então a|vou ver|como assim|ah espera|ah então|bom então|aí então|deixa ver)/i.test(t)) return 'THINKING'
+
+  // UNINTELLIGIBLE: transcrição incoerente ou não-PT — sem conteúdo semântico aproveitável
+  if (words <= 1 && !/^(sim|não|nao|s|n|ok|tá|ta|pode|claro|é|bom|boa)$/i.test(t) && !/[a-záàãâéêíóôõúüç]/i.test(t)) return 'UNINTELLIGIBLE'
 
   // Speech stage: final interest response always takes precedence
   if (stage === 'speech' && (sp.state === 'WAITING_FINAL_RESPONSE' || sp.pergunta_final_feita)) return 'FINAL_INTEREST_RESPONSE'
@@ -618,17 +638,35 @@ function SimuladorInner() {
       }
 
       case 'ANSWER_AMBIGUOUS': {
-        // Do NOT satisfy expectation — escalate to ANSWER_CONFIRMATION
-        logTimeline('EXPECTATION_ESCALATED', `ANSWER_AMBIGUOUS stage=${stage}`)
+        // Do NOT satisfy expectation — escalate to ANSWER_CONFIRMATION with specific field
+        const field = inferPendingClarification(exp)
+        logTimeline('EXPECTATION_ESCALATED', `ANSWER_AMBIGUOUS stage=${stage} field=${field}`)
         expectationRef.current = {
           waiting: true,
           expected_type: 'ANSWER_CONFIRMATION',
           originating_stage: stage,
           originating_turn_id: `confirm-${Date.now()}`,
+          pendingClarification: field,
         }
         updateInstructions(
           buildInstructions(stage) +
-          '\n\nCONTEXTO IMEDIATO: A resposta da lead foi ambígua. Confirme a interpretação em até 5 palavras antes de qualquer ação. Ex: "PIX à vista, certo?" Não chame gates nem registre decisão antes da confirmação.'
+          `\n\nCONTEXTO IMEDIATO: A resposta da lead foi ambígua. Confirme APENAS "${field}" em até 5 palavras — ex: "PIX à vista, certo?" ou "Pode viajar?" Não repita outros pontos. Não chame gates antes de confirmação.`
+        )
+        break
+      }
+
+      case 'THINKING': {
+        // Lead still formulating — hold, do not respond
+        logTimeline('THINKING_DETECTED', `stage=${stage}`)
+        break
+      }
+
+      case 'UNINTELLIGIBLE': {
+        // ASR returned incoherent content — gentle one-shot clarification
+        logTimeline('UNINTELLIGIBLE_DETECTED', `stage=${stage}`)
+        updateInstructions(
+          buildInstructions(stage) +
+          '\n\nCONTEXTO IMEDIATO: A lead disse algo que não ficou claro. Peça gentilmente para repetir em uma frase curta. Ex: "Não peguei bem — pode repetir?" Sem desculpas, sem drama, sem explicar o motivo.'
         )
         break
       }
@@ -725,7 +763,8 @@ function SimuladorInner() {
 
     // For non-blocking dispositions during WAITING_LEAD in speech, let ANA continue
     if (stage === 'speech' && sp.state === 'WAITING_LEAD' && sp.waiting_for_lead &&
-        disposition !== 'BACKCHANNEL' && disposition !== 'QUESTION' && disposition !== 'CONFUSION' && disposition !== 'GENERIC_POSITIVE_RESPONSE') {
+        disposition !== 'BACKCHANNEL' && disposition !== 'QUESTION' && disposition !== 'CONFUSION' &&
+        disposition !== 'GENERIC_POSITIVE_RESPONSE' && disposition !== 'THINKING' && disposition !== 'UNINTELLIGIBLE') {
       const newSp = { ...sp, waiting_for_lead: false, parte_em_execucao: typeof sp.parte_atual === 'number' ? sp.parte_atual : undefined }
       setSpeechProgress(newSp); speechRef.current = newSp
       updateInstructions(buildInstructions('speech', sp.parte_atual))
@@ -831,9 +870,9 @@ function SimuladorInner() {
           const result = await executeTool(call.name, parsedArgs)
           sendEvent({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: call.call_id, output: result } })
           logTimeline('FUNCTION_CALL_OUTPUT_SENT', call.name)
-          // PASSO 2A: log policy decision — behavior unchanged (response.create sent for all)
-          logTimeline('RESPONSE_CREATE_DECISION', `tool=${call.name} policy=${policy} → sending (2A: behavior unchanged)`)
-          sendResponseCreate(`tool:${call.name}`)
+          // Policy enforcement: silent tools do not trigger a new response
+          logTimeline('RESPONSE_CREATE_DECISION', `tool=${call.name} policy=${policy}`)
+          if (policy !== 'silent') sendResponseCreate(`tool:${call.name}`)
         }
         break
       }
