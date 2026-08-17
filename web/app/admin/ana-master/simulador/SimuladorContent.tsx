@@ -772,11 +772,7 @@ function SimuladorInner() {
       updateInstructions(buildInstructions('speech', sp.parte_atual))
     }
 
-    // HV-v4: create_response:false — controller is sole authority for response.create.
-    // session.update (updateInstructions) was sent above; DataChannel ordering guarantees
-    // the server processes it before this response.create.
-    sendResponseCreate(`disposition:${disposition}`)
-  }, [updateInstructions, saveSpeechState, logTimeline, sendResponseCreate])
+  }, [updateInstructions, saveSpeechState, logTimeline])
 
   // ── DataChannel message handler ────────────────────────────────────────────
 
@@ -1054,16 +1050,13 @@ function SimuladorInner() {
       }
 
       dc.onopen = () => {
-        logTimeline('SESSION_START', 'DataChannel open — HV-v4 create_response:false — firing initial response.create')
+        logTimeline('SESSION_START', 'DataChannel open — no response.create sent, ANA response will be AUTOMATIC')
         addTranscript('system', '🎙️ Conectado — ANA está iniciando...')
         if (pendingInstructionsRef.current) {
           logTimeline('SESSION_UPDATE_SENT', `checkpoint restore chars=${pendingInstructionsRef.current.length}`)
           sendEvent({ type: 'session.update', session: { type: 'realtime', instructions: pendingInstructionsRef.current } })
           pendingInstructionsRef.current = null
         }
-        // HV-v4: with create_response:false the initial greeting is no longer auto-fired by the server.
-        // Fire explicitly so ANA begins the conversation.
-        sendResponseCreate('session:start')
       }
 
       // FASE 2B — persist SpeechProgress on page unload

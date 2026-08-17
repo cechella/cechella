@@ -78,7 +78,7 @@ export const ANA_PROFILE_V4: AnaRuntimeProfile = {
 }
 
 /** The active profile — import this everywhere instead of hardcoding constants */
-export const ACTIVE_PROFILE: AnaRuntimeProfile = ANA_PROFILE_V4
+export const ACTIVE_PROFILE: AnaRuntimeProfile = ANA_PROFILE_V3
 
 // ── FASE 3 — Voice Behavior Profile per stage ─────────────────────────────────
 // Injected as a suffix to STAGE_INSTRUCTIONS at each gate transition.
