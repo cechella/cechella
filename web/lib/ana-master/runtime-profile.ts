@@ -26,6 +26,9 @@ export interface AnaRuntimeProfile {
   transcription_model: string
   /** ISO timestamp when this profile was defined */
   defined_at: string
+  /** If true, simulator sends session.update with create_response:false after session.created,
+   *  then fires response.create explicitly per turn (HV-v4 controller gate). */
+  controller_response_gate?: true
 }
 
 export const ANA_PROFILE_V2: AnaRuntimeProfile = {
@@ -59,10 +62,11 @@ export const ANA_PROFILE_V3: AnaRuntimeProfile = {
   defined_at: '2026-08-16',
 }
 
-// HV-v4 — create_response: false: VAD detecta fim de turno mas NÃO dispara response.create automaticamente.
-// O controller recebe a transcrição, classifica a disposição e decide se e quando disparar response.create.
+// HV-v4 — controller_response_gate: true
+// create_response:false NÃO vai no payload inicial (/v1/realtime/client_secrets).
+// É aplicado via session.update após session.created (protocolo correto conforme OpenAI Case #13293156).
+// response.create é disparado explicitamente pelo controller com output_modalities:["audio"].
 // Elimina a race condition onde semantic_vad disparava antes da classificação do controller.
-// Tradeoff: latência levemente maior (tempo de transcrição + classificação) em troca de controle absoluto.
 export const ANA_PROFILE_V4: AnaRuntimeProfile = {
   version: 'ANA-v4.0.0',
   model: 'gpt-realtime',
@@ -71,14 +75,14 @@ export const ANA_PROFILE_V4: AnaRuntimeProfile = {
   vad: {
     type: 'semantic_vad',
     eagerness: 'low',
-    create_response: false,
   },
   transcription_model: 'gpt-4o-mini-transcribe',
+  controller_response_gate: true,
   defined_at: '2026-08-17',
 }
 
 /** The active profile — import this everywhere instead of hardcoding constants */
-export const ACTIVE_PROFILE: AnaRuntimeProfile = ANA_PROFILE_V3
+export const ACTIVE_PROFILE: AnaRuntimeProfile = ANA_PROFILE_V4
 
 // ── FASE 3 — Voice Behavior Profile per stage ─────────────────────────────────
 // Injected as a suffix to STAGE_INSTRUCTIONS at each gate transition.

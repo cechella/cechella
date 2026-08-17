@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Mic, MicOff, Phone, PhoneOff, Copy, Check, RefreshCw, Link, RotateCcw, Activity } from 'lucide-react'
 import { SPEECH_PART_INSTRUCTIONS, ANA_BASE_PROMPT, STAGE_INSTRUCTIONS } from '@/lib/ana-master/constants'
-import { VOICE_BEHAVIOR_PROFILES } from '@/lib/ana-master/runtime-profile'
+import { VOICE_BEHAVIOR_PROFILES, ACTIVE_PROFILE } from '@/lib/ana-master/runtime-profile'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -330,6 +330,8 @@ function SimuladorInner() {
   const sessionStartTsRef = useRef<number>(0)
   const pendingManualResponseRef = useRef(false)
   const lastResponseOriginRef = useRef<string>('unknown')
+  // HV-v4: tracks whether the initial session.update (create_response:false) was acknowledged
+  const sessionReadyRef = useRef(false)
 
   useEffect(() => { speechRef.current = speechProgress }, [speechProgress])
   useEffect(() => { stageRef.current = currentStage }, [currentStage])
@@ -384,11 +386,13 @@ function SimuladorInner() {
   }, [])
 
   // PASSO 2A — send response.create with origin tracking
+  // HV-v4: include output_modalities:["audio"] — required when create_response:false is active,
+  // otherwise the server may produce a response with no audio output.
   const sendResponseCreate = useCallback((origin: string) => {
     pendingManualResponseRef.current = true
     lastResponseOriginRef.current = origin
     logTimeline('RESPONSE_CREATE_SENT', `origin=${origin}`)
-    sendEvent({ type: 'response.create' })
+    sendEvent({ type: 'response.create', response: { output_modalities: ['audio'] } })
   }, [sendEvent, logTimeline])
 
   const updateInstructions = useCallback((instructions: string) => {
@@ -772,7 +776,13 @@ function SimuladorInner() {
       updateInstructions(buildInstructions('speech', sp.parte_atual))
     }
 
-  }, [updateInstructions, saveSpeechState, logTimeline])
+    // HV-v4: controller_response_gate — fire response.create explicitly for all non-suppressed dispositions.
+    // session.update (updateInstructions) was sent above; DataChannel ordering ensures server processes
+    // it before this response.create. output_modalities:["audio"] is set inside sendResponseCreate.
+    if (ACTIVE_PROFILE.controller_response_gate) {
+      sendResponseCreate(`disposition:${disposition}`)
+    }
+  }, [updateInstructions, saveSpeechState, logTimeline, sendResponseCreate])
 
   // ── DataChannel message handler ────────────────────────────────────────────
 
@@ -798,8 +808,14 @@ function SimuladorInner() {
       }
 
       case 'session.updated': {
-        // PASSO 2A — confirm server processed session.update
         logTimeline('SESSION_UPDATED')
+        // HV-v4: first session.updated after session.created confirms create_response:false is active.
+        // Fire the initial greeting explicitly — subsequent session.updated (from updateInstructions)
+        // are ignored here because sessionReadyRef is already true.
+        if (ACTIVE_PROFILE.controller_response_gate && !sessionReadyRef.current) {
+          sessionReadyRef.current = true
+          sendResponseCreate('session:start')
+        }
         break
       }
 
@@ -958,6 +974,7 @@ function SimuladorInner() {
     sessionStartTsRef.current = Date.now()
     pendingManualResponseRef.current = false
     lastResponseOriginRef.current = 'unknown'
+    sessionReadyRef.current = false
 
     try {
       const sessionRes = await fetch('/api/admin/ana-master/simulador/session', {
@@ -1050,12 +1067,30 @@ function SimuladorInner() {
       }
 
       dc.onopen = () => {
-        logTimeline('SESSION_START', 'DataChannel open — no response.create sent, ANA response will be AUTOMATIC')
+        sessionReadyRef.current = false
         addTranscript('system', '🎙️ Conectado — ANA está iniciando...')
-        if (pendingInstructionsRef.current) {
-          logTimeline('SESSION_UPDATE_SENT', `checkpoint restore chars=${pendingInstructionsRef.current.length}`)
-          sendEvent({ type: 'session.update', session: { type: 'realtime', instructions: pendingInstructionsRef.current } })
-          pendingInstructionsRef.current = null
+
+        if (ACTIVE_PROFILE.controller_response_gate) {
+          // HV-v4: set create_response:false via session.update (not in initial payload).
+          // Merge checkpoint instructions if present so we only need one round-trip.
+          logTimeline('SESSION_START', 'HV-v4 — sending session.update create_response:false')
+          const vadSession: Record<string, unknown> = {
+            type: 'realtime',
+            audio: { input: { turn_detection: { type: 'semantic_vad', eagerness: 'low', create_response: false } } },
+          }
+          if (pendingInstructionsRef.current) {
+            vadSession.instructions = pendingInstructionsRef.current
+            pendingInstructionsRef.current = null
+          }
+          sendEvent({ type: 'session.update', session: vadSession })
+          // Greeting fires in session.updated handler once create_response:false is confirmed.
+        } else {
+          logTimeline('SESSION_START', 'HV-v3 — ANA response will be AUTOMATIC')
+          if (pendingInstructionsRef.current) {
+            logTimeline('SESSION_UPDATE_SENT', `checkpoint restore chars=${pendingInstructionsRef.current.length}`)
+            sendEvent({ type: 'session.update', session: { type: 'realtime', instructions: pendingInstructionsRef.current } })
+            pendingInstructionsRef.current = null
+          }
         }
       }
 
