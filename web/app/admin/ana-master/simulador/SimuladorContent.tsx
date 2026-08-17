@@ -332,6 +332,8 @@ function SimuladorInner() {
   const lastResponseOriginRef = useRef<string>('unknown')
   // HV-v4: tracks whether the initial session.update (create_response:false) was acknowledged
   const sessionReadyRef = useRef(false)
+  // HV-v4: true while a response is in progress — guards against double response.create
+  const responseInProgressRef = useRef(false)
 
   useEffect(() => { speechRef.current = speechProgress }, [speechProgress])
   useEffect(() => { stageRef.current = currentStage }, [currentStage])
@@ -777,10 +779,13 @@ function SimuladorInner() {
     }
 
     // HV-v4: controller_response_gate — fire response.create explicitly for all non-suppressed dispositions.
+    // Guard: skip if a response is already in progress (prevents "active response" error).
     // session.update (updateInstructions) was sent above; DataChannel ordering ensures server processes
     // it before this response.create. output_modalities:["audio"] is set inside sendResponseCreate.
-    if (ACTIVE_PROFILE.controller_response_gate) {
+    if (ACTIVE_PROFILE.controller_response_gate && !responseInProgressRef.current) {
       sendResponseCreate(`disposition:${disposition}`)
+    } else if (ACTIVE_PROFILE.controller_response_gate) {
+      logTimeline('RESPONSE_CREATE_SKIPPED', `disposition=${disposition} — response in progress`)
     }
   }, [updateInstructions, saveSpeechState, logTimeline, sendResponseCreate])
 
@@ -804,6 +809,7 @@ function SimuladorInner() {
         // New response starting — reset delivery state
         currentDeliveryRef.current = initialDelivery(msg.response?.id ?? '')
         wasInterruptedRef.current = false
+        responseInProgressRef.current = true  // HV-v4: block further response.create
         break
       }
 
@@ -812,7 +818,7 @@ function SimuladorInner() {
         // HV-v4: first session.updated after session.created confirms create_response:false is active.
         // Fire the initial greeting explicitly — subsequent session.updated (from updateInstructions)
         // are ignored here because sessionReadyRef is already true.
-        if (ACTIVE_PROFILE.controller_response_gate && !sessionReadyRef.current) {
+        if (ACTIVE_PROFILE.controller_response_gate && !sessionReadyRef.current && !responseInProgressRef.current) {
           sessionReadyRef.current = true
           sendResponseCreate('session:start')
         }
@@ -893,6 +899,8 @@ function SimuladorInner() {
           logTimeline('RESPONSE_CREATE_DECISION', `tool=${call.name} policy=${policy}`)
           if (policy !== 'silent') sendResponseCreate(`tool:${call.name}`)
         }
+        // HV-v4: response is done — unlock response.create for next turn
+        responseInProgressRef.current = false
         break
       }
 
@@ -975,6 +983,7 @@ function SimuladorInner() {
     pendingManualResponseRef.current = false
     lastResponseOriginRef.current = 'unknown'
     sessionReadyRef.current = false
+    responseInProgressRef.current = false
 
     try {
       const sessionRes = await fetch('/api/admin/ana-master/simulador/session', {
