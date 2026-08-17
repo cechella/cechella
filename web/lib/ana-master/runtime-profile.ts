@@ -21,7 +21,7 @@ export interface AnaRuntimeProfile {
   /** VAD configuration — goes under audio.input.turn_detection in GA protocol */
   vad:
     | { type: 'server_vad'; silence_duration_ms: number; threshold: number; prefix_padding_ms: number }
-    | { type: 'semantic_vad'; eagerness: 'low' | 'medium' | 'high' | 'auto' }
+    | { type: 'semantic_vad'; eagerness: 'low' | 'medium' | 'high' | 'auto'; create_response?: false }
   /** Transcription model for lead audio — goes under audio.input.transcription in GA protocol */
   transcription_model: string
   /** ISO timestamp when this profile was defined */
@@ -59,8 +59,26 @@ export const ANA_PROFILE_V3: AnaRuntimeProfile = {
   defined_at: '2026-08-16',
 }
 
+// HV-v4 — create_response: false: VAD detecta fim de turno mas NÃO dispara response.create automaticamente.
+// O controller recebe a transcrição, classifica a disposição e decide se e quando disparar response.create.
+// Elimina a race condition onde semantic_vad disparava antes da classificação do controller.
+// Tradeoff: latência levemente maior (tempo de transcrição + classificação) em troca de controle absoluto.
+export const ANA_PROFILE_V4: AnaRuntimeProfile = {
+  version: 'ANA-v4.0.0',
+  model: 'gpt-realtime',
+  voice: 'marin',
+  transport: 'webrtc',
+  vad: {
+    type: 'semantic_vad',
+    eagerness: 'low',
+    create_response: false,
+  },
+  transcription_model: 'gpt-4o-mini-transcribe',
+  defined_at: '2026-08-17',
+}
+
 /** The active profile — import this everywhere instead of hardcoding constants */
-export const ACTIVE_PROFILE: AnaRuntimeProfile = ANA_PROFILE_V3
+export const ACTIVE_PROFILE: AnaRuntimeProfile = ANA_PROFILE_V4
 
 // ── FASE 3 — Voice Behavior Profile per stage ─────────────────────────────────
 // Injected as a suffix to STAGE_INSTRUCTIONS at each gate transition.

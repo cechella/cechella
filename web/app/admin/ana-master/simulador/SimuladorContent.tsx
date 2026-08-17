@@ -659,7 +659,7 @@ function SimuladorInner() {
       case 'THINKING': {
         // Lead still formulating — hold, do not respond
         logTimeline('THINKING_DETECTED', `stage=${stage}`)
-        break
+        return  // HV-v4: explicit return — no response.create
       }
 
       case 'UNINTELLIGIBLE': {
@@ -673,7 +673,7 @@ function SimuladorInner() {
       }
 
       case 'BACKCHANNEL': {
-        // Speech WAITING_LEAD: original behavior — hold
+        // Speech WAITING_LEAD: hold — no response.create
         if (stage === 'speech' && sp.state === 'WAITING_LEAD' && sp.waiting_for_lead) return
         // Active expectation outside speech: lead hasn't answered — hold
         if (exp.waiting && stage !== 'speech') {
@@ -682,9 +682,9 @@ function SimuladorInner() {
             buildInstructions(stage) +
             '\n\nCONTEXTO IMEDIATO: AGUARDE — a lead ainda não respondeu sua pergunta. Não avance, não reformule, não faça nova pergunta. Aguarde turno real.'
           )
-          return
+          return  // HV-v4: explicit return — no response.create
         }
-        // No expectation — implicit continue (original behavior)
+        // No expectation — implicit continue: ANA continues naturally
         break
       }
 
@@ -770,7 +770,12 @@ function SimuladorInner() {
       setSpeechProgress(newSp); speechRef.current = newSp
       updateInstructions(buildInstructions('speech', sp.parte_atual))
     }
-  }, [updateInstructions, saveSpeechState, logTimeline])
+
+    // HV-v4: create_response:false — controller is sole authority for response.create.
+    // session.update (updateInstructions) was sent above; DataChannel ordering guarantees
+    // the server processes it before this response.create.
+    sendResponseCreate(`disposition:${disposition}`)
+  }, [updateInstructions, saveSpeechState, logTimeline, sendResponseCreate])
 
   // ── DataChannel message handler ────────────────────────────────────────────
 
@@ -1048,13 +1053,16 @@ function SimuladorInner() {
       }
 
       dc.onopen = () => {
-        logTimeline('SESSION_START', 'DataChannel open — no response.create sent, ANA response will be AUTOMATIC')
+        logTimeline('SESSION_START', 'DataChannel open — HV-v4 create_response:false — firing initial response.create')
         addTranscript('system', '🎙️ Conectado — ANA está iniciando...')
         if (pendingInstructionsRef.current) {
           logTimeline('SESSION_UPDATE_SENT', `checkpoint restore chars=${pendingInstructionsRef.current.length}`)
           sendEvent({ type: 'session.update', session: { type: 'realtime', instructions: pendingInstructionsRef.current } })
           pendingInstructionsRef.current = null
         }
+        // HV-v4: with create_response:false the initial greeting is no longer auto-fired by the server.
+        // Fire explicitly so ANA begins the conversation.
+        sendResponseCreate('session:start')
       }
 
       // FASE 2B — persist SpeechProgress on page unload
