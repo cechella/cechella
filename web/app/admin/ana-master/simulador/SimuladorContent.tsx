@@ -763,9 +763,10 @@ function SimuladorInner() {
     }
 
     // For non-blocking dispositions during WAITING_LEAD in speech, let ANA continue
+    // Note: THINKING already returned above — TypeScript narrows it out of this check
     if (stage === 'speech' && sp.state === 'WAITING_LEAD' && sp.waiting_for_lead &&
         disposition !== 'BACKCHANNEL' && disposition !== 'QUESTION' && disposition !== 'CONFUSION' &&
-        disposition !== 'GENERIC_POSITIVE_RESPONSE' && disposition !== 'THINKING' && disposition !== 'UNINTELLIGIBLE') {
+        disposition !== 'GENERIC_POSITIVE_RESPONSE' && disposition !== 'UNINTELLIGIBLE') {
       const newSp = { ...sp, waiting_for_lead: false, parte_em_execucao: typeof sp.parte_atual === 'number' ? sp.parte_atual : undefined }
       setSpeechProgress(newSp); speechRef.current = newSp
       updateInstructions(buildInstructions('speech', sp.parte_atual))
