@@ -102,7 +102,7 @@ const TOOLS = [
 
 export async function POST(req: NextRequest) {
   try {
-    const { telefone, nome } = await req.json()
+    const { telefone, nome, voice, model } = await req.json()
 
     if (!telefone) {
       return NextResponse.json({ error: 'telefone obrigatório' }, { status: 400 })
@@ -148,12 +148,12 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         session: {
           type: 'realtime',
-          model: ACTIVE_PROFILE.model,
+          model: model ?? ACTIVE_PROFILE.model,
           instructions: systemPrompt,
           tools: TOOLS,
           tool_choice: 'auto',
           audio: {
-            output: { voice: ACTIVE_PROFILE.voice },
+            output: { voice: voice ?? ACTIVE_PROFILE.voice },
             input: {
               transcription: { model: ACTIVE_PROFILE.transcription_model },
               turn_detection: ACTIVE_PROFILE.vad,

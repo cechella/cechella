@@ -274,6 +274,8 @@ function SimuladorInner() {
   // ── State ──────────────────────────────────────────────────────────────────
   const [telefone, setTelefone] = useState('5548988416899')
   const [nome, setNome] = useState('')
+  const [selectedVoice, setSelectedVoice] = useState('marin')
+  const [selectedModel, setSelectedModel] = useState('gpt-realtime')
   const [status, setStatus] = useState<SessionStatus>('idle')
   const [currentStage, setCurrentStage] = useState('apresentacao')
   const [speechProgress, setSpeechProgress] = useState<SpeechProgress>(initialSpeechProgress())
@@ -1016,7 +1018,7 @@ function SimuladorInner() {
     try {
       const sessionRes = await fetch('/api/admin/ana-master/simulador/session', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telefone, nome: nome.trim() || undefined }),
+        body: JSON.stringify({ telefone, nome: nome.trim() || undefined, voice: selectedVoice, model: selectedModel }),
       })
       if (!sessionRes.ok) throw new Error('Falha ao criar sessão')
       const { callSid, clientSecret, telefone: normPhone, profileVersion: pv, model: mdl } = await sessionRes.json()
@@ -1239,6 +1241,32 @@ function SimuladorInner() {
             disabled={status === 'active' || status === 'connecting'}
             style={{ width: '100%', background: '#111113', border: '1px solid #27272F', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: '#fff', outline: 'none', boxSizing: 'border-box' }}
           />
+          <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', display: 'block', marginTop: 8, marginBottom: 4 }}>Voz</label>
+          <select
+            value={selectedVoice} onChange={e => setSelectedVoice(e.target.value)}
+            disabled={status === 'active' || status === 'connecting'}
+            style={{ width: '100%', background: '#111113', border: '1px solid #27272F', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: '#fff', outline: 'none', boxSizing: 'border-box' }}
+          >
+            <option value="marin">marin ★ (atual)</option>
+            <option value="cedar">cedar ★ (recomendada OpenAI)</option>
+            <option value="ash">ash</option>
+            <option value="ballad">ballad</option>
+            <option value="coral">coral</option>
+            <option value="sage">sage</option>
+            <option value="verse">verse</option>
+            <option value="alloy">alloy</option>
+            <option value="echo">echo</option>
+            <option value="shimmer">shimmer</option>
+          </select>
+          <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', display: 'block', marginTop: 8, marginBottom: 4 }}>Modelo</label>
+          <select
+            value={selectedModel} onChange={e => setSelectedModel(e.target.value)}
+            disabled={status === 'active' || status === 'connecting'}
+            style={{ width: '100%', background: '#111113', border: '1px solid #27272F', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: '#fff', outline: 'none', boxSizing: 'border-box' }}
+          >
+            <option value="gpt-realtime">gpt-realtime (atual)</option>
+            <option value="gpt-realtime-1.5">gpt-realtime-1.5 (novo)</option>
+          </select>
         </div>
 
         {/* Controls */}
