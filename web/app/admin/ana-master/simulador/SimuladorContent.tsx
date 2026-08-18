@@ -1132,6 +1132,8 @@ function SimuladorInner() {
           const vadSession: Record<string, unknown> = {
             type: 'realtime',
             output_modalities: ['audio'],
+            max_output_tokens: 'inf',
+            reasoning: { effort: 'low' },
             audio: {
               input: {
                 format: { type: 'audio/pcm', rate: 24000 },
