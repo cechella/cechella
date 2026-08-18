@@ -152,6 +152,8 @@ export async function POST(req: NextRequest) {
           instructions: systemPrompt,
           tools: TOOLS,
           tool_choice: 'auto',
+          max_output_tokens: 'inf',
+          reasoning: { effort: 'low' },
           audio: {
             output: { voice: voice ?? ACTIVE_PROFILE.voice },
             input: {
