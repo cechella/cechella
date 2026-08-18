@@ -155,7 +155,7 @@ export async function POST(req: NextRequest) {
           audio: {
             output: { voice: voice ?? ACTIVE_PROFILE.voice },
             input: {
-              transcription: { model: ACTIVE_PROFILE.transcription_model },
+              transcription: { model: ACTIVE_PROFILE.transcription_model, language: 'pt' },
               turn_detection: ACTIVE_PROFILE.vad,
               ...(ACTIVE_PROFILE.noise_reduction !== undefined && {
                 noise_reduction: { type: ACTIVE_PROFILE.noise_reduction },
