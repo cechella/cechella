@@ -74,13 +74,13 @@ export const ANA_PROFILE_V3: AnaRuntimeProfile = {
 // response.create é disparado explicitamente pelo controller com output_modalities:["audio"].
 // Elimina a race condition onde semantic_vad disparava antes da classificação do controller.
 //
-// v4.2.0 — configs validadas via platform.openai.com/audio/realtime/edit:
-//   transcription_model: gpt-realtime-whisper (melhor qualidade em PT-BR)
-//   noise_reduction: far_field (microfone ambiente / headset sem cancelamento ativo)
-//   max_response_output_tokens: 'inf' (sem truncamento de resposta)
-//   reasoning_effort: 'low' (latência de voz — raciocínio pesado prejudica first-audio)
+// v4.3.0 — audio format baseline confirmado via OpenAI Case #13293156:
+//   audio.input.format: { type: 'audio/pcm', rate: 24000 }
+//   audio.output.format: { type: 'audio/pcm' }
+//   output_modalities: ['audio'] no nível de sessão
+//   getUserMedia: echoCancellation:true, noiseSuppression:false, autoGainControl:false
 export const ANA_PROFILE_V4: AnaRuntimeProfile = {
-  version: 'ANA-v4.2.0',
+  version: 'ANA-v4.3.0',
   model: 'gpt-realtime-2.1',
   voice: 'marin',
   transport: 'webrtc',
@@ -93,7 +93,7 @@ export const ANA_PROFILE_V4: AnaRuntimeProfile = {
   max_response_output_tokens: 'inf',
   reasoning_effort: 'low',
   controller_response_gate: true,
-  defined_at: '2026-08-18',
+  defined_at: '2026-08-18',  // v4.3.0 audio format baseline
 }
 
 /** The active profile — import this everywhere instead of hardcoding constants */

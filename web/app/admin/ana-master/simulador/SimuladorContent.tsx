@@ -1032,8 +1032,17 @@ function SimuladorInner() {
 
       const pc = new RTCPeerConnection(); pcRef.current = pc
 
-      // Get local mic stream
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      // Get local mic stream — explicit constraints per OpenAI Case #13293156:
+      // echoCancellation:true prevents feedback; noiseSuppression+autoGainControl:false
+      // avoids browser AGC flattening the lead's voice before it reaches the model.
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: false,
+          autoGainControl: false,
+          sampleRate: 24000,
+        },
+      })
       localStreamRef.current = stream
       stream.getTracks().forEach(track => pc.addTrack(track, stream))
 
@@ -1115,9 +1124,20 @@ function SimuladorInner() {
           // HV-v4: set create_response:false via session.update (not in initial payload).
           // Merge checkpoint instructions if present so we only need one round-trip.
           logTimeline('SESSION_START', 'HV-v4 — sending session.update create_response:false')
+          // OpenAI Case #13293156: set audio.input.format + audio.output.format + output_modalities
+          // at session level to match Playground-style baseline shape.
           const vadSession: Record<string, unknown> = {
             type: 'realtime',
-            audio: { input: { turn_detection: { type: 'semantic_vad', eagerness: 'low', create_response: false } } },
+            output_modalities: ['audio'],
+            audio: {
+              input: {
+                format: { type: 'audio/pcm', rate: 24000 },
+                turn_detection: { type: 'semantic_vad', eagerness: 'low', create_response: false },
+              },
+              output: {
+                format: { type: 'audio/pcm' },
+              },
+            },
           }
           if (pendingInstructionsRef.current) {
             vadSession.instructions = pendingInstructionsRef.current
