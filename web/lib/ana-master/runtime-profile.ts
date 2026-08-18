@@ -24,6 +24,12 @@ export interface AnaRuntimeProfile {
     | { type: 'semantic_vad'; eagerness: 'low' | 'medium' | 'high' | 'auto'; create_response?: false }
   /** Transcription model for lead audio — goes under audio.input.transcription in GA protocol */
   transcription_model: string
+  /** Noise reduction mode — goes under audio.input.noise_reduction in GA protocol */
+  noise_reduction?: 'near_field' | 'far_field'
+  /** Max tokens for model response — 'inf' = unlimited */
+  max_response_output_tokens?: number | 'inf'
+  /** Reasoning effort for the model */
+  reasoning_effort?: 'low' | 'medium' | 'high'
   /** ISO timestamp when this profile was defined */
   defined_at: string
   /** If true, simulator sends session.update with create_response:false after session.created,
@@ -67,8 +73,14 @@ export const ANA_PROFILE_V3: AnaRuntimeProfile = {
 // É aplicado via session.update após session.created (protocolo correto conforme OpenAI Case #13293156).
 // response.create é disparado explicitamente pelo controller com output_modalities:["audio"].
 // Elimina a race condition onde semantic_vad disparava antes da classificação do controller.
+//
+// v4.2.0 — configs validadas via platform.openai.com/audio/realtime/edit:
+//   transcription_model: gpt-realtime-whisper (melhor qualidade em PT-BR)
+//   noise_reduction: far_field (microfone ambiente / headset sem cancelamento ativo)
+//   max_response_output_tokens: 'inf' (sem truncamento de resposta)
+//   reasoning_effort: 'low' (latência de voz — raciocínio pesado prejudica first-audio)
 export const ANA_PROFILE_V4: AnaRuntimeProfile = {
-  version: 'ANA-v4.1.0',
+  version: 'ANA-v4.2.0',
   model: 'gpt-realtime-2.1',
   voice: 'marin',
   transport: 'webrtc',
@@ -76,9 +88,12 @@ export const ANA_PROFILE_V4: AnaRuntimeProfile = {
     type: 'semantic_vad',
     eagerness: 'low',
   },
-  transcription_model: 'gpt-4o-mini-transcribe',
+  transcription_model: 'gpt-realtime-whisper',
+  noise_reduction: 'far_field',
+  max_response_output_tokens: 'inf',
+  reasoning_effort: 'low',
   controller_response_gate: true,
-  defined_at: '2026-08-17',
+  defined_at: '2026-08-18',
 }
 
 /** The active profile — import this everywhere instead of hardcoding constants */
