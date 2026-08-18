@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
     const nomeHint = nome
       ? `\nDADOS DO CADASTRO: nome="${nome}". Use este nome para confirmar — não invente outro.`
       : `\nDADOS DO CADASTRO: nome não informado. PERGUNTE o nome à lead — NUNCA invente ou assuma um nome.`
-    const systemPrompt = `${ANA_BASE_PROMPT}\n\nINÍCIO: Você inicia a conversa. Comece agora pela Etapa 1.${nomeHint}\n\n${STAGE_INSTRUCTIONS.apresentacao}\n\n${vbp}`
+    const systemPrompt = `${ANA_BASE_PROMPT}\n\nINÍCIO: A lead acabou de atender a ligação. Quando ela disser qualquer coisa (ex: "Alô", "Sim", "Oi"), apresente-se imediatamente e inicie a Etapa 1. Não espere mais de uma fala — reaja ao primeiro som.${nomeHint}\n\n${STAGE_INSTRUCTIONS.apresentacao}\n\n${vbp}`
 
     const oaiRes = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',

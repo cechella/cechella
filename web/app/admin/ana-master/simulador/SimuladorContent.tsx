@@ -819,12 +819,11 @@ function SimuladorInner() {
 
       case 'session.updated': {
         logTimeline('SESSION_UPDATED')
-        // HV-v4: first session.updated after session.created confirms create_response:false is active.
-        // Fire the initial greeting explicitly — subsequent session.updated (from updateInstructions)
-        // are ignored here because sessionReadyRef is already true.
-        if (ACTIVE_PROFILE.controller_response_gate && !sessionReadyRef.current && !responseInProgressRef.current) {
+        // HV-v4: first session.updated confirms create_response:false is active.
+        // ANA waits for the lead to speak first (simulates real call: lead picks up → says "Alô").
+        if (ACTIVE_PROFILE.controller_response_gate && !sessionReadyRef.current) {
           sessionReadyRef.current = true
-          sendResponseCreate('session:start')
+          logTimeline('SESSION_READY', 'waiting for lead to speak first (call pickup simulation)')
         }
         break
       }
@@ -1089,7 +1088,7 @@ function SimuladorInner() {
 
       dc.onopen = () => {
         sessionReadyRef.current = false
-        addTranscript('system', '🎙️ Conectado — ANA está iniciando...')
+        addTranscript('system', '🎙️ Conectado — diga "Alô" para iniciar (simula lead atendendo a ligação)')
 
         if (ACTIVE_PROFILE.controller_response_gate) {
           // HV-v4: set create_response:false via session.update (not in initial payload).
