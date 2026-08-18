@@ -889,6 +889,7 @@ function SimuladorInner() {
 
         // Execute function calls
         const funcCalls = (msg.response?.output ?? []).filter((o: any) => o.type === 'function_call')
+        let nonSilentToolFired = false
         for (const call of funcCalls) {
           let parsedArgs: Record<string, unknown> = {}
           try { parsedArgs = JSON.parse(call.arguments ?? '{}') } catch {}
@@ -898,9 +899,8 @@ function SimuladorInner() {
           const result = await executeTool(call.name, parsedArgs)
           sendEvent({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: call.call_id, output: result } })
           logTimeline('FUNCTION_CALL_OUTPUT_SENT', call.name)
-          // Policy enforcement: silent tools do not trigger a new response
           logTimeline('RESPONSE_CREATE_DECISION', `tool=${call.name} policy=${policy}`)
-          if (policy !== 'silent') sendResponseCreate(`tool:${call.name}`)
+          if (policy !== 'silent') { sendResponseCreate(`tool:${call.name}`); nonSilentToolFired = true }
         }
         // HV-v4: response is done — unlock response.create for next turn
         responseInProgressRef.current = false
@@ -910,6 +910,16 @@ function SimuladorInner() {
           pendingSkippedDispositionRef.current = null
           logTimeline('RESPONSE_CREATE_DEQUEUED', `firing queued ${queuedOrigin}`)
           sendResponseCreate(queuedOrigin)
+        } else if (
+          // Response completed with no audio and only silent tools — ANA must continue speaking
+          ACTIVE_PROFILE.controller_response_gate &&
+          responseStatus !== 'cancelled' &&
+          !currentDeliveryRef.current.audio_started &&
+          funcCalls.length > 0 &&
+          !nonSilentToolFired
+        ) {
+          logTimeline('RESPONSE_CREATE_SILENT_RECOVERY', 'no audio + only silent tools — firing recovery response.create')
+          sendResponseCreate('silent-tool-recovery')
         }
         break
       }
