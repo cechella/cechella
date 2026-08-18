@@ -1021,7 +1021,10 @@ function SimuladorInner() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ telefone, nome: nome.trim() || undefined, voice: selectedVoice, model: selectedModel }),
       })
-      if (!sessionRes.ok) throw new Error('Falha ao criar sessão')
+      if (!sessionRes.ok) {
+        const errBody = await sessionRes.json().catch(() => ({}))
+        throw new Error(`Falha ao criar sessão: ${errBody?.error ?? sessionRes.status}`)
+      }
       const { callSid, clientSecret, telefone: normPhone, profileVersion: pv, model: mdl, voice: vc } = await sessionRes.json()
       callSidRef.current = callSid; telefoneRef.current = normPhone
       if (pv) setProfileVersion(pv)
