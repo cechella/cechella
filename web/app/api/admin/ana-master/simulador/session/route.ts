@@ -152,12 +152,6 @@ export async function POST(req: NextRequest) {
           instructions: systemPrompt,
           tools: TOOLS,
           tool_choice: 'auto',
-          ...(ACTIVE_PROFILE.max_response_output_tokens !== undefined && {
-            max_response_output_tokens: ACTIVE_PROFILE.max_response_output_tokens,
-          }),
-          ...(ACTIVE_PROFILE.reasoning_effort !== undefined && {
-            reasoning: { effort: ACTIVE_PROFILE.reasoning_effort },
-          }),
           audio: {
             output: { voice: voice ?? ACTIVE_PROFILE.voice },
             input: {
