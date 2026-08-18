@@ -172,12 +172,15 @@ export async function POST(req: NextRequest) {
     // GA protocol returns ephemeral key at top-level `value` (not client_secret.value)
     const clientSecret = session.value ?? session.client_secret?.value
 
+    const activeVoice = voice ?? ACTIVE_PROFILE.voice
+    const activeModel = model ?? ACTIVE_PROFILE.model
     return NextResponse.json({
       callSid,
       telefone: norm,
       clientSecret,
       sessionId: session.session?.id ?? session.id,
-      model: ACTIVE_PROFILE.model,
+      model: activeModel,
+      voice: activeVoice,
       profileVersion: ACTIVE_PROFILE.version,
     })
   } catch (e: any) {

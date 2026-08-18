@@ -295,6 +295,7 @@ function SimuladorInner() {
   const [audioUploading, setAudioUploading] = useState(false)
   const [profileVersion, setProfileVersion] = useState('')
   const [activeModel, setActiveModel] = useState('')
+  const [activeVoice, setActiveVoice] = useState('')
   const [metrics, setMetrics] = useState<LatencyMetrics>({ lastResponseMs: null, interruptionCount: 0, turnCount: 0 })
   const [lastDisposition, setLastDisposition] = useState<LeadTurnDisposition | null>(null)
   // PASSO 2A
@@ -1021,10 +1022,11 @@ function SimuladorInner() {
         body: JSON.stringify({ telefone, nome: nome.trim() || undefined, voice: selectedVoice, model: selectedModel }),
       })
       if (!sessionRes.ok) throw new Error('Falha ao criar sessão')
-      const { callSid, clientSecret, telefone: normPhone, profileVersion: pv, model: mdl } = await sessionRes.json()
+      const { callSid, clientSecret, telefone: normPhone, profileVersion: pv, model: mdl, voice: vc } = await sessionRes.json()
       callSidRef.current = callSid; telefoneRef.current = normPhone
       if (pv) setProfileVersion(pv)
       if (mdl) setActiveModel(mdl)
+      if (vc) setActiveVoice(vc)
 
       if (checkpointOverride) restoreCheckpoint(checkpointOverride)
 
@@ -1214,6 +1216,8 @@ function SimuladorInner() {
             {profileVersion
               ? <span style={{ color: '#7B3FE4', fontWeight: 700 }}>{profileVersion}</span>
               : <span>· gpt-4o-realtime</span>}
+            {activeVoice && <span style={{ color: '#22C55E', fontWeight: 700 }}>· {activeVoice}</span>}
+            {activeModel && activeModel !== 'gpt-realtime' && <span style={{ color: '#F59E0B', fontWeight: 700 }}>· {activeModel}</span>}
             {isRecording && (
               <span style={{ color: '#F87171', display: 'flex', alignItems: 'center', gap: 3 }}>
                 <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#F87171', display: 'inline-block', animation: 'pulse 1s infinite' }} />
