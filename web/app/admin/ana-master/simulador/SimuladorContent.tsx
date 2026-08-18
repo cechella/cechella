@@ -334,6 +334,8 @@ function SimuladorInner() {
   const sessionReadyRef = useRef(false)
   // HV-v4: true while a response is in progress — guards against double response.create
   const responseInProgressRef = useRef(false)
+  // HV-v4: if lead speaks while response is in progress, save origin to fire on response.done
+  const pendingSkippedDispositionRef = useRef<string | null>(null)
 
   useEffect(() => { speechRef.current = speechProgress }, [speechProgress])
   useEffect(() => { stageRef.current = currentStage }, [currentStage])
@@ -783,9 +785,11 @@ function SimuladorInner() {
     // session.update (updateInstructions) was sent above; DataChannel ordering ensures server processes
     // it before this response.create. output_modalities:["audio"] is set inside sendResponseCreate.
     if (ACTIVE_PROFILE.controller_response_gate && !responseInProgressRef.current) {
+      pendingSkippedDispositionRef.current = null
       sendResponseCreate(`disposition:${disposition}`)
     } else if (ACTIVE_PROFILE.controller_response_gate) {
-      logTimeline('RESPONSE_CREATE_SKIPPED', `disposition=${disposition} — response in progress`)
+      pendingSkippedDispositionRef.current = `disposition:${disposition}`
+      logTimeline('RESPONSE_CREATE_QUEUED', `disposition=${disposition} — response in progress, will fire on response.done`)
     }
   }, [updateInstructions, saveSpeechState, logTimeline, sendResponseCreate])
 
@@ -901,6 +905,13 @@ function SimuladorInner() {
         }
         // HV-v4: response is done — unlock response.create for next turn
         responseInProgressRef.current = false
+        // HV-v4: if lead spoke while response was in progress, fire the queued response.create now
+        if (ACTIVE_PROFILE.controller_response_gate && pendingSkippedDispositionRef.current) {
+          const queuedOrigin = pendingSkippedDispositionRef.current
+          pendingSkippedDispositionRef.current = null
+          logTimeline('RESPONSE_CREATE_DEQUEUED', `firing queued ${queuedOrigin}`)
+          sendResponseCreate(queuedOrigin)
+        }
         break
       }
 
@@ -984,6 +995,7 @@ function SimuladorInner() {
     lastResponseOriginRef.current = 'unknown'
     sessionReadyRef.current = false
     responseInProgressRef.current = false
+    pendingSkippedDispositionRef.current = null
 
     try {
       const sessionRes = await fetch('/api/admin/ana-master/simulador/session', {
