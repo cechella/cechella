@@ -152,14 +152,9 @@ export async function POST(req: NextRequest) {
           instructions: systemPrompt,
           tools: TOOLS,
           tool_choice: 'auto',
-          output_modalities: ['audio'],
           audio: {
-            output: {
-              voice: voice ?? ACTIVE_PROFILE.voice,
-              format: { type: 'audio/pcm' },
-            },
+            output: { voice: voice ?? ACTIVE_PROFILE.voice },
             input: {
-              format: { type: 'audio/pcm', rate: 24000 },
               transcription: { model: ACTIVE_PROFILE.transcription_model },
               turn_detection: ACTIVE_PROFILE.vad,
               ...(ACTIVE_PROFILE.noise_reduction !== undefined && {
