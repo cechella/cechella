@@ -100,7 +100,7 @@ type SessionStatus = 'idle' | 'connecting' | 'active' | 'error' | 'ended'
 // PASSO 2A — Tool response policy: silent = no response.create after tool output
 //            controller_decides = response.create is sent (behavior unchanged in 2A)
 const TOOL_RESPONSE_POLICY: Record<string, 'silent' | 'controller_decides'> = {
-  save_memory:              'silent',
+  save_memory:              'controller_decides',
   send_whatsapp:            'silent',
   set_expectation:          'silent',
   gateValidator:            'controller_decides',
@@ -887,7 +887,8 @@ function SimuladorInner() {
           if (text) { addTranscript('ana', text); saveTranscriptTurn('ana', text) }
         }
 
-        // Execute function calls
+        // Execute function calls — wrapped in try/catch so a failing tool never
+        // silently locks responseInProgressRef and freezes ANA permanently.
         const funcCalls = (msg.response?.output ?? []).filter((o: any) => o.type === 'function_call')
         let nonSilentToolFired = false
         for (const call of funcCalls) {
@@ -896,7 +897,13 @@ function SimuladorInner() {
           const policy = TOOL_RESPONSE_POLICY[call.name] ?? 'controller_decides'
           addTranscript('tool', `→ ${call.name}(${JSON.stringify(parsedArgs).slice(0, 80)}) [${policy}]`)
           logTimeline('TOOL_CALL', `${call.name} policy=${policy}`)
-          const result = await executeTool(call.name, parsedArgs)
+          let result = 'ok'
+          try {
+            result = await executeTool(call.name, parsedArgs)
+          } catch (toolErr: any) {
+            logTimeline('TOOL_ERROR', `${call.name} threw: ${toolErr?.message ?? toolErr}`)
+            result = `error: ${toolErr?.message ?? 'unknown'}`
+          }
           sendEvent({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: call.call_id, output: result } })
           logTimeline('FUNCTION_CALL_OUTPUT_SENT', call.name)
           logTimeline('RESPONSE_CREATE_DECISION', `tool=${call.name} policy=${policy}`)
