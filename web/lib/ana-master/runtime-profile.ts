@@ -68,8 +68,8 @@ export const ANA_PROFILE_V3: AnaRuntimeProfile = {
 // response.create é disparado explicitamente pelo controller com output_modalities:["audio"].
 // Elimina a race condition onde semantic_vad disparava antes da classificação do controller.
 export const ANA_PROFILE_V4: AnaRuntimeProfile = {
-  version: 'ANA-v4.0.0',
-  model: 'gpt-realtime',
+  version: 'ANA-v4.1.0',
+  model: 'gpt-realtime-2.1',
   voice: 'marin',
   transport: 'webrtc',
   vad: {

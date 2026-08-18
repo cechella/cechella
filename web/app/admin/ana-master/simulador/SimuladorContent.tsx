@@ -275,7 +275,7 @@ function SimuladorInner() {
   const [telefone, setTelefone] = useState('5548988416899')
   const [nome, setNome] = useState('')
   const [selectedVoice, setSelectedVoice] = useState('marin')
-  const [selectedModel, setSelectedModel] = useState('gpt-realtime')
+  const [selectedModel, setSelectedModel] = useState('gpt-realtime-2.1')
   const [status, setStatus] = useState<SessionStatus>('idle')
   const [currentStage, setCurrentStage] = useState('apresentacao')
   const [speechProgress, setSpeechProgress] = useState<SpeechProgress>(initialSpeechProgress())
@@ -1268,8 +1268,11 @@ function SimuladorInner() {
             disabled={status === 'active' || status === 'connecting'}
             style={{ width: '100%', background: '#111113', border: '1px solid #27272F', borderRadius: 8, padding: '7px 10px', fontSize: 13, color: '#fff', outline: 'none', boxSizing: 'border-box' }}
           >
-            <option value="gpt-realtime">gpt-realtime (atual)</option>
-            <option value="gpt-realtime-1.5">gpt-realtime-1.5 (novo)</option>
+            <option value="gpt-realtime-2.1">gpt-realtime-2.1 ★ (recomendado OpenAI)</option>
+            <option value="gpt-realtime-2">gpt-realtime-2 (GPT-5 class)</option>
+            <option value="gpt-realtime-2.1-mini">gpt-realtime-2.1-mini (econômico)</option>
+            <option value="gpt-realtime-1.5">gpt-realtime-1.5</option>
+            <option value="gpt-realtime">gpt-realtime (anterior)</option>
           </select>
         </div>
 
