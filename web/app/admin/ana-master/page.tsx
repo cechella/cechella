@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react'
 import { SimuladorContent } from './simulador/SimuladorContent'
 import { SimuladorGoldContent } from './simulador/SimuladorGoldContent'
+import { RealtimeConfigPanel } from './simulador/RealtimeConfigPanel'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import {
@@ -3496,6 +3497,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] =
 export default function AnaMasterPage() {
   const [tab, setTab] = useState<Tab>('central')
   const [simMode, setSimMode] = useState<'controller' | 'gold'>('controller')
+  const [simConfigOpen, setSimConfigOpen] = useState(false)
   const [sims, setSims] = useState<Simulacao[]>([])
   const [gold, setGold] = useState<GoldItem[]>([])
   const [antiGold, setAntiGold] = useState<AntiGoldItem[]>([])
@@ -3588,6 +3590,7 @@ export default function AnaMasterPage() {
               {tab === 'dna'        && <DnaTab />}
               {tab === 'simulador'  && (
                 <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
+                  {/* toolbar */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderBottom: '1px solid #27272A', background: '#09090B', flexShrink: 0 }}>
                     <button
                       onClick={() => setSimMode('controller')}
@@ -3601,9 +3604,31 @@ export default function AnaMasterPage() {
                     >
                       ✦ Gold
                     </button>
+                    <div style={{ flex: 1 }} />
+                    <button
+                      onClick={() => setSimConfigOpen(o => !o)}
+                      title="Configurações da sessão"
+                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: simConfigOpen ? '1px solid #8B5CF660' : '1px solid #27272A', background: simConfigOpen ? '#8B5CF618' : 'transparent', color: simConfigOpen ? '#8B5CF6' : '#71717A', transition: 'all 0.15s' }}
+                    >
+                      ⚙ Config
+                    </button>
                   </div>
-                  <div style={{ flex: 1, borderRadius: '0 0 12px 12px', overflow: 'hidden', border: '1px solid #27272A', borderTop: 'none' }}>
-                    {simMode === 'controller' ? <SimuladorContent /> : <SimuladorGoldContent />}
+                  {/* body — simulator + optional config panel */}
+                  <div style={{ flex: 1, display: 'flex', overflow: 'hidden', border: '1px solid #27272A', borderTop: 'none', borderRadius: '0 0 12px 12px' }}>
+                    <div style={{ flex: 1, overflow: 'hidden' }}>
+                      {simMode === 'controller' ? <SimuladorContent /> : <SimuladorGoldContent />}
+                    </div>
+                    {simConfigOpen && (
+                      <div style={{ width: 280, borderLeft: '1px solid #27272A', background: '#09090B', flexShrink: 0, overflowY: 'auto' }}>
+                        <div style={{ padding: '10px 14px', borderBottom: '1px solid #27272A', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: simMode === 'gold' ? '#F59E0B' : '#3B82F6' }}>
+                            {simMode === 'gold' ? '✦ Gold Config' : '⚙ Controller Config'}
+                          </span>
+                          <button onClick={() => setSimConfigOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#52525B', fontSize: 18, lineHeight: 1 }}>×</button>
+                        </div>
+                        <RealtimeConfigPanel profile={simMode} isGold={simMode === 'gold'} />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

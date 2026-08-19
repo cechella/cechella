@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { GOLDEN_PROMPT } from '@/lib/ana-master/constants'
+import { GOLD_DEFAULTS } from '@/app/api/admin/ana-master/realtime-config/route'
 import { ANA_PROFILE_GOLD } from '@/lib/ana-master/runtime-profile'
 
 export const dynamic = 'force-dynamic'
@@ -11,8 +11,18 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-const GOLD_PROFILE = ANA_PROFILE_GOLD
-const vad = GOLD_PROFILE.vad as { type: 'server_vad'; threshold: number; prefix_padding_ms: number; silence_duration_ms: number }
+async function getGoldConfig() {
+  try {
+    const { data } = await supabase
+      .from('ana_realtime_profiles')
+      .select('*')
+      .eq('profile', 'gold')
+      .single()
+    return data ?? GOLD_DEFAULTS
+  } catch {
+    return GOLD_DEFAULTS
+  }
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -21,6 +31,8 @@ export async function POST(req: NextRequest) {
     if (!telefone) {
       return NextResponse.json({ error: 'telefone obrigatório' }, { status: 400 })
     }
+
+    const cfg = await getGoldConfig()
 
     const callSid = `sim-gold-${Date.now()}`
     const digits = String(telefone).replace(/\D/g, '')
@@ -33,7 +45,7 @@ export async function POST(req: NextRequest) {
       stage: 'apresentacao',
       status: 'active',
       gates_passed: [],
-      memories: { telefone: norm, sim_browser: true, sim_gold: true, profile_version: GOLD_PROFILE.version },
+      memories: { telefone: norm, sim_browser: true, sim_gold: true, profile_version: ANA_PROFILE_GOLD.version },
       created_at: now,
       updated_at: now,
     })
@@ -43,7 +55,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `DB insert failed: ${insertError.message}` }, { status: 500 })
     }
 
-    // Payload exato do OpenAI Playground — espelho do "View Code" em platform.openai.com/audio/realtime
+    const activeModel = model ?? cfg.model
+    const activeVoice = voice ?? cfg.voice
+
+    const turnDetection = cfg.vad_type === 'server_vad'
+      ? { type: 'server_vad', threshold: cfg.vad_threshold, prefix_padding_ms: cfg.vad_prefix_padding_ms, silence_duration_ms: cfg.vad_silence_duration_ms }
+      : { type: 'semantic_vad', eagerness: cfg.vad_eagerness }
+
     const oaiRes = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
       method: 'POST',
       headers: {
@@ -53,27 +71,22 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         session: {
           type: 'realtime',
-          model: model ?? GOLD_PROFILE.model,
-          instructions: GOLDEN_PROMPT,
+          model: activeModel,
+          instructions: cfg.instructions,
           tools: [],
           output_modalities: ['audio'],
-          max_output_tokens: 'inf',
-          reasoning: { effort: 'low' },
+          max_output_tokens: cfg.max_output_tokens === 'inf' ? 'inf' : Number(cfg.max_output_tokens),
+          reasoning: { effort: cfg.reasoning_effort },
           audio: {
             input: {
               format: { type: 'audio/pcm', rate: 24000 },
-              transcription: { model: GOLD_PROFILE.transcription_model, language: 'pt' },
-              noise_reduction: { type: GOLD_PROFILE.noise_reduction },
-              turn_detection: {
-                type: 'server_vad',
-                threshold: vad.threshold,
-                prefix_padding_ms: vad.prefix_padding_ms,
-                silence_duration_ms: vad.silence_duration_ms,
-              },
+              transcription: { model: cfg.transcription_model, language: 'pt' },
+              noise_reduction: { type: cfg.noise_reduction },
+              turn_detection: turnDetection,
             },
             output: {
               format: { type: 'audio/pcm', rate: 24000 },
-              voice: voice ?? GOLD_PROFILE.voice,
+              voice: activeVoice,
             },
           },
         },
@@ -93,9 +106,9 @@ export async function POST(req: NextRequest) {
       telefone: norm,
       clientSecret,
       sessionId: session.session?.id ?? session.id,
-      model: model ?? GOLD_PROFILE.model,
-      voice: voice ?? GOLD_PROFILE.voice,
-      profileVersion: GOLD_PROFILE.version,
+      model: activeModel,
+      voice: activeVoice,
+      profileVersion: ANA_PROFILE_GOLD.version,
     })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
