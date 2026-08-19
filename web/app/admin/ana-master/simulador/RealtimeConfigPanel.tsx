@@ -164,7 +164,7 @@ export function RealtimeConfigPanel({ profile, isGold }: { profile: 'gold' | 'co
               <span style={{ fontSize: 11, color: '#3F3F46' }}>{cfg.instructions.split('\n').length} lines</span>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => setPromptModalOpen(false)} style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #3F3F46', borderRadius: 7, color: '#71717A', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
-                <button onClick={() => { save(); setPromptModalOpen(false) }} style={{ padding: '8px 20px', background: accent, border: 'none', borderRadius: 7, color: isGold ? '#000' : '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.02em' }}>Salvar</button>
+                <button onClick={async () => { await save(); setPromptModalOpen(false) }} style={{ padding: '8px 20px', background: accent, border: 'none', borderRadius: 7, color: isGold ? '#000' : '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.02em' }}>{saving ? 'Salvando…' : 'Salvar'}</button>
               </div>
             </div>
           </div>
