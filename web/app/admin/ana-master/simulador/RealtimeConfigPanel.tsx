@@ -92,6 +92,7 @@ export function RealtimeConfigPanel({ profile, isGold }: { profile: 'gold' | 'co
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [promptModalOpen, setPromptModalOpen] = useState(false)
 
   const accent = isGold ? '#F59E0B' : '#3B82F6'
 
@@ -140,13 +141,39 @@ export function RealtimeConfigPanel({ profile, isGold }: { profile: 'gold' | 'co
         {cfg._source === 'db' ? '✓ salvo no banco' : '⚙ padrão do código'}
       </div>
 
+      {/* Prompt modal */}
+      {promptModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+          onClick={e => { if (e.target === e.currentTarget) setPromptModalOpen(false) }}
+        >
+          <div style={{ background: '#18181B', border: '1px solid #27272A', borderRadius: 16, width: '100%', maxWidth: 680, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.9)' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid #27272A', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 14, fontWeight: 700, color: '#F4F4F5' }}>Edit system instructions</span>
+              <button onClick={() => setPromptModalOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#71717A', fontSize: 22, lineHeight: 1 }}>×</button>
+            </div>
+            <textarea
+              value={cfg.instructions}
+              onChange={e => set('instructions', e.target.value)}
+              style={{ flex: 1, background: 'transparent', border: 'none', padding: '16px 18px', fontSize: 13, color: '#F4F4F5', outline: 'none', resize: 'none', fontFamily: 'monospace', lineHeight: 1.7, overflowY: 'auto' }}
+            />
+            <div style={{ padding: '12px 18px', borderTop: '1px solid #27272A', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button onClick={() => setPromptModalOpen(false)} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid #27272A', borderRadius: 8, color: '#A1A1AA', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={() => { save(); setPromptModalOpen(false) }} style={{ padding: '8px 16px', background: accent, border: 'none', borderRadius: 8, color: isGold ? '#000' : '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* System Instructions */}
       <div style={{ marginBottom: 14 }}>
-        <label style={{ display: 'block', fontSize: 12, color: '#A1A1AA', marginBottom: 6 }}>System Instructions</label>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <label style={{ fontSize: 12, color: '#A1A1AA' }}>System Instructions</label>
+          <button onClick={() => setPromptModalOpen(true)} title="Editar em tela cheia" style={{ background: 'transparent', border: '1px solid #27272A', borderRadius: 5, cursor: 'pointer', color: '#71717A', fontSize: 11, padding: '2px 7px' }}>⤢ Expandir</button>
+        </div>
         <textarea
           value={cfg.instructions}
           onChange={e => set('instructions', e.target.value)}
-          rows={8}
+          rows={6}
           style={{ width: '100%', background: '#18181B', border: '1px solid #27272A', borderRadius: 8, padding: '8px 10px', fontSize: 11, color: '#F4F4F5', outline: 'none', resize: 'vertical', fontFamily: 'monospace', lineHeight: 1.5, boxSizing: 'border-box' }}
         />
       </div>

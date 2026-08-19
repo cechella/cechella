@@ -70,6 +70,12 @@ export function SimuladorGoldContent() {
   const transcriptRef = useRef<HTMLDivElement>(null)
   const responseStartTsRef = useRef<number | null>(null)
   const callSidRef = useRef<string | null>(null)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const mixDestRef = useRef<MediaStreamAudioDestinationNode | null>(null)
+  const audioUploadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [isRecording, setIsRecording] = useState(false)
 
   const saveTranscriptTurn = useCallback((role: string, text: string) => {
     if (!callSidRef.current || !text.trim()) return
@@ -77,6 +83,17 @@ export function SimuladorGoldContent() {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ callSid: callSidRef.current, role, text }),
     }).catch(() => {})
+  }, [])
+
+  const uploadAudio = useCallback(async () => {
+    const chunks = audioChunksRef.current
+    if (chunks.length === 0 || !callSidRef.current) return
+    try {
+      const blob = new Blob(chunks, { type: 'audio/webm' })
+      await fetch(`/api/admin/ana-master/simulador/audio?callSid=${callSidRef.current}`, {
+        method: 'POST', body: blob, headers: { 'Content-Type': 'audio/webm' },
+      })
+    } catch {}
   }, [])
 
   useEffect(() => { metricsRef.current = metrics }, [metrics])
@@ -188,10 +205,40 @@ export function SimuladorGoldContent() {
       localStreamRef.current = stream
       stream.getTracks().forEach(track => pc.addTrack(track, stream))
 
+      // Audio recording — mix local mic + ANA remote track
+      try {
+        const audioCtx = new AudioContext()
+        audioCtxRef.current = audioCtx
+        const dest = audioCtx.createMediaStreamDestination()
+        mixDestRef.current = dest
+        const localSource = audioCtx.createMediaStreamSource(stream)
+        localSource.connect(dest)
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm'
+        const recorder = new MediaRecorder(dest.stream, { mimeType })
+        audioChunksRef.current = []
+        recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
+        recorder.start(2000); mediaRecorderRef.current = recorder; setIsRecording(true)
+        audioUploadIntervalRef.current = setInterval(() => {
+          const chunks = audioChunksRef.current
+          const sid = callSidRef.current
+          if (chunks.length === 0 || !sid) return
+          const blob = new Blob(chunks, { type: 'audio/webm' })
+          fetch(`/api/admin/ana-master/simulador/audio?callSid=${sid}`, {
+            method: 'POST', body: blob, headers: { 'Content-Type': 'audio/webm' },
+          }).catch(() => {})
+        }, 60000)
+      } catch { setIsRecording(false) }
+
       pc.ontrack = (e) => {
         const audio = document.createElement('audio')
         audio.autoplay = true; audio.srcObject = e.streams[0]
         document.body.appendChild(audio); audioRef.current = audio
+        if (audioCtxRef.current && mixDestRef.current) {
+          try {
+            const remoteSource = audioCtxRef.current.createMediaStreamSource(e.streams[0])
+            remoteSource.connect(mixDestRef.current)
+          } catch {}
+        }
       }
 
       const dc = pc.createDataChannel('oai-events'); dcRef.current = dc
@@ -213,11 +260,25 @@ export function SimuladorGoldContent() {
   }, [telefone, handleDCMessage, addTranscript])
 
   const stopSession = useCallback(() => {
+    if (audioUploadIntervalRef.current) {
+      clearInterval(audioUploadIntervalRef.current)
+      audioUploadIntervalRef.current = null
+    }
+    const recorder = mediaRecorderRef.current
+    if (recorder && recorder.state !== 'inactive') {
+      recorder.onstop = () => uploadAudio()
+      recorder.stop()
+    } else if (recorder) {
+      uploadAudio()
+    }
+    mediaRecorderRef.current = null; setIsRecording(false)
+    audioCtxRef.current?.close().catch(() => {}); audioCtxRef.current = null; mixDestRef.current = null
+
     pcRef.current?.close(); pcRef.current = null; dcRef.current = null
     localStreamRef.current?.getTracks().forEach(t => t.stop()); localStreamRef.current = null
     if (audioRef.current) { audioRef.current.srcObject = null; audioRef.current.remove(); audioRef.current = null }
     setStatus('ended'); setStreamingText(''); addTranscript('system', '⏹ Sessão encerrada.')
-  }, [addTranscript])
+  }, [addTranscript, uploadAudio])
 
   const toggleMute = useCallback(() => {
     localStreamRef.current?.getTracks().forEach(t => { t.enabled = isMuted })
