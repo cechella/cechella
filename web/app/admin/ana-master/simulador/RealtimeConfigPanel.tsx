@@ -143,22 +143,29 @@ export function RealtimeConfigPanel({ profile, isGold }: { profile: 'gold' | 'co
 
       {/* Prompt modal */}
       {promptModalOpen && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px 32px' }}
           onClick={e => { if (e.target === e.currentTarget) setPromptModalOpen(false) }}
         >
-          <div style={{ background: '#18181B', border: '1px solid #27272A', borderRadius: 16, width: '100%', maxWidth: 680, maxHeight: '90vh', display: 'flex', flexDirection: 'column', boxShadow: '0 32px 80px rgba(0,0,0,0.9)' }}>
-            <div style={{ padding: '14px 18px', borderBottom: '1px solid #27272A', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#F4F4F5' }}>Edit system instructions</span>
-              <button onClick={() => setPromptModalOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#71717A', fontSize: 22, lineHeight: 1 }}>×</button>
+          <div style={{ background: '#111113', border: '1px solid #303033', borderRadius: 12, width: '100%', maxWidth: 900, height: '85vh', display: 'flex', flexDirection: 'column', boxShadow: '0 40px 120px rgba(0,0,0,0.95)' }}>
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid #27272A', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <div>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#F4F4F5' }}>System Instructions</span>
+                <span style={{ marginLeft: 12, fontSize: 12, color: '#52525B' }}>{cfg.profile} · {cfg.instructions.length} chars</span>
+              </div>
+              <button onClick={() => setPromptModalOpen(false)} style={{ background: '#27272A', border: 'none', cursor: 'pointer', color: '#A1A1AA', fontSize: 18, lineHeight: 1, width: 32, height: 32, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
             </div>
             <textarea
               value={cfg.instructions}
               onChange={e => set('instructions', e.target.value)}
-              style={{ flex: 1, background: 'transparent', border: 'none', padding: '16px 18px', fontSize: 13, color: '#F4F4F5', outline: 'none', resize: 'none', fontFamily: 'monospace', lineHeight: 1.7, overflowY: 'auto' }}
+              placeholder="Enter system instructions…"
+              style={{ flex: 1, background: 'transparent', border: 'none', padding: '20px 24px', fontSize: 14, color: '#E4E4E7', outline: 'none', resize: 'none', fontFamily: '"JetBrains Mono", "Fira Code", "Cascadia Code", monospace', lineHeight: 1.75, overflowY: 'auto', letterSpacing: '0.01em' }}
             />
-            <div style={{ padding: '12px 18px', borderTop: '1px solid #27272A', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-              <button onClick={() => setPromptModalOpen(false)} style={{ padding: '8px 16px', background: 'transparent', border: '1px solid #27272A', borderRadius: 8, color: '#A1A1AA', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={() => { save(); setPromptModalOpen(false) }} style={{ padding: '8px 16px', background: accent, border: 'none', borderRadius: 8, color: isGold ? '#000' : '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Save</button>
+            <div style={{ padding: '14px 24px', borderTop: '1px solid #27272A', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+              <span style={{ fontSize: 11, color: '#3F3F46' }}>{cfg.instructions.split('\n').length} lines</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setPromptModalOpen(false)} style={{ padding: '8px 18px', background: 'transparent', border: '1px solid #3F3F46', borderRadius: 7, color: '#71717A', fontSize: 13, cursor: 'pointer' }}>Cancelar</button>
+                <button onClick={() => { save(); setPromptModalOpen(false) }} style={{ padding: '8px 20px', background: accent, border: 'none', borderRadius: 7, color: isGold ? '#000' : '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', letterSpacing: '0.02em' }}>Salvar</button>
+              </div>
             </div>
           </div>
         </div>
