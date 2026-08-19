@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { GOLDEN_PROMPT, ANA_BASE_PROMPT } from '@/lib/ana-master/constants'
-import { ANA_PROFILE_GOLD, ACTIVE_PROFILE } from '@/lib/ana-master/runtime-profile'
+import { GOLD_DEFAULTS, CONTROLLER_DEFAULTS } from '@/lib/ana-master/realtime-config-defaults'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,55 +10,7 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-// SQL to create table (run once in Supabase SQL editor):
-// create table if not exists ana_realtime_profiles (
-//   profile text primary key,
-//   model text not null default 'gpt-realtime-2.1',
-//   voice text not null default 'marin',
-//   vad_type text not null default 'server_vad',
-//   vad_threshold float default 0.5,
-//   vad_prefix_padding_ms int default 300,
-//   vad_silence_duration_ms int default 500,
-//   vad_eagerness text default 'low',
-//   transcription_model text default 'gpt-realtime-whisper',
-//   noise_reduction text default 'far_field',
-//   max_output_tokens text default 'inf',
-//   reasoning_effort text default 'low',
-//   instructions text,
-//   updated_at timestamptz default now()
-// );
-
-export const GOLD_DEFAULTS = {
-  profile: 'gold',
-  model: ANA_PROFILE_GOLD.model,
-  voice: ANA_PROFILE_GOLD.voice,
-  vad_type: 'server_vad',
-  vad_threshold: 0.5,
-  vad_prefix_padding_ms: 300,
-  vad_silence_duration_ms: 500,
-  vad_eagerness: 'low',
-  transcription_model: ANA_PROFILE_GOLD.transcription_model,
-  noise_reduction: ANA_PROFILE_GOLD.noise_reduction ?? 'far_field',
-  max_output_tokens: 'inf',
-  reasoning_effort: 'low',
-  instructions: GOLDEN_PROMPT,
-}
-
-export const CONTROLLER_DEFAULTS = {
-  profile: 'controller',
-  model: ACTIVE_PROFILE.model,
-  voice: ACTIVE_PROFILE.voice,
-  vad_type: ACTIVE_PROFILE.vad.type,
-  vad_threshold: (ACTIVE_PROFILE.vad as any).threshold ?? 0.5,
-  vad_prefix_padding_ms: (ACTIVE_PROFILE.vad as any).prefix_padding_ms ?? 300,
-  vad_silence_duration_ms: (ACTIVE_PROFILE.vad as any).silence_duration_ms ?? 500,
-  vad_eagerness: (ACTIVE_PROFILE.vad as any).eagerness ?? 'low',
-  transcription_model: ACTIVE_PROFILE.transcription_model,
-  noise_reduction: ACTIVE_PROFILE.noise_reduction ?? 'far_field',
-  max_output_tokens: 'inf',
-  reasoning_effort: 'low',
-  instructions: ANA_BASE_PROMPT,
-}
+export { GOLD_DEFAULTS, CONTROLLER_DEFAULTS }
 
 export async function GET(req: NextRequest) {
   const profile = req.nextUrl.searchParams.get('profile') ?? 'gold'

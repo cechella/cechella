@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { GOLD_DEFAULTS } from '@/app/api/admin/ana-master/realtime-config/route'
+import { GOLD_DEFAULTS } from '@/lib/ana-master/realtime-config-defaults'
 import { ANA_PROFILE_GOLD } from '@/lib/ana-master/runtime-profile'
 
 export const dynamic = 'force-dynamic'
