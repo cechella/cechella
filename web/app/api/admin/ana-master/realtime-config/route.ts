@@ -10,8 +10,6 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-export { GOLD_DEFAULTS, CONTROLLER_DEFAULTS }
-
 export async function GET(req: NextRequest) {
   const profile = req.nextUrl.searchParams.get('profile') ?? 'gold'
   const defaults = profile === 'gold' ? GOLD_DEFAULTS : CONTROLLER_DEFAULTS
