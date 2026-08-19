@@ -69,6 +69,15 @@ export function SimuladorGoldContent() {
   const localStreamRef = useRef<MediaStream | null>(null)
   const transcriptRef = useRef<HTMLDivElement>(null)
   const responseStartTsRef = useRef<number | null>(null)
+  const callSidRef = useRef<string | null>(null)
+
+  const saveTranscriptTurn = useCallback((role: string, text: string) => {
+    if (!callSidRef.current || !text.trim()) return
+    fetch('/api/admin/ana-master/simulador/transcript', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callSid: callSidRef.current, role, text }),
+    }).catch(() => {})
+  }, [])
 
   useEffect(() => { metricsRef.current = metrics }, [metrics])
   useEffect(() => {
@@ -116,7 +125,7 @@ export function SimuladorGoldContent() {
           const text = audioContent?.transcript
           if (text) {
             addTranscript('ana', text)
-            // Passive stage detection
+            saveTranscriptTurn('ana', text)
             const stage = detectStage(text)
             if (stage) {
               setDetectedStages(prev => prev.includes(stage) ? prev : [...prev, stage])
@@ -136,7 +145,10 @@ export function SimuladorGoldContent() {
       }
       case 'conversation.item.input_audio_transcription.completed': {
         const text = msg.transcript?.trim()
-        if (text) addTranscript('lead', text)
+        if (text) {
+          addTranscript('lead', text)
+          saveTranscriptTurn('lead', text)
+        }
         break
       }
       case 'error': {
@@ -163,6 +175,7 @@ export function SimuladorGoldContent() {
         throw new Error(`Falha ao criar sessão Gold: ${errBody?.error ?? sessionRes.status}`)
       }
       const { callSid: _sid, clientSecret, profileVersion: pv, model: mdl, voice: vc } = await sessionRes.json()
+      callSidRef.current = _sid
       if (pv) setProfileVersion(pv)
       if (mdl) setActiveModel(mdl)
       if (vc) setActiveVoice(vc)

@@ -3244,7 +3244,7 @@ function SessoesInlineTab() {
         referidos:'Referidos',validacao:'Validação',ganho:'Ganho',
       }
       const raw = allRows
-        .filter((row: any) => row.call_sid?.startsWith('sim-browser-'))
+        .filter((row: any) => row.call_sid?.startsWith('sim-browser-') || row.call_sid?.startsWith('sim-gold-'))
         .map((row: any) => {
           const mem = (row.memories ?? {}) as Record<string,any>
           const checkpoints = (mem.checkpoints ?? {}) as Record<string,any>
