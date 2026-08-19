@@ -3497,7 +3497,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] =
 export default function AnaMasterPage() {
   const [tab, setTab] = useState<Tab>('central')
   const [simMode, setSimMode] = useState<'controller' | 'gold'>('controller')
-  const [simConfigOpen, setSimConfigOpen] = useState(false)
+  const [simConfigOpen, setSimConfigOpen] = useState(true)
   const [sims, setSims] = useState<Simulacao[]>([])
   const [gold, setGold] = useState<GoldItem[]>([])
   const [antiGold, setAntiGold] = useState<AntiGoldItem[]>([])
