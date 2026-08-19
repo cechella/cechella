@@ -91,6 +91,7 @@ export function RealtimeConfigPanel({ profile, isGold }: { profile: 'gold' | 'co
   const [cfg, setCfg] = useState<RealtimeConfig | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [saveError, setSaveError] = useState(false)
   const [loading, setLoading] = useState(true)
   const [promptModalOpen, setPromptModalOpen] = useState(false)
 
@@ -112,14 +113,22 @@ export function RealtimeConfigPanel({ profile, isGold }: { profile: 'gold' | 'co
   const save = async () => {
     if (!cfg) return
     setSaving(true)
-    await fetch('/api/admin/ana-master/realtime-config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(cfg),
-    })
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    setSaveError(false)
+    try {
+      const r = await fetch('/api/admin/ana-master/realtime-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfg),
+      })
+      if (!r.ok) throw new Error('erro')
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch {
+      setSaveError(true)
+      setTimeout(() => setSaveError(false), 4000)
+    } finally {
+      setSaving(false)
+    }
   }
 
   const set = (key: keyof RealtimeConfig, value: any) =>
@@ -135,6 +144,20 @@ export function RealtimeConfigPanel({ profile, isGold }: { profile: 'gold' | 'co
 
   return (
     <div style={{ height: '100%', overflowY: 'auto', padding: '16px 14px' }}>
+
+      {/* Save toast */}
+      {(saved || saveError) && (
+        <div style={{
+          position: 'fixed', bottom: 28, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 9999, padding: '12px 24px', borderRadius: 10,
+          background: saved ? '#16A34A' : '#DC2626',
+          color: '#fff', fontSize: 14, fontWeight: 700,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+          pointerEvents: 'none',
+        }}>
+          {saved ? '✓ Prompt salvo com sucesso!' : '✕ Erro ao salvar — tente novamente'}
+        </div>
+      )}
 
       {/* Source indicator */}
       <div style={{ marginBottom: 16, fontSize: 10, color: '#52525B', textAlign: 'right' }}>
