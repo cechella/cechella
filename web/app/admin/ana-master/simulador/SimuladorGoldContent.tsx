@@ -50,7 +50,7 @@ const badgeStyle = (color: string): React.CSSProperties => ({
 })
 
 export function SimuladorGoldContent() {
-  const [telefone, setTelefone] = useState('')
+  const [telefone, setTelefone] = useState('5548988416899')
   const [status, setStatus] = useState<SessionStatus>('idle')
   const [errorMsg, setErrorMsg] = useState('')
   const [transcript, setTranscript] = useState<TranscriptLine[]>([])
