@@ -96,6 +96,27 @@ export const ANA_PROFILE_V4: AnaRuntimeProfile = {
   defined_at: '2026-08-18',  // v4.3.0 audio format baseline
 }
 
+// Gold — exato espelho do OpenAI Playground (server_vad Normal, sem controller)
+// Testado em platform.openai.com/audio/realtime com gpt-realtime-2.1 + marin.
+// ANA responde automaticamente via server_vad — sem create_response:false.
+export const ANA_PROFILE_GOLD: AnaRuntimeProfile = {
+  version: 'ANA-gold-v1.0',
+  model: 'gpt-realtime-2.1',
+  voice: 'marin',
+  transport: 'webrtc',
+  vad: {
+    type: 'server_vad',
+    threshold: 0.5,
+    prefix_padding_ms: 300,
+    silence_duration_ms: 500,
+  },
+  transcription_model: 'gpt-realtime-whisper',
+  noise_reduction: 'far_field',
+  max_response_output_tokens: 'inf',
+  reasoning_effort: 'low',
+  defined_at: '2026-08-19',
+}
+
 /** The active profile — import this everywhere instead of hardcoding constants */
 export const ACTIVE_PROFILE: AnaRuntimeProfile = ANA_PROFILE_V4
 
