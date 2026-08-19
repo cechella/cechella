@@ -915,8 +915,13 @@ function SimuladorInner() {
         // HV-v4: response is done — unlock response.create for next turn
         responseInProgressRef.current = false
         // HV-v4: if lead spoke while response was in progress, fire the queued response.create now.
-        // Guard: skip if nonSilentToolFired — that response.create already covers the lead's last turn.
-        if (ACTIVE_PROFILE.controller_response_gate && pendingSkippedDispositionRef.current && !nonSilentToolFired) {
+        // Guards:
+        // - cancelled: lead is still speaking — do NOT fire; VAD end-of-speech will handle it naturally.
+        // - nonSilentToolFired: tool already fired response.create — drop the queued disposition.
+        if (responseStatus === 'cancelled' && pendingSkippedDispositionRef.current) {
+          pendingSkippedDispositionRef.current = null
+          logTimeline('RESPONSE_CREATE_DEQUEUED_SKIPPED', 'barge-in cancelled — VAD will handle lead turn end')
+        } else if (ACTIVE_PROFILE.controller_response_gate && pendingSkippedDispositionRef.current && !nonSilentToolFired) {
           const queuedOrigin = pendingSkippedDispositionRef.current
           pendingSkippedDispositionRef.current = null
           logTimeline('RESPONSE_CREATE_DEQUEUED', `firing queued ${queuedOrigin}`)
@@ -1145,7 +1150,7 @@ function SimuladorInner() {
               },
               output: {
                 voice: ACTIVE_PROFILE.voice,
-                format: { type: 'audio/pcm' },
+                format: { type: 'audio/pcm', rate: 24000 },
               },
             },
           }
