@@ -76,6 +76,11 @@ export function SimuladorGoldContent() {
   const mixDestRef = useRef<MediaStreamAudioDestinationNode | null>(null)
   const audioUploadIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [isRecording, setIsRecording] = useState(false)
+  const [pixState, setPixState] = useState<'idle' | 'sending' | 'pending' | 'paid'>('idle')
+  const [pixCallId, setPixCallId] = useState<string | null>(null)
+
+  const pixPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const referidosPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const saveTranscriptTurn = useCallback((role: string, text: string) => {
     if (!callSidRef.current || !text.trim()) return
@@ -105,11 +110,74 @@ export function SimuladorGoldContent() {
     setTranscript(prev => [...prev, { role, text, ts: Date.now() }])
   }, [])
 
+  const updateStageInDB = useCallback((stage: string) => {
+    if (!callSidRef.current) return
+    fetch('/api/admin/ana-master/simulador/stage', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callSid: callSidRef.current, stage }),
+    }).catch(() => {})
+  }, [])
+
   const sendEvent = useCallback((event: Record<string, unknown>) => {
     if (dcRef.current?.readyState === 'open') {
       dcRef.current.send(JSON.stringify(event))
     }
   }, [])
+
+  const startPixPolling = useCallback((callId: string) => {
+    if (pixPollRef.current) clearInterval(pixPollRef.current)
+    pixPollRef.current = setInterval(async () => {
+      if (!callSidRef.current) return
+      try {
+        const r = await fetch(`/api/admin/ana-master/simulador/pix-status?callSid=${callSidRef.current}`)
+        const data = await r.json()
+        if (data.paid) {
+          clearInterval(pixPollRef.current!); pixPollRef.current = null
+          setPixState('paid')
+          // Inject payment confirmation into DataChannel so ANA reacts naturally
+          sendEvent({
+            type: 'conversation.item.create',
+            item: {
+              type: 'function_call_output',
+              call_id: callId,
+              output: JSON.stringify({ paid: true, message: 'Pagamento confirmado! Valor de R$ 5.000 recebido com sucesso.' }),
+            },
+          })
+          sendEvent({ type: 'response.create' })
+        }
+      } catch {}
+    }, 4000)
+  }, [sendEvent])
+
+  const requestPix = useCallback(async (callId: string, metodo: string = 'pix') => {
+    if (!callSidRef.current) return
+    setPixState('sending')
+    setPixCallId(callId)
+    try {
+      const r = await fetch('/api/admin/ana-master/simulador/pix', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callSid: callSidRef.current, telefone, metodo }),
+      })
+      const data = await r.json()
+      if (data.ok) {
+        setPixState('pending')
+        addTranscript('system', `💳 ${metodo === 'pix' ? 'PIX' : 'Link de cartão'} enviado via WhatsApp — aguardando pagamento...`)
+        startPixPolling(callId)
+      } else {
+        addTranscript('system', `❌ Erro ao gerar pagamento: ${data.error}`)
+        // Inform ANA of failure
+        sendEvent({
+          type: 'conversation.item.create',
+          item: { type: 'function_call_output', call_id: callId, output: JSON.stringify({ paid: false, error: data.error }) },
+        })
+        sendEvent({ type: 'response.create' })
+        setPixState('idle')
+      }
+    } catch (e: any) {
+      addTranscript('system', `❌ Erro de rede ao gerar pagamento`)
+      setPixState('idle')
+    }
+  }, [telefone, addTranscript, startPixPolling, sendEvent])
 
   const handleDCMessage = useCallback((e: MessageEvent) => {
     let msg: any
@@ -146,6 +214,7 @@ export function SimuladorGoldContent() {
             const stage = detectStage(text)
             if (stage) {
               setDetectedStages(prev => prev.includes(stage) ? prev : [...prev, stage])
+              updateStageInDB(stage)
             }
           }
         }
@@ -168,18 +237,31 @@ export function SimuladorGoldContent() {
         }
         break
       }
+      case 'response.output_item.done': {
+        const item = msg.item
+        if (item?.type === 'function_call' && item?.name === 'solicitar_pagamento') {
+          let args: any = {}
+          try { args = JSON.parse(item.arguments || '{}') } catch {}
+          const metodo = (args.metodo || 'pix').toLowerCase()
+          requestPix(item.call_id, metodo)
+        }
+        break
+      }
       case 'error': {
         const errMsg = msg.error?.message ?? JSON.stringify(msg.error)
         setErrorMsg(`Erro OpenAI: ${errMsg}`)
         break
       }
     }
-  }, [addTranscript])
+  }, [addTranscript, requestPix, updateStageInDB])
 
   const startSession = useCallback(async () => {
     if (!telefone.trim()) { setErrorMsg('Digite o telefone de teste antes de iniciar.'); return }
     setErrorMsg(''); setStatus('connecting')
     setTranscript([]); setStreamingText(''); setDetectedStages([])
+    setPixState('idle'); setPixCallId(null)
+    if (pixPollRef.current) { clearInterval(pixPollRef.current); pixPollRef.current = null }
+    if (referidosPollRef.current) { clearInterval(referidosPollRef.current); referidosPollRef.current = null }
     setMetrics({ turns: 0, interruptions: 0, lastResponseMs: null })
 
     try {
@@ -264,6 +346,9 @@ export function SimuladorGoldContent() {
       clearInterval(audioUploadIntervalRef.current)
       audioUploadIntervalRef.current = null
     }
+    if (pixPollRef.current) { clearInterval(pixPollRef.current); pixPollRef.current = null }
+    if (referidosPollRef.current) { clearInterval(referidosPollRef.current); referidosPollRef.current = null }
+    setPixState('idle'); setPixCallId(null)
     const recorder = mediaRecorderRef.current
     if (recorder && recorder.state !== 'inactive') {
       recorder.onstop = () => uploadAudio()
@@ -384,6 +469,21 @@ export function SimuladorGoldContent() {
           </div>
           <p style={{ fontSize: 9, color: '#3F3F46', margin: '6px 0 0' }}>Detecção passiva por transcript</p>
         </div>
+
+        {/* PIX status */}
+        {pixState !== 'idle' && (
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid #1C1C1E' }}>
+            <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#52525E', margin: '0 0 6px' }}>Pagamento</p>
+            <span style={{
+              fontSize: 11, fontWeight: 700, padding: '3px 10px', borderRadius: 5,
+              background: pixState === 'paid' ? '#22C55E22' : pixState === 'pending' ? '#F59E0B22' : '#3B82F622',
+              color: pixState === 'paid' ? '#22C55E' : pixState === 'pending' ? '#F59E0B' : '#60A5FA',
+              border: `1px solid ${pixState === 'paid' ? '#22C55E44' : pixState === 'pending' ? '#F59E0B44' : '#3B82F644'}`,
+            }}>
+              {pixState === 'paid' ? '✓ Pago' : pixState === 'pending' ? '⏳ Aguardando...' : '💳 Enviando...'}
+            </span>
+          </div>
+        )}
 
       </div>
 

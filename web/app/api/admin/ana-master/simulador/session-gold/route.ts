@@ -73,7 +73,24 @@ export async function POST(req: NextRequest) {
           type: 'realtime',
           model: activeModel,
           instructions: cfg.instructions,
-          tools: [],
+          tools: [
+            {
+              type: 'function',
+              name: 'solicitar_pagamento',
+              description: 'Envia a chave Pix ou o link de cartão para a lead via WhatsApp e aguarda confirmação de pagamento. Chame somente após a lead confirmar a forma de pagamento.',
+              parameters: {
+                type: 'object',
+                properties: {
+                  metodo: {
+                    type: 'string',
+                    enum: ['pix', 'cartao'],
+                    description: 'Forma de pagamento escolhida pela lead',
+                  },
+                },
+                required: ['metodo'],
+              },
+            },
+          ],
           output_modalities: ['audio'],
           max_output_tokens: cfg.max_output_tokens === 'inf' ? 'inf' : Number(cfg.max_output_tokens),
           reasoning: { effort: cfg.reasoning_effort },
