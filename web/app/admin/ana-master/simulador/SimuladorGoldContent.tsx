@@ -114,9 +114,15 @@ export function SimuladorGoldContent() {
 
   const updateStageInDB = useCallback((stage: string) => {
     if (!callSidRef.current) return
+    const DB_STAGE_MAP: Record<string, string> = {
+      abertura: 'apresentacao', conexao: 'conexao', combinado: 'combinado',
+      speech: 'speech', fechamento: 'fechamento', pagamento: 'pagamento',
+      referidos: 'referidos', encerramento: 'encerrado',
+    }
+    const dbStage = DB_STAGE_MAP[stage] ?? stage
     fetch('/api/admin/ana-master/simulador/stage', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callSid: callSidRef.current, stage }),
+      body: JSON.stringify({ callSid: callSidRef.current, stage: dbStage }),
     }).catch(() => {})
   }, [])
 

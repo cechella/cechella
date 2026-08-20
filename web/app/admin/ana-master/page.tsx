@@ -2180,11 +2180,13 @@ const STAGE_LABELS: Record<string, string> = {
   apresentacao: 'E1 Apresentação', conexao: 'E2 Conexão', combinado: 'E3 Combinado',
   speech: 'E4 Speech', fechamento: 'E5 Fechamento', pagamento: 'E6 Pagamento',
   referidos: 'E7 Referidos', validacao: 'E8 Validação', ganho: '★ GANHO',
+  encerrado: 'Encerrado',
 }
 const STAGE_COLOR: Record<string, string> = {
   apresentacao: '#71717A', conexao: '#3B82F6', combinado: '#8B5CF6',
   speech: '#F59E0B', fechamento: '#EF4444', pagamento: '#10B981',
   referidos: '#06B6D4', validacao: '#F97316', ganho: '#22C55E',
+  encerrado: '#6B7280',
 }
 const ALL_GATES = ['GATE_ABERTURA','GATE_CONEXAO','GATE_COMBINADO','GATE_SPEECH','GATE_FECHAMENTO','GATE_PAGAMENTO','GATE_REFERIDOS','GATE_VALIDACAO']
 
