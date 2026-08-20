@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
 
     // Update leads status_pagamento
     const tel = String(resolvedTelefone || '').replace(/\D/g, '')
+    let refDebug: Record<string, unknown> = {}
     if (tel) {
       await supabase
         .from('leads')
@@ -99,18 +100,37 @@ export async function POST(req: NextRequest) {
           body: JSON.stringify({ telefone: tel, callSid }),
         })
         const refData = await refRes.json()
+        refDebug.refData = refData
+        refDebug.zapiPhone = `55${tel}`.replace(/^(55)+/, '55')
         if (refData.link) {
-          await zapiSend(tel,
-            `🎉 *Pagamento confirmado!*\n\nSua jornada hormonal está começando! Em breve nossa equipe entrará em contato para agendar sua consulta. 💜`
-          )
-          await zapiSendVideo(tel, TUTORIAL_VIDEO_URL,
-            `✅ Código recebido!\n\nAssista ao tutorial acima e siga os passos:\n\n1️⃣ Toque no *+* à esquerda\n2️⃣ Escolha *Contato*\n3️⃣ Busque e selecione suas amigas\n4️⃣ Toque em *Enviar*\n\nVocê pode selecionar várias de uma vez! 💜\n\nDepois volte para o link e seus contatos aparecerão automaticamente:\n👉 ${refData.link}`
-          )
+          const r1 = await fetch(`${ZAPI_BASE}/send-text`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+            body: JSON.stringify({
+              phone: normalize(tel),
+              message: `🎉 *Pagamento confirmado!*\n\nSua jornada hormonal está começando! Em breve nossa equipe entrará em contato para agendar sua consulta. 💜`,
+            }),
+          })
+          refDebug.zapi1Status = r1.status
+          refDebug.zapi1Body = await r1.text()
+          const r2 = await fetch(`${ZAPI_BASE}/send-video`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+            body: JSON.stringify({
+              phone: normalize(tel),
+              video: TUTORIAL_VIDEO_URL,
+              caption: `✅ Código recebido!\n\nAssista ao tutorial acima e siga os passos:\n\n1️⃣ Toque no *+* à esquerda\n2️⃣ Escolha *Contato*\n3️⃣ Busque e selecione suas amigas\n4️⃣ Toque em *Enviar*\n\nVocê pode selecionar várias de uma vez! 💜\n\nDepois volte para o link e seus contatos aparecerão automaticamente:\n👉 ${refData.link}`,
+            }),
+          })
+          refDebug.zapi2Status = r2.status
+          refDebug.zapi2Body = await r2.text()
         }
-      } catch {}
+      } catch (zapiErr: any) {
+        refDebug.error = zapiErr.message
+      }
     }
 
-    return NextResponse.json({ ok: true, simulated: true, payment_id: resolvedPaymentId })
+    return NextResponse.json({ ok: true, simulated: true, payment_id: resolvedPaymentId, debug: { tel, ...(typeof refDebug !== 'undefined' ? refDebug : {}) } })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
