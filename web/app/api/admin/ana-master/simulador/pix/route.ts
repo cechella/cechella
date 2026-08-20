@@ -53,7 +53,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, payment_id: existing.payment_id, reused: true })
     }
 
-    const valor = 5000
+    // Lê valor_pix da tabela configuracoes (permite teste com R$1)
+    let valor = 5000
+    try {
+      const { data: cfg } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'pagamento')
+        .maybeSingle()
+      if (cfg?.valor?.valor_pix && Number(cfg.valor.valor_pix) > 0) {
+        valor = Number(cfg.valor.valor_pix)
+      }
+    } catch {}
 
     if (metodo === 'cartao') {
       // Gera token de cartão e link de pagamento
