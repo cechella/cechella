@@ -40,8 +40,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'profile inválido' }, { status: 400 })
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { _source, ...rest } = body
     const record = {
-      ...body,
+      ...rest,
       updated_at: new Date().toISOString(),
     }
 
