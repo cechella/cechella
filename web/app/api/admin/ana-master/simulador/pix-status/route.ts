@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
       payment_id: data.payment_id,
       metodo: data.metodo,
       valor: data.valor,
-    })
+    }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
