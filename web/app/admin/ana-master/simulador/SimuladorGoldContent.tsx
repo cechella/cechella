@@ -137,6 +137,17 @@ export function SimuladorGoldContent() {
           setPixState('paid')
           const valor = pixValorRef.current
           const valorFmt = `R$ ${(valor / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+          // Send referidos WhatsApp link (generates token + sends via Z-API)
+          fetch('/api/admin/ana-master/simulador/pix-webhook/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ paymentId }),
+          }).then(res => res.json()).then(d => {
+            const tel = d.debug?.tel ?? d.debug?.zapiPhone ?? ''
+            addTranscript('system', `📱 Link de referidos enviado via WhatsApp${tel ? ` para ${tel}` : ''}`)
+          }).catch(() => {
+            addTranscript('system', '⚠️ Erro ao enviar link de referidos')
+          })
           // Inject payment confirmation into DataChannel so ANA reacts naturally
           sendEvent({
             type: 'conversation.item.create',
@@ -150,7 +161,7 @@ export function SimuladorGoldContent() {
         }
       } catch {}
     }, 4000)
-  }, [sendEvent])
+  }, [addTranscript, sendEvent])
 
   const requestPix = useCallback(async (callId: string, metodo: string = 'pix') => {
     if (!callSidRef.current) return
