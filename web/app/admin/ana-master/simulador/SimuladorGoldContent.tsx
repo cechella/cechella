@@ -82,6 +82,7 @@ export function SimuladorGoldContent() {
 
   const pixPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const referidosPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const streamingTextRef = useRef('')
 
   const saveTranscriptTurn = useCallback((role: string, text: string) => {
     if (!callSidRef.current || !text.trim()) return
@@ -182,6 +183,31 @@ export function SimuladorGoldContent() {
     }
   }, [telefone, addTranscript, startPixPolling, sendEvent])
 
+  const checkReferidos = useCallback(async (callId: string) => {
+    try {
+      const digits = telefone.replace(/\D/g, '')
+      const r = await fetch(`/api/admin/ana-master/simulador/referidos?telefone=${digits}`)
+      const data = await r.json()
+      const { total = 0, semDados = 0, missaoCompleta = false, token } = data
+      addTranscript('system', `📊 Referidos: ${total}/20 · sem dados: ${semDados} · missão completa: ${missaoCompleta}`)
+      sendEvent({
+        type: 'conversation.item.create',
+        item: {
+          type: 'function_call_output',
+          call_id: callId,
+          output: JSON.stringify({ total, semDados, missaoCompleta, token }),
+        },
+      })
+      sendEvent({ type: 'response.create' })
+    } catch {
+      sendEvent({
+        type: 'conversation.item.create',
+        item: { type: 'function_call_output', call_id: callId, output: JSON.stringify({ total: 0, semDados: 0, missaoCompleta: false }) },
+      })
+      sendEvent({ type: 'response.create' })
+    }
+  }, [telefone, addTranscript, sendEvent])
+
   const handleDCMessage = useCallback((e: MessageEvent) => {
     let msg: any
     try { msg = JSON.parse(e.data) } catch { return }
@@ -189,14 +215,18 @@ export function SimuladorGoldContent() {
     switch (msg.type) {
       case 'response.created': {
         responseStartTsRef.current = Date.now()
+        streamingTextRef.current = ''
         break
       }
       case 'response.audio_transcript.delta':
       case 'response.output_audio_transcript.delta': {
-        setStreamingText(prev => prev + (msg.delta ?? ''))
+        const delta = msg.delta ?? ''
+        streamingTextRef.current += delta
+        setStreamingText(prev => prev + delta)
         break
       }
       case 'response.done': {
+        const capturedStreaming = streamingTextRef.current
         setStreamingText('')
         const responseStatus = msg.response?.status ?? null
         if (responseStatus === 'cancelled') {
@@ -208,17 +238,22 @@ export function SimuladorGoldContent() {
         }
 
         const audioItem = msg.response?.output?.find((o: any) => o.type === 'message' && o.role === 'assistant')
+        let transcriptText: string | null = null
         if (audioItem) {
           const audioContent = audioItem.content?.find((c: any) => c.type === 'output_audio' || c.type === 'audio')
-          const text = audioContent?.transcript
-          if (text) {
-            addTranscript('ana', text)
-            saveTranscriptTurn('ana', text)
-            const stage = detectStage(text)
-            if (stage) {
-              setDetectedStages(prev => prev.includes(stage) ? prev : [...prev, stage])
-              updateStageInDB(stage)
-            }
+          transcriptText = audioContent?.transcript ?? null
+        }
+        // Fallback: if no transcript in response.output but streaming text was captured, use it
+        if (!transcriptText && capturedStreaming && capturedStreaming.trim()) {
+          transcriptText = capturedStreaming.trim()
+        }
+        if (transcriptText) {
+          addTranscript('ana', transcriptText)
+          saveTranscriptTurn('ana', transcriptText)
+          const stage = detectStage(transcriptText)
+          if (stage) {
+            setDetectedStages(prev => prev.includes(stage) ? prev : [...prev, stage])
+            updateStageInDB(stage)
           }
         }
 
@@ -248,6 +283,9 @@ export function SimuladorGoldContent() {
           const metodo = (args.metodo || 'pix').toLowerCase()
           requestPix(item.call_id, metodo)
         }
+        if (item?.type === 'function_call' && item?.name === 'verificar_referidos') {
+          checkReferidos(item.call_id)
+        }
         break
       }
       case 'error': {
@@ -256,7 +294,7 @@ export function SimuladorGoldContent() {
         break
       }
     }
-  }, [addTranscript, requestPix, updateStageInDB])
+  }, [addTranscript, requestPix, checkReferidos, updateStageInDB])
 
   const startSession = useCallback(async () => {
     if (!telefone.trim()) { setErrorMsg('Digite o telefone de teste antes de iniciar.'); return }

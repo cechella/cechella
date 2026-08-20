@@ -90,6 +90,16 @@ export async function POST(req: NextRequest) {
                 required: ['metodo'],
               },
             },
+            {
+              type: 'function',
+              name: 'verificar_referidos',
+              description: 'Verifica quantos contatos a lead já indicou no link de referidos. Retorna total, semDados e missaoCompleta. Chame a cada 2 minutos durante a etapa de referidos. Só avance para o encerramento quando missaoCompleta=true.',
+              parameters: {
+                type: 'object',
+                properties: {},
+                required: [],
+              },
+            },
           ],
           output_modalities: ['audio'],
           max_output_tokens: cfg.max_output_tokens === 'inf' ? 'inf' : Number(cfg.max_output_tokens),
