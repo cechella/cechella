@@ -144,7 +144,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `DB insert error: ${insertError.message}`, payment_id: paymentId }, { status: 500 })
     }
 
-    await zapiSend(phone, `🏦 Pagamento gerado!\n\n💰 Valor: R$ 5.000,00\n\nCopia e Cola PIX abaixo 👇`)
+    const valorFmt = `R$ ${(valor / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+    await zapiSend(phone, `🏦 Pagamento gerado!\n\n💰 Valor: ${valorFmt}\n\nCopia e Cola PIX abaixo 👇`)
     await zapiSend(phone, pixCode)
     await zapiSend(phone, `Após pagar, me avise aqui! 🎯`)
 

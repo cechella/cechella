@@ -9,35 +9,46 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text'
+const ZAPI_BASE = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5'
 const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
 const APP_URL = 'https://www.hormoneecosystem.com'
+const TUTORIAL_VIDEO_URL = 'https://pub-7091151189544b0980e12e81533a5213.r2.dev/tutorialwpp.mp4'
+
+function normalize(phone: string) {
+  const d = String(phone).replace(/\D/g, '')
+  return d.startsWith('55') ? d : `55${d}`
+}
 
 async function zapiSend(phone: string, message: string) {
-  const digits = String(phone).replace(/\D/g, '')
-  const normalized = digits.startsWith('55') ? digits : `55${digits}`
-  await fetch(ZAPI_URL, {
+  await fetch(`${ZAPI_BASE}/send-text`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-    body: JSON.stringify({ phone: normalized, message }),
+    body: JSON.stringify({ phone: normalize(phone), message }),
+  }).catch(() => {})
+}
+
+async function zapiSendVideo(phone: string, video: string, caption: string) {
+  await fetch(`${ZAPI_BASE}/send-video`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+    body: JSON.stringify({ phone: normalize(phone), video, caption }),
   }).catch(() => {})
 }
 
 async function handlePaymentConfirmed(callSid: string, paymentId: string) {
-  // Update pagamentos status
+  // Fetch pagamento by payment_id (avoids schema cache issue with call_sid column)
+  const { data: pag } = await supabase
+    .from('pagamentos')
+    .select('lead_telefone, valor')
+    .eq('payment_id', paymentId)
+    .maybeSingle()
+
   await supabase
     .from('pagamentos')
     .update({ status: 'approved', updated_at: new Date().toISOString() })
-    .eq('call_sid', callSid)
+    .eq('payment_id', paymentId)
 
-  // Update leads status_pagamento
-  const { data: callRow } = await supabase
-    .from('ana_calls')
-    .select('telefone')
-    .eq('call_sid', callSid)
-    .maybeSingle()
-
-  const tel = String(callRow?.telefone || '').replace(/\D/g, '')
+  const tel = String(pag?.lead_telefone || '').replace(/\D/g, '')
   if (tel) {
     await supabase
       .from('leads')
@@ -54,10 +65,10 @@ async function handlePaymentConfirmed(callSid: string, paymentId: string) {
       const refData = await refRes.json()
       if (refData.link) {
         await zapiSend(tel,
-          `🎉 *Pagamento confirmado!*\n\nSua jornada hormonal está começando, Adriana! Em breve nossa equipe entrará em contato para agendar sua consulta. 💜`
+          `🎉 *Pagamento confirmado!*\n\nSua jornada hormonal está começando! Em breve nossa equipe entrará em contato para agendar sua consulta. 💜`
         )
-        await zapiSend(tel,
-          `✨ *Seu link especial de indicações chegou!*\n\nVocê pode indicar amigas e familiares e ganhar benefícios especiais! 🎁\n\n👉 ${refData.link}`
+        await zapiSendVideo(tel, TUTORIAL_VIDEO_URL,
+          `✅ Código recebido!\n\nAssista ao tutorial acima e siga os passos:\n\n1️⃣ Toque no *+* à esquerda\n2️⃣ Escolha *Contato*\n3️⃣ Busque e selecione suas amigas\n4️⃣ Toque em *Enviar*\n\nVocê pode selecionar várias de uma vez! 💜\n\nDepois volte para o link e seus contatos aparecerão automaticamente:\n👉 ${refData.link}`
         )
       }
     } catch {}
