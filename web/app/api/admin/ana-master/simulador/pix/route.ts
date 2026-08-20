@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       const token = Math.random().toString(36).slice(2) + Date.now().toString(36)
       const link = `${APP_URL}/pagar/${token}`
 
-      await supabase.from('pagamentos').insert({
+      const { error: cartaoInsertErr } = await supabase.from('pagamentos').insert({
         call_sid: callSid,
         lead_telefone: phone,
         payment_id: token,
@@ -72,6 +72,10 @@ export async function POST(req: NextRequest) {
         origem: 'gold',
         created_at: new Date().toISOString(),
       })
+
+      if (cartaoInsertErr) {
+        return NextResponse.json({ error: `DB insert error: ${cartaoInsertErr.message}` }, { status: 500 })
+      }
 
       await zapiSend(phone, `💳 Gerando seu link de pagamento, aguarde um momento! 💜`)
       await zapiSend(phone, `Seu acesso está quase liberado! 🎉\n\nClique aqui para finalizar com segurança 👇\n${link}\n\n🔒 Ambiente 100% seguro — Mercado Pago`)
@@ -112,7 +116,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'pix_code_vazio' }, { status: 500 })
     }
 
-    await supabase.from('pagamentos').insert({
+    const { error: insertError } = await supabase.from('pagamentos').insert({
       call_sid: callSid,
       lead_telefone: phone,
       payment_id: paymentId,
@@ -124,6 +128,10 @@ export async function POST(req: NextRequest) {
       origem: 'gold',
       created_at: new Date().toISOString(),
     })
+
+    if (insertError) {
+      return NextResponse.json({ error: `DB insert error: ${insertError.message}`, payment_id: paymentId }, { status: 500 })
+    }
 
     await zapiSend(phone, `🏦 Pagamento gerado!\n\n💰 Valor: R$ 5.000,00\n\nCopia e Cola PIX abaixo 👇`)
     await zapiSend(phone, pixCode)
