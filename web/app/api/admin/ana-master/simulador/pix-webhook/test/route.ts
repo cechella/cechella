@@ -69,13 +69,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'payment_id não encontrado' }, { status: 404 })
     }
 
-    const { error: updateErr } = await supabase
+    const { data: updated, error: updateErr } = await supabase
       .from('pagamentos')
-      .update({ status: 'approved', updated_at: new Date().toISOString() })
+      .update({ status: 'approved' })
       .eq('payment_id', resolvedPaymentId)
+      .select('payment_id, status')
 
     if (updateErr) {
       return NextResponse.json({ error: `DB update error: ${updateErr.message}` }, { status: 500 })
+    }
+
+    if (!updated || updated.length === 0) {
+      return NextResponse.json({ error: `UPDATE afetou 0 linhas — payment_id não encontrado: ${resolvedPaymentId}` }, { status: 404 })
     }
 
     // Update leads status_pagamento
