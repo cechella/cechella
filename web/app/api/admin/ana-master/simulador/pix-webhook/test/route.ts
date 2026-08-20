@@ -40,10 +40,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Mark as approved
-    await supabase
+    const { error: updateErr } = await supabase
       .from('pagamentos')
       .update({ status: 'approved', updated_at: new Date().toISOString() })
       .eq('call_sid', callSid)
+
+    if (updateErr) {
+      return NextResponse.json({ error: `DB update error: ${updateErr.message}` }, { status: 500 })
+    }
 
     // Update leads status_pagamento
     const tel = String(pag.lead_telefone || '').replace(/\D/g, '')

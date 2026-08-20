@@ -34,13 +34,21 @@ export async function GET(req: NextRequest) {
 
   if (!phone) return NextResponse.json({ completo: false, semDados: 20, missaoCompleta: false, total: 0 })
 
+  // Also fetch token from leads
+  const { data: leadRow } = await supabase
+    .from('leads')
+    .select('token_indicacao')
+    .or(`telefone.eq.${phone},telefone.eq.55${phone},telefone.eq.${phone.replace(/^55/, '')}`)
+    .maybeSingle()
+  const resolvedToken = leadRow?.token_indicacao ?? null
+
   const { data } = await supabase
     .from('contatos_referidos')
     .select('id, profissao, hobby, status')
     .or(`indicado_por_telefone.eq.${phone},indicado_por_telefone.eq.55${phone},indicado_por_telefone.eq.${phone.replace(/^55/, '')}`)
 
   if (!data || data.length === 0) {
-    return NextResponse.json({ completo: false, semDados: 20, missaoCompleta: false, total: 0 })
+    return NextResponse.json({ completo: false, semDados: 20, missaoCompleta: false, total: 0, token: resolvedToken })
   }
 
   const ativos = data.filter((r: any) => r.status !== 'recusou')
@@ -48,7 +56,7 @@ export async function GET(req: NextRequest) {
   const completo = ativos.length >= 20
   const missaoCompleta = completo && semDados === 0
 
-  return NextResponse.json({ completo, semDados, missaoCompleta, total: ativos.length })
+  return NextResponse.json({ completo, semDados, missaoCompleta, total: ativos.length, token: resolvedToken })
 }
 
 // POST: iniciar coleta — gera/recupera token e retorna link
