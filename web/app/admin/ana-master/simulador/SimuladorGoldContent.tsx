@@ -84,6 +84,12 @@ export function SimuladorGoldContent() {
   const referidosPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const streamingTextRef = useRef('')
 
+  interface CheckpointEntry { stage: string; ts: string; transcriptSnapshot: { role: string; text: string; ts: number }[] }
+  interface RecentSession { call_sid: string; created_at: string; checkpoints: Record<string, CheckpointEntry> }
+  const [sessionCheckpoints, setSessionCheckpoints] = useState<CheckpointEntry[]>([])
+  const [recentSessions, setRecentSessions] = useState<RecentSession[]>([])
+  const transcriptForCheckpointRef = useRef<{ role: string; text: string; ts: number }[]>([])
+
   const saveTranscriptTurn = useCallback((role: string, text: string) => {
     if (!callSidRef.current || !text.trim()) return
     fetch('/api/admin/ana-master/simulador/transcript', {
@@ -109,7 +115,9 @@ export function SimuladorGoldContent() {
   }, [transcript, streamingText])
 
   const addTranscript = useCallback((role: TranscriptLine['role'], text: string) => {
-    setTranscript(prev => [...prev, { role, text, ts: Date.now() }])
+    const line = { role, text, ts: Date.now() }
+    setTranscript(prev => [...prev, line])
+    if (role !== 'system') transcriptForCheckpointRef.current = [...transcriptForCheckpointRef.current, line]
   }, [])
 
   const updateStageInDB = useCallback((stage: string) => {
@@ -123,6 +131,18 @@ export function SimuladorGoldContent() {
     fetch('/api/admin/ana-master/simulador/stage', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ callSid: callSidRef.current, stage: dbStage }),
+    }).catch(() => {})
+    // Save checkpoint for this stage
+    const ts = new Date().toISOString()
+    const transcriptSnapshot = transcriptForCheckpointRef.current.slice()
+    const cp: CheckpointEntry = { stage, ts, transcriptSnapshot }
+    setSessionCheckpoints(prev => {
+      const filtered = prev.filter(c => c.stage !== stage)
+      return [...filtered, cp].sort((a, b) => new Date(a.ts).getTime() - new Date(b.ts).getTime())
+    })
+    fetch('/api/admin/ana-master/simulador/transcript', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callSid: callSidRef.current, checkpoint: { gate: `GOLD_${stage.toUpperCase()}`, stage: dbStage, ts } }),
     }).catch(() => {})
   }, [])
 
@@ -317,6 +337,7 @@ export function SimuladorGoldContent() {
     if (!telefone.trim()) { setErrorMsg('Digite o telefone de teste antes de iniciar.'); return }
     setErrorMsg(''); setStatus('connecting')
     setTranscript([]); setStreamingText(''); setDetectedStages([])
+    setSessionCheckpoints([]); transcriptForCheckpointRef.current = []
     setPixState('idle'); setPixCallId(null)
     if (pixPollRef.current) { clearInterval(pixPollRef.current); pixPollRef.current = null }
     if (referidosPollRef.current) { clearInterval(referidosPollRef.current); referidosPollRef.current = null }
@@ -425,6 +446,84 @@ export function SimuladorGoldContent() {
     setStatus('ended'); setStreamingText(''); addTranscript('system', '⏹ Sessão encerrada.')
   }, [addTranscript, uploadAudio])
 
+  const loadRecentSessions = useCallback(async () => {
+    try {
+      const r = await fetch('/api/admin/ana-master/simulador/sessions')
+      const d = await r.json()
+      const goldSessions = (d.sessions ?? [])
+        .filter((s: any) => s.memories?.sim_gold && Object.keys(s.memories?.checkpoints ?? {}).length > 0)
+        .slice(0, 5)
+      setRecentSessions(goldSessions.map((s: any) => ({
+        call_sid: s.call_sid,
+        created_at: s.created_at,
+        checkpoints: s.memories?.checkpoints ?? {},
+      })))
+    } catch {}
+  }, [])
+
+  const restoreFromCheckpoint = useCallback(async (cp: CheckpointEntry) => {
+    if (status === 'active') stopSession()
+    await new Promise(r => setTimeout(r, 400))
+    setErrorMsg(''); setStatus('connecting')
+    setTranscript([]); setStreamingText(''); setDetectedStages([])
+    setSessionCheckpoints([]); transcriptForCheckpointRef.current = []
+    setPixState('idle'); setPixCallId(null)
+    if (pixPollRef.current) { clearInterval(pixPollRef.current); pixPollRef.current = null }
+    setMetrics({ turns: 0, interruptions: 0, lastResponseMs: null })
+
+    const contextBlock = cp.transcriptSnapshot.length > 0
+      ? `\n\n[CONTEXTO RESTAURADO — etapa: ${cp.stage}]\nO que já foi dito:\n` +
+        cp.transcriptSnapshot.map(l => `${l.role === 'ana' ? 'ANA' : 'LEAD'}: ${l.text}`).join('\n') +
+        `\n[Continue a partir daqui, na etapa ${cp.stage}]`
+      : ''
+
+    try {
+      const sessionRes = await fetch('/api/admin/ana-master/simulador/session-gold', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ telefone, contextSuffix: contextBlock }),
+      })
+      if (!sessionRes.ok) throw new Error('Falha ao criar sessão')
+      const { callSid: _sid, clientSecret, profileVersion: pv, model: mdl, voice: vc } = await sessionRes.json()
+      callSidRef.current = _sid
+      if (pv) setProfileVersion(pv)
+      if (mdl) setActiveModel(mdl)
+      if (vc) setActiveVoice(vc)
+
+      const pc = new RTCPeerConnection(); pcRef.current = pc
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: false, autoGainControl: false, sampleRate: 24000 },
+      })
+      localStreamRef.current = stream
+      stream.getTracks().forEach(track => pc.addTrack(track, stream))
+
+      pc.ontrack = (e) => {
+        const audio = document.createElement('audio')
+        audio.autoplay = true; audio.srcObject = e.streams[0]
+        document.body.appendChild(audio); audioRef.current = audio
+      }
+
+      const dc = pc.createDataChannel('oai-events'); dcRef.current = dc
+      dc.onmessage = handleDCMessage
+      dc.onopen = () => {
+        addTranscript('system', `↩ Retomando da etapa: ${STAGE_LABELS[cp.stage] ?? cp.stage}`)
+        cp.transcriptSnapshot.forEach(l => addTranscript(l.role as TranscriptLine['role'], l.text))
+        addTranscript('system', '🎙️ Contexto restaurado — diga "Alô" para continuar')
+      }
+
+      const offer = await pc.createOffer(); await pc.setLocalDescription(offer)
+      const oaiRes = await fetch('https://api.openai.com/v1/realtime/calls', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${clientSecret}`, 'Content-Type': 'application/sdp' },
+        body: offer.sdp,
+      })
+      if (!oaiRes.ok) throw new Error(`Falha ao conectar: ${await oaiRes.text()}`)
+      await pc.setRemoteDescription({ type: 'answer', sdp: await oaiRes.text() })
+      setStatus('active')
+    } catch (e: any) { setStatus('error'); setErrorMsg(e.message) }
+  }, [status, stopSession, telefone, handleDCMessage, addTranscript])
+
+  useEffect(() => { loadRecentSessions() }, [loadRecentSessions])
+
   const toggleMute = useCallback(() => {
     localStreamRef.current?.getTracks().forEach(t => { t.enabled = isMuted })
     setIsMuted(!isMuted)
@@ -528,6 +627,70 @@ export function SimuladorGoldContent() {
             })}
           </div>
           <p style={{ fontSize: 9, color: '#3F3F46', margin: '6px 0 0' }}>Detecção passiva por transcript</p>
+        </div>
+
+        {/* Checkpoints */}
+        <div style={{ padding: '12px 14px', borderBottom: '1px solid #1C1C1E' }}>
+          <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#52525E', margin: '0 0 8px' }}>Checkpoints</p>
+
+          {/* Começar do Zero */}
+          <button
+            onClick={() => { if (status === 'active') stopSession(); setTimeout(() => startSession(), 400) }}
+            style={{ width: '100%', padding: '6px 0', marginBottom: 8, background: '#1C1C1E', border: '1px solid #2A2A2E', borderRadius: 6, color: '#A1A1AA', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+          >
+            🔄 Começar do Zero
+          </button>
+
+          {/* Current session checkpoints */}
+          {sessionCheckpoints.length > 0 && (
+            <div style={{ marginBottom: 8 }}>
+              <p style={{ fontSize: 9, color: '#52525E', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Esta sessão</p>
+              {sessionCheckpoints.map(cp => (
+                <button
+                  key={cp.stage}
+                  onClick={() => restoreFromCheckpoint(cp)}
+                  title={`Retomar da etapa: ${STAGE_LABELS[cp.stage] ?? cp.stage}`}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '4px 8px', marginBottom: 3, background: '#111113', border: '1px solid #2A2A2E', borderRadius: 5, cursor: 'pointer', textAlign: 'left' }}
+                >
+                  <span style={{ fontSize: 11, color: '#F59E0B', fontWeight: 700 }}>● {STAGE_LABELS[cp.stage] ?? cp.stage}</span>
+                  <span style={{ fontSize: 9, color: '#52525E' }}>{new Date(cp.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Recent sessions */}
+          {recentSessions.length > 0 && (
+            <div>
+              <p style={{ fontSize: 9, color: '#52525E', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.07em' }}>Sessões anteriores</p>
+              {recentSessions.map(s => {
+                const gates = Object.keys(s.checkpoints)
+                return (
+                  <div key={s.call_sid} style={{ marginBottom: 6 }}>
+                    <p style={{ fontSize: 9, color: '#3F3F46', margin: '0 0 3px' }}>{new Date(s.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                      {gates.map(gate => {
+                        const cp = s.checkpoints[gate]
+                        return (
+                          <button
+                            key={gate}
+                            onClick={() => restoreFromCheckpoint({ stage: cp.stage, ts: cp.ts, transcriptSnapshot: [] })}
+                            style={{ padding: '2px 7px', background: '#1C1C1E', border: '1px solid #2A2A2E', borderRadius: 4, cursor: 'pointer', fontSize: 10, color: '#A1A1AA', fontWeight: 600 }}
+                          >
+                            {STAGE_LABELS[cp.stage] ?? cp.stage}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+
+          {sessionCheckpoints.length === 0 && recentSessions.length === 0 && (
+            <p style={{ fontSize: 9, color: '#3F3F46', margin: 0 }}>Checkpoints aparecerão conforme as etapas forem detectadas</p>
+          )}
         </div>
 
         {/* PIX status */}

@@ -26,7 +26,7 @@ async function getGoldConfig() {
 
 export async function POST(req: NextRequest) {
   try {
-    const { telefone, voice, model } = await req.json()
+    const { telefone, voice, model, contextSuffix } = await req.json()
 
     if (!telefone) {
       return NextResponse.json({ error: 'telefone obrigatório' }, { status: 400 })
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
         session: {
           type: 'realtime',
           model: activeModel,
-          instructions: cfg.instructions,
+          instructions: contextSuffix ? `${cfg.instructions}${contextSuffix}` : cfg.instructions,
           tools: [
             {
               type: 'function',
