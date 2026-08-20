@@ -121,6 +121,7 @@ export function RealtimeConfigPanel({ profile, isGold }: { profile: 'gold' | 'co
         body: JSON.stringify(cfg),
       })
       if (!r.ok) throw new Error('erro')
+      setCfg(prev => prev ? { ...prev, _source: 'db' } : prev)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch {
