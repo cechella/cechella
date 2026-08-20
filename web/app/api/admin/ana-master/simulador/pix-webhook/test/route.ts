@@ -51,11 +51,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Nenhum pagamento pending encontrado para este callSid' }, { status: 404 })
     }
 
-    // Mark as approved
+    // Mark as approved — use payment_id since call_sid filter may hit schema cache issues
     const { error: updateErr } = await supabase
       .from('pagamentos')
       .update({ status: 'approved', updated_at: new Date().toISOString() })
-      .eq('call_sid', callSid)
+      .eq('payment_id', pag.payment_id)
 
     if (updateErr) {
       return NextResponse.json({ error: `DB update error: ${updateErr.message}` }, { status: 500 })
