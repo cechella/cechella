@@ -300,14 +300,16 @@ export function SimuladorGoldContent() {
         audioChunksRef.current = []
         recorder.ondataavailable = (e) => { if (e.data.size > 0) audioChunksRef.current.push(e.data) }
         recorder.start(2000); mediaRecorderRef.current = recorder; setIsRecording(true)
-        audioUploadIntervalRef.current = setInterval(() => {
-          const chunks = audioChunksRef.current
+        audioUploadIntervalRef.current = setInterval(async () => {
+          const chunks = audioChunksRef.current.splice(0)
           const sid = callSidRef.current
           if (chunks.length === 0 || !sid) return
           const blob = new Blob(chunks, { type: 'audio/webm' })
-          fetch(`/api/admin/ana-master/simulador/audio?callSid=${sid}`, {
-            method: 'POST', body: blob, headers: { 'Content-Type': 'audio/webm' },
-          }).catch(() => {})
+          try {
+            await fetch(`/api/admin/ana-master/simulador/audio?callSid=${sid}&partial=true`, {
+              method: 'POST', body: blob, headers: { 'Content-Type': 'audio/webm' },
+            })
+          } catch {}
         }, 60000)
       } catch { setIsRecording(false) }
 
