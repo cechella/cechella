@@ -23,14 +23,14 @@ interface Metrics {
 // ── Passive stage detection ───────────────────────────────────────────────────
 
 const STAGE_PATTERNS: { stage: string; label: string; pattern: RegExp }[] = [
-  { stage: 'abertura',  label: 'Abertura',  pattern: /qual.{0,15}(teu|seu) nome|como (é que )?você se chama|pra eu te chamar/i },
-  { stage: 'conexao',   label: 'Conexão',   pattern: /me conta.{0,20}dia a dia|como (é|tá) (a sua|tua) rotina|me fala mais sobre/i },
-  { stage: 'combinado', label: 'Combinado', pattern: /vamos fazer um combinado|sei que teu tempo|no final do que eu vou te apresentar/i },
-  { stage: 'speech',    label: 'Speech',    pattern: /pellet|implante hormonal|grão de arroz|libera hormônios|cilindro colocado/i },
-  { stage: 'fechamento',label: 'Fechamento',pattern: /lembra do nosso combinado|R\$\s*5\.?000|cinco mil|faz sentido pra você/i },
-  { stage: 'pagamento', label: 'Pagamento', pattern: /pix ou cartão|prefere (fazer|pagar|parcelar).*pix/i },
-  { stage: 'referidos', label: 'Referidos', pattern: /conhece alguma amiga|alguém que também esteja/i },
-  { stage: 'encerramento', label: 'Encerramento', pattern: /obrigada pela confiança|foi um prazer falar/i },
+  { stage: 'abertura',  label: 'Abertura',  pattern: /qual.{0,20}(teu|seu|o seu) nome|como (é que )?você se chama|pra eu te chamar|posso te chamar|quem me indicou|quem te indicou|por quem (você|vc) foi indicad/i },
+  { stage: 'conexao',   label: 'Conexão',   pattern: /me conta.{0,30}(dia a dia|vida|rotina)|como (é|tá|está) (a sua|tua|sua) (rotina|vida|dia)|me fala mais sobre|o que (você|vc) (faz|trabalha)|tem filhos|família|mora com/i },
+  { stage: 'combinado', label: 'Combinado', pattern: /combinado|combinamos|combina|no final.{0,30}apresent|quando eu terminar|ao final|antes de (eu te |te )apresentar|só (me |te )pede|decisão no final|sim ou não/i },
+  { stage: 'speech',    label: 'Speech',    pattern: /pellet|implante hormonal|grão de arroz|libera hormônios|cilindro|subcutâneo|hormônio bioidêntico|testosterona|progesterona|estrogênio|implantado|implante/i },
+  { stage: 'fechamento',label: 'Fechamento',pattern: /lembra (do nosso|que a gente fez|do) combinado|faz sentido pra você|qual (seria|é) a sua decisão|você quer|vamos avançar|fechar|investimento|valor|quanto custa|preço/i },
+  { stage: 'pagamento', label: 'Pagamento', pattern: /pix ou cartão|prefere (fazer|pagar|parcelar|o )?pix|cartão de crédito|forma de pagamento|pagamento|pagar|vou (gerar|mandar|enviar).{0,20}pix/i },
+  { stage: 'referidos', label: 'Referidos', pattern: /conhece alguma amiga|alguém que (também esteja|possa|poderia)|indicar|indicação|amiga.{0,20}(benefício|desconto|vantagem)|seu link|link de indicação/i },
+  { stage: 'encerramento', label: 'Encerramento', pattern: /obrigada pela confiança|foi um prazer falar|até (logo|breve)|nossa equipe (vai|irá|entrará)|(muito )?obrigada|encerrando|encerrar|tchau|boa (sorte|tarde|noite|semana)/i },
 ]
 
 function detectStage(text: string): string | null {
@@ -78,6 +78,7 @@ export function SimuladorGoldContent() {
   const [isRecording, setIsRecording] = useState(false)
   const [pixState, setPixState] = useState<'idle' | 'sending' | 'pending' | 'paid'>('idle')
   const [pixCallId, setPixCallId] = useState<string | null>(null)
+  const pixValorRef = useRef<number>(5000)
 
   const pixPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const referidosPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -134,13 +135,15 @@ export function SimuladorGoldContent() {
         if (data.paid) {
           clearInterval(pixPollRef.current!); pixPollRef.current = null
           setPixState('paid')
+          const valor = pixValorRef.current
+          const valorFmt = `R$ ${(valor / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
           // Inject payment confirmation into DataChannel so ANA reacts naturally
           sendEvent({
             type: 'conversation.item.create',
             item: {
               type: 'function_call_output',
               call_id: callId,
-              output: JSON.stringify({ paid: true, message: 'Pagamento confirmado! Valor de R$ 5.000 recebido com sucesso.' }),
+              output: JSON.stringify({ paid: true, message: `Pagamento confirmado! ${valorFmt} recebido com sucesso.` }),
             },
           })
           sendEvent({ type: 'response.create' })
@@ -160,6 +163,7 @@ export function SimuladorGoldContent() {
       })
       const data = await r.json()
       if (data.ok) {
+        if (data.valor) pixValorRef.current = data.valor
         setPixState('pending')
         addTranscript('system', `💳 ${metodo === 'pix' ? 'PIX' : 'Link de cartão'} enviado via WhatsApp — aguardando pagamento...`)
         startPixPolling(callId)

@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
       await zapiSend(phone, `💳 Gerando seu link de pagamento, aguarde um momento! 💜`)
       await zapiSend(phone, `Seu acesso está quase liberado! 🎉\n\nClique aqui para finalizar com segurança 👇\n${link}\n\n🔒 Ambiente 100% seguro — Mercado Pago`)
 
-      return NextResponse.json({ ok: true, payment_id: token, metodo: 'cartao', link })
+      return NextResponse.json({ ok: true, payment_id: token, metodo: 'cartao', link, valor })
     }
 
     // PIX via Mercado Pago
@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
     await zapiSend(phone, pixCode)
     await zapiSend(phone, `Após pagar, me avise aqui! 🎯`)
 
-    return NextResponse.json({ ok: true, payment_id: paymentId, metodo: 'pix' })
+    return NextResponse.json({ ok: true, payment_id: paymentId, metodo: 'pix', valor })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
