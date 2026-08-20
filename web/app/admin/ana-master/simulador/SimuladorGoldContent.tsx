@@ -125,12 +125,11 @@ export function SimuladorGoldContent() {
     }
   }, [])
 
-  const startPixPolling = useCallback((callId: string) => {
+  const startPixPolling = useCallback((callId: string, paymentId: string) => {
     if (pixPollRef.current) clearInterval(pixPollRef.current)
     pixPollRef.current = setInterval(async () => {
-      if (!callSidRef.current) return
       try {
-        const r = await fetch(`/api/admin/ana-master/simulador/pix-status?callSid=${callSidRef.current}`)
+        const r = await fetch(`/api/admin/ana-master/simulador/pix-status?paymentId=${paymentId}`)
         const data = await r.json()
         if (data.paid) {
           clearInterval(pixPollRef.current!); pixPollRef.current = null
@@ -166,7 +165,7 @@ export function SimuladorGoldContent() {
         if (data.valor) pixValorRef.current = data.valor
         setPixState('pending')
         addTranscript('system', `💳 ${metodo === 'pix' ? 'PIX' : 'Link de cartão'} enviado via WhatsApp — aguardando pagamento...`)
-        startPixPolling(callId)
+        startPixPolling(callId, data.payment_id)
       } else {
         addTranscript('system', `❌ Erro ao gerar pagamento: ${data.error}`)
         // Inform ANA of failure

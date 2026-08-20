@@ -11,17 +11,15 @@ const supabase = createClient(
 
 export async function GET(req: NextRequest) {
   try {
-    const callSid = req.nextUrl.searchParams.get('callSid')
-    if (!callSid) {
-      return NextResponse.json({ error: 'callSid obrigatório' }, { status: 400 })
+    const paymentId = req.nextUrl.searchParams.get('paymentId')
+    if (!paymentId) {
+      return NextResponse.json({ error: 'paymentId obrigatório' }, { status: 400 })
     }
 
     const { data } = await supabase
       .from('pagamentos')
       .select('payment_id, status, metodo, pix_code, expira_em, valor')
-      .eq('call_sid', callSid)
-      .order('created_at', { ascending: false })
-      .limit(1)
+      .eq('payment_id', paymentId)
       .maybeSingle()
 
     if (!data) {
