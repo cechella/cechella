@@ -37,32 +37,49 @@ async function zapiSendVideo(phone: string, video: string, caption: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { callSid } = await req.json()
-    if (!callSid) return NextResponse.json({ error: 'callSid obrigatório' }, { status: 400 })
+    const { callSid, paymentId } = await req.json()
+    if (!callSid && !paymentId) return NextResponse.json({ error: 'callSid ou paymentId obrigatório' }, { status: 400 })
 
-    const { data: pag } = await supabase
-      .from('pagamentos')
-      .select('payment_id, lead_telefone')
-      .eq('call_sid', callSid)
-      .eq('status', 'pending')
-      .maybeSingle()
+    // Prefer paymentId directly to avoid schema cache issues with call_sid column
+    let resolvedPaymentId: string | null = paymentId ?? null
+    let resolvedTelefone: string | null = null
 
-    if (!pag) {
-      return NextResponse.json({ error: 'Nenhum pagamento pending encontrado para este callSid' }, { status: 404 })
+    if (!resolvedPaymentId) {
+      const { data: pag } = await supabase
+        .from('pagamentos')
+        .select('payment_id, lead_telefone')
+        .eq('call_sid', callSid)
+        .eq('status', 'pending')
+        .maybeSingle()
+      if (!pag) {
+        return NextResponse.json({ error: 'Nenhum pagamento pending encontrado para este callSid' }, { status: 404 })
+      }
+      resolvedPaymentId = pag.payment_id
+      resolvedTelefone = pag.lead_telefone
+    } else {
+      const { data: pag } = await supabase
+        .from('pagamentos')
+        .select('lead_telefone')
+        .eq('payment_id', resolvedPaymentId)
+        .maybeSingle()
+      resolvedTelefone = pag?.lead_telefone ?? null
     }
 
-    // Mark as approved — use payment_id since call_sid filter may hit schema cache issues
+    if (!resolvedPaymentId) {
+      return NextResponse.json({ error: 'payment_id não encontrado' }, { status: 404 })
+    }
+
     const { error: updateErr } = await supabase
       .from('pagamentos')
       .update({ status: 'approved', updated_at: new Date().toISOString() })
-      .eq('payment_id', pag.payment_id)
+      .eq('payment_id', resolvedPaymentId)
 
     if (updateErr) {
       return NextResponse.json({ error: `DB update error: ${updateErr.message}` }, { status: 500 })
     }
 
     // Update leads status_pagamento
-    const tel = String(pag.lead_telefone || '').replace(/\D/g, '')
+    const tel = String(resolvedTelefone || '').replace(/\D/g, '')
     if (tel) {
       await supabase
         .from('leads')
@@ -88,7 +105,7 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
-    return NextResponse.json({ ok: true, simulated: true, payment_id: pag.payment_id })
+    return NextResponse.json({ ok: true, simulated: true, payment_id: resolvedPaymentId })
   } catch (e: any) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
