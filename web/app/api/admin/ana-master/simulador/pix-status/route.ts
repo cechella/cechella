@@ -3,13 +3,15 @@ import { createClient } from '@supabase/supabase-js'
 
 export const dynamic = 'force-dynamic'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
-
 export async function GET(req: NextRequest) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: { autoRefreshToken: false, persistSession: false },
+      global: { fetch: (url, init) => fetch(url, { ...init, cache: 'no-store' }) },
+    }
+  )
   try {
     const paymentId = req.nextUrl.searchParams.get('paymentId')
     if (!paymentId) {
