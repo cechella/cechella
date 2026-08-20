@@ -74,6 +74,7 @@ type Stats = {
   referidosTotais: number
   referidosValidados: number
   etapaCount: Record<number, number>
+  anaCallsEtapaCount: Record<number, number>
   temperaturaCounts: { quente: number; morno: number; frio: number }
   leadsPorDia: { dia: string; total: number }[]
   recentLeads: Lead[]
@@ -187,13 +188,15 @@ export default function AdminDashboard() {
 
   async function load() {
     try {
-      const [leadsRes, referidosRes] = await Promise.all([
+      const [leadsRes, referidosRes, anaCallsRes] = await Promise.all([
         supabase.from('leads').select('id,nome,telefone,etapa_agente,temperatura,historico,total_referidos,updated_at,created_at,dor_principal,origem,atendimento_humano').order('updated_at', { ascending: false }),
         supabase.from('contatos_referidos').select('id,nome,telefone,profissao,hobby,status,indicado_por_telefone,indicado_por_nome,created_at').order('created_at', { ascending: false }),
+        supabase.from('ana_calls').select('call_sid,stage,status,updated_at').order('updated_at', { ascending: false }).limit(500),
       ])
 
       const leads: Lead[] = leadsRes.data ?? []
       const referidos: Referido[] = referidosRes.data ?? []
+      const anaCalls: { call_sid: string; stage: string; status: string; updated_at: string }[] = anaCallsRes.data ?? []
 
       // ── Flatten historico messages ──
       const allMessages: Array<{role: string; content: string; ts: string; leadId: string}> = []
@@ -213,6 +216,23 @@ export default function AdminDashboard() {
       const etapaCount: Record<number, number> = {}
       leads.forEach(l => {
         if (l.etapa_agente) etapaCount[l.etapa_agente] = (etapaCount[l.etapa_agente] ?? 0) + 1
+      })
+
+      // Pipeline ao Vivo: fed exclusively by ana_calls.stage (transcript-driven)
+      const STAGE_TO_N: Record<string, number> = {
+        apresentacao: 1, abertura: 1,
+        conexao: 2,
+        combinado: 3, di: 3,
+        speech: 4,
+        fechamento: 5,
+        pagamento: 6,
+        referidos: 7,
+        encerramento: 8, validacao: 8, ganho: 8,
+      }
+      const anaCallsEtapaCount: Record<number, number> = {}
+      anaCalls.forEach(c => {
+        const n = STAGE_TO_N[c.stage]
+        if (n) anaCallsEtapaCount[n] = (anaCallsEtapaCount[n] ?? 0) + 1
       })
 
       const temperaturaCounts = {
@@ -375,7 +395,7 @@ export default function AdminDashboard() {
       setStats({
         totalLeads: leads.length, leadsHoje, ganhos, perdidos,
         referidosTotais: referidos.length, referidosValidados,
-        etapaCount, temperaturaCounts, leadsPorDia,
+        etapaCount, anaCallsEtapaCount, temperaturaCounts, leadsPorDia,
         recentLeads: leads, alertas, origens,
         referidosComScore,
         topReferidos,
@@ -396,14 +416,14 @@ export default function AdminDashboard() {
     }
   }
 
-  // Update pipeline whenever stats changes
+  // Update pipeline whenever stats changes — reads from ana_calls.stage (transcript-driven)
   useEffect(() => {
     if (!stats) return
     setPipeline([1,2,3,4,5,6,7,8].map(n => ({
       n,
       label: etapaAgentLabels[n],
       shortLabel: etapaShortLabels[n],
-      count: stats.etapaCount[n] ?? 0,
+      count: stats.anaCallsEtapaCount[n] ?? 0,
       color: etapaAgentColors[n],
     })))
   }, [stats])
@@ -413,30 +433,43 @@ export default function AdminDashboard() {
     // Auto-refresh a cada 60s
     const interval = setInterval(load, 60000)
 
-    // Supabase Realtime — atualiza pipeline instantaneamente quando lead muda de etapa
+    // Supabase Realtime — atualiza pipeline ao vivo via ana_calls.stage (transcript-driven)
+    const STAGE_TO_N: Record<string, number> = {
+      apresentacao: 1, abertura: 1,
+      conexao: 2,
+      combinado: 3, di: 3,
+      speech: 4,
+      fechamento: 5,
+      pagamento: 6,
+      referidos: 7,
+      encerramento: 8, validacao: 8, ganho: 8,
+    }
     const channel = supabase
-      .channel('leads-pipeline')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'leads' }, (payload: any) => {
-        const newEtapa = (payload.new as any).etapa_agente as number | null
-        const oldEtapa = (payload.old as any).etapa_agente as number | null
-        if (newEtapa && newEtapa !== oldEtapa) {
+      .channel('ana-calls-pipeline')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ana_calls' }, (payload: any) => {
+        const newStage = (payload.new as any).stage as string | null
+        const oldStage = (payload.old as any).stage as string | null
+        const newN = newStage ? (STAGE_TO_N[newStage] ?? null) : null
+        const oldN = oldStage ? (STAGE_TO_N[oldStage] ?? null) : null
+        if (newN && newN !== oldN) {
           setPipeline(prev => prev.map(e => ({
             ...e,
-            count: e.n === newEtapa
+            count: e.n === newN
               ? e.count + 1
-              : e.n === oldEtapa
+              : e.n === oldN
                 ? Math.max(0, e.count - 1)
                 : e.count,
           })))
-          setPipelineFlash(newEtapa)
+          setPipelineFlash(newN)
           setTimeout(() => setPipelineFlash(null), 2000)
         }
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'leads' }, (payload: any) => {
-        const etapa = (payload.new as any).etapa_agente as number | null
-        if (etapa) {
-          setPipeline(prev => prev.map(e => e.n === etapa ? { ...e, count: e.count + 1 } : e))
-          setPipelineFlash(etapa)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ana_calls' }, (payload: any) => {
+        const stage = (payload.new as any).stage as string | null
+        const n = stage ? (STAGE_TO_N[stage] ?? null) : null
+        if (n) {
+          setPipeline(prev => prev.map(e => e.n === n ? { ...e, count: e.count + 1 } : e))
+          setPipelineFlash(n)
           setTimeout(() => setPipelineFlash(null), 2000)
         }
       })
