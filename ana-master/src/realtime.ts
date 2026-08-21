@@ -1,17 +1,16 @@
 import { RealtimeAgent, RealtimeSession } from '@openai/agents/realtime'
 import { TwilioRealtimeTransportLayer } from '@openai/agents-extensions'
 import { OPENAI_API_KEY, REALTIME_DEFAULTS } from './config.js'
-import { ANA_BASE_PROMPT, STAGE_INSTRUCTIONS } from './state-machine.js'
+import { ANA_BASE_PROMPT } from './state-machine.js'
 import { buildTools, SessionRef } from './tools/index.js'
 import { upsertCall, saveMemory, appendTranscript, supabase } from './supabase.js'
 import { pushTranscriptEvent } from './sse-registry.js'
 import { initialSpeechProgress, classifyLeadTurn, getPartInstruction, LeadTurnDisposition } from './speech-progress.js'
 
-const ANA_SYSTEM_PROMPT = `${ANA_BASE_PROMPT}
+// Fallback minimal prompt — used only if Supabase is unreachable before session starts
+const ANA_FALLBACK_PROMPT = `${ANA_BASE_PROMPT}
 
-INÍCIO: Você recebe a ligação e fala PRIMEIRO. Comece agora pela Etapa 1.
-
-${STAGE_INSTRUCTIONS.apresentacao}`
+INÍCIO: Você recebe a ligação e fala PRIMEIRO. Cumprimente naturalmente e inicie a conversa.`
 
 async function loadGoldenPrompt(): Promise<string> {
   try {
@@ -24,7 +23,7 @@ async function loadGoldenPrompt(): Promise<string> {
   } catch (e) {
     console.error('[ANA MASTER] Failed to load GOLDEN_PROMPT from Supabase, falling back:', e)
   }
-  return ANA_SYSTEM_PROMPT
+  return ANA_FALLBACK_PROMPT
 }
 
 // gpt-realtime-2.1 envia PCM 24kHz no output apesar de output_audio_format=g711_ulaw.
@@ -118,11 +117,11 @@ function wrapTwilioWithPcmToMulaw(ws: any): any {
 }
 
 export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { contexto?: string } = {}) {
-  // Note: opts.contexto comes from server.ts req.query which is always empty for Twilio WebSocket.
-  // The real contexto arrives in the Twilio 'start' event customParameters — handled below.
-  // We start with base prompt and upgrade to GOLDEN_PROMPT after 'start' fires if contexto=gold.
-  const instructions = ANA_SYSTEM_PROMPT
-  console.log('[ANA MASTER] session starting — awaiting start event for contexto')
+  // For Twilio calls, always load GOLDEN_PROMPT before connecting so ANA starts with the
+  // correct free-flowing prompt — not the rigid stage script — regardless of when 'start' fires.
+  console.log('[ANA MASTER] session starting — loading GOLDEN_PROMPT before connect')
+  const instructions = await loadGoldenPrompt()
+  console.log('[ANA MASTER] GOLDEN_PROMPT loaded — length:', instructions.length)
 
   // INBOUND: mulaw→PCM (gpt-realtime-2.1 ignora g711_ulaw input) + session.update pcm16
   // OUTBOUND: PCM→mulaw (gpt-realtime-2.1 ignora g711_ulaw output)
@@ -244,16 +243,11 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       console.log('[ANA MASTER] start event — callSid:', callSid, '| telefone:', telefone, '| contexto:', contextoFromStart)
       await upsertCall(callSid, telefone).catch(() => {})
       await saveMemory(callSid, 'telefone', telefone).catch(() => {})
-      // Load GOLDEN_PROMPT if contexto=gold and update session instructions
+      // Mark goldenMode — speech-progress state machine is disabled for gold calls.
+      // GOLDEN_PROMPT is already loaded at session start (before connect), so no reload needed.
       if (contextoFromStart === 'gold') {
         sessionRef.goldenMode = true
         console.log('[ANA MASTER] contexto=gold — goldenMode ativo, speech-progress desabilitado')
-        console.log('[ANA MASTER] contexto=gold — carregando GOLDEN_PROMPT do Supabase')
-        loadGoldenPrompt().then((goldenInstructions) => {
-          ;(realtimeSession as any).updateSession?.({ instructions: goldenInstructions })
-            ?.catch?.((e: unknown) => console.error('[ANA MASTER] updateSession gold failed:', e))
-          console.log('[ANA MASTER] GOLDEN_PROMPT aplicado — length:', goldenInstructions.length)
-        }).catch((e: unknown) => console.error('[ANA MASTER] loadGoldenPrompt failed:', e))
       }
     }
 
