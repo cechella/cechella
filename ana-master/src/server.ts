@@ -34,8 +34,10 @@ app.get('/health', async () => ({
 // Twilio webhook — returns TwiML connecting call to Media Stream WebSocket
 app.post('/twiml', async (req, reply) => {
   const body = req.body as Record<string, string>
+  const query = req.query as Record<string, string>
   const callSid = body?.CallSid ?? 'unknown'
   const from = (body?.From ?? '').replace(/\D/g, '')
+  const contexto = query?.contexto ?? ''          // passed via URL query from /outbound
   const host = PUBLIC_HOST.replace(/^https?:\/\//, '')
 
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -44,6 +46,7 @@ app.post('/twiml', async (req, reply) => {
     <Stream url="wss://${host}/media-stream">
       <Parameter name="callSid" value="${callSid}" />
       <Parameter name="from" value="${from}" />
+      <Parameter name="contexto" value="${contexto}" />
     </Stream>
   </Connect>
 </Response>`
@@ -53,8 +56,10 @@ app.post('/twiml', async (req, reply) => {
 })
 
 // Twilio Media Streams WebSocket handler
-app.get('/media-stream', { websocket: true }, (socket, _req) => {
-  app.log.info('Twilio Media Stream connected')
+app.get('/media-stream', { websocket: true }, (socket, req) => {
+  const query = req.query as Record<string, string>
+  const contexto = query?.contexto ?? ''
+  app.log.info({ contexto }, 'Twilio Media Stream connected')
 
   // TwilioRealtimeTransportLayer needs the raw ws.WebSocket (has addEventListener).
   // Fastify gives us a SocketStream wrapper — socket.socket is the actual ws instance.
@@ -62,8 +67,8 @@ app.get('/media-stream', { websocket: true }, (socket, _req) => {
 
   // Create session immediately so the Transport sees all events including 'start'
   // (it uses 'start' to capture streamSid, required for sending audio back).
-  createAnaMasterSession(rawWs)
-    .then(() => { app.log.info('ANA MASTER session started') })
+  createAnaMasterSession(rawWs, { contexto })
+    .then(() => { app.log.info({ contexto }, 'ANA MASTER session started') })
     .catch((err: unknown) => {
       app.log.error({ err }, 'Failed to start RealtimeSession — closing stream')
       socket.destroy()

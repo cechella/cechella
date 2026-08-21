@@ -3,7 +3,7 @@ import { TwilioRealtimeTransportLayer } from '@openai/agents-extensions'
 import { OPENAI_API_KEY, REALTIME_DEFAULTS } from './config.js'
 import { ANA_BASE_PROMPT, STAGE_INSTRUCTIONS } from './state-machine.js'
 import { buildTools, SessionRef } from './tools/index.js'
-import { upsertCall, saveMemory, appendTranscript } from './supabase.js'
+import { upsertCall, saveMemory, appendTranscript, supabase } from './supabase.js'
 import { initialSpeechProgress, classifyLeadTurn, getPartInstruction, LeadTurnDisposition } from './speech-progress.js'
 
 const ANA_SYSTEM_PROMPT = `${ANA_BASE_PROMPT}
@@ -11,6 +11,20 @@ const ANA_SYSTEM_PROMPT = `${ANA_BASE_PROMPT}
 INÍCIO: Você recebe a ligação e fala PRIMEIRO. Comece agora pela Etapa 1.
 
 ${STAGE_INSTRUCTIONS.apresentacao}`
+
+async function loadGoldenPrompt(): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('ana_realtime_profiles')
+      .select('instructions')
+      .eq('profile', 'gold')
+      .single()
+    if (data?.instructions) return data.instructions as string
+  } catch (e) {
+    console.error('[ANA MASTER] Failed to load GOLDEN_PROMPT from Supabase, falling back:', e)
+  }
+  return ANA_SYSTEM_PROMPT
+}
 
 // ── Audio conversion helpers ───────────────────────────────────────────────────
 //
@@ -58,14 +72,39 @@ function mulaw8k_to_pcm16_24k(input: Buffer): Buffer {
 }
 
 // Intercept WebSocket.send (server→Twilio): convert PCM 24kHz → mulaw 8kHz
-function wrapTwilioWithPcmToMulaw(ws: any): any {
+// Runtime format detection per OpenAI recommendation: if model starts sending mulaw, pass through
+function wrapTwilioWithPcmToMulaw(ws: any, getDetectedFormat: () => 'pcm' | 'mulaw' | 'unknown', setDetectedFormat: (f: 'pcm' | 'mulaw') => void): any {
   const originalSend = ws.send.bind(ws)
   ws.send = function (data: any) {
     try {
       const msg = JSON.parse(data)
       if (msg.event === 'media' && msg.media?.payload) {
-        const pcm = Buffer.from(msg.media.payload, 'base64')
-        msg.media.payload = pcm16_24k_to_mulaw8k(pcm).toString('base64')
+        const raw = Buffer.from(msg.media.payload, 'base64')
+        const fmt = getDetectedFormat()
+
+        if (fmt === 'mulaw') {
+          // Model is already sending mulaw — pass through unchanged
+          originalSend(data)
+          return
+        }
+
+        // Assume PCM (current behavior of gpt-realtime-2.1)
+        // Heuristic: mulaw frames from model would be ~1/6 the size of PCM for same duration
+        // PCM 24kHz 20ms = 960 bytes; mulaw 8kHz 20ms = 160 bytes
+        if (fmt === 'unknown') {
+          // Detect on first frame: if payload is small (≤200 bytes), likely already mulaw
+          if (raw.length <= 200) {
+            setDetectedFormat('mulaw')
+            console.log('[ANA MASTER] Output format detected: mulaw (passing through)')
+            originalSend(data)
+            return
+          } else {
+            setDetectedFormat('pcm')
+            console.log('[ANA MASTER] Output format detected: pcm (converting to mulaw)')
+          }
+        }
+
+        msg.media.payload = pcm16_24k_to_mulaw8k(raw).toString('base64')
         originalSend(JSON.stringify(msg))
         return
       }
@@ -99,32 +138,49 @@ function wrapTwilioInputMulawToPcm(ws: any): any {
   return ws
 }
 
-export async function createAnaMasterSession(twilioWebSocket: unknown) {
+export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { contexto?: string } = {}) {
+  const contexto = opts.contexto ?? ''
+  const isGold = contexto === 'gold'
+
+  // Load instructions — GOLDEN_PROMPT from Supabase for gold calls, base prompt otherwise
+  const instructions = isGold ? await loadGoldenPrompt() : ANA_SYSTEM_PROMPT
+  console.log('[ANA MASTER] contexto:', contexto, '| isGold:', isGold, '| instructions length:', instructions.length)
+
   // Pipeline de áudio (PROVADO por diagnóstico — gpt-realtime-2.1 ignora g711_ulaw input):
   //
   // INBOUND  Twilio mulaw 8kHz
   //          → wrapTwilioInputMulawToPcm (mulaw→PCM 24kHz nos media events do WebSocket)
   //          → transport encaminha PCM para OpenAI
-  //          → session.update declara input_audio_format=pcm16 (sobrescreve g711_ulaw do transport)
+  //          → session.update declara audio.input.format=audio/pcm 24kHz (API documentada)
   //          → OpenAI VAD detecta fala ✓
   //
-  // OUTBOUND OpenAI PCM 24kHz (ignora output_audio_format=g711_ulaw)
-  //          → transport encaminha raw
-  //          → wrapTwilioWithPcmToMulaw (PCM→mulaw 8kHz)
+  // OUTBOUND OpenAI envia PCM 24kHz ou mulaw 8kHz dependendo da sessão
+  //          → wrapper detecta formato em runtime (recomendação OpenAI)
+  //          → se PCM: converte para mulaw 8kHz antes de enviar ao Twilio
+  //          → se já mulaw: passa direto
   //          → Twilio toca áudio ✓
   //
   // CAVEAT: transport injeta silence padding mulaw internamente (não passa pelo wrapper).
   // Em chamadas ativas (sem gaps no stream) isso é inofensivo — 0xff como PCM ≈ zero.
 
+  // Runtime format detection (recomendado pela OpenAI — output pode mudar com updates do modelo)
+  // 'pcm' = modelo ignora audio/pcmu e envia PCM 24kHz (comportamento atual gpt-realtime-2.1)
+  // 'mulaw' = modelo honra audio/pcmu e envia mulaw 8kHz (pode ocorrer após update)
+  let detectedOutputFormat: 'pcm' | 'mulaw' | 'unknown' = 'unknown'
+
   console.log('[ANA MASTER] PIPELINE:',
     'TWILIO_IN=mulaw8k→PCM24k(wrapper)',
-    '| OPENAI_IN=pcm16(declarado+convertido)',
-    '| OPENAI_OUT=pcm24k(real)',
+    '| OPENAI_IN=audio/pcm@24kHz(documentado)',
+    '| OPENAI_OUT=detecção em runtime',
     '| TWILIO_OUT=mulaw8k(wrapper)',
   )
 
   const transport = new TwilioRealtimeTransportLayer({
-    twilioWebSocket: wrapTwilioWithPcmToMulaw(wrapTwilioInputMulawToPcm(twilioWebSocket)),
+    twilioWebSocket: wrapTwilioWithPcmToMulaw(
+      wrapTwilioInputMulawToPcm(twilioWebSocket),
+      () => detectedOutputFormat,
+      (f) => { detectedOutputFormat = f },
+    ),
   } as any)
 
   // SessionRef is mutable — callSid/telefone are filled from the Twilio 'start' event
@@ -187,7 +243,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
 
   const agent = new RealtimeAgent({
     name: 'ANA',
-    instructions: ANA_SYSTEM_PROMPT,
+    instructions,
     voice: REALTIME_DEFAULTS.voice as any,
     tools: buildTools(sessionRef) as any,
   })
@@ -302,14 +358,25 @@ export async function createAnaMasterSession(twilioWebSocket: unknown) {
 
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 
-  // Sobrescreve input_audio_format do transport (g711_ulaw → pcm16) pois convertemos
-  // o áudio inbound antes de chegar na OpenAI. Habilita também transcrição.
+  // Sobrescreve formatos de áudio usando a API documentada (nested audio objects).
+  // Recomendação OpenAI: usar session.audio.input.format e session.audio.output.format
+  // ao invés dos campos legados input_audio_format / output_audio_format.
   ;(transport as any).sendEvent?.({
     type: 'session.update',
     session: {
       type: 'realtime',
-      input_audio_format: 'pcm16',
-      input_audio_transcription: { model: 'gpt-4o-transcribe' },
+      // Documented nested format API (OpenAI recommended)
+      audio: {
+        input: {
+          format: { type: 'audio/pcm', rate: 24000 },        // nossa conversão mulaw→PCM
+          transcription: { model: 'gpt-realtime-whisper', language: 'pt' },
+          noise_reduction: { type: 'far_field' },
+        },
+        output: {
+          format: { type: 'audio/pcmu' },                    // pede mulaw — detectamos em runtime
+          voice: REALTIME_DEFAULTS.voice,
+        },
+      },
     },
   })?.catch?.(() => {})
 
