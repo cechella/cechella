@@ -2,6 +2,7 @@ import Fastify from 'fastify'
 import websocket from '@fastify/websocket'
 import { PORT, PUBLIC_HOST } from './config.js'
 import { createAnaMasterSession } from './realtime.js'
+import { registerSseClient } from './sse-registry.js'
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN!
@@ -142,6 +143,32 @@ app.post('/recording-status', async (req, reply) => {
   }
 
   return reply.status(204).send()
+})
+
+// SSE live transcript stream — browser connects here to receive real-time turns
+app.get('/transcript-stream/:callSid', (req, reply) => {
+  const { callSid } = req.params as { callSid: string }
+
+  reply.raw.setHeader('Content-Type', 'text/event-stream')
+  reply.raw.setHeader('Cache-Control', 'no-cache')
+  reply.raw.setHeader('Connection', 'keep-alive')
+  reply.raw.setHeader('Access-Control-Allow-Origin', '*')
+  reply.raw.flushHeaders()
+
+  // Heartbeat every 15s to keep the connection alive through proxies
+  const heartbeat = setInterval(() => {
+    try { reply.raw.write(': ping\n\n') } catch { clearInterval(heartbeat) }
+  }, 15000)
+
+  const unregister = registerSseClient(callSid, {
+    write: (data: string) => reply.raw.write(data),
+    close: () => reply.raw.end(),
+  })
+
+  req.raw.on('close', () => {
+    clearInterval(heartbeat)
+    unregister()
+  })
 })
 
 await app.listen({ port: PORT, host: '0.0.0.0' })

@@ -4,6 +4,7 @@ import { OPENAI_API_KEY, REALTIME_DEFAULTS } from './config.js'
 import { ANA_BASE_PROMPT, STAGE_INSTRUCTIONS } from './state-machine.js'
 import { buildTools, SessionRef } from './tools/index.js'
 import { upsertCall, saveMemory, appendTranscript, supabase } from './supabase.js'
+import { pushTranscriptEvent } from './sse-registry.js'
 import { initialSpeechProgress, classifyLeadTurn, getPartInstruction, LeadTurnDisposition } from './speech-progress.js'
 
 const ANA_SYSTEM_PROMPT = `${ANA_BASE_PROMPT}
@@ -298,6 +299,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       console.log('[ANA MASTER] 📝 user:', text)
       if (text && sessionRef.callSid !== 'unknown') {
         appendTranscript(sessionRef.callSid, 'user', text).catch(() => {})
+        pushTranscriptEvent(sessionRef.callSid, 'user', text)
         // Speech progress: classify lead turn and potentially unlock next part
         if (sessionRef.speechProgress.waiting_for_lead) {
           sessionRef.onLeadTurn(text).catch(() => {})
@@ -312,6 +314,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
           console.log('[ANA MASTER] 📝 assistant raw:', JSON.stringify({ type: content?.type, transcript: content?.transcript, text: content?.text }))
           if (text && sessionRef.callSid !== 'unknown') {
             appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
+            pushTranscriptEvent(sessionRef.callSid, 'assistant', text)
           }
         }
       }

@@ -3231,6 +3231,40 @@ function SessoesInlineTab() {
   const [copiedTranscript, setCopiedTranscript] = useState<string|null>(null)
   const [debugInfo, setDebugInfo] = useState<string>('')
 
+  // Live SSE transcript stream
+  const [liveCallSid, setLiveCallSid] = useState<string|null>(null)
+  const [liveTurns, setLiveTurns] = useState<{role:string;text:string;ts:number}[]>([])
+  const [liveConnected, setLiveConnected] = useState(false)
+  const liveEndRef = useRef<HTMLDivElement>(null)
+  const esRef = useRef<EventSource|null>(null)
+
+  const startLive = useCallback((callSid: string) => {
+    if (esRef.current) { esRef.current.close(); esRef.current = null }
+    setLiveCallSid(callSid)
+    setLiveTurns([])
+    setLiveConnected(false)
+    const es = new EventSource(`/api/admin/ana-transcript-stream?callSid=${encodeURIComponent(callSid)}`)
+    es.onopen = () => setLiveConnected(true)
+    es.onmessage = (e) => {
+      try {
+        const t = JSON.parse(e.data)
+        setLiveTurns(prev => [...prev, t])
+        setTimeout(() => liveEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 50)
+      } catch { /* ignore */ }
+    }
+    es.onerror = () => setLiveConnected(false)
+    esRef.current = es
+  }, [])
+
+  const stopLive = useCallback(() => {
+    esRef.current?.close()
+    esRef.current = null
+    setLiveCallSid(null)
+    setLiveConnected(false)
+  }, [])
+
+  useEffect(() => () => { esRef.current?.close() }, [])
+
   const load = useCallback(async () => {
     setLoading(true)
     setDebugInfo('buscando...')
@@ -3323,6 +3357,34 @@ function SessoesInlineTab() {
         </div>
       )}
 
+      {/* Live SSE transcript panel */}
+      {liveCallSid && (
+        <div style={{ borderRadius: 12, border: `1px solid ${liveConnected ? '#34D399' : '#EF4444'}`, marginBottom: 16, background: '#0A0A0B', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 16px', borderBottom: '1px solid #1C1C1E' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: liveConnected ? '#34D399' : '#EF4444', display: 'inline-block', animation: liveConnected ? 'pulse 1.5s infinite' : 'none' }} />
+              <span style={{ color: '#fff', fontSize: 12, fontWeight: 700 }}>Live Transcript</span>
+              <span style={{ fontSize: 11, color: '#52525B', fontFamily: 'monospace' }}>{liveCallSid}</span>
+            </div>
+            <button onClick={stopLive} style={{ background: 'none', border: '1px solid #3A3A3C', borderRadius: 6, padding: '3px 10px', color: '#9CA3AF', fontSize: 11, cursor: 'pointer' }}>✕ fechar</button>
+          </div>
+          <div style={{ padding: 16, maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {liveTurns.length === 0 && <p style={{ color: '#52525B', fontSize: 12, fontStyle: 'italic', textAlign: 'center' }}>{liveConnected ? 'Aguardando turnos...' : 'Conectando...'}</p>}
+            {liveTurns.map((t, i) => {
+              const isAna = t.role === 'assistant'
+              return (
+                <div key={i} style={{ borderRadius: 8, padding: '8px 12px', background: isAna ? 'rgba(123,63,228,0.1)' : '#1C1C1E', border: `1px solid ${isAna ? 'rgba(123,63,228,0.2)' : '#27272A'}`, fontSize: 13, color: isAna ? '#fff' : '#A1A1AA', lineHeight: 1.5 }}>
+                  <p style={{ fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', margin: '0 0 3px', color: isAna ? '#A78BFA' : '#52525B' }}>{isAna ? 'ANA' : 'VOCÊ'}</p>
+                  {t.text}
+                </div>
+              )
+            })}
+            <div ref={liveEndRef} />
+          </div>
+        </div>
+      )}
+      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }`}</style>
+
       {sessions.map((s: any) => {
         const isOpen = expanded === s.callSid
         const gatesPassed = new Set((s.gates ?? []).map((g: any) => g.gate))
@@ -3339,6 +3401,10 @@ function SessoesInlineTab() {
                   <span style={{ fontSize: 11, color: '#52525B' }}>{fmtTime(s.updatedAt)}</span>
                   {s.hasAudio && <span style={{ fontSize: 10, color: '#38BDF8', border: '1px solid rgba(56,189,248,0.2)', borderRadius: 4, padding: '1px 6px' }}>🎙 áudio</span>}
                   {s.stage === 'ganho' && <span style={{ fontSize: 10, color: C.green, background: 'rgba(52,211,153,0.1)', borderRadius: 4, padding: '1px 6px' }}>🏆 GANHO</span>}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); liveCallSid === s.callSid ? stopLive() : startLive(s.callSid) }}
+                    style={{ fontSize: 10, padding: '1px 7px', borderRadius: 4, border: `1px solid ${liveCallSid === s.callSid ? '#EF4444' : 'rgba(52,211,153,0.3)'}`, background: liveCallSid === s.callSid ? 'rgba(239,68,68,0.15)' : 'rgba(52,211,153,0.07)', color: liveCallSid === s.callSid ? '#EF4444' : '#34D399', cursor: 'pointer' }}
+                  >{liveCallSid === s.callSid ? '■ parar' : '● live'}</button>
                 </div>
                 <div style={{ display: 'flex', gap: 3, marginTop: 6, flexWrap: 'wrap' }}>
                   {GATE_ORDER_S.map(g => {
