@@ -84,6 +84,8 @@ export function SimuladorGoldContent() {
   const pixPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const referidosPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const streamingTextRef = useRef('')
+  const ptlEsRef = useRef<EventSource | null>(null)
+  const ptlCallSidRef = useRef<string | null>(null)
 
   interface CheckpointEntry { stage: string; ts: string; transcriptSnapshot: { role: string; text: string; ts: number }[] }
   interface RecentSession { call_sid: string; created_at: string; checkpoints: Record<string, CheckpointEntry> }
@@ -121,10 +123,19 @@ export function SimuladorGoldContent() {
     if (role !== 'system') transcriptForCheckpointRef.current = [...transcriptForCheckpointRef.current, line]
   }, [])
 
+  const stopPtlStream = useCallback(() => {
+    if (ptlEsRef.current) {
+      ptlEsRef.current.close()
+      ptlEsRef.current = null
+    }
+    ptlCallSidRef.current = null
+  }, [])
+
   const dispararLigacaoPTL = useCallback(async () => {
     const digits = String(telefone).replace(/\D/g, '')
     const numero = digits.startsWith('55') ? digits : `55${digits}`
     if (!numero || numero.length < 12) return
+    stopPtlStream()
     setPtlStatus('calling')
     try {
       const res = await fetch('/api/admin/ana-master-call', {
@@ -134,14 +145,34 @@ export function SimuladorGoldContent() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      const callSid = data.callSid ?? data.sid ?? null
+      ptlCallSidRef.current = callSid
       setPtlStatus('active')
-      addTranscript('system', `📞 Ligação PTL disparada para ${numero} — SID: ${data.callSid ?? data.sid ?? 'ok'}`)
+      addTranscript('system', `📞 Ligação PTL disparada para ${numero}${callSid ? ` — SID: ${callSid}` : ''}`)
+
+      // Connect SSE live transcript
+      if (callSid) {
+        const es = new EventSource(`/api/admin/ana-transcript-stream?callSid=${encodeURIComponent(callSid)}`)
+        ptlEsRef.current = es
+        es.onmessage = (e) => {
+          try {
+            const { role, text } = JSON.parse(e.data)
+            const mappedRole: TranscriptLine['role'] = role === 'assistant' ? 'ana' : 'lead'
+            addTranscript(mappedRole, text)
+          } catch {}
+        }
+        es.onerror = () => {
+          // SSE error/closed — clean up quietly (call may have ended)
+          es.close()
+          if (ptlEsRef.current === es) ptlEsRef.current = null
+        }
+      }
     } catch (e: any) {
       setPtlStatus('error')
       addTranscript('system', `❌ Erro ao disparar ligação PTL: ${e.message}`)
       setTimeout(() => setPtlStatus('idle'), 4000)
     }
-  }, [telefone, addTranscript])
+  }, [telefone, addTranscript, stopPtlStream])
 
   const updateStageInDB = useCallback((stage: string) => {
     if (!callSidRef.current) return
@@ -547,6 +578,10 @@ export function SimuladorGoldContent() {
 
   useEffect(() => { loadRecentSessions() }, [loadRecentSessions])
 
+  useEffect(() => {
+    return () => { stopPtlStream() }
+  }, [stopPtlStream])
+
   const toggleMute = useCallback(() => {
     localStreamRef.current?.getTracks().forEach(t => { t.enabled = isMuted })
     setIsMuted(!isMuted)
@@ -755,13 +790,13 @@ export function SimuladorGoldContent() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <div style={{ padding: '12px 20px', borderBottom: '1px solid #1C1C1E', display: 'flex', alignItems: 'center', gap: 10 }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: '#fff', margin: 0 }}>Transcrição ao vivo</p>
-          {status === 'active' && (
+          {(status === 'active' || ptlStatus === 'active') && (
             <span style={{ fontSize: 10, color: '#22C55E', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22C55E', display: 'inline-block' }} />
-              AO VIVO
+              AO VIVO{ptlStatus === 'active' ? ' · PTL' : ''}
             </span>
           )}
-          {status === 'ended' && <span style={{ fontSize: 10, color: '#52525E' }}>· Encerrado</span>}
+          {status === 'ended' && ptlStatus !== 'active' && <span style={{ fontSize: 10, color: '#52525E' }}>· Encerrado</span>}
           <span style={{ marginLeft: 'auto', fontSize: 10, color: '#F59E0B', fontWeight: 700 }}>✦ GOLD MODE</span>
         </div>
 
