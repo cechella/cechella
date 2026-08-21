@@ -147,7 +147,11 @@ export function SimuladorGoldContent() {
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
       const callSid = data.callSid ?? data.sid ?? null
       ptlCallSidRef.current = callSid
+      // Use PTL callSid for saveTranscriptTurn / updateStageInDB
+      if (callSid) callSidRef.current = callSid
       setPtlStatus('active')
+      setTranscript([]); setDetectedStages([]); setSessionCheckpoints([]); transcriptForCheckpointRef.current = []
+      setMetrics({ turns: 0, interruptions: 0, lastResponseMs: null })
       addTranscript('system', `📞 Ligação PTL disparada para ${numero}${callSid ? ` — SID: ${callSid}` : ''}`)
 
       // Connect SSE live transcript
@@ -157,8 +161,21 @@ export function SimuladorGoldContent() {
         es.onmessage = (e) => {
           try {
             const { role, text } = JSON.parse(e.data)
+            if (!text?.trim()) return
             const mappedRole: TranscriptLine['role'] = role === 'assistant' ? 'ana' : 'lead'
             addTranscript(mappedRole, text)
+            saveTranscriptTurn(mappedRole, text)
+            if (mappedRole === 'ana') {
+              const stage = detectStage(text)
+              if (stage) {
+                setDetectedStages(prev => prev.includes(stage) ? prev : [...prev, stage])
+                updateStageInDB(stage)
+              }
+              setMetrics(prev => {
+                const m = { ...prev, turns: prev.turns + 1 }
+                metricsRef.current = m; return m
+              })
+            }
           } catch {}
         }
         es.onerror = () => {
