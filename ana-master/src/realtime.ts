@@ -26,6 +26,55 @@ async function loadGoldenPrompt(): Promise<string> {
   return ANA_SYSTEM_PROMPT
 }
 
+// gpt-realtime-2.1 envia PCM 24kHz no output apesar de output_audio_format=g711_ulaw.
+// Intercepta ws.send (server→Twilio) e converte PCM 16-bit LE 24kHz → mulaw 8kHz.
+function linearToMulaw(s: number): number {
+  const BIAS = 0x84, CLIP = 32635
+  const sign = s < 0 ? 0x80 : 0
+  if (s < 0) s = -s
+  if (s > CLIP) s = CLIP
+  s += BIAS
+  let exp = 7
+  for (let mask = 0x4000; (s & mask) === 0 && exp > 0; mask >>= 1) exp--
+  return (~(sign | (exp << 4) | ((s >> (exp + 3)) & 0x0F))) & 0xFF
+}
+
+function pcm16_24k_to_mulaw8k(input: Buffer): Buffer {
+  const outLen = Math.floor(input.length / 6)
+  const out = Buffer.allocUnsafe(outLen)
+  for (let i = 0; i < outLen; i++) {
+    const s0 = input.readInt16LE(i * 6)
+    const s1 = input.readInt16LE(i * 6 + 2)
+    const s2 = input.readInt16LE(i * 6 + 4)
+    out[i] = linearToMulaw(Math.round((s0 + s1 + s2) / 3))
+  }
+  return out
+}
+
+function wrapTwilioWithPcmToMulaw(ws: any): any {
+  const originalSend = ws.send.bind(ws)
+  let detectedFormat: 'pcm' | 'mulaw' | 'unknown' = 'unknown'
+  ws.send = function (data: any) {
+    try {
+      const msg = JSON.parse(data)
+      if (msg.event === 'media' && msg.media?.payload) {
+        const raw = Buffer.from(msg.media.payload, 'base64')
+        if (detectedFormat === 'unknown') {
+          // mulaw 8kHz 20ms ≈ 160 bytes; PCM 24kHz 20ms ≈ 960 bytes
+          detectedFormat = raw.length <= 200 ? 'mulaw' : 'pcm'
+          console.log('[ANA MASTER] output format detected:', detectedFormat, '| payload bytes:', raw.length)
+        }
+        if (detectedFormat === 'pcm') {
+          msg.media.payload = pcm16_24k_to_mulaw8k(raw).toString('base64')
+          originalSend(JSON.stringify(msg))
+          return
+        }
+      }
+    } catch { /* non-media frames pass through */ }
+    originalSend(data)
+  }
+  return ws
+}
 
 export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { contexto?: string } = {}) {
   // Note: opts.contexto comes from server.ts req.query which is always empty for Twilio WebSocket.
@@ -34,10 +83,10 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
   const instructions = ANA_SYSTEM_PROMPT
   console.log('[ANA MASTER] session starting — awaiting start event for contexto')
 
-  // TwilioRealtimeTransportLayer configura automaticamente g711_ulaw nos dois sentidos.
-  // Twilio envia/recebe mulaw 8kHz nativamente — sem conversão manual necessária.
+  // INBOUND: mulaw 8kHz passa direto para TwilioTransport → OpenAI (transport declara g711_ulaw)
+  // OUTBOUND: gpt-realtime-2.1 envia PCM 24kHz ignorando g711_ulaw — wrapper converte para mulaw
   const transport = new TwilioRealtimeTransportLayer({
-    twilioWebSocket,
+    twilioWebSocket: wrapTwilioWithPcmToMulaw(twilioWebSocket),
   } as any)
 
   // SessionRef is mutable — callSid/telefone are filled from the Twilio 'start' event
