@@ -26,123 +26,6 @@ async function loadGoldenPrompt(): Promise<string> {
   return ANA_SYSTEM_PROMPT
 }
 
-// ── Audio conversion helpers ───────────────────────────────────────────────────
-//
-// gpt-realtime-2.1 ignores the g711_ulaw format request on BOTH directions:
-//   OUTPUT: model sends PCM 24kHz → we convert to mulaw 8kHz before sending to Twilio
-//   INPUT:  Twilio sends mulaw 8kHz → we convert to PCM 24kHz before OpenAI receives it
-
-function linearToMulaw(s: number): number {
-  const BIAS = 0x84, CLIP = 32635
-  const sign = s < 0 ? 0x80 : 0
-  if (s < 0) s = -s
-  if (s > CLIP) s = CLIP
-  s += BIAS
-  let exp = 7
-  for (let mask = 0x4000; (s & mask) === 0 && exp > 0; mask >>= 1) exp--
-  return (~(sign | (exp << 4) | ((s >> (exp + 3)) & 0x0F))) & 0xFF
-}
-
-function mulawToLinear(u: number): number {
-  u = (~u) & 0xFF
-  const sign = u & 0x80
-  const exp = (u >> 4) & 0x07
-  const mantissa = u & 0x0F
-  let value = ((mantissa << 1) + 33) << exp
-  value -= 33
-  return sign ? -value : value
-}
-
-function pcm16_24k_to_mulaw8k(input: Buffer): Buffer {
-  const outLen = Math.floor(input.length / 6) // downsample 3:1 then encode
-  const out = Buffer.allocUnsafe(outLen)
-  for (let i = 0; i < outLen; i++) {
-    // Average 3 consecutive samples (box filter) before encoding to reduce aliasing
-    const s0 = input.readInt16LE(i * 6)
-    const s1 = input.readInt16LE(i * 6 + 2)
-    const s2 = input.readInt16LE(i * 6 + 4)
-    out[i] = linearToMulaw(Math.round((s0 + s1 + s2) / 3))
-  }
-  return out
-}
-
-function mulaw8k_to_pcm16_24k(input: Buffer): Buffer {
-  const out = Buffer.allocUnsafe(input.length * 6) // upsample 3:1
-  for (let i = 0; i < input.length; i++) {
-    const s = mulawToLinear(input[i])
-    out.writeInt16LE(s, i * 6)
-    out.writeInt16LE(s, i * 6 + 2)
-    out.writeInt16LE(s, i * 6 + 4)
-  }
-  return out
-}
-
-// Intercept WebSocket.send (server→Twilio): convert PCM 24kHz → mulaw 8kHz
-// Runtime format detection per OpenAI recommendation: if model starts sending mulaw, pass through
-function wrapTwilioWithPcmToMulaw(ws: any, getDetectedFormat: () => 'pcm' | 'mulaw' | 'unknown', setDetectedFormat: (f: 'pcm' | 'mulaw') => void): any {
-  const originalSend = ws.send.bind(ws)
-  ws.send = function (data: any) {
-    try {
-      const msg = JSON.parse(data)
-      if (msg.event === 'media' && msg.media?.payload) {
-        const raw = Buffer.from(msg.media.payload, 'base64')
-        const fmt = getDetectedFormat()
-
-        if (fmt === 'mulaw') {
-          // Model is already sending mulaw — pass through unchanged
-          originalSend(data)
-          return
-        }
-
-        // Assume PCM (current behavior of gpt-realtime-2.1)
-        // Heuristic: mulaw frames from model would be ~1/6 the size of PCM for same duration
-        // PCM 24kHz 20ms = 960 bytes; mulaw 8kHz 20ms = 160 bytes
-        if (fmt === 'unknown') {
-          // Detect on first frame: if payload is small (≤200 bytes), likely already mulaw
-          if (raw.length <= 200) {
-            setDetectedFormat('mulaw')
-            console.log('[ANA MASTER] Output format detected: mulaw (passing through)')
-            originalSend(data)
-            return
-          } else {
-            setDetectedFormat('pcm')
-            console.log('[ANA MASTER] Output format detected: pcm (converting to mulaw)')
-          }
-        }
-
-        msg.media.payload = pcm16_24k_to_mulaw8k(raw).toString('base64')
-        originalSend(JSON.stringify(msg))
-        return
-      }
-    } catch { /* non-media frames pass through unchanged */ }
-    originalSend(data)
-  }
-  return ws
-}
-
-// Intercept WebSocket.on('message') (Twilio→server): convert inbound mulaw 8kHz → PCM 24kHz
-// so OpenAI (which ignores g711_ulaw input format) receives valid PCM audio.
-function wrapTwilioInputMulawToPcm(ws: any): any {
-  const originalOn = ws.on.bind(ws)
-  ws.on = function (event: string, handler: any, ...rest: any[]) {
-    if (event === 'message') {
-      return originalOn(event, (data: any) => {
-        try {
-          const msg = JSON.parse(data.toString())
-          if (msg.event === 'media' && msg.media?.payload) {
-            const mulaw = Buffer.from(msg.media.payload, 'base64')
-            msg.media.payload = mulaw8k_to_pcm16_24k(mulaw).toString('base64')
-            handler(JSON.stringify(msg))
-            return
-          }
-        } catch { /* non-media frames pass through unchanged */ }
-        handler(data)
-      }, ...rest)
-    }
-    return originalOn(event, handler, ...rest)
-  }
-  return ws
-}
 
 export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { contexto?: string } = {}) {
   // Note: opts.contexto comes from server.ts req.query which is always empty for Twilio WebSocket.
@@ -151,41 +34,10 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
   const instructions = ANA_SYSTEM_PROMPT
   console.log('[ANA MASTER] session starting — awaiting start event for contexto')
 
-  // Pipeline de áudio (PROVADO por diagnóstico — gpt-realtime-2.1 ignora g711_ulaw input):
-  //
-  // INBOUND  Twilio mulaw 8kHz
-  //          → wrapTwilioInputMulawToPcm (mulaw→PCM 24kHz nos media events do WebSocket)
-  //          → transport encaminha PCM para OpenAI
-  //          → session.update declara audio.input.format=audio/pcm 24kHz (API documentada)
-  //          → OpenAI VAD detecta fala ✓
-  //
-  // OUTBOUND OpenAI envia PCM 24kHz ou mulaw 8kHz dependendo da sessão
-  //          → wrapper detecta formato em runtime (recomendação OpenAI)
-  //          → se PCM: converte para mulaw 8kHz antes de enviar ao Twilio
-  //          → se já mulaw: passa direto
-  //          → Twilio toca áudio ✓
-  //
-  // CAVEAT: transport injeta silence padding mulaw internamente (não passa pelo wrapper).
-  // Em chamadas ativas (sem gaps no stream) isso é inofensivo — 0xff como PCM ≈ zero.
-
-  // Runtime format detection (recomendado pela OpenAI — output pode mudar com updates do modelo)
-  // 'pcm' = modelo ignora audio/pcmu e envia PCM 24kHz (comportamento atual gpt-realtime-2.1)
-  // 'mulaw' = modelo honra audio/pcmu e envia mulaw 8kHz (pode ocorrer após update)
-  let detectedOutputFormat: 'pcm' | 'mulaw' | 'unknown' = 'unknown'
-
-  console.log('[ANA MASTER] PIPELINE:',
-    'TWILIO_IN=mulaw8k→PCM24k(wrapper)',
-    '| OPENAI_IN=audio/pcm@24kHz(documentado)',
-    '| OPENAI_OUT=detecção em runtime',
-    '| TWILIO_OUT=mulaw8k(wrapper)',
-  )
-
+  // TwilioRealtimeTransportLayer configura automaticamente g711_ulaw nos dois sentidos.
+  // Twilio envia/recebe mulaw 8kHz nativamente — sem conversão manual necessária.
   const transport = new TwilioRealtimeTransportLayer({
-    twilioWebSocket: wrapTwilioWithPcmToMulaw(
-      wrapTwilioInputMulawToPcm(twilioWebSocket),
-      () => detectedOutputFormat,
-      (f) => { detectedOutputFormat = f },
-    ),
+    twilioWebSocket,
   } as any)
 
   // SessionRef is mutable — callSid/telefone are filled from the Twilio 'start' event
@@ -374,27 +226,6 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
 
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 
-  // Sobrescreve formatos de áudio usando a API documentada (nested audio objects).
-  // Recomendação OpenAI: usar session.audio.input.format e session.audio.output.format
-  // ao invés dos campos legados input_audio_format / output_audio_format.
-  ;(transport as any).sendEvent?.({
-    type: 'session.update',
-    session: {
-      type: 'realtime',
-      // Documented nested format API (OpenAI recommended)
-      audio: {
-        input: {
-          format: { type: 'audio/pcm', rate: 24000 },        // nossa conversão mulaw→PCM
-          transcription: { model: 'gpt-realtime-whisper', language: 'pt' },
-          noise_reduction: { type: 'far_field' },
-        },
-        output: {
-          format: { type: 'audio/pcmu' },                    // pede mulaw — detectamos em runtime
-          voice: REALTIME_DEFAULTS.voice,
-        },
-      },
-    },
-  })?.catch?.(() => {})
 
   // Trigger ANA to speak first — outbound call, AI must initiate.
   setTimeout(() => {
