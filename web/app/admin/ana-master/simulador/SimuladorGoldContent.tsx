@@ -79,7 +79,7 @@ export function SimuladorGoldContent() {
   const [pixState, setPixState] = useState<'idle' | 'sending' | 'pending' | 'paid'>('idle')
   const [pixCallId, setPixCallId] = useState<string | null>(null)
   const pixValorRef = useRef<number>(5000)
-  const [ptlStatus, setPtlStatus] = useState<'idle' | 'calling' | 'active' | 'error'>('idle')
+  const [ptlStatus, setPtlStatus] = useState<'idle' | 'calling' | 'active' | 'ended' | 'error'>('idle')
   const [ptlElapsed, setPtlElapsed] = useState(0)
   const ptlTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -171,7 +171,14 @@ export function SimuladorGoldContent() {
         }
         es.onmessage = (e) => {
           try {
-            const { role, text } = JSON.parse(e.data)
+            const { type = 'message', role, text } = JSON.parse(e.data)
+            if (type === 'call_ended') {
+              setPtlStatus('ended')
+              if (ptlTimerRef.current) { clearInterval(ptlTimerRef.current); ptlTimerRef.current = null }
+              addTranscript('system', '🔴 Chamada encerrada')
+              es.close(); if (ptlEsRef.current === es) ptlEsRef.current = null
+              return
+            }
             if (!text?.trim()) return
             const mappedRole: TranscriptLine['role'] = role === 'assistant' ? 'ana' : 'lead'
             addTranscript(mappedRole, text)
@@ -683,17 +690,17 @@ export function SimuladorGoldContent() {
         <div style={{ padding: '0 14px 12px' }}>
           <button
             onClick={dispararLigacaoPTL}
-            disabled={ptlStatus === 'calling'}
+            disabled={ptlStatus === 'calling' || ptlStatus === 'active'}
             style={{
               width: '100%', padding: '10px 0',
-              background: ptlStatus === 'error' ? '#7F1D1D' : ptlStatus === 'active' ? '#14532D' : ptlStatus === 'calling' ? '#333' : '#1C1C1E',
-              color: ptlStatus === 'error' ? '#FCA5A5' : ptlStatus === 'active' ? '#86EFAC' : '#A1A1AA',
-              border: '1px solid #2A2A2E', borderRadius: 8, fontWeight: 700, fontSize: 13,
-              cursor: ptlStatus === 'calling' ? 'default' : 'pointer',
+              background: ptlStatus === 'ended' ? '#7F1D1D' : ptlStatus === 'error' ? '#7F1D1D' : ptlStatus === 'active' ? '#14532D' : ptlStatus === 'calling' ? '#333' : '#1C1C1E',
+              color: ptlStatus === 'ended' ? '#FCA5A5' : ptlStatus === 'error' ? '#FCA5A5' : ptlStatus === 'active' ? '#86EFAC' : '#A1A1AA',
+              border: ptlStatus === 'ended' ? '1px solid #EF4444' : '1px solid #2A2A2E', borderRadius: 8, fontWeight: 700, fontSize: 13,
+              cursor: (ptlStatus === 'calling' || ptlStatus === 'active') ? 'default' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}
           >
-            📞 {ptlStatus === 'calling' ? 'Discando...' : ptlStatus === 'active' ? 'Ligação PTL ativa' : ptlStatus === 'error' ? 'Erro — tente novamente' : 'Disparar Ligação PTL'}
+            {ptlStatus === 'ended' ? '🔴 Chamada encerrada' : ptlStatus === 'calling' ? '📞 Discando...' : ptlStatus === 'active' ? '📞 Ligação PTL ativa' : ptlStatus === 'error' ? '📞 Erro — tente novamente' : '📞 Disparar Ligação PTL'}
           </button>
         </div>
 
@@ -818,7 +825,13 @@ export function SimuladorGoldContent() {
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
         <div style={{ padding: '12px 20px', borderBottom: '1px solid #1C1C1E', display: 'flex', alignItems: 'center', gap: 10 }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: '#fff', margin: 0 }}>Transcrição ao vivo</p>
-          {(status === 'active' || ptlStatus === 'active') && (
+          {ptlStatus === 'ended' && (
+            <span style={{ fontSize: 10, color: '#EF4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#EF4444', display: 'inline-block' }} />
+              CHAMADA ENCERRADA
+            </span>
+          )}
+          {(status === 'active' || ptlStatus === 'active') && ptlStatus !== 'ended' && (
             <span style={{ fontSize: 10, color: '#22C55E', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22C55E', display: 'inline-block' }} />
               AO VIVO{ptlStatus === 'active' ? ' · PTL' : ''}
@@ -829,7 +842,7 @@ export function SimuladorGoldContent() {
               )}
             </span>
           )}
-          {status === 'ended' && ptlStatus !== 'active' && <span style={{ fontSize: 10, color: '#52525E' }}>· Encerrado</span>}
+          {status === 'ended' && ptlStatus !== 'active' && ptlStatus !== 'ended' && <span style={{ fontSize: 10, color: '#52525E' }}>· Encerrado</span>}
           <span style={{ marginLeft: 'auto', fontSize: 10, color: '#F59E0B', fontWeight: 700 }}>✦ GOLD MODE</span>
         </div>
 

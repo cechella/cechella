@@ -4,7 +4,7 @@ import { OPENAI_API_KEY, REALTIME_DEFAULTS } from './config.js'
 import { ANA_BASE_PROMPT } from './state-machine.js'
 import { buildTools, SessionRef } from './tools/index.js'
 import { upsertCall, saveMemory, appendTranscript, supabase } from './supabase.js'
-import { pushTranscriptEvent } from './sse-registry.js'
+import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
 import { initialSpeechProgress, classifyLeadTurn, getPartInstruction, LeadTurnDisposition } from './speech-progress.js'
 
 // Fallback minimal prompt — used only if Supabase is unreachable before session starts.
@@ -250,8 +250,9 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       }
     }
 
-    if (msg?.event === 'stop' && DIAG) {
-      console.log(`[INBOUND TEST] CALL ENDED — total media_count=${mediaCount} total_bytes=${totalInboundBytes}`)
+    if (msg?.event === 'stop') {
+      if (DIAG) console.log(`[INBOUND TEST] CALL ENDED — total media_count=${mediaCount} total_bytes=${totalInboundBytes}`)
+      if (sessionRef.callSid !== 'unknown') pushCallEndedEvent(sessionRef.callSid)
     }
   })
 
