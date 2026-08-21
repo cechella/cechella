@@ -56,7 +56,13 @@ function mulawToLinear(u: number): number {
 function pcm16_24k_to_mulaw8k(input: Buffer): Buffer {
   const outLen = Math.floor(input.length / 6) // downsample 3:1 then encode
   const out = Buffer.allocUnsafe(outLen)
-  for (let i = 0; i < outLen; i++) out[i] = linearToMulaw(input.readInt16LE(i * 6))
+  for (let i = 0; i < outLen; i++) {
+    // Average 3 consecutive samples (box filter) before encoding to reduce aliasing
+    const s0 = input.readInt16LE(i * 6)
+    const s1 = input.readInt16LE(i * 6 + 2)
+    const s2 = input.readInt16LE(i * 6 + 4)
+    out[i] = linearToMulaw(Math.round((s0 + s1 + s2) / 3))
+  }
   return out
 }
 
