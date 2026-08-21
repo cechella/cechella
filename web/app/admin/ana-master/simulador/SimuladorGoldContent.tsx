@@ -79,6 +79,7 @@ export function SimuladorGoldContent() {
   const [pixState, setPixState] = useState<'idle' | 'sending' | 'pending' | 'paid'>('idle')
   const [pixCallId, setPixCallId] = useState<string | null>(null)
   const pixValorRef = useRef<number>(5000)
+  const [ptlStatus, setPtlStatus] = useState<'idle' | 'calling' | 'active' | 'error'>('idle')
 
   const pixPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const referidosPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -119,6 +120,28 @@ export function SimuladorGoldContent() {
     setTranscript(prev => [...prev, line])
     if (role !== 'system') transcriptForCheckpointRef.current = [...transcriptForCheckpointRef.current, line]
   }, [])
+
+  const dispararLigacaoPTL = useCallback(async () => {
+    const digits = String(telefone).replace(/\D/g, '')
+    const numero = digits.startsWith('55') ? digits : `55${digits}`
+    if (!numero || numero.length < 12) return
+    setPtlStatus('calling')
+    try {
+      const res = await fetch('/api/admin/ana-master-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numero, contexto: 'gold' }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
+      setPtlStatus('active')
+      addTranscript('system', `📞 Ligação PTL disparada para ${numero} — SID: ${data.callSid ?? data.sid ?? 'ok'}`)
+    } catch (e: any) {
+      setPtlStatus('error')
+      addTranscript('system', `❌ Erro ao disparar ligação PTL: ${e.message}`)
+      setTimeout(() => setPtlStatus('idle'), 4000)
+    }
+  }, [telefone, addTranscript])
 
   const updateStageInDB = useCallback((stage: string) => {
     if (!callSidRef.current) return
@@ -591,6 +614,24 @@ export function SimuladorGoldContent() {
               </button>
             </>
           )}
+        </div>
+
+        {/* PTL Call */}
+        <div style={{ padding: '0 14px 12px' }}>
+          <button
+            onClick={dispararLigacaoPTL}
+            disabled={ptlStatus === 'calling'}
+            style={{
+              width: '100%', padding: '10px 0',
+              background: ptlStatus === 'error' ? '#7F1D1D' : ptlStatus === 'active' ? '#14532D' : ptlStatus === 'calling' ? '#333' : '#1C1C1E',
+              color: ptlStatus === 'error' ? '#FCA5A5' : ptlStatus === 'active' ? '#86EFAC' : '#A1A1AA',
+              border: '1px solid #2A2A2E', borderRadius: 8, fontWeight: 700, fontSize: 13,
+              cursor: ptlStatus === 'calling' ? 'default' : 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            }}
+          >
+            📞 {ptlStatus === 'calling' ? 'Discando...' : ptlStatus === 'active' ? 'Ligação PTL ativa' : ptlStatus === 'error' ? 'Erro — tente novamente' : 'Disparar Ligação PTL'}
+          </button>
         </div>
 
         {/* Metrics */}
