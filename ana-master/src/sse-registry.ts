@@ -11,11 +11,21 @@ export function registerSseClient(callSid: string, client: SseClient): () => voi
   }
 }
 
-export function pushTranscriptEvent(callSid: string, role: string, text: string) {
+export function pushTranscriptEvent(callSid: string, role: string, text: string, eventType: string = 'message') {
   const clients = registry.get(callSid)
   if (!clients || clients.size === 0) return
-  const payload = JSON.stringify({ role, text, ts: Date.now() })
+  const payload = JSON.stringify({ type: eventType, role, text, ts: Date.now() })
   for (const client of clients) {
     try { client.write(`data: ${payload}\n\n`) } catch { /* ignore closed connections */ }
   }
+}
+
+export function pushCallEndedEvent(callSid: string) {
+  const clients = registry.get(callSid)
+  if (!clients || clients.size === 0) return
+  const payload = JSON.stringify({ type: 'call_ended', ts: Date.now() })
+  for (const client of clients) {
+    try { client.write(`data: ${payload}\n\n`); client.close() } catch { }
+  }
+  registry.delete(callSid)
 }
