@@ -227,7 +227,7 @@ export default function AdminDashboard() {
         fechamento: 5,
         pagamento: 6,
         referidos: 7,
-        encerramento: 8, validacao: 8, ganho: 8,
+        encerramento: 8, encerrado: 8, validacao: 8, ganho: 8,
       }
       const anaCallsEtapaCount: Record<number, number> = {}
       anaCalls.forEach(c => {

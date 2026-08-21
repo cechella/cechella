@@ -34,6 +34,15 @@ export async function getCallStage(callSid: string): Promise<string | null> {
   return (data as any)?.stage ?? null
 }
 
+// Updates stage directly without going through gate_transition RPC.
+// Used by passive transcript-based stage detection — does not affect gate logic.
+export async function updateCallStage(callSid: string, stage: string) {
+  await supabase
+    .from('ana_calls')
+    .update({ stage, updated_at: new Date().toISOString() })
+    .eq('call_sid', callSid)
+}
+
 // ── Single door for stage transitions ────────────────────────────────────────
 // All gate transitions go through this RPC — stage + gate_passed + trace in one transaction.
 // The SQL function (supabase/gate_transition_rpc.sql) must be deployed to Supabase first.

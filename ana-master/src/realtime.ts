@@ -3,7 +3,7 @@ import { TwilioRealtimeTransportLayer } from '@openai/agents-extensions'
 import { OPENAI_API_KEY, REALTIME_DEFAULTS } from './config.js'
 import { ANA_BASE_PROMPT } from './state-machine.js'
 import { buildTools, SessionRef } from './tools/index.js'
-import { upsertCall, saveMemory, appendTranscript, supabase } from './supabase.js'
+import { upsertCall, saveMemory, appendTranscript, updateCallStage, supabase } from './supabase.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
 import { initialSpeechProgress, classifyLeadTurn, getPartInstruction, LeadTurnDisposition } from './speech-progress.js'
 
@@ -115,8 +115,46 @@ function wrapTwilioWithPcmToMulaw(ws: any): any {
   return ws
 }
 
+// Passive stage detection from ANA's transcript — same patterns as the simulador client.
+// Runs server-side so it works for both PTL and WebRTC calls without touching gate logic.
+const STAGE_PATTERNS: Array<{ stage: string; patterns: RegExp[] }> = [
+  { stage: 'apresentacao', patterns: [/qual (é |e )?teu nome/i, /como você se chama/i, /pra eu te chamar/i, /quem me indicou/i] },
+  { stage: 'conexao',      patterns: [/me conta (seu|o) dia a dia/i, /me fala mais sobre/i, /o que você faz/i, /tem filhos/i, /família/i] },
+  { stage: 'combinado',    patterns: [/combinad[ao]/i, /no final apresent/i, /decisão no final/i, /sim ou não/i] },
+  { stage: 'speech',       patterns: [/pellet/i, /implante hormonal/i, /grão de arroz/i, /libera hormônios/i, /testosterona/i, /estrogênio/i] },
+  { stage: 'fechamento',   patterns: [/lembra do nosso combinado/i, /faz sentido pra você/i, /sua decisão/i, /fechar/i, /investimento/i, /quanto custa/i] },
+  { stage: 'pagamento',    patterns: [/pix ou cartão/i, /forma de pagamento/i, /vou gerar (o )?pix/i] },
+  { stage: 'referidos',    patterns: [/conhece alguma amiga/i, /indicar/i, /indicação/i, /seu link/i] },
+  { stage: 'encerramento', patterns: [/obrigada pela confiança/i, /foi um prazer/i, /até logo/i, /tchau/i] },
+]
+
+// Keeps track of the highest stage reached per callSid so we never go backwards.
+const STAGE_ORDER = ['apresentacao', 'conexao', 'combinado', 'speech', 'fechamento', 'pagamento', 'referidos', 'encerramento']
+
+function detectStageFromText(text: string): string | null {
+  for (const { stage, patterns } of STAGE_PATTERNS) {
+    if (patterns.some(p => p.test(text))) return stage
+  }
+  return null
+}
+
+// Per-session stage state — prevents going backwards and avoids duplicate DB writes.
+function makeStageTracker() {
+  let currentIdx = 0
+  return function advanceStage(callSid: string, text: string) {
+    const detected = detectStageFromText(text)
+    if (!detected) return
+    const detectedIdx = STAGE_ORDER.indexOf(detected)
+    if (detectedIdx <= currentIdx) return  // never go backwards
+    currentIdx = detectedIdx
+    console.log(`[ANA MASTER] 🎯 stage detected: ${detected} for ${callSid}`)
+    updateCallStage(callSid, detected).catch(() => {})
+  }
+}
+
 export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { contexto?: string } = {}) {
   console.log('[ANA MASTER] session starting')
+  const advanceStage = makeStageTracker()
 
   // Transport created IMMEDIATELY so it sets up WebSocket listeners and captures the Twilio
   // 'start' event (which carries streamSid — required to send audio back to Twilio).
@@ -302,6 +340,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
           if (text && sessionRef.callSid !== 'unknown') {
             appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
             pushTranscriptEvent(sessionRef.callSid, 'assistant', text)
+            advanceStage(sessionRef.callSid, text)
           }
         }
       }
