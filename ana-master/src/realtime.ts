@@ -51,6 +51,46 @@ function pcm16_24k_to_mulaw8k(input: Buffer): Buffer {
   return out
 }
 
+function mulawToLinear(u: number): number {
+  u = (~u) & 0xFF
+  const sign = u & 0x80
+  const exp = (u >> 4) & 0x07
+  const mantissa = u & 0x0F
+  let value = ((mantissa << 1) + 33) << exp
+  value -= 33
+  return sign ? -value : value
+}
+
+// Inbound: Twilio mulaw 8kHz → PCM 24kHz (gpt-realtime-2.1 ignora g711_ulaw input)
+function wrapTwilioInputMulawToPcm(ws: any): any {
+  const originalOn = ws.on.bind(ws)
+  ws.on = function (event: string, handler: any, ...rest: any[]) {
+    if (event === 'message') {
+      return originalOn(event, (data: any) => {
+        try {
+          const msg = JSON.parse(data.toString())
+          if (msg.event === 'media' && msg.media?.payload) {
+            const mulaw = Buffer.from(msg.media.payload, 'base64')
+            const out = Buffer.allocUnsafe(mulaw.length * 6)
+            for (let i = 0; i < mulaw.length; i++) {
+              const s = mulawToLinear(mulaw[i])
+              out.writeInt16LE(s, i * 6)
+              out.writeInt16LE(s, i * 6 + 2)
+              out.writeInt16LE(s, i * 6 + 4)
+            }
+            msg.media.payload = out.toString('base64')
+            handler(JSON.stringify(msg))
+            return
+          }
+        } catch { /* non-media pass through */ }
+        handler(data)
+      }, ...rest)
+    }
+    return originalOn(event, handler, ...rest)
+  }
+  return ws
+}
+
 function wrapTwilioWithPcmToMulaw(ws: any): any {
   const originalSend = ws.send.bind(ws)
   let detectedFormat: 'pcm' | 'mulaw' | 'unknown' = 'unknown'
@@ -83,10 +123,11 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
   const instructions = ANA_SYSTEM_PROMPT
   console.log('[ANA MASTER] session starting — awaiting start event for contexto')
 
-  // INBOUND: mulaw 8kHz passa direto para TwilioTransport → OpenAI (transport declara g711_ulaw)
-  // OUTBOUND: gpt-realtime-2.1 envia PCM 24kHz ignorando g711_ulaw — wrapper converte para mulaw
+  // INBOUND: mulaw→PCM (gpt-realtime-2.1 ignora g711_ulaw input) + session.update pcm16
+  // OUTBOUND: PCM→mulaw (gpt-realtime-2.1 ignora g711_ulaw output)
+  // silence padding do transport injeta 0xff diretamente (não passa pelo wrapper) — inofensivo
   const transport = new TwilioRealtimeTransportLayer({
-    twilioWebSocket: wrapTwilioWithPcmToMulaw(twilioWebSocket),
+    twilioWebSocket: wrapTwilioWithPcmToMulaw(wrapTwilioInputMulawToPcm(twilioWebSocket)),
   } as any)
 
   // SessionRef is mutable — callSid/telefone are filled from the Twilio 'start' event
@@ -275,6 +316,16 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
 
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 
+  // Sobrescreve input_audio_format para pcm16 — transport configura g711_ulaw mas
+  // convertemos o inbound para PCM antes de chegar na OpenAI.
+  ;(transport as any).sendEvent?.({
+    type: 'session.update',
+    session: {
+      type: 'realtime',
+      input_audio_format: 'pcm16',
+      input_audio_transcription: { model: 'gpt-4o-transcribe' },
+    },
+  })?.catch?.(() => {})
 
   // Trigger ANA to speak first — outbound call, AI must initiate.
   setTimeout(() => {
