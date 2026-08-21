@@ -28,11 +28,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ session: data ?? null })
   }
 
-  // Fetch recent rows unfiltered, filter sim-browser in JS
-  // limit(50) matches the working Ligações route — avoids Supabase replica routing with large Range
   const { data, error } = await supabase
     .from('ana_calls')
-    .select('call_sid, created_at, updated_at, stage, memories')
+    .select('call_sid, created_at, updated_at, stage, memories, telefone')
     .order('created_at', { ascending: false })
     .limit(50)
 
@@ -40,7 +38,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
-  const filtered = (data ?? []).filter((r: any) => r.call_sid?.startsWith('sim-browser-'))
+  // Show simulator sessions (sim-browser-*, sim-gold-*) and real Twilio calls (CA*)
+  const filtered = (data ?? [])
   const totalRaw = filtered.length
   const firstCallSids = filtered.slice(0, 5).map((r: any) => r.call_sid)
 
@@ -56,7 +55,7 @@ export async function GET(req: NextRequest) {
 
     return {
       callSid: row.call_sid,
-      telefone: mem.telefone ?? null,
+      telefone: row.telefone ?? mem.telefone ?? null,
       stage: row.stage ?? 'apresentacao',
       stageLabel: STAGE_LABELS[row.stage ?? 'apresentacao'] ?? row.stage,
       gates: gateLog,
