@@ -116,20 +116,18 @@ function wrapTwilioWithPcmToMulaw(ws: any): any {
 }
 
 export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { contexto?: string } = {}) {
-  // Create Transport IMMEDIATELY so it captures the Twilio 'start' event (which carries streamSid).
-  // Without streamSid the Transport can't send audio back — ANA goes mute.
-  // GOLDEN_PROMPT is loaded in parallel and applied via updateSession after connect.
-  console.log('[ANA MASTER] session starting — awaiting start event for contexto')
+  console.log('[ANA MASTER] session starting')
 
-  // INBOUND: mulaw→PCM (gpt-realtime-2.1 ignora g711_ulaw input) + session.update pcm16
-  // OUTBOUND: PCM→mulaw (gpt-realtime-2.1 ignora g711_ulaw output)
-  // silence padding do transport injeta 0xff diretamente (não passa pelo wrapper) — inofensivo
+  // Transport created IMMEDIATELY so it sets up WebSocket listeners and captures the Twilio
+  // 'start' event (which carries streamSid — required to send audio back to Twilio).
+  // INBOUND: mulaw→PCM | OUTBOUND: PCM→mulaw
   const transport = new TwilioRealtimeTransportLayer({
     twilioWebSocket: wrapTwilioWithPcmToMulaw(wrapTwilioInputMulawToPcm(twilioWebSocket)),
   } as any)
 
-  // Load GOLDEN_PROMPT in parallel — will be applied via updateSession right after connect
-  const goldenPromptPromise = loadGoldenPrompt()
+  // Load GOLDEN_PROMPT in parallel with Transport setup — Supabase fetch while Transport listens
+  const instructions = await loadGoldenPrompt()
+  console.log('[ANA MASTER] GOLDEN_PROMPT loaded — length:', instructions.length)
 
   // SessionRef is mutable — callSid/telefone are filled from the Twilio 'start' event
   const sessionRef: SessionRef = {
@@ -193,7 +191,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
 
   const agent = new RealtimeAgent({
     name: 'ANA',
-    instructions: ANA_FALLBACK_PROMPT,  // placeholder — replaced by GOLDEN_PROMPT after connect
+    instructions,  // GOLDEN_PROMPT — same as the simulator, from the first word
     voice: REALTIME_DEFAULTS.voice as any,
     tools: buildTools(sessionRef) as any,
   })
@@ -318,15 +316,10 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
 
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 
-  // Apply GOLDEN_PROMPT now that session is connected — this runs in parallel with
-  // the transport setup so streamSid is captured correctly.
-  const goldenInstructions = await goldenPromptPromise
-  console.log('[ANA MASTER] GOLDEN_PROMPT loaded — length:', goldenInstructions.length)
+  // Override input_audio_format to pcm16 — the inbound wrapper already converted mulaw→PCM
   ;(transport as any).sendEvent?.({
     type: 'session.update',
     session: {
-      instructions: goldenInstructions,
-      type: 'realtime',
       input_audio_format: 'pcm16',
       input_audio_transcription: { model: 'gpt-4o-transcribe' },
     },
