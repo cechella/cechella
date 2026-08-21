@@ -93,11 +93,17 @@ app.post('/outbound', async (req, reply) => {
   if (referidor) twimlUrl.searchParams.set('referidor', referidor)
   if (contexto) twimlUrl.searchParams.set('contexto', contexto)
 
+  const recordingCallback = `${PUBLIC_HOST}/recording-status`
+
   const params = new URLSearchParams({
     To: to,
     From: TWILIO_PHONE_NUMBER,
     Url: twimlUrl.toString(),
     Method: 'POST',
+    Record: 'true',
+    RecordingChannels: 'dual',
+    RecordingStatusCallback: recordingCallback,
+    RecordingStatusCallbackMethod: 'POST',
   })
 
   const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Calls.json`
@@ -116,5 +122,26 @@ app.post('/outbound', async (req, reply) => {
   return reply.send({ ok: true, sid: data.sid, status: data.status })
 })
 
+
+// Twilio recording status callback — saves audio URL to Supabase when recording is ready
+app.post('/recording-status', async (req, reply) => {
+  const body = req.body as Record<string, string>
+  const callSid = body?.CallSid
+  const status = body?.RecordingStatus
+  const url = body?.RecordingUrl
+
+  app.log.info({ callSid, status, url }, 'Recording status callback')
+
+  if (status === 'completed' && callSid && url) {
+    const audioUrl = `${url}.mp3`
+    const { saveMemory } = await import('./supabase.js')
+    await saveMemory(callSid, 'audio_url', audioUrl).catch((e: unknown) =>
+      app.log.error({ e }, 'Failed to save recording URL')
+    )
+    app.log.info({ callSid, audioUrl }, 'Recording URL saved')
+  }
+
+  return reply.status(204).send()
+})
 
 await app.listen({ port: PORT, host: '0.0.0.0' })
