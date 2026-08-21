@@ -80,6 +80,8 @@ export function SimuladorGoldContent() {
   const [pixCallId, setPixCallId] = useState<string | null>(null)
   const pixValorRef = useRef<number>(5000)
   const [ptlStatus, setPtlStatus] = useState<'idle' | 'calling' | 'active' | 'error'>('idle')
+  const [ptlElapsed, setPtlElapsed] = useState(0)
+  const ptlTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const pixPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const referidosPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -129,6 +131,8 @@ export function SimuladorGoldContent() {
       ptlEsRef.current = null
     }
     ptlCallSidRef.current = null
+    if (ptlTimerRef.current) { clearInterval(ptlTimerRef.current); ptlTimerRef.current = null }
+    setPtlElapsed(0)
   }, [])
 
   const dispararLigacaoPTL = useCallback(async () => {
@@ -150,15 +154,21 @@ export function SimuladorGoldContent() {
       // Use PTL callSid for saveTranscriptTurn / updateStageInDB
       if (callSid) callSidRef.current = callSid
       setPtlStatus('active')
+      setPtlElapsed(0)
+      if (ptlTimerRef.current) clearInterval(ptlTimerRef.current)
+      ptlTimerRef.current = setInterval(() => setPtlElapsed(s => s + 1), 1000)
       setTranscript([]); setDetectedStages([]); setSessionCheckpoints([]); transcriptForCheckpointRef.current = []
       setMetrics({ turns: 0, interruptions: 0, lastResponseMs: null })
-      addTranscript('system', `📞 Ligação PTL disparada para ${numero}${callSid ? ` — SID: ${callSid}` : ''}`)
+      addTranscript('system', `📞 Ligação PTL conectando para ${numero}${callSid ? ` — SID: ${callSid}` : ''}`)
 
       // Connect SSE live transcript
       if (callSid) {
         const ANA_MASTER_URL = process.env.NEXT_PUBLIC_ANA_MASTER_URL || 'https://ana-master.hormoneecosystem.com'
         const es = new EventSource(`${ANA_MASTER_URL}/transcript-stream/${encodeURIComponent(callSid)}`)
         ptlEsRef.current = es
+        es.onopen = () => {
+          addTranscript('system', '🟢 SSE conectado — aguardando transcrição ao vivo...')
+        }
         es.onmessage = (e) => {
           try {
             const { role, text } = JSON.parse(e.data)
@@ -812,6 +822,11 @@ export function SimuladorGoldContent() {
             <span style={{ fontSize: 10, color: '#22C55E', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22C55E', display: 'inline-block' }} />
               AO VIVO{ptlStatus === 'active' ? ' · PTL' : ''}
+              {ptlStatus === 'active' && ptlElapsed > 0 && (
+                <span style={{ fontVariantNumeric: 'tabular-nums', color: '#86EFAC' }}>
+                  {String(Math.floor(ptlElapsed / 60)).padStart(2, '0')}:{String(ptlElapsed % 60).padStart(2, '0')}
+                </span>
+              )}
             </span>
           )}
           {status === 'ended' && ptlStatus !== 'active' && <span style={{ fontSize: 10, color: '#52525E' }}>· Encerrado</span>}
