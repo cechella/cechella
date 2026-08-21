@@ -3466,16 +3466,17 @@ function SessoesInlineTab() {
                       {detailAudio && (
                         <div style={{ padding: 12 }}>
                           <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', margin: '0 0 8px' }}>Áudio</p>
-                          <audio controls src={detailAudio} style={{ width: '100%', height: 28 }} />
+                          <audio controls src={`/api/admin/ana-recording?url=${encodeURIComponent(detailAudio)}`} style={{ width: '100%', height: 28 }} />
                           <button
                             onClick={async () => {
                               try {
-                                const res = await fetch(detailAudio)
+                                const proxyUrl = `/api/admin/ana-recording?url=${encodeURIComponent(detailAudio)}`
+                                const res = await fetch(proxyUrl)
                                 const blob = await res.blob()
                                 const url = URL.createObjectURL(blob)
                                 const a = document.createElement('a')
                                 a.href = url
-                                a.download = `${s.callSid}.webm`
+                                a.download = `${s.callSid}.mp3`
                                 a.click()
                                 URL.revokeObjectURL(url)
                               } catch { window.open(detailAudio, '_blank') }
