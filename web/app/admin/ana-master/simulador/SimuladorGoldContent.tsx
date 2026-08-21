@@ -156,7 +156,8 @@ export function SimuladorGoldContent() {
 
       // Connect SSE live transcript
       if (callSid) {
-        const es = new EventSource(`/api/admin/ana-transcript-stream?callSid=${encodeURIComponent(callSid)}`)
+        const ANA_MASTER_URL = process.env.NEXT_PUBLIC_ANA_MASTER_URL || 'https://ana-master.hormoneecosystem.com'
+        const es = new EventSource(`${ANA_MASTER_URL}/transcript-stream/${encodeURIComponent(callSid)}`)
         ptlEsRef.current = es
         es.onmessage = (e) => {
           try {
