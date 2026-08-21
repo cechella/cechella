@@ -125,11 +125,8 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
     twilioWebSocket: wrapTwilioWithPcmToMulaw(wrapTwilioInputMulawToPcm(twilioWebSocket)),
   } as any)
 
-  // Load GOLDEN_PROMPT in parallel with Transport setup — Supabase fetch while Transport listens
-  const instructions = await loadGoldenPrompt()
-  console.log('[ANA MASTER] GOLDEN_PROMPT loaded — length:', instructions.length)
-
-  // SessionRef is mutable — callSid/telefone are filled from the Twilio 'start' event
+  // SessionRef created BEFORE loadGoldenPrompt() so the transport listener below
+  // can capture the Twilio 'start' event (and its callSid) even during the await.
   const sessionRef: SessionRef = {
     callSid: 'unknown',
     telefone: '',
@@ -169,48 +166,28 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
           break
         }
         case 'QUESTION': {
-          // ANA answers, then backend re-evaluates on next turn
-          // Keep waiting_for_lead=true so after ANA answers, next lead turn is classified again
-          // But also allow ANA to continue if question is resolved (ANA calls registrar_parte after)
-          // No instruction change — ANA handles naturally with current context
           break
         }
         case 'INTERRUPTION': {
           sp.parte_interrompida = true
-          // No instruction change — ANA must complete interrupted part before registering
           break
         }
         case 'CONFUSION':
         case 'OBJECTION':
         case 'UNKNOWN':
-          // Stay in current state — ANA handles naturally
           break
       }
     },
   }
-
-  const agent = new RealtimeAgent({
-    name: 'ANA',
-    instructions,  // GOLDEN_PROMPT — same as the simulator, from the first word
-    voice: REALTIME_DEFAULTS.voice as any,
-    tools: buildTools(sessionRef) as any,
-  })
-
-  let realtimeSession: RealtimeSession
-
-  realtimeSession = new RealtimeSession(agent, {
-    transport,
-    model: REALTIME_DEFAULTS.model,
-  } as any)
 
   // INBOUND_AUDIO_DIAGNOSTIC: count every Twilio event type to prove audio chain
   const DIAG = process.env.INBOUND_AUDIO_DIAGNOSTIC === 'true'
   let mediaCount = 0
   let totalInboundBytes = 0
 
-  // Capture callSid/telefone from the Twilio 'start' event.
-  // The Transport emits '*' events for every Twilio message — we listen before connecting
-  // so we don't miss 'start' (which fires early in the stream lifecycle).
+  // Register listener BEFORE loadGoldenPrompt() await so we never miss the Twilio 'start'
+  // event that carries callSid. Previously this listener was registered after the await,
+  // causing callSid to stay 'unknown' and all Supabase writes to be silently dropped.
   let dbInitialized = false
   ;(transport as any).on('*', async (event: any) => {
     if (event?.type !== 'twilio_message') return
@@ -222,7 +199,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
         mediaCount++
         const payloadLen = msg?.media?.payload?.length ?? 0
         totalInboundBytes += payloadLen
-        if (mediaCount % 50 === 1) { // log every 50 frames (~1s at Twilio 8kHz/20ms)
+        if (mediaCount % 50 === 1) {
           console.log(`[INBOUND TEST] media_count=${mediaCount} payload_bytes=${payloadLen} total_bytes=${totalInboundBytes} streamSid=${msg?.streamSid ?? '?'}`)
         }
       } else {
@@ -242,8 +219,6 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       console.log('[ANA MASTER] start event — callSid:', callSid, '| telefone:', telefone, '| contexto:', contextoFromStart)
       await upsertCall(callSid, telefone).catch(() => {})
       await saveMemory(callSid, 'telefone', telefone).catch(() => {})
-      // Mark goldenMode — speech-progress state machine is disabled for gold calls.
-      // GOLDEN_PROMPT is already loaded at session start (before connect), so no reload needed.
       if (contextoFromStart === 'gold') {
         sessionRef.goldenMode = true
         console.log('[ANA MASTER] contexto=gold — goldenMode ativo, speech-progress desabilitado')
@@ -255,6 +230,24 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       if (sessionRef.callSid !== 'unknown') pushCallEndedEvent(sessionRef.callSid)
     }
   })
+
+  // Load GOLDEN_PROMPT — listener is already registered above so 'start' event is never missed
+  const instructions = await loadGoldenPrompt()
+  console.log('[ANA MASTER] GOLDEN_PROMPT loaded — length:', instructions.length)
+
+  const agent = new RealtimeAgent({
+    name: 'ANA',
+    instructions,  // GOLDEN_PROMPT — same as the simulator, from the first word
+    voice: REALTIME_DEFAULTS.voice as any,
+    tools: buildTools(sessionRef) as any,
+  })
+
+  let realtimeSession: RealtimeSession
+
+  realtimeSession = new RealtimeSession(agent, {
+    transport,
+    model: REALTIME_DEFAULTS.model,
+  } as any)
 
   // Prevent unhandled error crash if OpenAI rejects the session
   realtimeSession.on('error', (err: unknown) => {
