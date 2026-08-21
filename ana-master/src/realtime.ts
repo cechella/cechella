@@ -134,6 +134,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
   const sessionRef: SessionRef = {
     callSid: 'unknown',
     telefone: '',
+    goldenMode: false,
     speechProgress: initialSpeechProgress(),
     updateInstructions: async (instructions: string) => {
       await (realtimeSession as any).updateSession({
@@ -141,6 +142,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       })
     },
     onLeadTurn: async (transcript: string) => {
+      if (sessionRef.goldenMode) return  // gold: ANA segue GOLDEN_PROMPT livremente
       const sp = sessionRef.speechProgress
       if (!sp.waiting_for_lead) return
 
@@ -243,6 +245,8 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       await saveMemory(callSid, 'telefone', telefone).catch(() => {})
       // Load GOLDEN_PROMPT if contexto=gold and update session instructions
       if (contextoFromStart === 'gold') {
+        sessionRef.goldenMode = true
+        console.log('[ANA MASTER] contexto=gold — goldenMode ativo, speech-progress desabilitado')
         console.log('[ANA MASTER] contexto=gold — carregando GOLDEN_PROMPT do Supabase')
         loadGoldenPrompt().then((goldenInstructions) => {
           ;(realtimeSession as any).updateSession?.({ instructions: goldenInstructions })

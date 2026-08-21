@@ -11,6 +11,7 @@ import {
 export type SessionRef = {
   callSid: string
   telefone: string
+  goldenMode: boolean
   speechProgress: SpeechProgress
   updateInstructions: (instructions: string) => Promise<void>
   onLeadTurn: (transcript: string) => Promise<void>
