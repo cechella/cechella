@@ -139,12 +139,11 @@ function wrapTwilioInputMulawToPcm(ws: any): any {
 }
 
 export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { contexto?: string } = {}) {
-  const contexto = opts.contexto ?? ''
-  const isGold = contexto === 'gold'
-
-  // Load instructions — GOLDEN_PROMPT from Supabase for gold calls, base prompt otherwise
-  const instructions = isGold ? await loadGoldenPrompt() : ANA_SYSTEM_PROMPT
-  console.log('[ANA MASTER] contexto:', contexto, '| isGold:', isGold, '| instructions length:', instructions.length)
+  // Note: opts.contexto comes from server.ts req.query which is always empty for Twilio WebSocket.
+  // The real contexto arrives in the Twilio 'start' event customParameters — handled below.
+  // We start with base prompt and upgrade to GOLDEN_PROMPT after 'start' fires if contexto=gold.
+  const instructions = ANA_SYSTEM_PROMPT
+  console.log('[ANA MASTER] session starting — awaiting start event for contexto')
 
   // Pipeline de áudio (PROVADO por diagnóstico — gpt-realtime-2.1 ignora g711_ulaw input):
   //
@@ -288,10 +287,21 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
         ?? msg.start?.customParameters?.callSid
         ?? `stream_${msg.start?.streamSid ?? Date.now()}`
       const telefone = String(msg.start?.customParameters?.from ?? '').replace(/\D/g, '')
+      const contextoFromStart = String(msg.start?.customParameters?.contexto ?? '')
       sessionRef.callSid = callSid
       sessionRef.telefone = telefone
+      console.log('[ANA MASTER] start event — callSid:', callSid, '| telefone:', telefone, '| contexto:', contextoFromStart)
       await upsertCall(callSid, telefone).catch(() => {})
       await saveMemory(callSid, 'telefone', telefone).catch(() => {})
+      // Load GOLDEN_PROMPT if contexto=gold and update session instructions
+      if (contextoFromStart === 'gold') {
+        console.log('[ANA MASTER] contexto=gold — carregando GOLDEN_PROMPT do Supabase')
+        loadGoldenPrompt().then((goldenInstructions) => {
+          ;(realtimeSession as any).updateSession?.({ instructions: goldenInstructions })
+            ?.catch?.((e: unknown) => console.error('[ANA MASTER] updateSession gold failed:', e))
+          console.log('[ANA MASTER] GOLDEN_PROMPT aplicado — length:', goldenInstructions.length)
+        }).catch((e: unknown) => console.error('[ANA MASTER] loadGoldenPrompt failed:', e))
+      }
     }
 
     if (msg?.event === 'stop' && DIAG) {
