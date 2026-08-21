@@ -7,10 +7,9 @@ import { upsertCall, saveMemory, appendTranscript, supabase } from './supabase.j
 import { pushTranscriptEvent } from './sse-registry.js'
 import { initialSpeechProgress, classifyLeadTurn, getPartInstruction, LeadTurnDisposition } from './speech-progress.js'
 
-// Fallback minimal prompt — used only if Supabase is unreachable before session starts
-const ANA_FALLBACK_PROMPT = `${ANA_BASE_PROMPT}
-
-INÍCIO: Você recebe a ligação e fala PRIMEIRO. Cumprimente naturalmente e inicie a conversa.`
+// Fallback minimal prompt — used only if Supabase is unreachable before session starts.
+// Must NOT contain any "fale primeiro" instruction — only sendMessage('iniciar') triggers speech.
+const ANA_FALLBACK_PROMPT = ANA_BASE_PROMPT
 
 async function loadGoldenPrompt(): Promise<string> {
   try {
