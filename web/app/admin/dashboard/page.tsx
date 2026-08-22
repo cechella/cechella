@@ -430,48 +430,24 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     load()
-    // Auto-refresh a cada 60s
-    const interval = setInterval(load, 60000)
+    // Auto-refresh a cada 15s
+    const interval = setInterval(load, 15000)
 
-    // Supabase Realtime — atualiza pipeline ao vivo via ana_calls.stage (transcript-driven)
-    const STAGE_TO_N: Record<string, number> = {
-      apresentacao: 1, abertura: 1,
-      conexao: 2,
-      combinado: 3, di: 3,
-      speech: 4,
-      fechamento: 5,
-      pagamento: 6,
-      referidos: 7,
-      encerramento: 8, validacao: 8, ganho: 8,
-    }
+    // Supabase Realtime — dispara load() ao detectar mudança em ana_calls
+    // Não incrementa contadores em memória (evita conflito com o load() da API)
     const channel = supabase
       .channel('ana-calls-pipeline')
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'ana_calls' }, (payload: any) => {
         const newStage = (payload.new as any).stage as string | null
         const oldStage = (payload.old as any).stage as string | null
-        const newN = newStage ? (STAGE_TO_N[newStage] ?? null) : null
-        const oldN = oldStage ? (STAGE_TO_N[oldStage] ?? null) : null
-        if (newN && newN !== oldN) {
-          setPipeline(prev => prev.map(e => ({
-            ...e,
-            count: e.n === newN
-              ? e.count + 1
-              : e.n === oldN
-                ? Math.max(0, e.count - 1)
-                : e.count,
-          })))
-          setPipelineFlash(newN)
+        if (newStage !== oldStage) {
+          load()
+          setPipelineFlash(null)
           setTimeout(() => setPipelineFlash(null), 2000)
         }
       })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ana_calls' }, (payload: any) => {
-        const stage = (payload.new as any).stage as string | null
-        const n = stage ? (STAGE_TO_N[stage] ?? null) : null
-        if (n) {
-          setPipeline(prev => prev.map(e => e.n === n ? { ...e, count: e.count + 1 } : e))
-          setPipelineFlash(n)
-          setTimeout(() => setPipelineFlash(null), 2000)
-        }
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'ana_calls' }, () => {
+        load()
       })
       .subscribe()
 
