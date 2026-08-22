@@ -118,7 +118,7 @@ function wrapTwilioWithPcmToMulaw(ws: any): any {
 // Passive stage detection from ANA's transcript — same patterns as the simulador client.
 // Runs server-side so it works for both PTL and WebRTC calls without touching gate logic.
 const STAGE_PATTERNS: Array<{ stage: string; patterns: RegExp[] }> = [
-  { stage: 'apresentacao', patterns: [/qual (é |e )?teu nome/i, /como você se chama/i, /pra eu te chamar/i, /quem me indicou/i] },
+  { stage: 'apresentacao', patterns: [/qual (é |e )?(o )?teu nome/i, /como (eu |)posso te chamar/i, /como você se chama/i, /pra eu te chamar/i, /quem me indicou/i, /como (eu |)posso te? (chamar|identificar)/i] },
   { stage: 'conexao',      patterns: [/me conta (seu|o) dia a dia/i, /me fala mais sobre/i, /o que você faz/i, /tem filhos/i, /família/i] },
   { stage: 'combinado',    patterns: [/combinad[ao]/i, /no final apresent/i, /decisão no final/i, /sim ou não/i] },
   { stage: 'speech',       patterns: [/pellet/i, /implante hormonal/i, /grão de arroz/i, /libera hormônios/i, /testosterona/i, /estrogênio/i] },
@@ -140,7 +140,7 @@ function detectStageFromText(text: string): string | null {
 
 // Per-session stage state — prevents going backwards and avoids duplicate DB writes.
 function makeStageTracker() {
-  let currentIdx = 0
+  let currentIdx = -1  // -1 so index 0 (apresentacao) is not blocked on first detection
   return function advanceStage(callSid: string, text: string) {
     const detected = detectStageFromText(text)
     if (!detected) return
