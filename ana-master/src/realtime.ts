@@ -292,6 +292,10 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
     console.error('[ANA MASTER] RealtimeSession error:', err)
   })
 
+  // Accumulates streaming transcript deltas per response — used as fallback when
+  // response.done arrives without transcript in content (common with PTL/Twilio calls).
+  let streamingTranscript = ''
+
   // Debug: log session config and VAD events
   ;(transport as any).on('*', (event: any) => {
     if (event?.type === 'session.updated') {
@@ -303,6 +307,12 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
         '| input_audio_transcription:', JSON.stringify(s.input_audio_transcription),
       )
       if (DIAG) console.log('[DIAG] session completa:', JSON.stringify(s))
+    }
+    if (event?.type === 'response.audio_transcript.delta') {
+      streamingTranscript += event?.delta ?? ''
+    }
+    if (event?.type === 'response.created') {
+      streamingTranscript = ''
     }
     if (event?.type === 'response.output_audio.delta') {
       console.log('[ANA MASTER] audio delta recebido — bytes:', event?.delta?.length ?? 0)
@@ -333,17 +343,28 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
     }
     if (event?.type === 'response.done') {
       const output: any[] = event?.response?.output ?? []
+      let foundText = false
       for (const item of output) {
         for (const content of (item?.content ?? [])) {
           const text = content?.transcript ?? content?.text
           console.log('[ANA MASTER] 📝 assistant raw:', JSON.stringify({ type: content?.type, transcript: content?.transcript, text: content?.text }))
           if (text && sessionRef.callSid !== 'unknown') {
+            foundText = true
             appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
             pushTranscriptEvent(sessionRef.callSid, 'assistant', text)
             advanceStage(sessionRef.callSid, text)
           }
         }
       }
+      // Fallback: response.done arrived without transcript — use accumulated streaming text
+      if (!foundText && streamingTranscript.trim() && sessionRef.callSid !== 'unknown') {
+        const text = streamingTranscript.trim()
+        console.log('[ANA MASTER] 📝 assistant (streaming fallback):', text)
+        appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
+        pushTranscriptEvent(sessionRef.callSid, 'assistant', text)
+        advanceStage(sessionRef.callSid, text)
+      }
+      streamingTranscript = ''
     }
   })
 
