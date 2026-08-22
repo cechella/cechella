@@ -26,6 +26,13 @@ export default function TestePage() {
   const [loadingLeads, setLoadingLeads] = useState(false)
   const [deletandoSelecionados, setDeletandoSelecionados] = useState(false)
 
+  // referido selector state
+  type Referido = { id: string; nome: string | null; telefone: string; status: string; indicado_por_nome: string | null; created_at?: string }
+  const [referidos, setReferidos] = useState<Referido[]>([])
+  const [selecionadosRef, setSelecionadosRef] = useState<Set<string>>(new Set())
+  const [loadingRef, setLoadingRef] = useState(false)
+  const [deletandoRef, setDeletandoRef] = useState(false)
+
   async function executar(action: string) {
     setLoading(action)
     setErro(null)
@@ -102,6 +109,63 @@ export default function TestePage() {
   function toggleTodos() {
     if (selecionados.size === leads.length) setSelecionados(new Set())
     else setSelecionados(new Set(leads.map(l => l.telefone)))
+  }
+
+  async function carregarReferidos() {
+    setLoadingRef(true)
+    setErro(null)
+    try {
+      const res = await fetch('/api/admin/dev-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'listar_todos_referidos' }),
+      })
+      const json = await res.json()
+      if (json.error) setErro(json.error)
+      else { setReferidos(json.data || []); setSelecionadosRef(new Set()) }
+    } catch (e: any) {
+      setErro(e.message)
+    } finally {
+      setLoadingRef(false)
+    }
+  }
+
+  async function deletarReferidosSelecionados() {
+    if (selecionadosRef.size === 0) return
+    if (!confirm(`Apagar ${selecionadosRef.size} referido(s)? Esta ação é irreversível.`)) return
+    setDeletandoRef(true)
+    setErro(null)
+    try {
+      const res = await fetch('/api/admin/dev-tools', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deletar_referidos_selecionados', ids: Array.from(selecionadosRef) }),
+      })
+      const json = await res.json()
+      if (json.error) setErro(json.error)
+      else {
+        setResultado({ msg: `${json.apagados} referido(s) apagados` })
+        await carregarReferidos()
+      }
+    } catch (e: any) {
+      setErro(e.message)
+    } finally {
+      setDeletandoRef(false)
+    }
+  }
+
+  function toggleRef(id: string) {
+    setSelecionadosRef(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleTodosRef() {
+    if (selecionadosRef.size === referidos.length) setSelecionadosRef(new Set())
+    else setSelecionadosRef(new Set(referidos.map(r => r.id)))
   }
 
   const acoes = [
@@ -271,6 +335,92 @@ export default function TestePage() {
 
         {leads.length === 0 && !loadingLeads && (
           <p className="text-xs text-[#52525B] text-center py-4">Clique em "Carregar leads" para ver todos os leads do banco</p>
+        )}
+      </div>
+
+      {/* ── SELETOR DE REFERIDOS ── */}
+      <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-[#A78BFA]" />
+            <p className="text-sm font-semibold text-white">Selecionar referidos para apagar</p>
+          </div>
+          <button
+            onClick={carregarReferidos}
+            disabled={loadingRef}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#A78BFA]/20 text-[#A78BFA] text-xs font-semibold hover:opacity-90 transition-all disabled:opacity-50"
+          >
+            {loadingRef
+              ? <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+              : <RefreshCw className="w-3.5 h-3.5" />}
+            {referidos.length > 0 ? 'Recarregar' : 'Carregar referidos'}
+          </button>
+        </div>
+
+        {referidos.length > 0 && (
+          <>
+            <div className="flex items-center gap-3 px-3 py-2 mb-1">
+              <button onClick={toggleTodosRef} className="flex-shrink-0 text-[#A78BFA]">
+                {selecionadosRef.size === referidos.length ? <CheckSquare className="w-4 h-4" /> : selecionadosRef.size > 0 ? <CheckSquare className="w-4 h-4 opacity-50" /> : <Square className="w-4 h-4" />}
+              </button>
+              <span className="text-xs text-[#71717A] uppercase tracking-wider flex-1">
+                {selecionadosRef.size > 0 ? `${selecionadosRef.size} de ${referidos.length} selecionados` : `${referidos.length} referidos`}
+              </span>
+              {selecionadosRef.size > 0 && (
+                <button onClick={() => setSelecionadosRef(new Set())} className="text-xs text-[#71717A] hover:text-white transition-colors">
+                  Desmarcar todos
+                </button>
+              )}
+            </div>
+
+            <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
+              {referidos.map((ref) => {
+                const sel = selecionadosRef.has(ref.id)
+                const statusColor = ref.status === 'vendido' ? 'bg-green-500/20 text-green-400' : ref.status === 'aguardando' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-[#2C2C2E] text-[#71717A]'
+                return (
+                  <div
+                    key={ref.id}
+                    onClick={() => toggleRef(ref.id)}
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-all ${sel ? 'bg-red-500/10 border border-red-500/30' : 'bg-[#0A0A0B] border border-transparent hover:border-[#2C2C2E]'}`}
+                  >
+                    <div className={`flex-shrink-0 ${sel ? 'text-red-400' : 'text-[#52525B]'}`}>
+                      {sel ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-white truncate">{ref.nome || <span className="text-[#52525B] font-normal italic">sem nome</span>}</span>
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${statusColor}`}>{ref.status}</span>
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-xs text-[#71717A] font-mono">{ref.telefone}</span>
+                        {ref.indicado_por_nome && <span className="text-xs text-[#52525B]">indicado por {ref.indicado_por_nome}</span>}
+                        {ref.created_at && <span className="text-xs text-[#52525B]">{new Date(ref.created_at).toLocaleDateString('pt-BR')}</span>}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-[#1C1C1E]">
+              <button
+                onClick={deletarReferidosSelecionados}
+                disabled={selecionadosRef.size === 0 || deletandoRef}
+                className="w-full flex items-center justify-center gap-2 p-3 rounded-xl border border-red-500/40 bg-red-500/15 text-red-400 hover:opacity-90 transition-all disabled:opacity-30 text-sm font-bold"
+              >
+                {deletandoRef
+                  ? <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                  : <Trash2 className="w-4 h-4" />}
+                {selecionadosRef.size === 0
+                  ? 'Selecione referidos para apagar'
+                  : `Apagar ${selecionadosRef.size} referido${selecionadosRef.size > 1 ? 's' : ''} selecionado${selecionadosRef.size > 1 ? 's' : ''}`}
+              </button>
+            </div>
+          </>
+        )}
+
+        {referidos.length === 0 && !loadingRef && (
+          <p className="text-xs text-[#52525B] text-center py-4">Clique em "Carregar referidos" para ver todos os referidos do banco</p>
         )}
       </div>
 

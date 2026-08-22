@@ -15,7 +15,8 @@ function makeClient() {
 }
 
 export async function POST(req: NextRequest) {
-  const { action, telefone, telefones } = await req.json()
+  const body = await req.json()
+  const { action, telefone, telefones } = body
   const supabase = makeClient()
 
   try {
@@ -27,6 +28,27 @@ export async function POST(req: NextRequest) {
         .limit(10)
       if (error) throw error
       return NextResponse.json({ data })
+    }
+
+    if (action === 'listar_todos_referidos') {
+      const { data, error } = await supabase
+        .from('contatos_referidos')
+        .select('id, nome, telefone, status, indicado_por_nome, created_at')
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      return NextResponse.json({ data: data ?? [] })
+    }
+
+    if (action === 'deletar_referidos_selecionados') {
+      const ids: string[] = body.ids ?? []
+      if (!ids.length) return NextResponse.json({ error: 'Nenhum id selecionado' }, { status: 400 })
+      const { data, error } = await supabase
+        .from('contatos_referidos')
+        .delete()
+        .in('id', ids)
+        .select('id')
+      if (error) throw error
+      return NextResponse.json({ apagados: data?.length ?? 0 })
     }
 
     if (action === 'listar_todos_leads') {
