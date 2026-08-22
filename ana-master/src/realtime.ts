@@ -292,9 +292,9 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
     console.error('[ANA MASTER] RealtimeSession error:', err)
   })
 
-  // Accumulates streaming transcript deltas per response — used as fallback when
-  // response.done arrives without transcript in content (common with PTL/Twilio calls).
-  let streamingTranscript = ''
+  // Tracks which item_ids have already been processed via response.audio_transcript.done
+  // to avoid double-processing in the response.done fallback.
+  const processedItems = new Set<string>()
 
   // Debug: log session config and VAD events
   ;(transport as any).on('*', (event: any) => {
@@ -308,11 +308,17 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       )
       if (DIAG) console.log('[DIAG] session completa:', JSON.stringify(s))
     }
-    if (event?.type === 'response.audio_transcript.delta') {
-      streamingTranscript += event?.delta ?? ''
-    }
-    if (event?.type === 'response.created') {
-      streamingTranscript = ''
+    // PRIMARY: fires once per audio content part with the complete transcript — most reliable source
+    if (event?.type === 'response.audio_transcript.done') {
+      const text = event?.transcript as string | undefined
+      const itemId = event?.item_id as string | undefined
+      if (text?.trim() && sessionRef.callSid !== 'unknown') {
+        console.log('[ANA MASTER] 📝 assistant (transcript.done):', text)
+        if (itemId) processedItems.add(itemId)
+        appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
+        pushTranscriptEvent(sessionRef.callSid, 'assistant', text)
+        advanceStage(sessionRef.callSid, text)
+      }
     }
     if (event?.type === 'response.output_audio.delta') {
       console.log('[ANA MASTER] audio delta recebido — bytes:', event?.delta?.length ?? 0)
@@ -341,30 +347,23 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
         }
       }
     }
+    // FALLBACK: response.done — only processes items not already handled by transcript.done
     if (event?.type === 'response.done') {
       const output: any[] = event?.response?.output ?? []
-      let foundText = false
       for (const item of output) {
+        if (item?.id && processedItems.has(item.id)) continue
         for (const content of (item?.content ?? [])) {
           const text = content?.transcript ?? content?.text
-          console.log('[ANA MASTER] 📝 assistant raw:', JSON.stringify({ type: content?.type, transcript: content?.transcript, text: content?.text }))
+          console.log('[ANA MASTER] 📝 assistant raw (fallback):', JSON.stringify({ type: content?.type, transcript: content?.transcript, text: content?.text }))
           if (text && sessionRef.callSid !== 'unknown') {
-            foundText = true
             appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
             pushTranscriptEvent(sessionRef.callSid, 'assistant', text)
             advanceStage(sessionRef.callSid, text)
           }
         }
       }
-      // Fallback: response.done arrived without transcript — use accumulated streaming text
-      if (!foundText && streamingTranscript.trim() && sessionRef.callSid !== 'unknown') {
-        const text = streamingTranscript.trim()
-        console.log('[ANA MASTER] 📝 assistant (streaming fallback):', text)
-        appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
-        pushTranscriptEvent(sessionRef.callSid, 'assistant', text)
-        advanceStage(sessionRef.callSid, text)
-      }
-      streamingTranscript = ''
+      // Clear processed items after each response cycle
+      processedItems.clear()
     }
   })
 
