@@ -188,15 +188,15 @@ export default function AdminDashboard() {
 
   async function load() {
     try {
-      const [leadsRes, referidosRes, anaCallsRes] = await Promise.all([
+      const [leadsRes, referidosRes, anaCallsData] = await Promise.all([
         supabase.from('leads').select('id,nome,telefone,etapa_agente,temperatura,historico,total_referidos,updated_at,created_at,dor_principal,origem,atendimento_humano').order('updated_at', { ascending: false }),
         supabase.from('contatos_referidos').select('id,nome,telefone,profissao,hobby,status,indicado_por_telefone,indicado_por_nome,created_at').order('created_at', { ascending: false }),
-        supabase.from('ana_calls').select('call_sid,stage,status,updated_at').order('updated_at', { ascending: false }).limit(500),
+        fetch('/api/admin/ana-calls').then(r => r.json()).catch(() => []),
       ])
 
       const leads: Lead[] = leadsRes.data ?? []
       const referidos: Referido[] = referidosRes.data ?? []
-      const anaCalls: { call_sid: string; stage: string; status: string; updated_at: string }[] = anaCallsRes.data ?? []
+      const anaCalls: { call_sid: string; stage: string; status: string; updated_at: string }[] = Array.isArray(anaCallsData) ? anaCallsData : []
 
       // ── Flatten historico messages ──
       const allMessages: Array<{role: string; content: string; ts: string; leadId: string}> = []
