@@ -8,7 +8,7 @@ const STAGE_PATTERNS = [
   { stage: 'speech',       patterns: [/pellet/i, /implante hormonal/i, /grão de arroz/i, /libera hormônios/i, /testosterona/i, /estrogênio/i] },
   { stage: 'fechamento',   patterns: [/lembra do nosso combinado/i, /faz sentido pra você/i, /sua decisão/i, /fechar/i, /investimento/i, /quanto custa/i] },
   { stage: 'pagamento',    patterns: [/pix ou cartão/i, /forma de pagamento/i, /vou gerar (o )?pix/i] },
-  { stage: 'referidos',    patterns: [/conhece alguma amiga/i, /indicar/i, /indicação/i, /seu link/i] },
+  { stage: 'referidos',    patterns: [/conhece alguma amiga/i, /tem alguma (amiga|conhecida|pessoa) que/i, /me passa o (contato|número)/i, /vou te mandar.*link/i, /seu link de indicação/i] },
   { stage: 'encerramento', patterns: [/obrigada pela confiança/i, /foi um prazer/i, /até logo/i, /tchau/i] },
 ]
 
@@ -74,6 +74,10 @@ test('pagamento: "pix ou cartão"', () =>
   eq(detectStageFromText('Você prefere pix ou cartão?'), 'pagamento'))
 test('referidos: "conhece alguma amiga"', () =>
   eq(detectStageFromText('Você conhece alguma amiga que também poderia se beneficiar?'), 'referidos'))
+test('referidos: NAO dispara em "indicacao" de conexao', () =>
+  eq(detectStageFromText('Como é que você chegou até a gente? Foi indicação de alguém?'), null))
+test('referidos: NAO dispara "indicacao" contextual como referidos', () =>
+  eq(detectStageFromText('Foi indicação de alguém ou encontrou por conta própria?'), null))
 test('encerramento: "foi um prazer"', () =>
   eq(detectStageFromText('Foi um prazer conversar com você!'), 'encerramento'))
 test('no match returns null', () =>

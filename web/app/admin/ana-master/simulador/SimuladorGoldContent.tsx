@@ -29,7 +29,7 @@ const STAGE_PATTERNS: { stage: string; label: string; pattern: RegExp }[] = [
   { stage: 'speech',    label: 'Speech',    pattern: /pellet|implante hormonal|grão de arroz|libera hormônios|cilindro|subcutâneo|hormônio bioidêntico|testosterona|progesterona|estrogênio|implantado|implante/i },
   { stage: 'fechamento',label: 'Fechamento',pattern: /lembra (do nosso|que a gente fez|do) combinado|faz sentido pra você|qual (seria|é) a sua decisão|você quer|vamos avançar|fechar|investimento|valor|quanto custa|preço/i },
   { stage: 'pagamento', label: 'Pagamento', pattern: /pix ou cartão|prefere (fazer|pagar|parcelar|o )?pix|cartão de crédito|forma de pagamento|pagamento|pagar|vou (gerar|mandar|enviar).{0,20}pix/i },
-  { stage: 'referidos', label: 'Referidos', pattern: /conhece alguma amiga|alguém que (também esteja|possa|poderia)|indicar|indicação|amiga.{0,20}(benefício|desconto|vantagem)|seu link|link de indicação/i },
+  { stage: 'referidos', label: 'Referidos', pattern: /conhece alguma amiga|tem alguma (amiga|conhecida|pessoa) que|me passa o (contato|número)|vou te mandar.*link|seu link de indicação/i },
   { stage: 'encerramento', label: 'Encerramento', pattern: /obrigada pela confiança|foi um prazer falar|até (logo|breve)|nossa equipe (vai|irá|entrará)|(muito )?obrigada|encerrando|encerrar|tchau|boa (sorte|tarde|noite|semana)/i },
 ]
 
