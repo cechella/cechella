@@ -122,7 +122,7 @@ const STAGE_PATTERNS: Array<{ stage: string; patterns: RegExp[] }> = [
   { stage: 'conexao',      patterns: [/me conta (seu|o) dia a dia/i, /me fala mais sobre/i, /o que você faz/i, /tem filhos/i, /família/i] },
   { stage: 'combinado',    patterns: [/combinad[ao]/i, /no final apresent/i, /decisão no final/i, /sim ou não/i] },
   { stage: 'speech',       patterns: [/pellet/i, /implante hormonal/i, /grão de arroz/i, /libera hormônios/i, /testosterona/i, /estrogênio/i] },
-  { stage: 'fechamento',   patterns: [/lembra do nosso combinado/i, /faz sentido pra você/i, /sua decisão/i, /fechar/i, /investimento/i, /quanto custa/i] },
+  { stage: 'fechamento',   patterns: [/lembra do nosso combinado/i, /faz sentido pra você avançar/i, /a sua decisão agora/i, /fechar (isso|hoje|agora|com a gente)/i, /o investimento (é|será|fica)/i, /quanto (que )?custa/i] },
   { stage: 'pagamento',    patterns: [/pix ou cartão/i, /forma de pagamento/i, /vou gerar (o )?pix/i] },
   { stage: 'referidos',    patterns: [/conhece alguma amiga/i, /tem alguma (amiga|conhecida|pessoa) que/i, /me passa o (contato|número)/i, /vou te mandar.*link/i, /seu link de indicação/i] },
   { stage: 'encerramento', patterns: [/obrigada pela confiança/i, /foi um prazer/i, /até logo/i, /tchau/i] },

@@ -6,7 +6,7 @@ const STAGE_PATTERNS = [
   { stage: 'conexao',      patterns: [/me conta (seu|o) dia a dia/i, /me fala mais sobre/i, /o que você faz/i, /tem filhos/i, /família/i] },
   { stage: 'combinado',    patterns: [/combinad[ao]/i, /no final apresent/i, /decisão no final/i, /sim ou não/i] },
   { stage: 'speech',       patterns: [/pellet/i, /implante hormonal/i, /grão de arroz/i, /libera hormônios/i, /testosterona/i, /estrogênio/i] },
-  { stage: 'fechamento',   patterns: [/lembra do nosso combinado/i, /faz sentido pra você/i, /sua decisão/i, /fechar/i, /investimento/i, /quanto custa/i] },
+  { stage: 'fechamento',   patterns: [/lembra do nosso combinado/i, /faz sentido pra você avançar/i, /a sua decisão agora/i, /fechar (isso|hoje|agora|com a gente)/i, /o investimento (é|será|fica)/i, /quanto (que )?custa/i] },
   { stage: 'pagamento',    patterns: [/pix ou cartão/i, /forma de pagamento/i, /vou gerar (o )?pix/i] },
   { stage: 'referidos',    patterns: [/conhece alguma amiga/i, /tem alguma (amiga|conhecida|pessoa) que/i, /me passa o (contato|número)/i, /vou te mandar.*link/i, /seu link de indicação/i] },
   { stage: 'encerramento', patterns: [/obrigada pela confiança/i, /foi um prazer/i, /até logo/i, /tchau/i] },
@@ -68,8 +68,14 @@ test('combinado: "combinado"', () =>
   eq(detectStageFromText('Antes de continuar, quero fazer um combinado com você.'), 'combinado'))
 test('speech: "pellet"', () =>
   eq(detectStageFromText('O procedimento é um pellet, um implante hormonal.'), 'speech'))
-test('fechamento: "faz sentido pra você"', () =>
-  eq(detectStageFromText('Faz sentido pra você avançar?'), 'fechamento'))
+test('fechamento: "faz sentido pra você avançar"', () =>
+  eq(detectStageFromText('Faz sentido pra você avançar com isso?'), 'fechamento'))
+test('fechamento: NAO dispara em "faz sentido pra você" generico', () =>
+  eq(detectStageFromText('Faz sentido pra você?'), null))
+test('fechamento: NAO dispara em "fechar" solto', () =>
+  eq(detectStageFromText('Antes de fechar a ligação...'), null))
+test('fechamento: NAO dispara em "investimento" solto', () =>
+  eq(detectStageFromText('Vou te falar sobre o investimento que você vai fazer na sua saúde.'), null))
 test('pagamento: "pix ou cartão"', () =>
   eq(detectStageFromText('Você prefere pix ou cartão?'), 'pagamento'))
 test('referidos: "conhece alguma amiga"', () =>
