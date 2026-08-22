@@ -18,8 +18,10 @@ export async function PATCH(req: NextRequest) {
 
     await supabase
       .from('ana_calls')
-      .update({ stage, updated_at: new Date().toISOString() })
-      .eq('call_sid', callSid)
+      .upsert(
+        { call_sid: callSid, stage, updated_at: new Date().toISOString() },
+        { onConflict: 'call_sid', ignoreDuplicates: false }
+      )
 
     return NextResponse.json({ ok: true })
   } catch (e: any) {
