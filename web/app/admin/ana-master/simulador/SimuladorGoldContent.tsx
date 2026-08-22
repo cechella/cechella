@@ -210,7 +210,9 @@ export function SimuladorGoldContent() {
   }, [telefone, addTranscript, stopPtlStream])
 
   const updateStageInDB = useCallback((stage: string) => {
-    if (!callSidRef.current) return
+    const sid = callSidRef.current || ptlCallSidRef.current
+    if (!sid) return
+    if (!callSidRef.current && ptlCallSidRef.current) callSidRef.current = ptlCallSidRef.current
     const DB_STAGE_MAP: Record<string, string> = {
       abertura: 'apresentacao', conexao: 'conexao', combinado: 'combinado',
       speech: 'speech', fechamento: 'fechamento', pagamento: 'pagamento',
