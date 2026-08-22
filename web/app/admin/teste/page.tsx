@@ -373,7 +373,7 @@ export default function TestePage() {
               )}
             </div>
 
-            <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
+            <div className="space-y-1 max-h-[480px] overflow-y-auto pr-1">
               {referidos.map((ref) => {
                 const sel = selecionadosRef.has(ref.id)
                 const statusColor = ref.status === 'vendido' ? 'bg-green-500/20 text-green-400' : ref.status === 'aguardando' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-[#2C2C2E] text-[#71717A]'
