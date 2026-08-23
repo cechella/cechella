@@ -35,6 +35,7 @@ import {
   Cpu,
   ServerCog,
   Brain,
+  Briefcase,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -100,6 +101,12 @@ const adminNav: NavSection[] = [
       { label: 'Usuários',     href: '/admin/users',       icon: <Users className="w-5 h-5" /> },
       { label: 'Agentes',       href: '/admin/agentes',     icon: <Cpu className="w-5 h-5" /> },
       { label: 'Infraestrutura',href: '/admin/infraestrutura', icon: <ServerCog className="w-5 h-5" /> },
+    ],
+  },
+  {
+    section: 'Comercial',
+    items: [
+      { label: 'Consultores', href: '/admin/comerciais', icon: <Briefcase className="w-5 h-5" /> },
     ],
   },
   {
