@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
@@ -8,7 +8,7 @@ import {
   Users, TrendingUp, DollarSign, ChevronRight,
   Activity, Network, Kanban, AlertTriangle, CheckCircle2,
   Clock, Flame, UserPlus, ArrowUpRight, Target, GitBranch,
-  Bot, MessageSquare, Zap, PhoneCall, BarChart2, RefreshCw,
+  Bot, MessageSquare, Zap, PhoneCall, BarChart2, RefreshCw, X,
 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar, LineChart, Line,
@@ -75,6 +75,7 @@ type Stats = {
   referidosValidados: number
   etapaCount: Record<number, number>
   anaCallsEtapaCount: Record<number, number>
+  anaCallsLeads: Record<number, AnaCallEnriched[]>
   temperaturaCounts: { quente: number; morno: number; frio: number }
   leadsPorDia: { dia: string; total: number }[]
   recentLeads: Lead[]
@@ -162,12 +163,39 @@ function getSupabase() {
 }
 
 // ─── Pipeline ticker types ────────────────────────────────
+type AnaCallEnriched = {
+  id: string
+  call_sid: string
+  telefone: string
+  stage: string
+  nome: string | null
+  created_at: string
+  updated_at: string
+}
+
+type Comercial = {
+  id: string
+  nome: string
+  initials: string
+  cor: string
+  ativos: number
+  ocupado: boolean
+}
+
+const COMERCIAIS_FIXOS: Comercial[] = [
+  { id: 'c1', nome: 'Diego Lemos',   initials: 'DL', cor: '#7B3FE4', ativos: 0, ocupado: false },
+  { id: 'c2', nome: 'Raquel Torres', initials: 'RT', cor: '#06B6D4', ativos: 0, ocupado: false },
+  { id: 'c3', nome: 'Bruno Alves',   initials: 'BA', cor: '#10B981', ativos: 0, ocupado: false },
+  { id: 'c4', nome: 'Camila Reis',   initials: 'CR', cor: '#F59E0B', ativos: 0, ocupado: false },
+]
+
 type PipelineEtapa = {
   n: number
   label: string
   shortLabel: string
   count: number
   color: string
+  leads: AnaCallEnriched[]
   pulse?: boolean
 }
 
@@ -183,8 +211,30 @@ export default function AdminDashboard() {
   const [lastRefresh, setLastRefresh] = useState(new Date())
   const [pipeline, setPipeline] = useState<PipelineEtapa[]>([])
   const [pipelineFlash, setPipelineFlash] = useState<number | null>(null)
+  const [drawerStage, setDrawerStage] = useState<PipelineEtapa | null>(null)
+  const [assignments, setAssignments] = useState<Record<string, string>>({})
+  const [comerciais, setComerciais] = useState<Comercial[]>(COMERCIAIS_FIXOS)
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const supabase = getSupabase()
+
+  function showToast(msg: string) {
+    setToastMsg(msg)
+    if (toastTimer.current) clearTimeout(toastTimer.current)
+    toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
+  }
+
+  function assignLead(leadId: string, comercialId: string) {
+    setAssignments(prev => ({ ...prev, [leadId]: comercialId }))
+    setComerciais(prev => prev.map(c => {
+      if (c.id === comercialId) return { ...c, ativos: c.ativos + 1 }
+      if (c.id === assignments[leadId]) return { ...c, ativos: Math.max(0, c.ativos - 1) }
+      return c
+    }))
+    const comm = comerciais.find(c => c.id === comercialId)
+    if (comm) showToast(`Lead atribuído para ${comm.nome.split(' ')[0]} ✓`)
+  }
 
   async function load() {
     try {
@@ -230,9 +280,14 @@ export default function AdminDashboard() {
         encerramento: 8, encerrado: 8, validacao: 8, ganho: 8,
       }
       const anaCallsEtapaCount: Record<number, number> = {}
-      anaCalls.forEach(c => {
+      const anaCallsLeads: Record<number, AnaCallEnriched[]> = {}
+      anaCalls.forEach((c: any) => {
         const n = STAGE_TO_N[c.stage]
-        if (n) anaCallsEtapaCount[n] = (anaCallsEtapaCount[n] ?? 0) + 1
+        if (n) {
+          anaCallsEtapaCount[n] = (anaCallsEtapaCount[n] ?? 0) + 1
+          if (!anaCallsLeads[n]) anaCallsLeads[n] = []
+          anaCallsLeads[n].push(c as AnaCallEnriched)
+        }
       })
 
       const temperaturaCounts = {
@@ -395,7 +450,7 @@ export default function AdminDashboard() {
       setStats({
         totalLeads: leads.length, leadsHoje, ganhos, perdidos,
         referidosTotais: referidos.length, referidosValidados,
-        etapaCount, anaCallsEtapaCount, temperaturaCounts, leadsPorDia,
+        etapaCount, anaCallsEtapaCount, anaCallsLeads, temperaturaCounts, leadsPorDia,
         recentLeads: leads, alertas, origens,
         referidosComScore,
         topReferidos,
@@ -425,6 +480,7 @@ export default function AdminDashboard() {
       shortLabel: etapaShortLabels[n],
       count: stats.anaCallsEtapaCount[n] ?? 0,
       color: etapaAgentColors[n],
+      leads: (stats as any).anaCallsLeads?.[n] ?? [],
     })))
   }, [stats])
 
@@ -451,9 +507,12 @@ export default function AdminDashboard() {
       })
       .subscribe()
 
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDrawerStage(null) }
+    window.addEventListener('keydown', onKey)
     return () => {
       clearInterval(interval)
       supabase.removeChannel(channel)
+      window.removeEventListener('keydown', onKey)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -694,79 +753,169 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   <span className="text-xs font-semibold text-white">Pipeline ao Vivo</span>
-                  <span className="text-xs text-[#52525B]">— atualiza em tempo real</span>
+                  <span className="text-xs text-[#52525B]">— clique para distribuir</span>
                 </div>
                 <span className="text-xs text-[#52525B]">
                   {pipeline.reduce((s, e) => s + e.count, 0)} leads no funil
                 </span>
               </div>
-              <div className="grid grid-cols-8 gap-2">
-                {pipeline.map((etapa) => {
-                  const isFlashing = pipelineFlash === etapa.n
-                  const isActive = etapa.count > 0
-                  const isPaid = etapa.n === 7 || etapa.n === 8
-                  return (
-                    <div
-                      key={etapa.n}
-                      className={`relative rounded-xl p-3 border text-center transition-all duration-500 ${
-                        isFlashing
-                          ? 'scale-105 shadow-lg'
-                          : ''
-                      }`}
-                      style={{
-                        borderColor: isFlashing ? etapa.color : isActive ? etapa.color + '40' : '#1C1C1E',
-                        background: isFlashing
-                          ? etapa.color + '30'
-                          : isActive
-                            ? etapa.color + '10'
-                            : '#0D0D0F',
-                        boxShadow: isFlashing ? `0 0 20px ${etapa.color}60` : undefined,
-                      }}
-                    >
-                      {/* Número da etapa */}
-                      <div className="text-[10px] font-bold mb-1" style={{ color: isActive ? etapa.color : '#3F3F46' }}>
-                        E{etapa.n}
-                      </div>
-                      {/* Contador — grande e em destaque */}
-                      <div
-                        className={`text-2xl font-bold transition-all ${isFlashing ? 'scale-110' : ''}`}
-                        style={{ color: isActive ? etapa.color : '#3F3F46' }}
-                      >
-                        {etapa.count}
-                      </div>
-                      {/* Label curto */}
-                      <div className="text-[9px] leading-tight mt-1 truncate" style={{ color: isActive ? '#A1A1AA' : '#3F3F46' }}>
-                        {etapa.shortLabel}
-                      </div>
-                      {/* Badge "$" quando dinheiro entrou (etapa 7+) */}
-                      {isPaid && etapa.count > 0 && (
-                        <div className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
-                          <span className="text-[8px] font-bold text-white">$</span>
+
+              <div className="flex gap-3">
+                {/* Grid de etapas */}
+                <div className="flex-1">
+                  <div className="grid grid-cols-8 gap-2">
+                    {pipeline.map((etapa) => {
+                      const isFlashing = pipelineFlash === etapa.n
+                      const isActive = etapa.count > 0
+                      const isSelected = drawerStage?.n === etapa.n
+                      const isPaid = etapa.n === 7 || etapa.n === 8
+                      return (
+                        <div
+                          key={etapa.n}
+                          role={isActive ? 'button' : undefined}
+                          tabIndex={isActive ? 0 : undefined}
+                          onClick={() => isActive && setDrawerStage(isSelected ? null : etapa)}
+                          onKeyDown={e => { if (isActive && (e.key === 'Enter' || e.key === ' ')) setDrawerStage(isSelected ? null : etapa) }}
+                          title={isActive ? `${etapa.count} lead${etapa.count !== 1 ? 's' : ''} em ${etapa.label} — clique para ver` : etapa.label}
+                          className={`relative rounded-xl p-3 border text-center transition-all duration-300 ${
+                            isActive ? 'cursor-pointer hover:-translate-y-0.5 hover:brightness-110' : ''
+                          } ${isFlashing ? 'scale-105' : ''}`}
+                          style={{
+                            borderColor: isSelected ? etapa.color : isFlashing ? etapa.color : isActive ? etapa.color + '50' : '#1C1C1E',
+                            background: isSelected
+                              ? etapa.color + '25'
+                              : isFlashing
+                                ? etapa.color + '30'
+                                : isActive
+                                  ? etapa.color + '10'
+                                  : '#0D0D0F',
+                            boxShadow: isSelected ? `0 0 20px ${etapa.color}50` : isFlashing ? `0 0 20px ${etapa.color}60` : undefined,
+                          }}
+                        >
+                          <div className="text-[10px] font-bold mb-1" style={{ color: isActive ? etapa.color : '#3F3F46' }}>
+                            E{etapa.n}
+                          </div>
+                          <div className={`text-2xl font-bold transition-all ${isFlashing ? 'scale-110' : ''}`}
+                            style={{ color: isActive ? etapa.color : '#3F3F46' }}>
+                            {etapa.count}
+                          </div>
+                          <div className="text-[9px] leading-tight mt-1 truncate" style={{ color: isActive ? '#A1A1AA' : '#3F3F46' }}>
+                            {etapa.shortLabel}
+                          </div>
+                          {isPaid && etapa.count > 0 && (
+                            <div className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center">
+                              <span className="text-[8px] font-bold text-white">$</span>
+                            </div>
+                          )}
+                          {isFlashing && (
+                            <div className="absolute inset-0 rounded-xl animate-ping opacity-20" style={{ background: etapa.color }} />
+                          )}
                         </div>
-                      )}
-                      {/* Flash de nova entrada */}
-                      {isFlashing && (
-                        <div className="absolute inset-0 rounded-xl animate-ping opacity-20"
-                          style={{ background: etapa.color }} />
-                      )}
+                      )
+                    })}
+                  </div>
+                  {/* Barra de progresso do funil */}
+                  <div className="flex gap-0.5 mt-3 h-1 rounded-full overflow-hidden">
+                    {pipeline.map(etapa => {
+                      const total = pipeline.reduce((s, e) => s + e.count, 0)
+                      const pct = total > 0 ? (etapa.count / total) * 100 : 0
+                      return (
+                        <div key={etapa.n} className="h-full transition-all duration-700 rounded-sm"
+                          style={{ width: `${pct}%`, background: etapa.color, opacity: etapa.count > 0 ? 1 : 0 }} />
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Drawer lateral */}
+                {drawerStage && (
+                  <div className="w-72 flex-shrink-0 border rounded-xl overflow-hidden flex flex-col transition-all"
+                    style={{ borderColor: drawerStage.color + '60', background: '#0D0D0F' }}>
+                    {/* Header */}
+                    <div className="flex items-center justify-between px-3 py-2.5 border-b" style={{ borderColor: drawerStage.color + '30' }}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full animate-pulse" style={{ background: drawerStage.color }} />
+                        <span className="text-xs font-bold text-white">E{drawerStage.n} — {drawerStage.label}</span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full"
+                          style={{ background: drawerStage.color + '25', color: drawerStage.color }}>
+                          {drawerStage.count} em ligação
+                        </span>
+                      </div>
+                      <button onClick={() => setDrawerStage(null)}
+                        className="text-[#52525B] hover:text-white hover:bg-[#1C1C1E] rounded-lg p-1 transition-colors">
+                        <X className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  )
-                })}
+
+                    {/* Lead list */}
+                    <div className="overflow-y-auto flex-1 p-2 space-y-2 max-h-64">
+                      {drawerStage.leads.map(lead => {
+                        const assignedCommId = assignments[lead.id]
+                        const initials = (lead.nome ?? lead.telefone).slice(0, 2).toUpperCase()
+                        const minsAgo = Math.floor((Date.now() - new Date(lead.updated_at).getTime()) / 60000)
+                        return (
+                          <div key={lead.id} className="bg-[#111113] border border-[#1C1C1E] rounded-lg p-2.5">
+                            {/* Lead info */}
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                                style={{ background: drawerStage.color + '25', color: drawerStage.color }}>
+                                {initials}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-semibold text-white truncate">{lead.nome ?? '(sem cadastro)'}</div>
+                                <div className="text-[10px] text-[#52525B] font-mono">{lead.telefone}</div>
+                              </div>
+                              <div className="text-[10px] font-bold whitespace-nowrap" style={{ color: drawerStage.color }}>
+                                {minsAgo}min
+                              </div>
+                            </div>
+
+                            {/* Comerciais */}
+                            <div className="text-[9px] font-semibold uppercase tracking-widest text-[#3F3F46] mb-1">
+                              {assignedCommId ? '✓ Atribuído para' : 'Distribuir para'}
+                            </div>
+                            <div className="grid grid-cols-2 gap-1">
+                              {comerciais.map(c => {
+                                const isAssigned = assignedCommId === c.id
+                                return (
+                                  <button key={c.id}
+                                    onClick={() => !c.ocupado && assignLead(lead.id, c.id)}
+                                    disabled={c.ocupado && !isAssigned}
+                                    className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-left transition-all ${
+                                      isAssigned
+                                        ? 'border-emerald-500/50 bg-emerald-500/10'
+                                        : c.ocupado
+                                          ? 'border-[#1C1C1E] opacity-40 cursor-not-allowed'
+                                          : 'border-[#1C1C1E] hover:border-[#7B3FE4]/50 hover:bg-[#7B3FE4]/10 cursor-pointer'
+                                    }`}>
+                                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-[8px] font-bold flex-shrink-0"
+                                      style={{ background: c.cor + '30', color: c.cor }}>
+                                      {c.initials}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-[10px] font-semibold text-white truncate">{c.nome.split(' ')[0]}</div>
+                                      <div className="text-[9px] text-[#52525B]">{c.ocupado ? 'ocupado' : `${c.ativos} ativo${c.ativos !== 1 ? 's' : ''}`}</div>
+                                    </div>
+                                    <div className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                                      style={{ background: isAssigned ? '#22C55E' : c.ocupado ? '#52525B' : '#22C55E', opacity: c.ocupado && !isAssigned ? .4 : 1 }} />
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
-              {/* Barra de progresso do funil */}
-              <div className="flex gap-0.5 mt-3 h-1 rounded-full overflow-hidden">
-                {pipeline.map(etapa => {
-                  const total = pipeline.reduce((s, e) => s + e.count, 0)
-                  const pct = total > 0 ? (etapa.count / total) * 100 : 0
-                  return (
-                    <div
-                      key={etapa.n}
-                      className="h-full transition-all duration-700 rounded-sm"
-                      style={{ width: `${pct}%`, background: etapa.color, opacity: etapa.count > 0 ? 1 : 0 }}
-                    />
-                  )
-                })}
-              </div>
+            </div>
+          )}
+
+          {/* Toast de confirmação */}
+          {toastMsg && (
+            <div className="fixed bottom-6 right-6 z-50 bg-[#111113] border border-emerald-500/40 text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-2xl animate-in slide-in-from-bottom-2 duration-200">
+              {toastMsg}
             </div>
           )}
 
