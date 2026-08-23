@@ -118,14 +118,14 @@ function wrapTwilioWithPcmToMulaw(ws: any): any {
 // Passive stage detection from ANA's transcript — same patterns as the simulador client.
 // Runs server-side so it works for both PTL and WebRTC calls without touching gate logic.
 const STAGE_PATTERNS: Array<{ stage: string; patterns: RegExp[] }> = [
-  { stage: 'apresentacao', patterns: [/qual (é |e )?(o )?teu nome/i, /como (eu |)posso te chamar/i, /como você se chama/i, /pra eu te chamar/i, /quem me indicou/i, /como (eu |)posso te? (chamar|identificar)/i] },
-  { stage: 'conexao',      patterns: [/me conta (seu|o) dia a dia/i, /me fala mais sobre/i, /o que você faz/i, /tem filhos/i, /família/i] },
-  { stage: 'combinado',    patterns: [/combinad[ao]/i, /no final apresent/i, /decisão no final/i, /sim ou não/i] },
-  { stage: 'speech',       patterns: [/pellet/i, /implante hormonal/i, /grão de arroz/i, /libera hormônios/i, /testosterona/i, /estrogênio/i] },
-  { stage: 'fechamento',   patterns: [/lembra do nosso combinado/i, /faz sentido pra você avançar/i, /a sua decisão agora/i, /fechar (isso|hoje|agora|com a gente)/i, /o investimento (é|será|fica)/i, /quanto (que )?custa/i] },
-  { stage: 'pagamento',    patterns: [/pix ou cartão/i, /forma de pagamento/i, /vou gerar (o )?pix/i] },
-  { stage: 'referidos',    patterns: [/conhece alguma amiga/i, /tem alguma (amiga|conhecida|pessoa) que/i, /me passa o (contato|número)/i, /vou te mandar.*link/i, /seu link de indicação/i] },
-  { stage: 'encerramento', patterns: [/obrigada pela confiança/i, /foi um prazer/i, /até logo/i, /tchau/i] },
+  { stage: 'apresentacao', patterns: [/qual é o teu nome/i, /pra eu te chamar direitinho/i, /pode repetir teu nome/i] },
+  { stage: 'conexao',      patterns: [/me conta um pouco de como é o teu dia a dia/i, /me conta como é o teu dia a dia/i] },
+  { stage: 'combinado',    patterns: [/vamos fazer um combinad[ao]/i, /combinadinh[ao]/i] },
+  { stage: 'speech',       patterns: [/pellet/i, /implante hormonal/i, /grão de arroz/i] },
+  { stage: 'fechamento',   patterns: [/lembra do nosso combinado/i, /faz sentido pra você/i, /pix ou cartão/i] },
+  { stage: 'pagamento',    patterns: [/confirmei aqui/i, /pagamento recebido/i] },
+  { stage: 'referidos',    patterns: [/você conhece alguma amiga/i, /tomou essa decisão tão importante/i] },
+  { stage: 'encerramento', patterns: [/nossa equipe vai entrar em contato/i, /foi uma honra conversar/i, /cuida-se/i] },
 ]
 
 // Keeps track of the highest stage reached per callSid so we never go backwards.

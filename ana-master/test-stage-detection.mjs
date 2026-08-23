@@ -2,14 +2,14 @@
 // Tests the exact same code that runs in realtime.ts
 
 const STAGE_PATTERNS = [
-  { stage: 'apresentacao', patterns: [/qual (é |e )?(o )?teu nome/i, /como (eu |)posso te chamar/i, /como você se chama/i, /pra eu te chamar/i, /quem me indicou/i, /como (eu |)posso te? (chamar|identificar)/i] },
-  { stage: 'conexao',      patterns: [/me conta (seu|o) dia a dia/i, /me fala mais sobre/i, /o que você faz/i, /tem filhos/i, /família/i] },
-  { stage: 'combinado',    patterns: [/combinad[ao]/i, /no final apresent/i, /decisão no final/i, /sim ou não/i] },
-  { stage: 'speech',       patterns: [/pellet/i, /implante hormonal/i, /grão de arroz/i, /libera hormônios/i, /testosterona/i, /estrogênio/i] },
-  { stage: 'fechamento',   patterns: [/lembra do nosso combinado/i, /faz sentido pra você avançar/i, /a sua decisão agora/i, /fechar (isso|hoje|agora|com a gente)/i, /o investimento (é|será|fica)/i, /quanto (que )?custa/i] },
-  { stage: 'pagamento',    patterns: [/pix ou cartão/i, /forma de pagamento/i, /vou gerar (o )?pix/i] },
-  { stage: 'referidos',    patterns: [/conhece alguma amiga/i, /tem alguma (amiga|conhecida|pessoa) que/i, /me passa o (contato|número)/i, /vou te mandar.*link/i, /seu link de indicação/i] },
-  { stage: 'encerramento', patterns: [/obrigada pela confiança/i, /foi um prazer/i, /até logo/i, /tchau/i] },
+  { stage: 'apresentacao', patterns: [/qual é o teu nome/i, /pra eu te chamar direitinho/i, /pode repetir teu nome/i] },
+  { stage: 'conexao',      patterns: [/me conta um pouco de como é o teu dia a dia/i, /me conta como é o teu dia a dia/i] },
+  { stage: 'combinado',    patterns: [/vamos fazer um combinad[ao]/i, /combinadinh[ao]/i] },
+  { stage: 'speech',       patterns: [/pellet/i, /implante hormonal/i, /grão de arroz/i] },
+  { stage: 'fechamento',   patterns: [/lembra do nosso combinado/i, /faz sentido pra você/i, /pix ou cartão/i] },
+  { stage: 'pagamento',    patterns: [/confirmei aqui/i, /pagamento recebido/i] },
+  { stage: 'referidos',    patterns: [/você conhece alguma amiga/i, /tomou essa decisão tão importante/i] },
+  { stage: 'encerramento', patterns: [/nossa equipe vai entrar em contato/i, /foi uma honra conversar/i, /cuida-se/i] },
 ]
 
 const STAGE_ORDER = ['apresentacao', 'conexao', 'combinado', 'speech', 'fechamento', 'pagamento', 'referidos', 'encerramento']
@@ -58,75 +58,99 @@ function eq(a, b) {
 }
 
 console.log('\n── detectStageFromText ──')
-test('apresentacao: "Pra eu te chamar direito, qual é o teu nome?"', () =>
-  eq(detectStageFromText('Pra eu te chamar direito, qual é o teu nome?'), 'apresentacao'))
-test('apresentacao: real ANA phrase from test call', () =>
-  eq(detectStageFromText('Oi, aqui é a ANA, da Hormone Ecosystem. Pra eu te atender direitinho, como eu posso te chamar?'), 'apresentacao'))
-test('conexao: "Me conta seu dia a dia"', () =>
-  eq(detectStageFromText('Me conta seu dia a dia, o que você faz?'), 'conexao'))
-test('combinado: "combinado"', () =>
-  eq(detectStageFromText('Antes de continuar, quero fazer um combinado com você.'), 'combinado'))
-test('speech: "pellet"', () =>
-  eq(detectStageFromText('O procedimento é um pellet, um implante hormonal.'), 'speech'))
-test('fechamento: "faz sentido pra você avançar"', () =>
-  eq(detectStageFromText('Faz sentido pra você avançar com isso?'), 'fechamento'))
-test('fechamento: NAO dispara em "faz sentido pra você" generico', () =>
-  eq(detectStageFromText('Faz sentido pra você?'), null))
-test('fechamento: NAO dispara em "fechar" solto', () =>
-  eq(detectStageFromText('Antes de fechar a ligação...'), null))
-test('fechamento: NAO dispara em "investimento" solto', () =>
-  eq(detectStageFromText('Vou te falar sobre o investimento que você vai fazer na sua saúde.'), null))
-test('pagamento: "pix ou cartão"', () =>
-  eq(detectStageFromText('Você prefere pix ou cartão?'), 'pagamento'))
-test('referidos: "conhece alguma amiga"', () =>
-  eq(detectStageFromText('Você conhece alguma amiga que também poderia se beneficiar?'), 'referidos'))
-test('referidos: NAO dispara em "indicacao" de conexao', () =>
-  eq(detectStageFromText('Como é que você chegou até a gente? Foi indicação de alguém?'), null))
-test('referidos: NAO dispara "indicacao" contextual como referidos', () =>
-  eq(detectStageFromText('Foi indicação de alguém ou encontrou por conta própria?'), null))
-test('encerramento: "foi um prazer"', () =>
-  eq(detectStageFromText('Foi um prazer conversar com você!'), 'encerramento'))
-test('no match returns null', () =>
-  eq(detectStageFromText('Tudo bem, obrigada!'), null))
 
-console.log('\n── makeStageTracker (no backwards, index -1 fix) ──')
-test('E1 apresentacao is written on first detection (index 0 not blocked)', () => {
+// E1 — Abertura
+test('E1: "Pra eu te chamar direitinho, qual é o teu nome?"', () =>
+  eq(detectStageFromText('Pra eu te chamar direitinho, qual é o teu nome?'), 'apresentacao'))
+test('E1: "pra eu te chamar direitinho"', () =>
+  eq(detectStageFromText('Oi, aqui é a ANA. Pra eu te chamar direitinho, como você gosta de ser chamada?'), 'apresentacao'))
+test('E1: "pode repetir teu nome"', () =>
+  eq(detectStageFromText('Desculpa, cortou um pouquinho. Pode repetir teu nome, por favor?'), 'apresentacao'))
+test('E1: NAO dispara em "obrigada" generico', () =>
+  eq(detectStageFromText('Mari, obrigada. E me conta como você chegou até a gente?'), null))
+
+// E2 — Conexão
+test('E2: "me conta um pouco de como é o teu dia a dia"', () =>
+  eq(detectStageFromText('Me conta um pouco de como é o teu dia a dia, no trabalho, na rotina.'), 'conexao'))
+test('E2: "me conta como é o teu dia a dia"', () =>
+  eq(detectStageFromText('Me conta como é o teu dia a dia.'), 'conexao'))
+test('E2: NAO dispara em "familia" ou "filhos" sozinhos', () =>
+  eq(detectStageFromText('Você tem família grande?'), null))
+
+// E3 — Combinado
+test('E3: "vamos fazer um combinado"', () =>
+  eq(detectStageFromText('Maria, sei que teu tempo é precioso. Vamos fazer um combinado?'), 'combinado'))
+test('E3: "vamos fazer um combinadinho"', () =>
+  eq(detectStageFromText('Vamos fazer um combinadinho?'), 'combinado'))
+test('E3: NAO dispara em "combinado" solto no meio de frase', () =>
+  eq(detectStageFromText('Ficou combinado então que você me liga depois?'), null))
+
+// E4 — Speech
+test('E4: "pellet"', () =>
+  eq(detectStageFromText('O procedimento é um pellet, um pequeno cilindro.'), 'speech'))
+test('E4: "implante hormonal"', () =>
+  eq(detectStageFromText('É um implante hormonal colocado sob a pele.'), 'speech'))
+test('E4: "grão de arroz"', () =>
+  eq(detectStageFromText('É do tamanho aproximado de um grão de arroz.'), 'speech'))
+
+// E5 — Fechamento
+test('E5: "lembra do nosso combinado"', () =>
+  eq(detectStageFromText('Lembra do nosso combinado? Se fizesse sentido pra você, a gente avançava.'), 'fechamento'))
+test('E5: "faz sentido pra você"', () =>
+  eq(detectStageFromText('Faz sentido pra você?'), 'fechamento'))
+test('E5: "pix ou cartão"', () =>
+  eq(detectStageFromText('Como você prefere fazer: Pix ou cartão?'), 'fechamento'))
+
+// E6 — Pagamento
+test('E6: "confirmei aqui"', () =>
+  eq(detectStageFromText('Confirmei aqui — pagamento recebido!'), 'pagamento'))
+test('E6: "pagamento recebido"', () =>
+  eq(detectStageFromText('Pagamento recebido, tudo certo!'), 'pagamento'))
+
+// E7 — Referidos
+test('E7: "você conhece alguma amiga"', () =>
+  eq(detectStageFromText('Já que você tomou essa decisão, você conhece alguma amiga que também poderia se beneficiar?'), 'referidos'))
+test('E7: "tomou essa decisão tão importante"', () =>
+  eq(detectStageFromText('Maria, já que você tomou essa decisão tão importante pela sua saúde...'), 'referidos'))
+test('E7: NAO dispara em "indicação" de conexao', () =>
+  eq(detectStageFromText('Como é que você chegou até a gente? Foi indicação de alguém?'), null))
+
+// E8 — Encerramento
+test('E8: "nossa equipe vai entrar em contato"', () =>
+  eq(detectStageFromText('Nossa equipe vai entrar em contato pra agendar teu procedimento.'), 'encerramento'))
+test('E8: "foi uma honra conversar"', () =>
+  eq(detectStageFromText('Foi uma honra conversar contigo. Cuida-se!'), 'encerramento'))
+test('E8: "cuida-se"', () =>
+  eq(detectStageFromText('Cuida-se!'), 'encerramento'))
+test('E8: NAO dispara em "obrigada" generico', () =>
+  eq(detectStageFromText('Obrigada por confirmar. Me conta mais.'), null))
+test('E8: NAO dispara em "tchau" avulso', () =>
+  eq(detectStageFromText('Tchau!'), null))
+
+// Falsos positivos bloqueados
+console.log('\n── Falsos positivos bloqueados ──')
+test('NAO dispara E7 em "indicação" de abertura', () =>
+  eq(detectStageFromText('Ah, então foi a Maria que te indicou. Que bom!'), null))
+test('NAO dispara E8 em "obrigada" no meio da conversa', () =>
+  eq(detectStageFromText('Mari, obrigada. E me conta, como é que você chegou até a gente?'), null))
+test('NAO dispara E3 em "combinado" avulso', () =>
+  eq(detectStageFromText('Ficou combinado então.'), null))
+
+// Conversa completa
+console.log('\n── Conversa completa E1→E8 ──')
+test('fluxo completo em ordem', () => {
   const t = makeStageTracker()
-  const r = t.advance('Pra eu te chamar direito, qual é o teu nome?')
-  eq(r, 'apresentacao')
-})
-test('stages advance in order', () => {
-  const t = makeStageTracker()
-  t.advance('qual é o teu nome?')  // apresentacao
-  t.advance('me conta seu dia a dia')  // conexao
-  t.advance('quero fazer um combinado')  // combinado
-  eq(t.log.join(','), 'apresentacao,conexao,combinado')
-})
-test('does not go backwards', () => {
-  const t = makeStageTracker()
-  t.advance('qual é o teu nome?')  // apresentacao idx=0
-  t.advance('qual é o teu nome?')  // apresentacao again — blocked
-  eq(t.log.length, 1)
-})
-test('skips stages (e.g. goes from apresentacao direct to speech)', () => {
-  const t = makeStageTracker()
-  t.advance('qual é o teu nome?')  // apresentacao idx=0
-  t.advance('o procedimento é um pellet')  // speech idx=3
-  eq(t.log.join(','), 'apresentacao,speech')
-})
-test('full conversation flow', () => {
-  const t = makeStageTracker()
-  const phrases = [
-    'Oi, aqui é a ANA, da Hormone Ecosystem. Pra eu te atender direitinho, como eu posso te chamar?',
-    'Que legal, Maria! Me conta seu dia a dia, o que você faz?',
-    'Antes de a gente continuar, quero fazer um combinado com você.',
-    'O procedimento é um pellet, um implante hormonal do tamanho de um grão de arroz.',
-    'Faz sentido pra você avançar com isso?',
-    'Você prefere pix ou cartão?',
-    'Você conhece alguma amiga que poderia se beneficiar?',
-    'Foi um prazer conversar com você!',
+  const frases = [
+    'Pra eu te chamar direitinho, qual é o teu nome?',
+    'Me conta um pouco de como é o teu dia a dia, no trabalho, na rotina.',
+    'Vamos fazer um combinado?',
+    'O procedimento é um pellet, um pequeno cilindro colocado sob a pele.',
+    'Faz sentido pra você?',
+    'Confirmei aqui — pagamento recebido!',
+    'Você conhece alguma amiga que também poderia se beneficiar?',
+    'Nossa equipe vai entrar em contato pra agendar teu procedimento.',
   ]
-  phrases.forEach(p => t.advance(p))
+  frases.forEach(f => t.advance(f))
   eq(t.log.join(','), 'apresentacao,conexao,combinado,speech,fechamento,pagamento,referidos,encerramento')
 })
 

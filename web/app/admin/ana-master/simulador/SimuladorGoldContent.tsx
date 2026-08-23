@@ -23,14 +23,14 @@ interface Metrics {
 // ── Passive stage detection ───────────────────────────────────────────────────
 
 const STAGE_PATTERNS: { stage: string; label: string; pattern: RegExp }[] = [
-  { stage: 'abertura',  label: 'Abertura',  pattern: /qual.{0,20}(teu|seu|o seu) nome|como (é que )?você se chama|pra eu te chamar|posso te chamar|quem me indicou|quem te indicou|por quem (você|vc) foi indicad/i },
-  { stage: 'conexao',   label: 'Conexão',   pattern: /me conta.{0,30}(dia a dia|vida|rotina)|como (é|tá|está) (a sua|tua|sua) (rotina|vida|dia)|me fala mais sobre|o que (você|vc) (faz|trabalha)|tem filhos|família|mora com/i },
-  { stage: 'combinado', label: 'Combinado', pattern: /combinado|combinamos|combina|no final.{0,30}apresent|quando eu terminar|ao final|antes de (eu te |te )apresentar|só (me |te )pede|decisão no final|sim ou não/i },
-  { stage: 'speech',    label: 'Speech',    pattern: /pellet|implante hormonal|grão de arroz|libera hormônios|cilindro|subcutâneo|hormônio bioidêntico|testosterona|progesterona|estrogênio|implantado|implante/i },
-  { stage: 'fechamento',label: 'Fechamento',pattern: /lembra (do nosso|que a gente fez|do) combinado|faz sentido pra você avançar|a sua decisão agora|fechar (isso|hoje|agora|com a gente)|o investimento (é|será|fica)|quanto (que )?custa/i },
-  { stage: 'pagamento', label: 'Pagamento', pattern: /pix ou cartão|prefere (fazer|pagar|parcelar|o )?pix|cartão de crédito|forma de pagamento|pagamento|pagar|vou (gerar|mandar|enviar).{0,20}pix/i },
-  { stage: 'referidos', label: 'Referidos', pattern: /conhece alguma amiga|tem alguma (amiga|conhecida|pessoa) que|me passa o (contato|número)|vou te mandar.*link|seu link de indicação/i },
-  { stage: 'encerramento', label: 'Encerramento', pattern: /obrigada pela confiança|foi um prazer falar|até (logo|breve)|nossa equipe (vai|irá|entrará)|(muito )?obrigada|encerrando|encerrar|tchau|boa (sorte|tarde|noite|semana)/i },
+  { stage: 'abertura',     label: 'Abertura',     pattern: /qual é o teu nome|pra eu te chamar direitinho|pode repetir teu nome/i },
+  { stage: 'conexao',      label: 'Conexão',      pattern: /me conta um pouco de como é o teu dia a dia|me conta como é o teu dia a dia/i },
+  { stage: 'combinado',    label: 'Combinado',    pattern: /vamos fazer um combinad[ao]|combinadinh[ao]/i },
+  { stage: 'speech',       label: 'Speech',       pattern: /pellet|implante hormonal|grão de arroz/i },
+  { stage: 'fechamento',   label: 'Fechamento',   pattern: /lembra do nosso combinado|faz sentido pra você|pix ou cartão/i },
+  { stage: 'pagamento',    label: 'Pagamento',    pattern: /confirmei aqui|pagamento recebido/i },
+  { stage: 'referidos',    label: 'Referidos',    pattern: /você conhece alguma amiga|tomou essa decisão tão importante/i },
+  { stage: 'encerramento', label: 'Encerramento', pattern: /nossa equipe vai entrar em contato|foi uma honra conversar|cuida-se/i },
 ]
 
 function detectStage(text: string): string | null {
