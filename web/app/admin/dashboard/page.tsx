@@ -183,12 +183,22 @@ type Comercial = {
   ocupado: boolean
 }
 
-const COMERCIAIS_FIXOS: Comercial[] = [
-  { id: 'c1', nome: 'Diego Lemos',   initials: 'DL', cor: '#7B3FE4', ativos: 0, ocupado: false },
-  { id: 'c2', nome: 'Raquel Torres', initials: 'RT', cor: '#06B6D4', ativos: 0, ocupado: false },
-  { id: 'c3', nome: 'Bruno Alves',   initials: 'BA', cor: '#10B981', ativos: 0, ocupado: false },
-  { id: 'c4', nome: 'Camila Reis',   initials: 'CR', cor: '#F59E0B', ativos: 0, ocupado: false },
-]
+const AVATAR_COLORS = ['#7B3FE4','#06B6D4','#10B981','#F59E0B','#EF4444','#3B82F6','#EC4899']
+
+function makeInitials(nome: string) {
+  return nome.split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase()
+}
+
+function dbComercialToUI(c: any, i: number): Comercial {
+  return {
+    id: c.id,
+    nome: c.nome,
+    initials: makeInitials(c.nome),
+    cor: AVATAR_COLORS[i % AVATAR_COLORS.length],
+    ativos: 0,
+    ocupado: !c.disponivel,
+  }
+}
 
 type PipelineEtapa = {
   n: number
@@ -214,7 +224,7 @@ export default function AdminDashboard() {
   const [pipelineFlash, setPipelineFlash] = useState<number | null>(null)
   const [drawerStage, setDrawerStage] = useState<PipelineEtapa | null>(null)
   const [assignments, setAssignments] = useState<Record<string, string>>({})
-  const [comerciais, setComerciais] = useState<Comercial[]>(COMERCIAIS_FIXOS)
+  const [comerciais, setComerciais] = useState<Comercial[]>([])
   const [toastMsg, setToastMsg] = useState<string | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -237,7 +247,17 @@ export default function AdminDashboard() {
     showToast('Lead marcado como resolvido ✓')
   }
 
-  function assignLead(leadId: string, comercialId: string) {
+  async function assignLead(leadId: string, comercialId: string) {
+    // Find the call_sid for this lead
+    const allLeads = Object.values((stats as any)?.anaCallsLeads ?? {}).flat() as AnaCallEnriched[]
+    const lead = allLeads.find((l: AnaCallEnriched) => l.id === leadId)
+    if (lead?.call_sid) {
+      await fetch('/api/admin/ana-calls', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ call_sid: lead.call_sid, assigned_comercial_id: comercialId }),
+      }).catch(() => {})
+    }
     setAssignments(prev => ({ ...prev, [leadId]: comercialId }))
     setComerciais(prev => prev.map(c => {
       if (c.id === comercialId) return { ...c, ativos: c.ativos + 1 }
@@ -497,6 +517,14 @@ export default function AdminDashboard() {
   }, [stats])
 
   useEffect(() => {
+    // Load comerciais from DB
+    fetch('/api/admin/comerciais')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data)) setComerciais(data.map(dbComercialToUI))
+      })
+      .catch(() => {})
+
     load()
     // Auto-refresh a cada 15s
     const interval = setInterval(load, 15000)

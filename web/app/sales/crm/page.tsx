@@ -1,178 +1,146 @@
 'use client'
 
-import { useState } from 'react'
-import { Sidebar } from '@/components/layout/Sidebar'
-import { TopBar } from '@/components/layout/TopBar'
-import { Badge } from '@/components/ui/Badge'
-import { Plus, MoreHorizontal, Clock, Instagram, Globe, MessageCircle, Phone, User } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
 
-type Stage = 'Lead' | 'Qualificado' | 'Consulta' | 'Tratamento' | 'Renovação'
-
-interface Lead {
-  id: number
-  name: string
-  age: number
-  source: string
-  date: string
-  value: string
-  assigned: string
-  tags: string[]
-  urgent?: boolean
+type AnaCall = {
+  id: string
+  call_sid: string
+  telefone: string
+  stage: string
+  status: string
+  em_ligacao: boolean
+  nome: string | null
+  created_at: string
+  updated_at: string
 }
 
-const columns: { id: Stage; label: string; color: string; accent: string }[] = [
-  { id: 'Lead', label: 'Lead', color: 'bg-[#7B3FE4]/10', accent: '#7B3FE4' },
-  { id: 'Qualificado', label: 'Qualificado', color: 'bg-[#3B82F6]/10', accent: '#3B82F6' },
-  { id: 'Consulta', label: 'Consulta', color: 'bg-[#06B6D4]/10', accent: '#06B6D4' },
-  { id: 'Tratamento', label: 'Tratamento', color: 'bg-emerald-500/10', accent: '#10B981' },
-  { id: 'Renovação', label: 'Renovação', color: 'bg-amber-500/10', accent: '#F59E0B' },
+type CRMStage = {
+  key: string
+  label: string
+  color: string
+  calls: AnaCall[]
+}
+
+function timeAgo(date: string) {
+  const m = Math.floor((Date.now() - new Date(date).getTime()) / 60000)
+  if (m < 60) return `${m}min`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h`
+  return `${Math.floor(h / 24)}d`
+}
+
+// Maps ana_calls.stage to CRM column
+function stageToColumn(stage: string): string {
+  const map: Record<string, string> = {
+    apresentacao: 'novo', abertura: 'novo',
+    conexao: 'contato', combinado: 'contato', di: 'contato',
+    speech: 'proposta', fechamento: 'proposta',
+    pagamento: 'fechamento', referidos: 'fechamento',
+    encerramento: 'fechamento', encerrado: 'fechamento',
+    validacao: 'fechamento', ganho: 'fechamento',
+  }
+  return map[stage] ?? 'novo'
+}
+
+const CRM_STAGES: Omit<CRMStage, 'calls'>[] = [
+  { key: 'novo', label: 'Novo Contato', color: '#3B82F6' },
+  { key: 'contato', label: 'Em Contato', color: '#F59E0B' },
+  { key: 'proposta', label: 'Proposta', color: '#8B5CF6' },
+  { key: 'fechamento', label: 'Fechamento', color: '#10B981' },
 ]
 
-const sourceIcons: Record<string, React.ReactNode> = {
-  'Instagram': <Instagram className="w-3 h-3" />,
-  'Google': <Globe className="w-3 h-3" />,
-  'WhatsApp': <MessageCircle className="w-3 h-3" />,
-  'Indicação': <User className="w-3 h-3" />,
-  'Telefone': <Phone className="w-3 h-3" />,
-}
+export default function SalesCRM() {
+  const [calls, setCalls] = useState<AnaCall[]>([])
+  const [loading, setLoading] = useState(true)
 
-const initialLeads: Record<Stage, Lead[]> = {
-  Lead: [
-    { id: 1, name: 'Ana Paula M.', age: 48, source: 'Instagram', date: 'Hoje', value: 'R$ 4.800', assigned: 'Juliana', tags: ['Menopausa'], urgent: true },
-    { id: 2, name: 'Sandra Kowalski', age: 52, source: 'Google', date: 'Ontem', value: 'R$ 4.800', assigned: 'Juliana', tags: ['TRH'] },
-    { id: 3, name: 'Renata Borges', age: 44, source: 'WhatsApp', date: '2 dias', value: 'R$ 4.800', assigned: 'Juliana', tags: ['Libido'] },
-    { id: 4, name: 'Marcos Vinicius', age: 55, source: 'Indicação', date: '3 dias', value: 'R$ 6.200', assigned: 'Juliana', tags: ['Andropausa'] },
-  ],
-  Qualificado: [
-    { id: 5, name: 'Carlos Eduardo S.', age: 51, source: 'Indicação', date: 'Ontem', value: 'R$ 6.200', assigned: 'Juliana', tags: ['TRT'] },
-    { id: 6, name: 'Patricia Gomes', age: 47, source: 'Instagram', date: '2 dias', value: 'R$ 4.800', assigned: 'Juliana', tags: ['Menopausa'] },
-    { id: 7, name: 'Roberto Almeida', age: 58, source: 'Google', date: '4 dias', value: 'R$ 6.200', assigned: 'Juliana', tags: ['Performance'] },
-  ],
-  Consulta: [
-    { id: 8, name: 'Marcia Lima', age: 49, source: 'WhatsApp', date: 'Ontem', value: 'R$ 4.800', assigned: 'Juliana', tags: ['Hormônios'], urgent: true },
-    { id: 9, name: 'Fernando Costa', age: 53, source: 'Telefone', date: '3 dias', value: 'R$ 6.200', assigned: 'Juliana', tags: ['TRT'] },
-  ],
-  Tratamento: [
-    { id: 10, name: 'Roberto Farias', age: 50, source: 'WhatsApp', date: '5 dias', value: 'R$ 9.600', assigned: 'Juliana', tags: ['Implante'] },
-    { id: 11, name: 'Claudia Neves', age: 46, source: 'Indicação', date: '1 sem', value: 'R$ 4.800', assigned: 'Juliana', tags: ['Implante Fem'] },
-    { id: 12, name: 'Henrique Torres', age: 48, source: 'Instagram', date: '1 sem', value: 'R$ 9.600', assigned: 'Juliana', tags: ['Implante Masc'] },
-  ],
-  Renovação: [
-    { id: 13, name: 'Monica Souza', age: 54, source: 'Indicação', date: '3 meses', value: 'R$ 4.800', assigned: 'Juliana', tags: ['Renovação'] },
-    { id: 14, name: 'André Ribeiro', age: 49, source: 'Indicação', date: '4 meses', value: 'R$ 6.200', assigned: 'Juliana', tags: ['Renovação'] },
-  ],
-}
+  useEffect(() => {
+    fetch('/api/sales/referidos')
+      .then(r => r.json())
+      .then(data => {
+        setCalls(Array.isArray(data) ? data : [])
+        setLoading(false)
+      })
+  }, [])
 
-function LeadCard({ lead, accent }: { lead: Lead; accent: string }) {
+  const stages: CRMStage[] = CRM_STAGES.map(s => ({
+    ...s,
+    calls: calls.filter(c => stageToColumn(c.stage) === s.key),
+  }))
+
   return (
-    <div className={`bg-[#111113] border rounded-xl p-3 cursor-grab hover:border-opacity-60 transition-all hover:-translate-y-0.5 shadow-[0_2px_12px_rgba(0,0,0,0.3)] ${
-      lead.urgent ? 'border-amber-500/30' : 'border-[#1C1C1E]'
-    }`}>
-      {lead.urgent && (
-        <div className="flex items-center gap-1 text-[10px] font-bold text-amber-400 mb-2">
-          <div className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-          Urgente
-        </div>
-      )}
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-sm font-semibold text-white">{lead.name}</p>
-          <p className="text-xs text-[#71717A]">{lead.age} anos</p>
-        </div>
-        <button className="text-[#52525B] hover:text-white transition-colors flex-shrink-0">
-          <MoreHorizontal className="w-4 h-4" />
-        </button>
-      </div>
-
-      <div className="flex gap-1 mt-2 flex-wrap">
-        {lead.tags.map(tag => (
-          <span key={tag} className="text-[10px] px-1.5 py-0.5 rounded-md text-[#71717A] bg-[#18181A] border border-[#1C1C1E]">
-            {tag}
+    <div className="min-h-screen bg-[#0A0A0B] text-white">
+      <header className="bg-[#111113] border-b border-[#27272A] px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <span className="text-base font-bold bg-gradient-to-r from-[#8B5CF6] to-[#C084FC] bg-clip-text text-transparent">
+            Cechella
           </span>
-        ))}
-      </div>
-
-      <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#1C1C1E]">
-        <div className="flex items-center gap-1 text-[10px] text-[#52525B]">
-          {sourceIcons[lead.source] || <User className="w-3 h-3" />}
-          <span>{lead.source}</span>
+          <nav className="flex items-center gap-1">
+            {[
+              { label: 'Referidos', href: '/sales/dashboard' },
+              { label: 'CRM', href: '/sales/crm' },
+              { label: 'Ranking', href: '/sales/ranking' },
+              { label: 'Treinamento', href: '/sales/training' },
+            ].map(n => (
+              <Link key={n.href} href={n.href}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  n.href === '/sales/crm' ? 'text-white bg-[#18181B]' : 'text-[#A1A1AA] hover:text-white hover:bg-[#18181B]'
+                }`}>
+                {n.label}
+              </Link>
+            ))}
+          </nav>
         </div>
-        <div className="flex items-center gap-1 text-[10px] text-[#52525B]">
-          <Clock className="w-2.5 h-2.5" />
-          <span>{lead.date}</span>
+      </header>
+
+      <main className="px-6 py-8">
+        <div className="mb-6">
+          <h1 className="text-xl font-bold">CRM</h1>
+          <p className="text-sm text-[#71717A] mt-1">
+            {loading ? 'Carregando…' : `${calls.length} referido${calls.length !== 1 ? 's' : ''} — organizados por etapa`}
+          </p>
         </div>
-      </div>
 
-      <div className="mt-2 text-xs font-bold" style={{ color: accent }}>{lead.value}</div>
-    </div>
-  )
-}
-
-export default function CRMPage() {
-  const [leads] = useState(initialLeads)
-
-  const totalValue = Object.values(leads).flat().reduce((acc, l) => {
-    return acc + parseInt(l.value.replace(/[^0-9]/g, ''))
-  }, 0)
-
-  return (
-    <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
-      <Sidebar role="sales" />
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar user={{ name: 'Juliana Martins', role: 'sales' }} title="CRM Pipeline" />
-        <div className="px-6 py-4 border-b border-[#1C1C1E] bg-[#111113]/50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4 text-sm">
-              <span className="text-[#71717A]">Total de leads:</span>
-              <span className="font-bold text-white">{Object.values(leads).flat().length}</span>
-              <span className="text-[#1C1C1E]">|</span>
-              <span className="text-[#71717A]">Receita potencial:</span>
-              <span className="font-bold text-emerald-400">R$ {(totalValue / 1000).toFixed(0)}k</span>
-            </div>
-            <button className="flex items-center gap-2 bg-gradient-to-r from-[#7B3FE4] to-[#3B82F6] text-white text-sm font-semibold px-4 py-2 rounded-xl hover:opacity-90 transition-opacity shadow-[0_0_10px_rgba(123,63,228,0.3)]">
-              <Plus className="w-4 h-4" /> Novo Lead
-            </button>
+        {!loading && calls.length === 0 && (
+          <div className="bg-[#111113] border border-[#27272A] rounded-xl p-12 text-center max-w-md mx-auto">
+            <div className="text-4xl mb-3">📋</div>
+            <div className="text-sm font-medium text-[#A1A1AA]">Nenhum referido no CRM ainda</div>
+            <div className="text-xs text-[#52525B] mt-1">Quando o admin atribuir leads para você, aparecerão aqui</div>
           </div>
-        </div>
+        )}
 
-        {/* Kanban board */}
-        <div className="flex-1 overflow-x-auto overflow-y-hidden p-6">
-          <div className="flex gap-4 h-full min-w-max">
-            {columns.map((col) => {
-              const colLeads = leads[col.id] || []
-              return (
-                <div key={col.id} className="w-64 flex flex-col h-full">
-                  {/* Column header */}
-                  <div className={`${col.color} border rounded-xl px-3 py-2.5 mb-3 flex items-center justify-between`} style={{ borderColor: `${col.accent}30` }}>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full" style={{ background: col.accent }} />
-                      <span className="text-sm font-semibold text-white">{col.label}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-white bg-[#111113]/60 px-2 py-0.5 rounded-full">
-                        {colLeads.length}
-                      </span>
-                      <button className="text-[#52525B] hover:text-white transition-colors">
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Cards */}
-                  <div className="flex-1 overflow-y-auto space-y-2 kanban-column no-scrollbar">
-                    {colLeads.map((lead) => (
-                      <LeadCard key={lead.id} lead={lead} accent={col.accent} />
-                    ))}
-                    <button className="w-full py-2.5 border border-dashed border-[#1C1C1E] rounded-xl text-xs text-[#52525B] hover:text-[#71717A] hover:border-[#27272A] transition-all">
-                      + Adicionar card
-                    </button>
-                  </div>
+        {!loading && calls.length > 0 && (
+          <div className="grid grid-cols-4 gap-4">
+            {stages.map(stage => (
+              <div key={stage.key}>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold" style={{ color: stage.color }}>{stage.label}</span>
+                  <span className="text-xs bg-[#18181B] border border-[#27272A] px-2 py-0.5 rounded-full text-[#71717A]">
+                    {stage.calls.length}
+                  </span>
                 </div>
-              )
-            })}
+                <div className="space-y-2 min-h-24">
+                  {stage.calls.map(c => (
+                    <div key={c.id} className="bg-[#111113] border border-[#27272A] rounded-xl p-3 hover:border-[#3F3F46] transition-colors">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-semibold text-white truncate">{c.nome ?? '(sem cadastro)'}</span>
+                        {c.em_ligacao && (
+                          <span className="w-2 h-2 rounded-full bg-[#10B981] flex-shrink-0 animate-pulse" title="Ao vivo" />
+                        )}
+                      </div>
+                      <div className="text-xs text-[#71717A] font-mono">{c.telefone}</div>
+                      <div className="flex items-center justify-between mt-2">
+                        <span className="text-[10px] text-[#52525B]">via ANA</span>
+                        <span className="text-[10px] text-[#52525B]">{timeAgo(c.updated_at)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
-        </div>
-      </div>
+        )}
+      </main>
     </div>
   )
 }

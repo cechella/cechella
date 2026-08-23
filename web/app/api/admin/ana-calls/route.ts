@@ -10,10 +10,14 @@ export async function PATCH(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
-  const { call_sid, status } = await req.json()
+  const body = await req.json()
+  const { call_sid, status, assigned_comercial_id } = body
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
+  if (status !== undefined) patch.status = status
+  if (assigned_comercial_id !== undefined) patch.assigned_comercial_id = assigned_comercial_id
   const { error } = await supabase
     .from('ana_calls')
-    .update({ status, updated_at: new Date().toISOString() })
+    .update(patch)
     .eq('call_sid', call_sid)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
@@ -31,7 +35,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('ana_calls')
-    .select('id, call_sid, telefone, stage, status, gates_passed, memories, created_at, updated_at, em_ligacao')
+    .select('id, call_sid, telefone, stage, status, gates_passed, memories, created_at, updated_at, em_ligacao, assigned_comercial_id')
     .order('created_at', { ascending: false })
     .limit(50)
 
