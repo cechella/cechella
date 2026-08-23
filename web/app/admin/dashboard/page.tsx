@@ -191,7 +191,7 @@ export default function AdminDashboard() {
       const [leadsRes, referidosRes, anaCallsData] = await Promise.all([
         supabase.from('leads').select('id,nome,telefone,etapa_agente,temperatura,historico,total_referidos,updated_at,created_at,dor_principal,origem,atendimento_humano').order('updated_at', { ascending: false }),
         supabase.from('contatos_referidos').select('id,nome,telefone,profissao,hobby,status,indicado_por_telefone,indicado_por_nome,created_at').order('created_at', { ascending: false }),
-        fetch('/api/admin/ana-calls').then(r => r.json()).catch(() => []),
+        fetch('/api/admin/ana-calls?active=true').then(r => r.json()).catch(() => []),
       ])
 
       const leads: Lead[] = leadsRes.data ?? []

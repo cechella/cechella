@@ -23,10 +23,20 @@ export async function upsertCall(callSid: string, telefone: string) {
   const norm = telefone.startsWith('55') ? telefone : `55${telefone}`
   const { data } = await supabase
     .from('ana_calls')
-    .upsert({ call_sid: callSid, telefone: norm, stage: 'apresentacao', status: 'active', gates_passed: [], memories: {} }, { onConflict: 'call_sid' })
+    .upsert(
+      { call_sid: callSid, telefone: norm, stage: 'apresentacao', status: 'active', gates_passed: [], memories: {}, em_ligacao: true },
+      { onConflict: 'call_sid' }
+    )
     .select()
     .single()
   return data as AnaCall | null
+}
+
+export async function endCall(callSid: string) {
+  await supabase
+    .from('ana_calls')
+    .update({ em_ligacao: false, updated_at: new Date().toISOString() })
+    .eq('call_sid', callSid)
 }
 
 export async function getCallStage(callSid: string): Promise<string | null> {

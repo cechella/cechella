@@ -12,14 +12,16 @@ export async function GET(req: NextRequest) {
   )
 
   const status = req.nextUrl.searchParams.get('status')
+  const active = req.nextUrl.searchParams.get('active')
 
   let query = supabase
     .from('ana_calls')
-    .select('id, call_sid, telefone, stage, status, gates_passed, memories, created_at, updated_at')
+    .select('id, call_sid, telefone, stage, status, gates_passed, memories, created_at, updated_at, em_ligacao')
     .order('created_at', { ascending: false })
     .limit(50)
 
   if (status) query = query.eq('status', status)
+  if (active === 'true') query = query.eq('em_ligacao', true)
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

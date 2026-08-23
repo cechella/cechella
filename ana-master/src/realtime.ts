@@ -3,7 +3,7 @@ import { TwilioRealtimeTransportLayer } from '@openai/agents-extensions'
 import { OPENAI_API_KEY, REALTIME_DEFAULTS } from './config.js'
 import { ANA_BASE_PROMPT } from './state-machine.js'
 import { buildTools, SessionRef } from './tools/index.js'
-import { upsertCall, saveMemory, appendTranscript, updateCallStage, supabase } from './supabase.js'
+import { upsertCall, saveMemory, appendTranscript, updateCallStage, endCall, supabase } from './supabase.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
 import { initialSpeechProgress, classifyLeadTurn, getPartInstruction, LeadTurnDisposition } from './speech-progress.js'
 
@@ -118,7 +118,7 @@ function wrapTwilioWithPcmToMulaw(ws: any): any {
 // Passive stage detection from ANA's transcript — same patterns as the simulador client.
 // Runs server-side so it works for both PTL and WebRTC calls without touching gate logic.
 const STAGE_PATTERNS: Array<{ stage: string; patterns: RegExp[] }> = [
-  { stage: 'apresentacao', patterns: [/qual é o teu nome/i, /pra eu te chamar direitinho/i, /pode repetir teu nome/i] },
+  { stage: 'apresentacao', patterns: [/qual é o teu nome/i, /pra eu te chamar direitinho/i, /pode repetir (o )?teu nome/i] },
   { stage: 'conexao',      patterns: [/me conta um pouco de como é o teu dia a dia/i, /me conta como é o teu dia a dia/i] },
   { stage: 'combinado',    patterns: [/vamos fazer um combinad[ao]/i, /combinadinh[ao]/i] },
   { stage: 'speech',       patterns: [/pellet/i, /implante hormonal/i, /grão de arroz/i] },
@@ -265,7 +265,10 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
 
     if (msg?.event === 'stop') {
       if (DIAG) console.log(`[INBOUND TEST] CALL ENDED — total media_count=${mediaCount} total_bytes=${totalInboundBytes}`)
-      if (sessionRef.callSid !== 'unknown') pushCallEndedEvent(sessionRef.callSid)
+      if (sessionRef.callSid !== 'unknown') {
+        pushCallEndedEvent(sessionRef.callSid)
+        endCall(sessionRef.callSid).catch(() => {})
+      }
     }
   })
 

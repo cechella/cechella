@@ -23,7 +23,7 @@ interface Metrics {
 // ── Passive stage detection ───────────────────────────────────────────────────
 
 const STAGE_PATTERNS: { stage: string; label: string; pattern: RegExp }[] = [
-  { stage: 'abertura',     label: 'Abertura',     pattern: /qual é o teu nome|pra eu te chamar direitinho|pode repetir teu nome/i },
+  { stage: 'abertura',     label: 'Abertura',     pattern: /qual é o teu nome|pra eu te chamar direitinho|pode repetir (o )?teu nome/i },
   { stage: 'conexao',      label: 'Conexão',      pattern: /me conta um pouco de como é o teu dia a dia|me conta como é o teu dia a dia/i },
   { stage: 'combinado',    label: 'Combinado',    pattern: /vamos fazer um combinad[ao]|combinadinh[ao]/i },
   { stage: 'speech',       label: 'Speech',       pattern: /pellet|implante hormonal|grão de arroz/i },
