@@ -169,6 +169,7 @@ type AnaCallEnriched = {
   telefone: string
   stage: string
   nome: string | null
+  em_ligacao: boolean
   created_at: string
   updated_at: string
 }
@@ -223,6 +224,17 @@ export default function AdminDashboard() {
     setToastMsg(msg)
     if (toastTimer.current) clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToastMsg(null), 3000)
+  }
+
+  async function resolveCall(callSid: string) {
+    await fetch('/api/admin/ana-calls', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ call_sid: callSid, status: 'encerrado' }),
+    }).catch(() => {})
+    // Optimistic: reload pipeline
+    await load()
+    showToast('Lead marcado como resolvido ✓')
   }
 
   function assignLead(leadId: string, comercialId: string) {
@@ -862,11 +874,17 @@ export default function AdminDashboard() {
                                 {initials}
                               </div>
                               <div className="flex-1 min-w-0">
-                                <div className="text-xs font-semibold text-white truncate">{lead.nome ?? '(sem cadastro)'}</div>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs font-semibold text-white truncate">{lead.nome ?? '(sem cadastro)'}</span>
+                                  {lead.em_ligacao
+                                    ? <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 whitespace-nowrap">● ao vivo</span>
+                                    : <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-400 whitespace-nowrap">⏳ pendente</span>
+                                  }
+                                </div>
                                 <div className="text-[10px] text-[#52525B] font-mono">{lead.telefone}</div>
                               </div>
                               <div className="text-[10px] font-bold whitespace-nowrap" style={{ color: drawerStage.color }}>
-                                {minsAgo}min
+                                {minsAgo < 60 ? `${minsAgo}min` : `${Math.floor(minsAgo/60)}h`}
                               </div>
                             </div>
 
@@ -902,6 +920,12 @@ export default function AdminDashboard() {
                                 )
                               })}
                             </div>
+                            {/* Botão resolver */}
+                            <button
+                              onClick={() => resolveCall(lead.call_sid)}
+                              className="mt-1.5 w-full text-[10px] font-semibold py-1.5 rounded-lg border border-[#27272A] text-[#52525B] hover:border-red-500/30 hover:text-red-400 hover:bg-red-500/05 transition-all">
+                              Marcar como resolvido
+                            </button>
                           </div>
                         )
                       })}

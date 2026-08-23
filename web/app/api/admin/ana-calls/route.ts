@@ -4,6 +4,21 @@ import { createClient } from '@supabase/supabase-js'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
+export async function PATCH(req: NextRequest) {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+  const { call_sid, status } = await req.json()
+  const { error } = await supabase
+    .from('ana_calls')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('call_sid', call_sid)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
+}
+
 export async function GET(req: NextRequest) {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,7 +36,9 @@ export async function GET(req: NextRequest) {
     .limit(50)
 
   if (status) query = query.eq('status', status)
-  if (active === 'true') query = query.eq('em_ligacao', true)
+  // Pipeline mode: show all unresolved calls (active status), not just live ones.
+  // em_ligacao=true → ao vivo; em_ligacao=false + status=active → pendente (call ended, needs follow-up)
+  if (active === 'true') query = query.eq('status', 'active')
 
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
