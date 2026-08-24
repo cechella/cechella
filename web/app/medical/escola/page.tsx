@@ -94,6 +94,7 @@ export default function EscolaPage() {
         .from('training_modules')
         .select('*')
         .eq('published', true)
+        .eq('role', 'medical')
         .order('num')
 
       const { data: lessons, error: e2 } = await supabase

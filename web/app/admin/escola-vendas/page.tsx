@@ -94,6 +94,7 @@ export default function AdminEscolaVendasPage() {
         .from('training_modules')
         .select('*')
         .eq('published', true)
+        .eq('role', 'sales')
         .order('num')
 
       const { data: lessons, error: e2 } = await supabase
