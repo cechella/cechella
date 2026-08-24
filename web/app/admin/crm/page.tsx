@@ -323,7 +323,7 @@ export default function CRMPage() {
     setLigandoVoz(null)
   }
   // ANA PTL + Distribuir (referidos tab)
-  const [consultores, setConsultores] = useState<{id: string; name: string | null; whatsapp: string | null}[]>([])
+  const [consultores, setConsultores] = useState<{id: string; name: string | null; whatsapp: string | null; ativos: number; cor: string}[]>([])
   const [ligandoAnaPtlRef, setLigandoAnaPtlRef] = useState<string | null>(null)
   const [modalDistribuirRef, setModalDistribuirRef] = useState<ContatoReferido | null>(null)
   const [consultorSelecionadoRef, setConsultorSelecionadoRef] = useState<string>('')
@@ -367,8 +367,20 @@ export default function CRMPage() {
   useEffect(() => {
     carregarLeads()
     carregarReferidos()
-    supabase.from('comerciais').select('id, nome, telefone').eq('disponivel', true).then(({ data }) => {
-      if (data) setConsultores(data.map((c: any) => ({ id: c.id, name: c.nome, whatsapp: c.telefone })))
+    supabase.from('comerciais').select('id, nome, telefone').eq('disponivel', true).then(async ({ data }) => {
+      if (!data) return
+      const { data: ativosData } = await supabase
+        .from('contatos_referidos').select('assigned_comercial_id').not('assigned_comercial_id', 'is', null)
+      const ativosCount: Record<string, number> = {}
+      for (const r of (ativosData || [])) {
+        if (r.assigned_comercial_id) ativosCount[r.assigned_comercial_id] = (ativosCount[r.assigned_comercial_id] || 0) + 1
+      }
+      const COMM_COLORS = ['#7B3FE4','#06B6D4','#10B981','#F59E0B','#EF4444','#3B82F6','#EC4899']
+      setConsultores(data.map((c: any, i: number) => ({
+        id: c.id, name: c.nome, whatsapp: c.telefone,
+        ativos: ativosCount[c.id] || 0,
+        cor: COMM_COLORS[i % COMM_COLORS.length],
+      })))
     })
   }, [carregarLeads, carregarReferidos])
 
@@ -390,15 +402,9 @@ export default function CRMPage() {
     setLigandoAnaPtlRef(null)
   }
 
-  const distribuirRefConsultor = async () => {
-    if (!modalDistribuirRef || !consultorSelecionadoRef) return
-    const consultor = consultores.find(c => c.id === consultorSelecionadoRef)
-    if (!consultor) return
-    const ref = modalDistribuirRef
+  const distribuirRefConsultor = async (ref: ContatoReferido, consultor: typeof consultores[0]) => {
     setModalDistribuirRef(null)
-
-    await supabase.from('contatos_referidos').update({ assigned_comercial_id: consultorSelecionadoRef }).eq('id', ref.id)
-
+    await supabase.from('contatos_referidos').update({ assigned_comercial_id: consultor.id }).eq('id', ref.id)
     if (notificarWppRef && consultor.whatsapp) {
       const msg = `👥 *Lead para contato — Hormone Ecosystem*\n\n📋 *Nome:* ${ref.nome || '—'}\n📱 *Telefone:* ${ref.telefone || '—'}\n👤 *Indicado por:* ${ref.indicado_por_nome || '—'}\n💼 *Profissão:* ${ref.profissao || '—'}\n\n⚡ Entre em contato agora:\nhttps://wa.me/55${(ref.telefone || '').replace(/\D/g, '')}`
       try {
@@ -409,7 +415,6 @@ export default function CRMPage() {
         })
       } catch {}
     }
-
     setDistribuidoRefIds(prev => { const n = new Set(prev); n.add(ref.id); return n })
     showToast(`Distribuído para ${consultor.name || 'consultor'}!`)
   }
@@ -1272,37 +1277,33 @@ export default function CRMPage() {
               <div className="flex justify-between"><span className="text-[#71717A]">Profissão</span><span className="text-white">{modalDistribuirRef.profissao || '—'}</span></div>
             </div>
 
-            <div className="space-y-2">
-              <p className="text-xs text-[#71717A] font-medium">Selecionar Consultor</p>
-              {consultores.length === 0 ? (
-                <p className="text-xs text-[#52525B]">Nenhum consultor em profiles</p>
-              ) : (
-                <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                  {consultores.map(c => (
-                    <label key={c.id} className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${consultorSelecionadoRef === c.id ? 'border-[#7B3FE4]/50 bg-[#7B3FE4]/10' : 'border-[#1C1C1E] bg-[#18181A] hover:border-[#3F3F46]'}`}>
-                      <input type="radio" name="consultor-ref" value={c.id} checked={consultorSelecionadoRef === c.id} onChange={() => setConsultorSelecionadoRef(c.id)} className="accent-[#7B3FE4]" />
-                      <div>
-                        <p className="text-xs text-white font-medium">{c.name || c.id}</p>
-                        {c.whatsapp && <p className="text-[10px] text-[#71717A]">{c.whatsapp}</p>}
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
+            {consultores.length === 0 ? (
+              <p className="text-xs text-[#52525B] text-center py-4">Nenhum consultor disponível cadastrado</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {consultores.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => distribuirRefConsultor(modalDistribuirRef, c)}
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl border border-[#1C1C1E] bg-[#18181A] hover:border-[#7B3FE4]/50 hover:bg-[#7B3FE4]/5 transition-all"
+                  >
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white" style={{ background: c.cor }}>
+                      {(c.name || '?').split(' ').slice(0, 2).map((w: string) => w[0]).join('').toUpperCase() || '?'}
+                    </div>
+                    <p className="text-xs font-medium text-white truncate max-w-full">{(c.name || '?').split(' ')[0]}</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-[#71717A]">{c.ativos} ativos</span>
+                      <span className="w-2 h-2 rounded-full inline-block" style={{ background: c.ativos >= 10 ? '#EF4444' : '#10B981' }} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex items-center gap-2 cursor-pointer pt-1">
               <input type="checkbox" checked={notificarWppRef} onChange={e => setNotificarWppRef(e.target.checked)} className="accent-[#7B3FE4]" />
               <span className="text-xs text-[#A1A1AA]">Notificar consultor via WhatsApp</span>
             </label>
-
-            <div className="flex gap-2">
-              <button onClick={() => setModalDistribuirRef(null)} className="flex-1 px-4 py-2.5 text-sm text-[#71717A] hover:text-white border border-[#1C1C1E] rounded-xl transition-colors">Cancelar</button>
-              <button onClick={distribuirRefConsultor} disabled={!consultorSelecionadoRef}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#7B3FE4] hover:bg-[#6B2FD4] disabled:opacity-50 rounded-xl transition-colors">
-                Distribuir
-              </button>
-            </div>
           </div>
         </div>
       )}

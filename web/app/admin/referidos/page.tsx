@@ -37,6 +37,15 @@ interface Consultor {
   id: string
   name: string | null
   whatsapp: string | null
+  ativos: number
+  cor: string
+}
+
+const COMM_COLORS = ['#7B3FE4','#06B6D4','#10B981','#F59E0B','#EF4444','#3B82F6','#EC4899']
+
+function makeInitials(nome: string | null) {
+  if (!nome) return '?'
+  return nome.split(' ').slice(0, 2).map((w: string) => w[0]).join('').toUpperCase()
 }
 
 const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text'
@@ -226,7 +235,23 @@ export default function ReferidosPage() {
       .from('comerciais')
       .select('id, nome, telefone')
       .eq('disponivel', true)
-    if (profs) setConsultores(profs.map((c: any) => ({ id: c.id, name: c.nome, whatsapp: c.telefone })))
+
+    const { data: ativosData } = await supabase
+      .from('contatos_referidos')
+      .select('assigned_comercial_id')
+      .not('assigned_comercial_id', 'is', null)
+    const ativosCount: Record<string, number> = {}
+    for (const r of (ativosData || [])) {
+      if (r.assigned_comercial_id) ativosCount[r.assigned_comercial_id] = (ativosCount[r.assigned_comercial_id] || 0) + 1
+    }
+
+    if (profs) setConsultores(profs.map((c: any, i: number) => ({
+      id: c.id,
+      name: c.nome,
+      whatsapp: c.telefone,
+      ativos: ativosCount[c.id] || 0,
+      cor: COMM_COLORS[i % COMM_COLORS.length],
+    })))
 
     setLoading(false)
   }, [supabase])
@@ -413,16 +438,9 @@ export default function ReferidosPage() {
     setLigandoAnaPtl(null)
   }
 
-  const distribuirParaConsultor = async () => {
-    if (!modalDistribuir || !consultorSelecionado) return
-    const consultor = consultores.find(c => c.id === consultorSelecionado)
-    if (!consultor) return
-    const ref = modalDistribuir
+  const distribuirParaConsultor = async (ref: Referido, consultor: Consultor) => {
     setModalDistribuir(null)
-
-    // Persist assignment (requires assigned_comercial_id column on contatos_referidos)
-    await supabase.from('contatos_referidos').update({ assigned_comercial_id: consultorSelecionado }).eq('id', ref.id)
-
+    await supabase.from('contatos_referidos').update({ assigned_comercial_id: consultor.id }).eq('id', ref.id)
     if (notificarWpp && consultor.whatsapp) {
       const msg = `👥 *Lead para contato — Hormone Ecosystem*\n\n📋 *Nome:* ${ref.nome || '—'}\n📱 *Telefone:* ${ref.telefone || '—'}\n👤 *Indicado por:* ${ref.indicado_por_nome || '—'}\n💼 *Profissão:* ${ref.profissao || '—'}\n🎯 *Status:* ${ref.status}\n\n⚡ Entre em contato agora:\nhttps://wa.me/55${(ref.telefone || '').replace(/\D/g, '')}`
       try {
@@ -433,7 +451,6 @@ export default function ReferidosPage() {
         })
       } catch {}
     }
-
     setDistribuidoIds(prev => { const n = new Set(prev); n.add(ref.id); return n })
     showToast(`Distribuído para ${consultor.name || 'consultor'}!`)
   }
@@ -1236,37 +1253,33 @@ export default function ReferidosPage() {
               <div className="flex justify-between"><span className="text-[#71717A]">Indicado por</span><span className="text-white">{modalDistribuir.indicado_por_nome || '—'}</span></div>
             </div>
 
-            <div className="space-y-2">
-              <p className="text-xs text-[#71717A] font-medium">Selecionar Consultor</p>
-              {consultores.length === 0 ? (
-                <p className="text-xs text-[#52525B]">Nenhum consultor cadastrado em profiles</p>
-              ) : (
-                <div className="space-y-1.5 max-h-40 overflow-y-auto">
-                  {consultores.map(c => (
-                    <label key={c.id} className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${consultorSelecionado === c.id ? 'border-[#7B3FE4]/50 bg-[#7B3FE4]/10' : 'border-[#1C1C1E] bg-[#18181A] hover:border-[#3F3F46]'}`}>
-                      <input type="radio" name="consultor" value={c.id} checked={consultorSelecionado === c.id} onChange={() => setConsultorSelecionado(c.id)} className="accent-[#7B3FE4]" />
-                      <div>
-                        <p className="text-xs text-white font-medium">{c.name || c.id}</p>
-                        {c.whatsapp && <p className="text-[10px] text-[#71717A]">{c.whatsapp}</p>}
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              )}
-            </div>
+            {consultores.length === 0 ? (
+              <p className="text-xs text-[#52525B] text-center py-4">Nenhum consultor disponível cadastrado</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2">
+                {consultores.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => distribuirParaConsultor(modalDistribuir, c)}
+                    className="flex flex-col items-center gap-2 p-3 rounded-xl border border-[#1C1C1E] bg-[#18181A] hover:border-[#7B3FE4]/50 hover:bg-[#7B3FE4]/5 transition-all"
+                  >
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white" style={{ background: c.cor }}>
+                      {makeInitials(c.name)}
+                    </div>
+                    <p className="text-xs font-medium text-white truncate max-w-full">{(c.name || '?').split(' ')[0]}</p>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-[#71717A]">{c.ativos} ativos</span>
+                      <span className="w-2 h-2 rounded-full inline-block" style={{ background: c.ativos >= 10 ? '#EF4444' : '#10B981' }} />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex items-center gap-2 cursor-pointer pt-1">
               <input type="checkbox" checked={notificarWpp} onChange={e => setNotificarWpp(e.target.checked)} className="accent-[#7B3FE4]" />
               <span className="text-xs text-[#A1A1AA]">Notificar consultor via WhatsApp</span>
             </label>
-
-            <div className="flex gap-2">
-              <button onClick={() => setModalDistribuir(null)} className="flex-1 px-4 py-2.5 text-sm text-[#71717A] hover:text-white border border-[#1C1C1E] rounded-xl transition-colors">Cancelar</button>
-              <button onClick={distribuirParaConsultor} disabled={!consultorSelecionado}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#7B3FE4] hover:bg-[#6B2FD4] disabled:opacity-50 rounded-xl transition-colors">
-                Distribuir
-              </button>
-            </div>
           </div>
         </div>
       )}
