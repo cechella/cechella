@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter, usePathname } from 'next/navigation'
+import SalesShell from '@/components/sales/SalesShell'
 
 let sb: ReturnType<typeof createBrowserClient> | null = null
 function getSupabase() {
@@ -17,25 +18,28 @@ export default function SalesLayout({ children }: { children: React.ReactNode })
   const [checking, setChecking] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
+  const isLogin = pathname === '/sales/login'
 
   useEffect(() => {
     const supabase = getSupabase()
     supabase.auth.getSession().then(({ data }: { data: { session: unknown } }) => {
-      if (!data.session && pathname !== '/sales/login') {
+      if (!data.session && !isLogin) {
         router.replace('/sales/login')
       } else {
         setChecking(false)
       }
     })
-  }, [pathname, router])
+  }, [pathname, router, isLogin])
 
-  if (checking && pathname !== '/sales/login') {
+  if (checking && !isLogin) {
     return (
-      <div className="min-h-screen bg-[#0A0A0B] flex items-center justify-center">
+      <div className="min-h-screen bg-[#09090B] flex items-center justify-center">
         <div className="w-6 h-6 border-2 border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
 
-  return <>{children}</>
+  if (isLogin) return <>{children}</>
+
+  return <SalesShell>{children}</SalesShell>
 }
