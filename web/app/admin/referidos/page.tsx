@@ -286,6 +286,15 @@ export default function ReferidosPage() {
   const [confirmarVozLote, setConfirmarVozLote] = useState<{ alvos: typeof referidos } | null>(null)
   const [copiandoLink, setCopiandoLink] = useState<string | null>(null)
 
+  // ANA PTL
+  const [ligandoAnaPtl, setLigandoAnaPtl] = useState<string | null>(null)
+
+  // Distribuir modal
+  const [modalDistribuir, setModalDistribuir] = useState<Referido | null>(null)
+  const [consultorSelecionado, setConsultorSelecionado] = useState<string>('')
+  const [notificarWpp, setNotificarWpp] = useState(true)
+  const [distribuidoIds, setDistribuidoIds] = useState<Set<string>>(new Set())
+
   const copiarLinkIndicacao = async (telefone: string | null, nome: string | null) => {
     if (!telefone) return
     const digits = telefone.replace(/\D/g, '')
@@ -384,6 +393,49 @@ export default function ReferidosPage() {
       showToast('Erro de conexão', 'err')
     }
     setAcionandoAna(null)
+  }
+
+  const ligarAnaPtl = async (ref: Referido) => {
+    if (!ref.telefone) return showToast('Sem telefone', 'err')
+    setLigandoAnaPtl(ref.id)
+    const tel = ref.telefone.replace(/\D/g, '')
+    try {
+      const res = await fetch('/api/admin/ana-master-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numero: tel, referidor: ref.indicado_por_nome || '', contexto: 'gold' }),
+      })
+      if (res.ok) showToast(`ANA PTL iniciada para ${ref.nome || ref.telefone}!`)
+      else showToast('Erro ao acionar ANA PTL', 'err')
+    } catch {
+      showToast('Erro de conexão', 'err')
+    }
+    setLigandoAnaPtl(null)
+  }
+
+  const distribuirParaConsultor = async () => {
+    if (!modalDistribuir || !consultorSelecionado) return
+    const consultor = consultores.find(c => c.id === consultorSelecionado)
+    if (!consultor) return
+    const ref = modalDistribuir
+    setModalDistribuir(null)
+
+    // Persist assignment (requires assigned_comercial_id column on contatos_referidos)
+    await supabase.from('contatos_referidos').update({ assigned_comercial_id: consultorSelecionado }).eq('id', ref.id)
+
+    if (notificarWpp && consultor.whatsapp) {
+      const msg = `👥 *Lead para contato — Hormone Ecosystem*\n\n📋 *Nome:* ${ref.nome || '—'}\n📱 *Telefone:* ${ref.telefone || '—'}\n👤 *Indicado por:* ${ref.indicado_por_nome || '—'}\n💼 *Profissão:* ${ref.profissao || '—'}\n🎯 *Status:* ${ref.status}\n\n⚡ Entre em contato agora:\nhttps://wa.me/55${(ref.telefone || '').replace(/\D/g, '')}`
+      try {
+        await fetch(ZAPI_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+          body: JSON.stringify({ phone: consultor.whatsapp, message: msg }),
+        })
+      } catch {}
+    }
+
+    setDistribuidoIds(prev => { const n = new Set(prev); n.add(ref.id); return n })
+    showToast(`Distribuído para ${consultor.name || 'consultor'}!`)
   }
 
   const iniciarVozLote = () => {
@@ -1080,13 +1132,25 @@ export default function ReferidosPage() {
                                       {acionandoAna === ref.id ? '...' : 'Mensagem'}
                                     </button>
                                   )}
-                                  {/* Acionar Ana — Voz */}
+                                  {/* ANA PTL */}
+                                  {ref.telefone && (
+                                    <button
+                                      onClick={() => ligarAnaPtl(ref)}
+                                      disabled={ligandoAnaPtl === ref.id}
+                                      className="flex items-center gap-1 text-xs px-2 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 rounded-lg transition-colors disabled:opacity-50"
+                                      title="ANA PTL — Ligação de voz automatizada"
+                                    >
+                                      <PhoneCall className="w-3 h-3" />
+                                      {ligandoAnaPtl === ref.id ? 'Ligando…' : 'ANA ▶'}
+                                    </button>
+                                  )}
+                                  {/* Ligar Voz (VAPI) */}
                                   {ref.telefone && (
                                     <button
                                       onClick={() => ligarVoz(ref.telefone!, ref.id)}
                                       disabled={ligandoVoz === ref.id}
                                       className="flex items-center gap-1 text-xs px-2 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
-                                      title="Ligar via Ana Voz"
+                                      title="Ligar via VAPI"
                                     >
                                       <PhoneCall className="w-3 h-3" />
                                       {ligandoVoz === ref.id ? '...' : 'Ligar Voz'}
@@ -1114,13 +1178,16 @@ export default function ReferidosPage() {
                                   )}
                                   {/* Distribuir consultor */}
                                   <button
-                                    onClick={() => notificarConsultor(ref)}
-                                    disabled={notificando === ref.id}
-                                    className="flex items-center gap-1 text-xs px-2 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 rounded-lg transition-colors disabled:opacity-50"
+                                    onClick={() => { setConsultorSelecionado(''); setNotificarWpp(true); setModalDistribuir(ref) }}
+                                    className={`flex items-center gap-1 text-xs px-2 py-1.5 rounded-lg transition-colors border ${
+                                      distribuidoIds.has(ref.id)
+                                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                        : 'bg-[#7B3FE4]/20 hover:bg-[#7B3FE4]/30 text-[#A78BFA] border-[#7B3FE4]/30'
+                                    }`}
                                     title="Distribuir para consultor"
                                   >
                                     <UserCheck className="w-3 h-3" />
-                                    {notificando === ref.id ? '...' : 'Distribuir'}
+                                    {distribuidoIds.has(ref.id) ? 'Distribuído ✓' : 'Distribuir'}
                                   </button>
 
                                   {/* Copiar link de indicação */}
@@ -1148,6 +1215,61 @@ export default function ReferidosPage() {
 
         </main>
       </div>
+
+      {/* Modal Distribuir */}
+      {modalDistribuir && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Distribuir para Consultor</h3>
+                <p className="text-xs text-[#71717A] mt-0.5">{modalDistribuir.nome || modalDistribuir.telefone}</p>
+              </div>
+              <button onClick={() => setModalDistribuir(null)} className="text-[#71717A] hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-[#18181A] rounded-xl p-3 space-y-1 text-xs">
+              <div className="flex justify-between"><span className="text-[#71717A]">Nome</span><span className="text-white">{modalDistribuir.nome || '—'}</span></div>
+              <div className="flex justify-between"><span className="text-[#71717A]">Telefone</span><span className="text-white font-mono">{modalDistribuir.telefone || '—'}</span></div>
+              <div className="flex justify-between"><span className="text-[#71717A]">Indicado por</span><span className="text-white">{modalDistribuir.indicado_por_nome || '—'}</span></div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs text-[#71717A] font-medium">Selecionar Consultor</p>
+              {consultores.length === 0 ? (
+                <p className="text-xs text-[#52525B]">Nenhum consultor cadastrado em profiles</p>
+              ) : (
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {consultores.map(c => (
+                    <label key={c.id} className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${consultorSelecionado === c.id ? 'border-[#7B3FE4]/50 bg-[#7B3FE4]/10' : 'border-[#1C1C1E] bg-[#18181A] hover:border-[#3F3F46]'}`}>
+                      <input type="radio" name="consultor" value={c.id} checked={consultorSelecionado === c.id} onChange={() => setConsultorSelecionado(c.id)} className="accent-[#7B3FE4]" />
+                      <div>
+                        <p className="text-xs text-white font-medium">{c.name || c.id}</p>
+                        {c.whatsapp && <p className="text-[10px] text-[#71717A]">{c.whatsapp}</p>}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={notificarWpp} onChange={e => setNotificarWpp(e.target.checked)} className="accent-[#7B3FE4]" />
+              <span className="text-xs text-[#A1A1AA]">Notificar consultor via WhatsApp</span>
+            </label>
+
+            <div className="flex gap-2">
+              <button onClick={() => setModalDistribuir(null)} className="flex-1 px-4 py-2.5 text-sm text-[#71717A] hover:text-white border border-[#1C1C1E] rounded-xl transition-colors">Cancelar</button>
+              <button onClick={distribuirParaConsultor} disabled={!consultorSelecionado}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#7B3FE4] hover:bg-[#6B2FD4] disabled:opacity-50 rounded-xl transition-colors">
+                Distribuir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal confirmação voz em lote */}
       {confirmarVozLote && (

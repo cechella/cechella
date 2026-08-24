@@ -322,6 +322,20 @@ export default function CRMPage() {
     } catch {}
     setLigandoVoz(null)
   }
+  // ANA PTL + Distribuir (referidos tab)
+  const [consultores, setConsultores] = useState<{id: string; name: string | null; whatsapp: string | null}[]>([])
+  const [ligandoAnaPtlRef, setLigandoAnaPtlRef] = useState<string | null>(null)
+  const [modalDistribuirRef, setModalDistribuirRef] = useState<ContatoReferido | null>(null)
+  const [consultorSelecionadoRef, setConsultorSelecionadoRef] = useState<string>('')
+  const [notificarWppRef, setNotificarWppRef] = useState(true)
+  const [distribuidoRefIds, setDistribuidoRefIds] = useState<Set<string>>(new Set())
+  const [toastMsg, setToastMsg] = useState<{msg: string; ok: boolean} | null>(null)
+
+  const showToast = (msg: string, ok = true) => {
+    setToastMsg({ msg, ok })
+    setTimeout(() => setToastMsg(null), 3000)
+  }
+
   const [filtroOrigem, setFiltroOrigem] = useState<string>('todas')
   const [filtroStatus, setFiltroStatus] = useState<StatusLead | 'todos'>('todos')
   const [menuAberto, setMenuAberto] = useState<string | null>(null)
@@ -353,7 +367,52 @@ export default function CRMPage() {
   useEffect(() => {
     carregarLeads()
     carregarReferidos()
+    supabase.from('profiles').select('id, name, whatsapp').eq('role', 'sales').then(({ data }) => {
+      if (data) setConsultores(data as typeof consultores)
+    })
   }, [carregarLeads, carregarReferidos])
+
+  const ligarAnaPtlRef = async (ref: ContatoReferido) => {
+    if (!ref.telefone) return showToast('Sem telefone', false)
+    setLigandoAnaPtlRef(ref.id)
+    const tel = ref.telefone.replace(/\D/g, '')
+    try {
+      const res = await fetch('/api/admin/ana-master-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numero: tel, referidor: ref.indicado_por_nome || '', contexto: 'gold' }),
+      })
+      if (res.ok) showToast(`ANA PTL iniciada para ${ref.nome || ref.telefone}!`)
+      else showToast('Erro ao acionar ANA PTL', false)
+    } catch {
+      showToast('Erro de conexão', false)
+    }
+    setLigandoAnaPtlRef(null)
+  }
+
+  const distribuirRefConsultor = async () => {
+    if (!modalDistribuirRef || !consultorSelecionadoRef) return
+    const consultor = consultores.find(c => c.id === consultorSelecionadoRef)
+    if (!consultor) return
+    const ref = modalDistribuirRef
+    setModalDistribuirRef(null)
+
+    await supabase.from('contatos_referidos').update({ assigned_comercial_id: consultorSelecionadoRef }).eq('id', ref.id)
+
+    if (notificarWppRef && consultor.whatsapp) {
+      const msg = `👥 *Lead para contato — Hormone Ecosystem*\n\n📋 *Nome:* ${ref.nome || '—'}\n📱 *Telefone:* ${ref.telefone || '—'}\n👤 *Indicado por:* ${ref.indicado_por_nome || '—'}\n💼 *Profissão:* ${ref.profissao || '—'}\n\n⚡ Entre em contato agora:\nhttps://wa.me/55${(ref.telefone || '').replace(/\D/g, '')}`
+      try {
+        await fetch(ZAPI_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
+          body: JSON.stringify({ phone: consultor.whatsapp, message: msg }),
+        })
+      } catch {}
+    }
+
+    setDistribuidoRefIds(prev => { const n = new Set(prev); n.add(ref.id); return n })
+    showToast(`Distribuído para ${consultor.name || 'consultor'}!`)
+  }
 
   const leadsFiltrados = leads.filter(l => {
     const matchSearch = (l.nome || '').toLowerCase().includes(search.toLowerCase()) ||
@@ -921,6 +980,27 @@ export default function CRMPage() {
                               <td className="px-4 py-4">
                                 <div className="flex items-center gap-1">
                                   {ref.telefone && (
+                                    <button
+                                      onClick={() => ligarAnaPtlRef(ref)}
+                                      disabled={ligandoAnaPtlRef === ref.id}
+                                      className="flex items-center gap-1 text-xs px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 rounded-lg transition-colors disabled:opacity-50"
+                                      title="ANA PTL — ligação automatizada"
+                                    >
+                                      <PhoneCall className="w-3 h-3" />
+                                      {ligandoAnaPtlRef === ref.id ? 'Ligando…' : 'ANA ▶'}
+                                    </button>
+                                  )}
+                                  {ref.telefone && (
+                                    <button
+                                      onClick={() => ligarVoz(ref.telefone!, ref.id)}
+                                      disabled={ligandoVoz === ref.id}
+                                      className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors disabled:opacity-50"
+                                      title="Ligar via VAPI"
+                                    >
+                                      <PhoneCall className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                  {ref.telefone && (
                                     <a
                                       href={`https://wa.me/55${ref.telefone.replace(/\D/g, '')}`}
                                       target="_blank"
@@ -931,16 +1011,17 @@ export default function CRMPage() {
                                       <Phone className="w-4 h-4" />
                                     </a>
                                   )}
-                                  {ref.telefone && (
-                                    <button
-                                      onClick={() => ligarVoz(ref.telefone!, ref.id)}
-                                      disabled={ligandoVoz === ref.id}
-                                      className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors disabled:opacity-50"
-                                      title="Ligar via Ana Voz"
-                                    >
-                                      <PhoneCall className="w-4 h-4" />
-                                    </button>
-                                  )}
+                                  <button
+                                    onClick={() => { setConsultorSelecionadoRef(''); setNotificarWppRef(true); setModalDistribuirRef(ref) }}
+                                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border transition-colors ${
+                                      distribuidoRefIds.has(ref.id)
+                                        ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+                                        : 'bg-[#7B3FE4]/20 hover:bg-[#7B3FE4]/30 text-[#A78BFA] border-[#7B3FE4]/30'
+                                    }`}
+                                    title="Distribuir para consultor"
+                                  >
+                                    {distribuidoRefIds.has(ref.id) ? '✓' : 'Distribuir'}
+                                  </button>
                                 </div>
                               </td>
                             </tr>
@@ -1160,6 +1241,68 @@ export default function CRMPage() {
               className="w-full bg-[#7B3FE4] hover:bg-[#6B2FD4] disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium transition-colors">
               {salvando ? 'Salvando...' : 'Criar Lead'}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast */}
+      {toastMsg && (
+        <div className={`fixed top-5 right-5 z-[60] px-4 py-3 rounded-xl text-sm font-medium shadow-lg border transition-all ${toastMsg.ok ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-red-500/20 text-red-300 border-red-500/30'}`}>
+          {toastMsg.msg}
+        </div>
+      )}
+
+      {/* Modal Distribuir referido */}
+      {modalDistribuirRef && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl w-full max-w-sm p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-semibold text-white">Distribuir para Consultor</h3>
+                <p className="text-xs text-[#71717A] mt-0.5">{modalDistribuirRef.nome || modalDistribuirRef.telefone}</p>
+              </div>
+              <button onClick={() => setModalDistribuirRef(null)} className="text-[#71717A] hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-[#18181A] rounded-xl p-3 space-y-1 text-xs">
+              <div className="flex justify-between"><span className="text-[#71717A]">Telefone</span><span className="text-white font-mono">{modalDistribuirRef.telefone || '—'}</span></div>
+              <div className="flex justify-between"><span className="text-[#71717A]">Indicado por</span><span className="text-white">{modalDistribuirRef.indicado_por_nome || '—'}</span></div>
+              <div className="flex justify-between"><span className="text-[#71717A]">Profissão</span><span className="text-white">{modalDistribuirRef.profissao || '—'}</span></div>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs text-[#71717A] font-medium">Selecionar Consultor</p>
+              {consultores.length === 0 ? (
+                <p className="text-xs text-[#52525B]">Nenhum consultor em profiles</p>
+              ) : (
+                <div className="space-y-1.5 max-h-40 overflow-y-auto">
+                  {consultores.map(c => (
+                    <label key={c.id} className={`flex items-center gap-3 p-2.5 rounded-xl border cursor-pointer transition-all ${consultorSelecionadoRef === c.id ? 'border-[#7B3FE4]/50 bg-[#7B3FE4]/10' : 'border-[#1C1C1E] bg-[#18181A] hover:border-[#3F3F46]'}`}>
+                      <input type="radio" name="consultor-ref" value={c.id} checked={consultorSelecionadoRef === c.id} onChange={() => setConsultorSelecionadoRef(c.id)} className="accent-[#7B3FE4]" />
+                      <div>
+                        <p className="text-xs text-white font-medium">{c.name || c.id}</p>
+                        {c.whatsapp && <p className="text-[10px] text-[#71717A]">{c.whatsapp}</p>}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={notificarWppRef} onChange={e => setNotificarWppRef(e.target.checked)} className="accent-[#7B3FE4]" />
+              <span className="text-xs text-[#A1A1AA]">Notificar consultor via WhatsApp</span>
+            </label>
+
+            <div className="flex gap-2">
+              <button onClick={() => setModalDistribuirRef(null)} className="flex-1 px-4 py-2.5 text-sm text-[#71717A] hover:text-white border border-[#1C1C1E] rounded-xl transition-colors">Cancelar</button>
+              <button onClick={distribuirRefConsultor} disabled={!consultorSelecionadoRef}
+                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-[#7B3FE4] hover:bg-[#6B2FD4] disabled:opacity-50 rounded-xl transition-colors">
+                Distribuir
+              </button>
+            </div>
           </div>
         </div>
       )}
