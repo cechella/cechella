@@ -40,6 +40,7 @@ const COLOR_OPTIONS = [
 ]
 
 export default function TreinamentoPage() {
+  const [activeRole, setActiveRole] = useState<'medical' | 'sales'>('medical')
   const [modules, setModules] = useState<Module[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -53,7 +54,7 @@ export default function TreinamentoPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  useEffect(() => { load() }, []) // eslint-disable-line
+  useEffect(() => { load() }, [activeRole]) // eslint-disable-line
 
   async function load() {
     setLoading(true)
@@ -62,6 +63,7 @@ export default function TreinamentoPage() {
       const { data: mods, error: e1 } = await supabase
         .from('training_modules')
         .select('*')
+        .eq('role', activeRole)
         .order('num')
       if (e1) throw e1
 
@@ -89,7 +91,7 @@ export default function TreinamentoPage() {
     try {
       const { data, error: e } = await supabase
         .from('training_modules')
-        .insert({ num, title: `Módulo ${num}`, subtitle: '', color: COLOR_OPTIONS[0].value, unlocked: true, published: false })
+        .insert({ num, title: `Módulo ${num}`, subtitle: '', color: COLOR_OPTIONS[0].value, unlocked: true, published: false, role: activeRole })
         .select()
         .single()
       if (e) throw e
@@ -193,7 +195,7 @@ export default function TreinamentoPage() {
   const totalLessons = modules.reduce((acc, m) => acc + (m.lessons?.length ?? 0), 0)
   const publishedModules = modules.filter((m) => m.published).length
 
-  if (loading) {
+  if (loading && modules.length === 0) {
     return (
       <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
         <Sidebar role="admin" />
@@ -208,9 +210,36 @@ export default function TreinamentoPage() {
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
       <Sidebar role="admin" />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <TopBar user={{ name: 'Admin', role: 'admin' }} title="Ger. Treinamento" />
+        <TopBar user={{ name: 'Admin', role: 'admin' }} title="Gerenciar Treinamento" />
         <main className="flex-1 overflow-y-auto px-6 py-6">
           <div className="max-w-3xl space-y-5">
+
+            {/* Role tabs */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setActiveRole('medical'); setEditingModule(null); setEditingLesson(null) }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${activeRole === 'medical' ? 'bg-[#7B3FE4] text-white' : 'bg-[#111113] text-[#71717A] border border-[#1C1C1E] hover:text-white'}`}
+              >
+                <GraduationCap className="w-4 h-4" />
+                Escola de Negócios — Médico
+              </button>
+              <button
+                onClick={() => { setActiveRole('sales'); setEditingModule(null); setEditingLesson(null) }}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${activeRole === 'sales' ? 'bg-[#7B3FE4] text-white' : 'bg-[#111113] text-[#71717A] border border-[#1C1C1E] hover:text-white'}`}
+              >
+                <GraduationCap className="w-4 h-4" />
+                Escola de Vendas — Consultor
+              </button>
+              <a
+                href={activeRole === 'medical' ? '/admin/escola' : '/admin/escola-vendas'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs text-[#71717A] border border-[#1C1C1E] hover:text-white hover:border-[#7B3FE4]/40 transition-all"
+              >
+                <Eye className="w-3.5 h-3.5" />
+                Preview
+              </a>
+            </div>
 
             {/* Header stats */}
             <div className="grid grid-cols-3 gap-4">

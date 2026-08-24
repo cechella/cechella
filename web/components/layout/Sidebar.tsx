@@ -102,40 +102,45 @@ const adminNav: NavSection[] = [
     ],
   },
   {
+    section: 'Gerenciar Conteúdo',
+    items: [
+      { label: 'Treinamento', href: '/admin/treinamento', icon: <GraduationCap className="w-5 h-5" /> },
+      { label: 'Vídeos',      href: '/admin/videos',      icon: <Play className="w-5 h-5" /> },
+    ],
+  },
+  {
     section: 'Área do Médico',
     items: [
-      { label: 'Treinamento', href: '/admin/escola',     icon: <GraduationCap className="w-5 h-5" /> },
-      { label: 'Pacientes',   href: '/admin/pacientes',  icon: <HeartPulse className="w-5 h-5" /> },
-      { label: 'Referidos',   href: '/admin/referidos',  icon: <Share2 className="w-5 h-5" /> },
-      { label: 'Assinatura',  href: '/admin/assinaturas',icon: <BadgeCheck className="w-5 h-5" /> },
-      { label: 'Agente IA',   href: '/admin/agente',     icon: <Bot className="w-5 h-5" /> },
+      { label: 'Preview Escola', href: '/admin/escola',      icon: <Eye className="w-5 h-5" /> },
+      { label: 'Pacientes',      href: '/admin/pacientes',   icon: <HeartPulse className="w-5 h-5" /> },
+      { label: 'Referidos',      href: '/admin/referidos',   icon: <Share2 className="w-5 h-5" /> },
+      { label: 'Assinatura',     href: '/admin/assinaturas', icon: <BadgeCheck className="w-5 h-5" /> },
+      { label: 'Agente IA',      href: '/admin/agente',      icon: <Bot className="w-5 h-5" /> },
     ],
   },
   {
     section: 'Área do Consultor',
     items: [
-      { label: 'Treinamento', href: '/admin/escola-vendas', icon: <GraduationCap className="w-5 h-5" /> },
-      { label: 'Consultores', href: '/admin/comerciais',    icon: <Briefcase className="w-5 h-5" /> },
-      { label: 'Ranking',     href: '/admin/ranking',       icon: <Trophy className="w-5 h-5" /> },
+      { label: 'Preview Escola', href: '/admin/escola-vendas', icon: <Eye className="w-5 h-5" /> },
+      { label: 'Consultores',    href: '/admin/comerciais',    icon: <Briefcase className="w-5 h-5" /> },
+      { label: 'Ranking',        href: '/admin/ranking',       icon: <Trophy className="w-5 h-5" /> },
     ],
   },
   {
     section: 'Área do Paciente',
     items: [
-      { label: 'Vídeos',              href: '/admin/videos',   icon: <Play className="w-5 h-5" /> },
-      { label: 'Evidência Científica',href: '/admin/evidencia',icon: <Eye className="w-5 h-5" /> },
-      { label: 'Assinaturas',         href: '/admin/assinaturas',icon: <CreditCard className="w-5 h-5" /> },
+      { label: 'Evidência Científica', href: '/admin/evidencia',   icon: <Eye className="w-5 h-5" /> },
+      { label: 'Assinaturas',          href: '/admin/assinaturas', icon: <CreditCard className="w-5 h-5" /> },
     ],
   },
   {
     section: 'Configurar',
     items: [
-      { label: 'Ger. Treinamento', href: '/admin/treinamento',      icon: <Wrench className="w-5 h-5" /> },
-      { label: 'Produtos',         href: '/admin/produtos',         icon: <Package className="w-5 h-5" /> },
-      { label: 'Configurações',    href: '/admin/configuracoes',    icon: <Settings className="w-5 h-5" /> },
-      { label: 'Sistema',          href: '/admin/sistema',          icon: <RefreshCw className="w-5 h-5" /> },
-      { label: 'Teste',            href: '/admin/teste',            icon: <TestTube2 className="w-5 h-5" /> },
-      { label: 'Agente voz test',  href: '/admin/voz-test',        icon: <PhoneCall className="w-5 h-5" /> },
+      { label: 'Produtos',      href: '/admin/produtos',      icon: <Package className="w-5 h-5" /> },
+      { label: 'Configurações', href: '/admin/configuracoes', icon: <Settings className="w-5 h-5" /> },
+      { label: 'Sistema',       href: '/admin/sistema',       icon: <RefreshCw className="w-5 h-5" /> },
+      { label: 'Teste',         href: '/admin/teste',         icon: <TestTube2 className="w-5 h-5" /> },
+      { label: 'Agente voz test', href: '/admin/voz-test',   icon: <PhoneCall className="w-5 h-5" /> },
     ],
   },
 ]
