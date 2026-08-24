@@ -93,6 +93,8 @@ const adminNav: NavSection[] = [
       { label: 'Dashboard',     href: '/admin/dashboard',      icon: <LayoutDashboard className="w-5 h-5" /> },
       { label: 'Financeiro',    href: '/admin/financeiro',     icon: <DollarSign className="w-5 h-5" /> },
       { label: 'CRM',           href: '/admin/crm',            icon: <Kanban className="w-5 h-5" /> },
+      { label: 'Referidos',     href: '/admin/referidos',      icon: <Share2 className="w-5 h-5" /> },
+      { label: 'Agente IA',     href: '/admin/agente',         icon: <Bot className="w-5 h-5" /> },
       { label: 'Analytics',     href: '/admin/analytics',      icon: <BarChart3 className="w-5 h-5" /> },
       { label: 'Rede',          href: '/admin/rede',           icon: <Network className="w-5 h-5" /> },
       { label: 'Resultados',    href: '/admin/resultados',     icon: <TrendingUp className="w-5 h-5" /> },
@@ -113,9 +115,7 @@ const adminNav: NavSection[] = [
     items: [
       { label: 'Preview Escola', href: '/admin/escola',      icon: <Eye className="w-5 h-5" /> },
       { label: 'Pacientes',      href: '/admin/pacientes',   icon: <HeartPulse className="w-5 h-5" /> },
-      { label: 'Referidos',      href: '/admin/referidos',   icon: <Share2 className="w-5 h-5" /> },
       { label: 'Assinatura',     href: '/admin/assinaturas', icon: <BadgeCheck className="w-5 h-5" /> },
-      { label: 'Agente IA',      href: '/admin/agente',      icon: <Bot className="w-5 h-5" /> },
     ],
   },
   {
