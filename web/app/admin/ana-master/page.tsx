@@ -74,7 +74,7 @@ interface AnaCall {
   gates_passed: string[]; memories: Record<string, unknown>; created_at: string; updated_at: string
 }
 
-type Tab = 'central' | 'dna' | 'recovery' | 'simulacoes' | 'gold' | 'anti-gold' | 'scorecard' | 'matriz' | 'changelog' | 'disparar' | 'ligacoes' | 'monitor' | 'script' | 'config' | 'voz' | 'simulador' | 'sessoes'
+type Tab = 'simulador' | 'sessoes' | 'ligacoes'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -3542,29 +3542,15 @@ function SessoesInlineTab() {
 // ─── TABS CONFIG ──────────────────────────────────────────────────────────────
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] = [
-  { id: 'central',    label: 'Central',       icon: <Sparkles style={{ width: 12, height: 12 }} />,  color: C.purple },
-  { id: 'simulador',  label: '🎙️ Simulador',  icon: <span style={{ fontSize: 12 }}>🎙️</span>,        color: '#A78BFA' },
-  { id: 'sessoes',    label: 'Sessões',       icon: <span style={{ fontSize: 12 }}>▶</span>,          color: '#38BDF8' },
-  { id: 'ligacoes',   label: 'Ligações',      icon: <span style={{ fontSize: 12 }}>📞</span>,        color: '#38BDF8' },
-  { id: 'monitor',    label: 'Live Monitor',  icon: <span style={{ fontSize: 12 }}>🔴</span>,        color: '#EF4444' },
-  { id: 'disparar',   label: '⚡ Disparar',   icon: <Zap style={{ width: 12, height: 12 }} />,       color: '#38BDF8' },
-  { id: 'script',     label: 'Script',        icon: <BookOpen style={{ width: 12, height: 12 }} />,  color: '#F59E0B' },
-  { id: 'config',     label: 'Realtime Config', icon: <span style={{ fontSize: 12 }}>⚙️</span>,      color: '#10B981' },
-  { id: 'voz',        label: '🎙️ Voz',        icon: <span style={{ fontSize: 12 }}>🎙️</span>,        color: '#A78BFA' },
-  { id: 'dna',        label: 'DNA v1',        icon: <span style={{ fontSize: 12 }}>🧬</span>,        color: '#A855F7' },
-  { id: 'recovery',   label: 'Recovery',      icon: <span style={{ fontSize: 12 }}>🛡️</span>,        color: '#6366F1' },
-  { id: 'simulacoes', label: 'Simulações',    icon: <Brain style={{ width: 12, height: 12 }} />,     color: C.purple },
-  { id: 'gold',       label: 'Gold ✦',        icon: <Star style={{ width: 12, height: 12 }} />,      color: C.gold },
-  { id: 'anti-gold',  label: 'Anti-Gold',     icon: <XCircle style={{ width: 12, height: 12 }} />,   color: C.red },
-  { id: 'scorecard',  label: 'Scorecard',     icon: <BarChart3 style={{ width: 12, height: 12 }} />, color: C.green },
-  { id: 'matriz',     label: 'Matriz',        icon: <Grid3X3 style={{ width: 12, height: 12 }} />,   color: C.blue },
-  { id: 'changelog',  label: 'Changelog',     icon: <Clock style={{ width: 12, height: 12 }} />,     color: C.textMuted },
+  { id: 'simulador', label: '🎙️ Simulador', icon: <span style={{ fontSize: 12 }}>🎙️</span>, color: '#A78BFA' },
+  { id: 'sessoes',   label: 'Sessões',      icon: <span style={{ fontSize: 12 }}>▶</span>,  color: '#38BDF8' },
+  { id: 'ligacoes',  label: 'Ligações',     icon: <span style={{ fontSize: 12 }}>📞</span>, color: '#38BDF8' },
 ]
 
 // ─── MAIN PAGE ────────────────────────────────────────────────────────────────
 
 export default function AnaMasterPage() {
-  const [tab, setTab] = useState<Tab>('central')
+  const [tab, setTab] = useState<Tab>('simulador')
   const [simMode, setSimMode] = useState<'controller' | 'gold'>('controller')
   const [simConfigOpen, setSimConfigOpen] = useState(true)
   const [sims, setSims] = useState<Simulacao[]>([])
@@ -3592,10 +3578,7 @@ export default function AnaMasterPage() {
 
   useEffect(() => { refresh() }, [refresh])
 
-  const counts: Partial<Record<Tab, number>> = {
-    simulacoes: sims.length, gold: gold.length, 'anti-gold': antiGold.length,
-    scorecard: scorecard.length, matriz: matriz.length, changelog: changelog.length,
-  }
+  const counts: Partial<Record<Tab, number>> = {}
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: C.bg, overflow: 'hidden' }}>
@@ -3649,15 +3632,8 @@ export default function AnaMasterPage() {
             </div>
           ) : (
             <>
-              {tab === 'ligacoes'   && <LigacoesTab />}
-              {tab === 'monitor'    && <LiveMonitorTab />}
-              {tab === 'disparar'   && <DispararTab />}
-              {tab === 'script'     && <ScriptTab />}
-              {tab === 'config'     && <RealtimeConfigTab />}
-              {tab === 'voz'       && <VozTab />}
-              {tab === 'central'    && <CentralTab sims={sims} gold={gold} antiGold={antiGold} scorecard={scorecard} matriz={matriz} changelog={changelog} />}
-              {tab === 'dna'        && <DnaTab />}
-              {tab === 'simulador'  && (
+              {tab === 'ligacoes'  && <LigacoesTab />}
+              {tab === 'simulador' && (
                 <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 120px)' }}>
                   {/* toolbar */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderBottom: '1px solid #27272A', background: '#09090B', flexShrink: 0 }}>
@@ -3701,14 +3677,7 @@ export default function AnaMasterPage() {
                   </div>
                 </div>
               )}
-              {tab === 'sessoes'    && <SessoesInlineTab />}
-              {tab === 'recovery'   && <RecoveryTab />}
-              {tab === 'simulacoes' && <SimulacoesTab sims={sims} gold={gold} antiGold={antiGold} scorecard={scorecard} onRefresh={refresh} />}
-              {tab === 'gold'       && <GoldTab items={gold} onRefresh={refresh} />}
-              {tab === 'anti-gold'  && <AntiGoldTab items={antiGold} onRefresh={refresh} />}
-              {tab === 'scorecard'  && <ScorecardTab entries={scorecard} sims={sims} onRefresh={refresh} />}
-              {tab === 'matriz'     && <MatrizTab items={matriz} onRefresh={refresh} />}
-              {tab === 'changelog'  && <ChangelogTab entries={changelog} onRefresh={refresh} />}
+              {tab === 'sessoes' && <SessoesInlineTab />}
             </>
           )}
         </div>
