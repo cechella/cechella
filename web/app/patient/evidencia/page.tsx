@@ -1,8 +1,10 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { ExternalLink, FlaskConical, BookOpen, TrendingUp, Shield, ChevronRight, Star, Users, Award, CheckCircle } from 'lucide-react'
+import { createBrowserClient } from '@supabase/ssr'
 
 const WHATSAPP_URL = 'https://wa.me/5547988507977?text=Ol%C3%A1!%20Vi%20os%20estudos%20cient%C3%ADficos%20e%20tenho%20interesse%20no%20implante%20hormonal.%20Pode%20me%20ajudar%3F'
 
@@ -122,6 +124,41 @@ const stats = [
 ]
 
 export default function EvidenciaPage() {
+  const [featured, setFeatured] = useState(featuredStudies)
+  const [world, setWorld] = useState(worldEvidence)
+
+  useEffect(() => {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    supabase
+      .from('site_content')
+      .select('key, value')
+      .in('key', ['evidencia_featured', 'evidencia_world'])
+      .then(({ data }) => {
+        if (!data) return
+        for (const row of data) {
+          if (row.key === 'evidencia_featured') {
+            // merge text overrides, keep visual props from defaults
+            setFeatured(prev => prev.map((s, i) => {
+              const ov = row.value[i]
+              if (!ov) return s
+              return { ...s, acronym: ov.acronym ?? s.acronym, title: ov.title ?? s.title, journal: ov.journal ?? s.journal, date: ov.date ?? s.date, doi: ov.doi ?? s.doi, authors: ov.authors ?? s.authors, type: ov.type ?? s.type, badge: ov.badge ?? s.badge, summary: ov.summary ?? s.summary, conclusion: ov.conclusion ?? s.conclusion }
+            }))
+          }
+          if (row.key === 'evidencia_world') {
+            setWorld(prev => prev.map((s, i) => {
+              const ov = row.value[i]
+              if (!ov) return s
+              return { ...s, title: ov.title ?? s.title, source: ov.source ?? s.source, year: ov.year ?? s.year, type: ov.type ?? s.type, finding: ov.finding ?? s.finding }
+            }))
+          }
+        }
+      })
+      .catch(() => {/* use defaults */})
+  }, [])
+
   return (
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
       <Sidebar role="patient" />
@@ -174,7 +211,7 @@ export default function EvidenciaPage() {
               </div>
 
               <div className="grid md:grid-cols-2 gap-6">
-                {featuredStudies.map((study) => (
+                {featured.map((study) => (
                   <div
                     key={study.acronym}
                     className={`relative bg-[#111113] border ${study.borderColor} rounded-3xl p-6 overflow-hidden`}
@@ -255,7 +292,7 @@ export default function EvidenciaPage() {
               </div>
 
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {worldEvidence.map((ev, i) => (
+                {world.map((ev, i) => (
                   <div key={i} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5 hover:border-[#2C2C2E] transition-colors">
                     <div className="flex items-start gap-3 mb-3">
                       <div className={`w-9 h-9 rounded-xl ${ev.bg} flex items-center justify-center flex-shrink-0`}>

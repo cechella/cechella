@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ChevronRight, Play, Star, Shield, Award, Users, ArrowRight, CheckCircle, Instagram, MessageCircle, Phone, Lock } from 'lucide-react'
 import Link from 'next/link'
+import { createBrowserClient } from '@supabase/ssr'
 
 const DEPOIMENTOS_VIDEO = [
   {
@@ -62,10 +63,37 @@ const WHATSAPP_MSG = encodeURIComponent('Olá! Vim pelo Instagram e quero saber 
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const formRef = useRef<HTMLDivElement>(null)
+  const [numeros, setNumeros] = useState(NUMEROS)
+  const [beneficios, setBeneficios] = useState(BENEFICIOS)
+  const [depoimentosTexto, setDepoimentosTexto] = useState(DEPOIMENTOS_TEXTO)
+  const [heroTitle, setHeroTitle] = useState('Recupere sua energia, libido e qualidade de vida')
+  const [heroSub, setHeroSub] = useState('Milhares de mulheres já transformaram sua saúde hormonal com implantes bioidenticos. Descubra como em menos de 30 minutos.')
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40)
     window.addEventListener('scroll', onScroll)
+    // Load content overrides from admin
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    supabase
+      .from('site_content')
+      .select('key, value')
+      .in('key', ['landing_numeros', 'landing_beneficios', 'landing_depoimentos', 'landing_hero'])
+      .then(({ data }) => {
+        if (!data) return
+        for (const row of data) {
+          if (row.key === 'landing_numeros') setNumeros(row.value)
+          if (row.key === 'landing_beneficios') setBeneficios(row.value)
+          if (row.key === 'landing_depoimentos') setDepoimentosTexto(row.value)
+          if (row.key === 'landing_hero') {
+            if (row.value.title) setHeroTitle(row.value.title)
+            if (row.value.subtitle) setHeroSub(row.value.subtitle)
+          }
+        }
+      })
+      .catch(() => {/* use defaults */})
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
@@ -113,17 +141,13 @@ export default function LandingPage() {
                 <span>Bem-vinda à sua transformação</span>
               </div>
               <h1 className="text-4xl md:text-6xl font-bold leading-[1.08] mb-6 tracking-tight">
-                Recupere sua{' '}
-                <span className="bg-gradient-to-r from-[#7B3FE4] to-[#9558EE] bg-clip-text text-transparent">energia,</span>
-                <br />libido e qualidade
-                <br />de vida
+                {heroTitle}
               </h1>
               <p className="text-lg text-[#A1A1AA] mb-8 leading-relaxed">
-                Milhares de mulheres já transformaram sua saúde hormonal com implantes bioidenticos.
-                Descubra como em menos de 30 minutos.
+                {heroSub}
               </p>
               <div className="grid grid-cols-2 gap-3">
-                {NUMEROS.map(n => (
+                {numeros.map(n => (
                   <div key={n.label} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4 text-center">
                     <p className="text-2xl font-bold text-white">{n.valor}</p>
                     <p className="text-xs text-[#71717A] mt-1">{n.label}</p>
@@ -147,7 +171,7 @@ export default function LandingPage() {
             <p className="text-[#71717A] text-lg">Sintomas que somem em semanas com a terapia de implante hormonal</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {BENEFICIOS.map(b => (
+            {beneficios.map(b => (
               <div key={b.titulo} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5 hover:border-[#7B3FE4]/40 transition-colors">
                 <div className="text-3xl mb-3">{b.icon}</div>
                 <h3 className="font-semibold text-white mb-1">{b.titulo}</h3>
@@ -199,7 +223,7 @@ export default function LandingPage() {
 
           {/* 2 depoimentos estilo WhatsApp Business real */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
-            {DEPOIMENTOS_TEXTO.map(d => (
+            {depoimentosTexto.map(d => (
               <div key={d.nome} className="rounded-2xl overflow-hidden shadow-2xl" style={{fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif'}}>
                 {/* Header — igual WhatsApp Business */}
                 <div className="flex items-center gap-3 px-3 py-2" style={{background: '#1f2c34'}}>

@@ -36,6 +36,8 @@ import {
   ServerCog,
   Brain,
   Briefcase,
+  Globe,
+  FlaskConical,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -106,8 +108,11 @@ const adminNav: NavSection[] = [
   {
     section: 'Gerenciar Conteúdo',
     items: [
-      { label: 'Treinamento', href: '/admin/treinamento', icon: <GraduationCap className="w-5 h-5" /> },
-      { label: 'Vídeos',      href: '/admin/videos',      icon: <Play className="w-5 h-5" /> },
+      { label: 'Central de Conteúdo', href: '/admin/conteudo',    icon: <LayoutDashboard className="w-5 h-5" /> },
+      { label: 'Treinamento',         href: '/admin/treinamento', icon: <GraduationCap className="w-5 h-5" /> },
+      { label: 'Vídeos',              href: '/admin/videos',      icon: <Play className="w-5 h-5" /> },
+      { label: 'Landing Page',        href: '/admin/landing',     icon: <Globe className="w-5 h-5" /> },
+      { label: 'Evidência Científica',href: '/admin/evidencia',   icon: <FlaskConical className="w-5 h-5" /> },
     ],
   },
   {
