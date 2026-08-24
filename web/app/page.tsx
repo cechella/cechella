@@ -77,7 +77,7 @@ export default function LandingPage() {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
-    supabase
+    void supabase
       .from('site_content')
       .select('key, value')
       .in('key', ['landing_numeros', 'landing_beneficios', 'landing_depoimentos', 'landing_hero'])
@@ -92,8 +92,7 @@ export default function LandingPage() {
             if (row.value.subtitle) setHeroSub(row.value.subtitle)
           }
         }
-      })
-      .catch(() => {/* use defaults */})
+      }, () => {/* use defaults */})
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 

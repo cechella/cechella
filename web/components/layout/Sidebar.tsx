@@ -37,7 +37,6 @@ import {
   Brain,
   Briefcase,
   Globe,
-  FlaskConical,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'

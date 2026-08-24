@@ -132,7 +132,7 @@ export default function EvidenciaPage() {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
-    supabase
+    void supabase
       .from('site_content')
       .select('key, value')
       .in('key', ['evidencia_featured', 'evidencia_world'])
@@ -140,7 +140,6 @@ export default function EvidenciaPage() {
         if (!data) return
         for (const row of data) {
           if (row.key === 'evidencia_featured') {
-            // merge text overrides, keep visual props from defaults
             setFeatured(prev => prev.map((s, i) => {
               const ov = row.value[i]
               if (!ov) return s
@@ -155,8 +154,7 @@ export default function EvidenciaPage() {
             }))
           }
         }
-      })
-      .catch(() => {/* use defaults */})
+      }, () => {/* use defaults */})
   }, [])
 
   return (
