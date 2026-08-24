@@ -765,27 +765,6 @@ export default function AdminDashboard() {
             </div>
           )}
 
-          {/* ── KPIs principais ── */}
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
-            {[
-              { label: 'Total Leads', value: loading ? '…' : kpi(stats?.totalLeads ?? 0), icon: <Users className="w-5 h-5" />, color: '#7B3FE4', sub: `+${stats?.leadsHoje ?? 0} hoje` },
-              { label: 'Clientes Fechados', value: loading ? '…' : kpi(stats?.ganhos ?? 0), icon: <CheckCircle2 className="w-5 h-5" />, color: '#22C55E', sub: `Taxa ${taxaConversao}%` },
-              { label: 'Taxa Conversão', value: loading ? '…' : `${taxaConversao}%`, icon: <Target className="w-5 h-5" />, color: '#3B82F6', sub: `etapas 7-8` },
-              { label: 'Referidos Coletados', value: loading ? '…' : kpi(stats?.referidosTotais ?? 0), icon: <GitBranch className="w-5 h-5" />, color: '#06B6D4', sub: `${stats?.referidosValidados ?? 0} vendidos` },
-              { label: 'Potencial Rede', value: loading ? '…' : kpi(potencialRede), icon: <Network className="w-5 h-5" />, color: '#F59E0B', sub: 'clientes × 20' },
-              { label: 'MRR Est.', value: loading ? '…' : `R$ ${kpi((stats?.ganhos ?? 0) * 2800)}`, icon: <DollarSign className="w-5 h-5" />, color: '#EF4444', sub: 'ticket médio R$2.8k' },
-            ].map((k, i) => (
-              <div key={i} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4 flex flex-col gap-2 hover:border-[#27272A] transition-colors">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-[#52525B] font-medium leading-tight">{k.label}</span>
-                  <span style={{ color: k.color }}>{k.icon}</span>
-                </div>
-                <p className="text-2xl font-bold text-white">{k.value}</p>
-                <p className="text-xs text-[#52525B]">{k.sub}</p>
-              </div>
-            ))}
-          </div>
-
           {/* ── Pipeline ao Vivo ── */}
           {pipeline.length > 0 && (
             <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4 overflow-hidden">
@@ -963,6 +942,27 @@ export default function AdminDashboard() {
               </div>
             </div>
           )}
+
+          {/* ── KPIs principais ── */}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+            {[
+              { label: 'Total Leads', value: loading ? '…' : kpi(stats?.totalLeads ?? 0), icon: <Users className="w-5 h-5" />, color: '#7B3FE4', sub: `+${stats?.leadsHoje ?? 0} hoje` },
+              { label: 'Clientes Fechados', value: loading ? '…' : kpi(stats?.ganhos ?? 0), icon: <CheckCircle2 className="w-5 h-5" />, color: '#22C55E', sub: `Taxa ${taxaConversao}%` },
+              { label: 'Taxa Conversão', value: loading ? '…' : `${taxaConversao}%`, icon: <Target className="w-5 h-5" />, color: '#3B82F6', sub: `etapas 7-8` },
+              { label: 'Referidos Coletados', value: loading ? '…' : kpi(stats?.referidosTotais ?? 0), icon: <GitBranch className="w-5 h-5" />, color: '#06B6D4', sub: `${stats?.referidosValidados ?? 0} vendidos` },
+              { label: 'Potencial Rede', value: loading ? '…' : kpi(potencialRede), icon: <Network className="w-5 h-5" />, color: '#F59E0B', sub: 'clientes × 20' },
+              { label: 'MRR Est.', value: loading ? '…' : `R$ ${kpi((stats?.ganhos ?? 0) * 2800)}`, icon: <DollarSign className="w-5 h-5" />, color: '#EF4444', sub: 'ticket médio R$2.8k' },
+            ].map((k, i) => (
+              <div key={i} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4 flex flex-col gap-2 hover:border-[#27272A] transition-colors">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#52525B] font-medium leading-tight">{k.label}</span>
+                  <span style={{ color: k.color }}>{k.icon}</span>
+                </div>
+                <p className="text-2xl font-bold text-white">{k.value}</p>
+                <p className="text-xs text-[#52525B]">{k.sub}</p>
+              </div>
+            ))}
+          </div>
 
           {/* Toast de confirmação */}
           {toastMsg && (
