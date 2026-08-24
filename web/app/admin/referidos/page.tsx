@@ -223,10 +223,10 @@ export default function ReferidosPage() {
     }
 
     const { data: profs } = await supabase
-      .from('profiles')
-      .select('id, name, whatsapp')
-      .eq('role', 'sales')
-    if (profs) setConsultores(profs as Consultor[])
+      .from('comerciais')
+      .select('id, nome, telefone')
+      .eq('disponivel', true)
+    if (profs) setConsultores(profs.map((c: any) => ({ id: c.id, name: c.nome, whatsapp: c.telefone })))
 
     setLoading(false)
   }, [supabase])

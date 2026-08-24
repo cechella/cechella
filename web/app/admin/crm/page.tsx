@@ -367,8 +367,8 @@ export default function CRMPage() {
   useEffect(() => {
     carregarLeads()
     carregarReferidos()
-    supabase.from('profiles').select('id, name, whatsapp').eq('role', 'sales').then(({ data }) => {
-      if (data) setConsultores(data as typeof consultores)
+    supabase.from('comerciais').select('id, nome, telefone').eq('disponivel', true).then(({ data }) => {
+      if (data) setConsultores(data.map((c: any) => ({ id: c.id, name: c.nome, whatsapp: c.telefone })))
     })
   }, [carregarLeads, carregarReferidos])
 
