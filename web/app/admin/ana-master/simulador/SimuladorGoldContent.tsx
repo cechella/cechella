@@ -669,35 +669,16 @@ export function SimuladorGoldContent() {
           />
         </div>
 
-        {/* Start / Stop */}
-        <div style={{ padding: '12px 14px', display: 'flex', gap: 8 }}>
-          {!isActive ? (
-            <button onClick={startSession} disabled={isConnecting} style={{ flex: 1, padding: '10px 0', background: isConnecting ? '#333' : '#F59E0B', color: '#000', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: isConnecting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              <Phone size={15} />
-              {isConnecting ? 'Conectando...' : 'Iniciar Gold'}
-            </button>
-          ) : (
-            <>
-              <button onClick={toggleMute} style={{ padding: '10px 12px', background: isMuted ? '#7F1D1D' : '#1C1C1E', border: '1px solid #2A2A2E', borderRadius: 8, cursor: 'pointer', color: '#fff', display: 'flex', alignItems: 'center' }}>
-                {isMuted ? <MicOff size={15} /> : <Mic size={15} />}
-              </button>
-              <button onClick={stopSession} style={{ flex: 1, padding: '10px 0', background: '#7F1D1D', color: '#FCA5A5', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <PhoneOff size={15} /> Encerrar
-              </button>
-            </>
-          )}
-        </div>
-
-        {/* PTL Call */}
-        <div style={{ padding: '0 14px 12px' }}>
+        {/* PTL Call — botão único */}
+        <div style={{ padding: '12px 14px' }}>
           <button
             onClick={dispararLigacaoPTL}
             disabled={ptlStatus === 'calling' || ptlStatus === 'active'}
             style={{
               width: '100%', padding: '10px 0',
-              background: ptlStatus === 'ended' ? '#7F1D1D' : ptlStatus === 'error' ? '#7F1D1D' : ptlStatus === 'active' ? '#14532D' : ptlStatus === 'calling' ? '#333' : '#1C1C1E',
-              color: ptlStatus === 'ended' ? '#FCA5A5' : ptlStatus === 'error' ? '#FCA5A5' : ptlStatus === 'active' ? '#86EFAC' : '#A1A1AA',
-              border: ptlStatus === 'ended' ? '1px solid #EF4444' : '1px solid #2A2A2E', borderRadius: 8, fontWeight: 700, fontSize: 13,
+              background: ptlStatus === 'ended' ? '#7F1D1D' : ptlStatus === 'error' ? '#7F1D1D' : ptlStatus === 'active' ? '#14532D' : ptlStatus === 'calling' ? '#555' : '#F59E0B',
+              color: ptlStatus === 'ended' ? '#FCA5A5' : ptlStatus === 'error' ? '#FCA5A5' : ptlStatus === 'active' ? '#86EFAC' : ptlStatus === 'calling' ? '#fff' : '#000',
+              border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 13,
               cursor: (ptlStatus === 'calling' || ptlStatus === 'active') ? 'default' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
             }}
