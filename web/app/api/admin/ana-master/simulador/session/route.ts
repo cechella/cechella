@@ -98,6 +98,48 @@ const TOOLS = [
       required: ['key', 'value', 'source'],
     },
   },
+  {
+    type: 'function',
+    name: 'solicitar_pagamento',
+    description: 'Gera e envia o link de pagamento (Pix ou cartão) no WhatsApp da lead. Chame imediatamente após a lead confirmar a forma de pagamento. O sistema envia automaticamente as mensagens — nunca diga que enviou antes de chamar esta ferramenta.',
+    parameters: {
+      type: 'object',
+      properties: {
+        metodo: { type: 'string', enum: ['pix', 'cartao'], description: 'Forma de pagamento escolhida pela lead' },
+      },
+      required: ['metodo'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'verificar_pagamento',
+    description: 'Verifica no sistema se o pagamento da lead foi confirmado.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    type: 'function',
+    name: 'iniciar_coleta_referidos',
+    description: 'Envia o link de indicações no WhatsApp da lead. SOMENTE após pagamento confirmado. O link é o ÚNICO canal — nunca colete contatos por voz.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    type: 'function',
+    name: 'verificar_referidos',
+    description: 'Verifica o progresso do formulário de indicações. Chame a cada 2 minutos após enviar o link.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      required: [],
+    },
+  },
 ]
 
 export async function POST(req: NextRequest) {

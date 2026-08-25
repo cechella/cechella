@@ -108,6 +108,7 @@ const TOOL_RESPONSE_POLICY: Record<string, 'silent' | 'controller_decides'> = {
   verificar_pagamento:      'controller_decides',
   verificar_referidos:      'controller_decides',
   iniciar_coleta_referidos: 'controller_decides',
+  solicitar_pagamento:      'controller_decides',
   get_lead_context:         'controller_decides',
 }
 
@@ -553,6 +554,16 @@ function SimuladorInner() {
         await fetch(`${base}/memory`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ callSid: callSidRef.current, key, value }) })
         setMemories(prev => ({ ...prev, [key]: value }))
         return `Memória "${key}" salva.`
+      }
+      case 'solicitar_pagamento': {
+        const metodo = (args.metodo || 'pix') as 'pix' | 'cartao'
+        const res = await fetch(`${base}/pix`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ callSid: callSidRef.current, telefone: telefoneRef.current, metodo }),
+        })
+        const data = await res.json()
+        if (res.ok) return `{"ok":true,"metodo":"${metodo}","enviado":true,"paymentId":"${data.paymentId ?? ''}"}`
+        return `{"ok":false,"motivo":"${JSON.stringify(data).replace(/"/g, "'")}"}`
       }
       case 'verificar_pagamento': {
         const res = await fetch(`${base}/payment?telefone=${encodeURIComponent(telefoneRef.current)}`)
