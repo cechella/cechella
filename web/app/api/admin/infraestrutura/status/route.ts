@@ -53,7 +53,7 @@ async function checkZAPI(): Promise<{ ok: boolean; connected: boolean; status?: 
     })
     if (!res.ok) return { ok: false, connected: false, status: `HTTP ${res.status}` }
     const data = await res.json() as { connected?: boolean; status?: string; session?: string }
-    const connected = !!(data.connected ?? data.status === 'open' ?? data.session === 'CONNECTED')
+    const connected = !!(data.connected || data.status === 'open' || data.session === 'CONNECTED')
     return { ok: true, connected, status: data.status ?? (connected ? 'open' : 'closed') }
   } catch (e: any) {
     return { ok: false, connected: false, status: e.message }
