@@ -214,20 +214,21 @@ export function buildTools(session: SessionRef) {
         metodo: z.enum(['pix', 'cartao']).describe('Forma de pagamento escolhida pela lead'),
       }),
       execute: async ({ metodo }: { metodo: 'pix' | 'cartao' }) => {
-        const result = await validateGate(
-          'GATE_FECHAMENTO' as GateId,
-          {
-            investimento_apresentado: true,
-            forma_pagamento_escolhida: metodo,
-            parcelamento_6x_mencionado: true,
-            telefone: session.telefone,
-          } as any,
-          session.callSid,
-        )
-        if (result.approved) {
-          return `{"ok":true,"metodo":"${metodo}","enviado":true}`
+        try {
+          const { APP_URL } = await import('../config.js')
+          const res = await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ callSid: session.callSid, telefone: session.telefone, metodo }),
+          })
+          const data = await res.json().catch(() => ({}))
+          if (res.ok) {
+            return `{"ok":true,"metodo":"${metodo}","enviado":true,"paymentId":"${(data as any).paymentId ?? ''}"}`
+          }
+          return `{"ok":false,"motivo":"${JSON.stringify(data).replace(/"/g, "'")}"}`
+        } catch (e: any) {
+          return `{"ok":false,"motivo":"${e.message}"}`
         }
-        return `{"ok":false,"motivo":"${result.reason.replace(/"/g, "'")}"}`
       },
     },
 
