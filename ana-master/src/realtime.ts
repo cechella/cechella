@@ -156,6 +156,38 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
   console.log('[ANA MASTER] session starting')
   const advanceStage = makeStageTracker()
 
+  // Tracks the most recent stage detected from Ana's transcript (in-memory, per session)
+  let currentDetectedStage = 'apresentacao'
+  const originalAdvanceStage = advanceStage
+  const advanceStageWithTracking = (callSid: string, text: string) => {
+    originalAdvanceStage(callSid, text)
+    const detected = detectStageFromText(text)
+    if (detected) {
+      const detectedIdx = STAGE_ORDER.indexOf(detected)
+      const currentIdx = STAGE_ORDER.indexOf(currentDetectedStage)
+      if (detectedIdx > currentIdx) currentDetectedStage = detected
+    }
+  }
+
+  // Automatic PIX trigger: when lead says "pix"/"cartão" while in fechamento stage,
+  // dispatch PIX immediately without depending on tool calls or gate approval.
+  let pixAutoSent = false
+  function tryAutoPix(leadText: string, callSid: string, telefone: string) {
+    if (pixAutoSent || currentDetectedStage !== 'fechamento') return
+    const t = leadText.toLowerCase()
+    let metodo: 'pix' | 'cartao' | null = null
+    if (/\bpix\b|pix\s*(a|à)\s*vista|avista|à\s*vista/i.test(t)) metodo = 'pix'
+    else if (/cart[aã]o|parcel/i.test(t)) metodo = 'cartao'
+    if (!metodo) return
+    pixAutoSent = true
+    console.log(`[ANA MASTER] 💳 auto-PIX triggered — metodo=${metodo} telefone=${telefone}`)
+    fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callSid, telefone, metodo }),
+    }).catch((e) => console.error('[ANA MASTER] auto-PIX fetch error:', e))
+  }
+
   // Transport created IMMEDIATELY so it sets up WebSocket listeners and captures the Twilio
   // 'start' event (which carries streamSid — required to send audio back to Twilio).
   // INBOUND: mulaw→PCM | OUTBOUND: PCM→mulaw
@@ -320,7 +352,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
         if (itemId) processedItems.add(itemId)
         appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
         pushTranscriptEvent(sessionRef.callSid, 'assistant', text)
-        advanceStage(sessionRef.callSid, text)
+        advanceStageWithTracking(sessionRef.callSid, text)
       }
     }
     if (event?.type === 'response.output_audio.delta') {
@@ -344,6 +376,8 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       if (text && sessionRef.callSid !== 'unknown') {
         appendTranscript(sessionRef.callSid, 'user', text).catch(() => {})
         pushTranscriptEvent(sessionRef.callSid, 'user', text)
+        // Automatic PIX trigger — fires as soon as lead says "pix"/"cartão" in fechamento stage
+        tryAutoPix(text, sessionRef.callSid, sessionRef.telefone)
         // Speech progress: classify lead turn and potentially unlock next part
         if (sessionRef.speechProgress.waiting_for_lead) {
           sessionRef.onLeadTurn(text).catch(() => {})
@@ -361,7 +395,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
           if (text && sessionRef.callSid !== 'unknown') {
             appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
             pushTranscriptEvent(sessionRef.callSid, 'assistant', text)
-            advanceStage(sessionRef.callSid, text)
+            advanceStageWithTracking(sessionRef.callSid, text)
           }
         }
       }
