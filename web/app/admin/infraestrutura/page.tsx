@@ -1,9 +1,15 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { ExternalLink, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react'
+
+interface LiveStatus {
+  openai: { ok: boolean; available: number | null; error?: string }
+  zapi: { ok: boolean; connected: boolean; status?: string }
+  ts: string
+}
 
 interface Service {
   id: string
@@ -42,16 +48,16 @@ const SERVICES: Service[] = [
     cost: '$150/mês', balance: '$342 créditos', renewal: 'Pay-as-you-go', renewalDays: 999, link: 'https://console.anthropic.com',
   },
   {
-    id: 'vapi', name: 'Vapi AI', icon: '🎙️', color: '#5b8ef0',
+    id: 'openai', name: 'OpenAI', icon: '🤖', color: '#10a37f',
     status: 'online', alertLevel: null,
-    description: 'Plataforma de voz para Ana Voz. Gerencia ligações telefônicas.',
-    cost: '$80/mês', balance: '$127 créditos', renewal: 'Pay-as-you-go', renewalDays: 999, link: 'https://dashboard.vapi.ai',
+    description: 'API de voz em tempo real para Ana Voz (Realtime API). Créditos pay-as-you-go.',
+    cost: '$120/mês', balance: '…', renewal: 'Pay-as-you-go', renewalDays: 999, link: 'https://platform.openai.com/billing',
   },
   {
     id: 'zapi', name: 'Z-API', icon: '📱', color: '#25d366',
     status: 'warn', alertLevel: 'warn',
     description: 'API WhatsApp Business. Recebe e envia mensagens para leads.',
-    cost: '$30/mês', balance: 'Ativo', renewal: '20/08/2026', renewalDays: 13, link: 'https://app.z-api.io',
+    cost: 'R$99/mês', balance: '…', renewal: '20/08/2026', renewalDays: 13, link: 'https://app.z-api.io',
   },
   {
     id: 'n8n', name: 'n8n', icon: '⚙️', color: '#ea4b71',
@@ -241,6 +247,20 @@ export default function InfraPage() {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const selectedIdRef = useRef<string | null>(null)
   const hoveredIdRef = useRef<string | null>(null)
+  const [liveStatus, setLiveStatus] = useState<LiveStatus | null>(null)
+  const [liveLoading, setLiveLoading] = useState(false)
+
+  const fetchLiveStatus = useCallback(async () => {
+    setLiveLoading(true)
+    try {
+      const res = await fetch('/api/admin/infraestrutura/status')
+      if (res.ok) setLiveStatus(await res.json())
+    } finally {
+      setLiveLoading(false)
+    }
+  }, [])
+
+  useEffect(() => { fetchLiveStatus() }, [fetchLiveStatus])
 
   const selected = selectedId ? SERVICES.find(s => s.id === selectedId) || (selectedId === 'center' ? null : null) : null
   const hovered = hoveredId ? SERVICES.find(s => s.id === hoveredId) : null
@@ -345,6 +365,24 @@ export default function InfraPage() {
   const alertServices = SERVICES.filter(s => s.alertLevel)
   const renewingSoon = SERVICES.filter(s => s.renewalDays < 30 && s.renewalDays !== 999)
 
+  const openaiOk = liveStatus ? liveStatus.openai.ok : true
+  const zapiOk = liveStatus ? liveStatus.zapi.connected : true
+  const criticalCount = (!openaiOk ? 1 : 0) + (!zapiOk ? 1 : 0)
+
+  const openaiBalance = liveStatus?.openai.available !== null && liveStatus?.openai.available !== undefined
+    ? `$${liveStatus.openai.available.toFixed(2)}`
+    : liveStatus
+    ? (liveStatus.openai.ok ? 'Ativo' : '⚠️ Sem saldo')
+    : '…'
+
+  const zapiBalance = liveStatus
+    ? (liveStatus.zapi.connected ? 'Conectado' : '⚠️ Desconectado')
+    : '…'
+
+  const lastChecked = liveStatus
+    ? new Date(liveStatus.ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+    : null
+
   return (
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
       <Sidebar role="admin" />
@@ -358,7 +396,33 @@ export default function InfraPage() {
               <h1 className="text-[22px] font-bold text-white">Infraestrutura</h1>
               <p className="text-sm text-[#71717A] mt-1">Serviços conectados, custos e alertas em tempo real</p>
             </div>
+            <button
+              onClick={fetchLiveStatus}
+              disabled={liveLoading}
+              className="flex items-center gap-2 px-3 py-2 bg-[#111113] border border-[#1C1C1E] rounded-lg text-xs text-[#71717A] hover:text-white hover:border-[#3F3F46] transition-all disabled:opacity-40"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${liveLoading ? 'animate-spin' : ''}`} />
+              {lastChecked ? `Atualizado ${lastChecked}` : 'Verificar agora'}
+            </button>
           </div>
+
+          {/* Critical live alerts */}
+          {liveStatus && (!openaiOk || !zapiOk) && (
+            <div className="flex gap-2 flex-wrap">
+              {!openaiOk && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.3)] text-[#ef4444] text-xs font-semibold">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  🔴 OpenAI sem crédito — Ana Voz OFFLINE. Recarregue: platform.openai.com/billing
+                </div>
+              )}
+              {!zapiOk && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgba(239,68,68,0.1)] border border-[rgba(239,68,68,0.3)] text-[#ef4444] text-xs font-semibold">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  🔴 Z-API desconectado — WhatsApp não está funcionando. Verifique: app.z-api.io
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Top metrics */}
           <div className="grid grid-cols-4 gap-3">
@@ -375,15 +439,17 @@ export default function InfraPage() {
               <p className="text-[10px] text-[#3F3F46] uppercase tracking-wider mt-1">Serviços Online</p>
             </div>
             <div className="bg-[#111113] border border-[#1C1C1E] rounded-xl p-4">
-              <p className="text-[22px] font-bold font-mono text-[#22c55e]">0</p>
+              <p className={`text-[22px] font-bold font-mono ${criticalCount > 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
+                {criticalCount}
+              </p>
               <p className="text-[10px] text-[#3F3F46] uppercase tracking-wider mt-1">Alertas Críticos</p>
             </div>
           </div>
 
-          {/* Alerts */}
+          {/* Static alerts */}
           {(alertServices.length > 0 || renewingSoon.length > 0) && (
             <div className="flex gap-2 flex-wrap">
-              {alertServices.map(s => (
+              {alertServices.filter(s => s.id !== 'zapi').map(s => (
                 <div key={s.id} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-[rgba(245,158,11,0.1)] border border-[rgba(245,158,11,0.3)] text-[#f59e0b] text-xs font-medium">
                   <AlertTriangle className="w-3.5 h-3.5" />
                   {s.name}: {s.id === 'supabase' ? 'Storage em 78% — considere upgrade' : `Renova em ${s.renewalDays} dias`}
@@ -441,7 +507,19 @@ export default function InfraPage() {
                     </div>
                     <div className="flex justify-between items-center py-3">
                       <span className="text-xs text-[#71717A]">Saldo / Plano</span>
-                      <span className="text-sm font-semibold font-mono text-[#22c55e]">{displayService.balance || '—'}</span>
+                      <span className={`text-sm font-semibold font-mono ${
+                        displayService.id === 'openai'
+                          ? openaiOk ? 'text-[#22c55e]' : 'text-[#ef4444]'
+                          : displayService.id === 'zapi'
+                          ? zapiOk ? 'text-[#22c55e]' : 'text-[#ef4444]'
+                          : 'text-[#22c55e]'
+                      }`}>
+                        {displayService.id === 'openai'
+                          ? openaiBalance
+                          : displayService.id === 'zapi'
+                          ? zapiBalance
+                          : displayService.balance || '—'}
+                      </span>
                     </div>
                     <div className="flex justify-between items-center py-3">
                       <span className="text-xs text-[#71717A]">Renovação</span>
