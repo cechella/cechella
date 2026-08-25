@@ -145,7 +145,7 @@ export function SimuladorGoldContent() {
       const res = await fetch('/api/admin/ana-master-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numero, contexto: 'gold' }),
+        body: JSON.stringify({ numero }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? `HTTP ${res.status}`)
