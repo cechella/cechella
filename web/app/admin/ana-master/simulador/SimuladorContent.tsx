@@ -359,6 +359,38 @@ function SimuladorInner() {
     return () => window.removeEventListener('beforeunload', handleUnload)
   }, [])
 
+  // Restore transcript from most recent active session when page loads
+  useEffect(() => {
+    fetch('/api/admin/ana-master/simulador/transcript')
+      .then(r => r.json())
+      .then(data => {
+        if (!data.found || !Array.isArray(data.transcript) || data.transcript.length === 0) return
+        const lines: TranscriptLine[] = data.transcript.map((t: any) => ({
+          role: t.role as TranscriptLine['role'],
+          text: t.text,
+          ts: new Date(t.ts).getTime(),
+        }))
+        setTranscript(lines)
+        callSidRef.current = data.callSid
+        // Restore checkpoints so start picker shows them
+        if (data.checkpoints && Object.keys(data.checkpoints).length > 0) {
+          const cps: Record<string, CheckpointData> = {}
+          for (const [gate, cp] of Object.entries(data.checkpoints)) {
+            cps[gate] = cp as CheckpointData
+          }
+          setSavedCheckpoints(cps)
+          checkpointsRef.current = cps
+        }
+        setTranscript(prev => [...lines, {
+          role: 'system',
+          text: `📋 Histórico restaurado — sessão ${data.callSid?.slice(0, 22)}. Inicie nova sessão para continuar.`,
+          ts: Date.now(),
+        }])
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   useEffect(() => {
     const gate = searchParams.get('checkpoint')
     const resumeCallSid = searchParams.get('resumeFrom')

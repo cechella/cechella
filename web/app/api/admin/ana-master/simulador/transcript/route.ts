@@ -9,6 +9,46 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
+// GET: return transcript + callSid of the most recent active session (last 30 min)
+export async function GET(req: NextRequest) {
+  try {
+    const callSid = req.nextUrl.searchParams.get('callSid')
+    let query = supabase
+      .from('ana_calls')
+      .select('call_sid, memories, stage, updated_at')
+      .eq('status', 'active')
+      .like('call_sid', 'sim-browser-%')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+
+    if (callSid) {
+      query = supabase
+        .from('ana_calls')
+        .select('call_sid, memories, stage, updated_at')
+        .eq('call_sid', callSid)
+        .limit(1)
+    }
+
+    const { data } = await query
+    const row = data?.[0]
+    if (!row) return NextResponse.json({ found: false })
+
+    const ageMs = Date.now() - new Date(row.updated_at).getTime()
+    if (!callSid && ageMs > 30 * 60 * 1000) return NextResponse.json({ found: false })
+
+    const memories = (row.memories as Record<string, unknown>) ?? {}
+    return NextResponse.json({
+      found: true,
+      callSid: row.call_sid,
+      stage: row.stage,
+      transcript: memories.transcript ?? [],
+      checkpoints: memories.checkpoints ?? {},
+    })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+}
+
 // POST: append turn, save checkpoint, and/or persist sub-gate SpeechProgress
 export async function POST(req: NextRequest) {
   try {
