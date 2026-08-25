@@ -92,9 +92,13 @@ export async function POST(req: NextRequest) {
           phone,
           video: TUTORIAL_VIDEO_URL,
           caption:
-            `✨ Seu link especial de indicações chegou! 💜\n\n` +
-            `👉 ${link}\n\n` +
-            `Assista o tutorial e siga os passos para indicar suas amigas. Guarda esse link! 💜`,
+            `✅ Código recebido!\n\n` +
+            `1️⃣ Toque no + à esquerda\n` +
+            `2️⃣ Escolha Contato\n` +
+            `3️⃣ Busque e selecione suas amigas\n` +
+            `4️⃣ Toque em Enviar\n\n` +
+            `Você pode selecionar várias de uma vez! 💜\n\n` +
+            `👉 ${link}`,
         }),
       })
       enviou = r.ok

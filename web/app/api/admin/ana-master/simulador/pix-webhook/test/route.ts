@@ -119,7 +119,14 @@ export async function POST(req: NextRequest) {
             body: JSON.stringify({
               phone: normalize(tel),
               video: TUTORIAL_VIDEO_URL,
-              caption: `✅ Código recebido!\n\nAssista ao tutorial acima e siga os passos:\n\n1️⃣ Toque no *+* à esquerda\n2️⃣ Escolha *Contato*\n3️⃣ Busque e selecione suas amigas\n4️⃣ Toque em *Enviar*\n\nVocê pode selecionar várias de uma vez! 💜\n\nDepois volte para o link e seus contatos aparecerão automaticamente:\n👉 ${refData.link}`,
+              caption:
+                `✅ Código recebido!\n\n` +
+                `1️⃣ Toque no + à esquerda\n` +
+                `2️⃣ Escolha Contato\n` +
+                `3️⃣ Busque e selecione suas amigas\n` +
+                `4️⃣ Toque em Enviar\n\n` +
+                `Você pode selecionar várias de uma vez! 💜\n\n` +
+                `👉 ${refData.link}`,
             }),
           })
           refDebug.zapi2Status = r2.status
