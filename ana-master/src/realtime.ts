@@ -1,6 +1,6 @@
 import { RealtimeAgent, RealtimeSession } from '@openai/agents/realtime'
 import { TwilioRealtimeTransportLayer } from '@openai/agents-extensions'
-import { OPENAI_API_KEY, REALTIME_DEFAULTS } from './config.js'
+import { OPENAI_API_KEY, REALTIME_DEFAULTS, APP_URL } from './config.js'
 import { ANA_BASE_PROMPT } from './state-machine.js'
 import { buildTools, SessionRef } from './tools/index.js'
 import { upsertCall, saveMemory, appendTranscript, updateCallStage, endCall, supabase } from './supabase.js'
