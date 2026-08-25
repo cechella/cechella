@@ -159,6 +159,8 @@ export async function POST(req: NextRequest) {
       }
 
       case 'GATE_REFERIDOS': {
+        // Sim bypass — browser simulator sessions skip real referidos check
+        if (callSid.startsWith('sim-browser-')) break
         // Use contatos_referidos table (saved by /api/indicar) keyed by phone
         const { data: callRow } = await supabase.from('ana_calls').select('telefone').eq('call_sid', callSid).single()
         const phone = String(callRow?.telefone || ev.telefone || telefone || '').replace(/\D/g, '')

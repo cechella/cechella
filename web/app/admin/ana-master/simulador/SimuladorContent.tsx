@@ -1040,7 +1040,46 @@ function SimuladorInner() {
       if (mdl) setActiveModel(mdl)
       if (vc) setActiveVoice(vc)
 
-      if (checkpointOverride) restoreCheckpoint(checkpointOverride)
+      if (checkpointOverride) {
+        restoreCheckpoint(checkpointOverride)
+        // Sync DB stage so gate invariant checks pass when resuming from checkpoint
+        await fetch('/api/admin/ana-master/simulador/stage', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ callSid, stage: checkpointOverride.stage }),
+        }).catch(() => {})
+        // Pre-seed gates_passed so the RPC transition doesn't block
+        if (checkpointOverride.gate_log?.length) {
+          await fetch('/api/admin/ana-master/simulador/session', {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ callSid, gates_passed: checkpointOverride.gate_log.map((g: any) => g.gate ?? g) }),
+          }).catch(() => {})
+        }
+        // Pre-seed essential memories for the restored stage
+        const memoriesToSeed: Record<string, string> = {
+          telefone: normPhone,
+          nome: nome.trim() || 'Lead',
+          dor_principal: 'cansaço e variações de humor',
+          sintomas: 'cansaço, variações de humor',
+          combinado_confirmado: 'sim',
+        }
+        // For referidos stage, ensure token_indicacao is available
+        if (['referidos', 'validacao', 'encerramento'].includes(checkpointOverride.stage)) {
+          try {
+            const refRes = await fetch(`/api/admin/ana-master/simulador/referidos`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ telefone: normPhone }),
+            })
+            const refData = await refRes.json().catch(() => ({}))
+            if (refData.token) memoriesToSeed.token_indicacao = refData.token
+          } catch { /* não bloqueia */ }
+        }
+        await Promise.all(Object.entries(memoriesToSeed).map(([key, value]) =>
+          fetch('/api/admin/ana-master/simulador/memory', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ callSid, key, value }),
+          }).catch(() => {})
+        ))
+      }
 
       const pc = new RTCPeerConnection(); pcRef.current = pc
 

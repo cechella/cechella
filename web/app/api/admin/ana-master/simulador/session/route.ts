@@ -190,3 +190,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: e.message }, { status: 500 })
   }
 }
+
+export async function PATCH(req: NextRequest) {
+  try {
+    const { callSid, gates_passed } = await req.json()
+    if (!callSid) return NextResponse.json({ error: 'callSid obrigatório' }, { status: 400 })
+    await supabase.from('ana_calls').update({ gates_passed, updated_at: new Date().toISOString() }).eq('call_sid', callSid)
+    return NextResponse.json({ ok: true })
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message }, { status: 500 })
+  }
+}
