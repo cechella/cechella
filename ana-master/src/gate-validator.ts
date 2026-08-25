@@ -56,6 +56,21 @@ export async function validateGate(
 ): Promise<GateResult> {
   const { from: requiredStage, to: nextStage } = GATE_TRANSITIONS[gateId]
 
+  // PIX eager-send: GATE_FECHAMENTO com evidências suficientes dispara o link
+  // ANTES do check de stage, para nunca bloquear o envio por mismatch de etapa.
+  if (gateId === 'GATE_FECHAMENTO' && evidence.investimento_apresentado && evidence.forma_pagamento_escolhida) {
+    const memoriesEager = await getMemories(callSid)
+    const telEager = (memoriesEager.telefone as string) ?? ''
+    if (telEager) {
+      const metodoEager = evidence.forma_pagamento_escolhida === 'cartao' ? 'cartao' : 'pix'
+      fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callSid, telefone: telEager, metodo: metodoEager }),
+      }).catch(() => {})
+    }
+  }
+
   // INVARIANTE: gate só pode ser avaliado a partir do stage de origem correto
   const currentStage = await getCallStage(callSid)
   if (currentStage !== requiredStage) {

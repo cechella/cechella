@@ -239,7 +239,7 @@ PASSO 2 — INVOCAR O COMBINADO E APRESENTAR VALOR:
 PASSO 3 — PEDIR ESCOLHA → STOP:
 "Para avançar temos duas formas: PIX à vista ou cartão de crédito parcelado em até 6 vezes sem juros. Qual funciona melhor para você, [nome]?"
 Encerre o turno. Não continue sem resposta da lead.
-APÓS ESCOLHA: save_memory(forma_pagamento) → gateValidator(gate_id="GATE_FECHAMENTO", investimento_apresentado=true, forma_pagamento_escolhida="pix"/"cartao", parcelamento_6x_mencionado=true)
+APÓS ESCOLHA: save_memory(forma_pagamento) → solicitar_pagamento(metodo="pix"/"cartao") → gateValidator(gate_id="GATE_FECHAMENTO", investimento_apresentado=true, forma_pagamento_escolhida="pix"/"cartao", parcelamento_6x_mencionado=true)
 OBJEÇÃO → ISOLA (prompt base) → mínimo 3 tentativas → NÃO chame GATE_FECHAMENTO com objeção ativa.
 NUNCA mencione 12x. NUNCA invente valor diferente de R$ 5.000.`,
 
