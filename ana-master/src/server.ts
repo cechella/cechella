@@ -37,7 +37,9 @@ app.post('/twiml', async (req, reply) => {
   const body = req.body as Record<string, string>
   const query = req.query as Record<string, string>
   const callSid = body?.CallSid ?? 'unknown'
-  const from = (body?.From ?? '').replace(/\D/g, '')
+  // For outbound calls: lead's number is in query.numero (set by /outbound).
+  // body.From = Twilio number; body.To = lead number — but query.numero is unambiguous.
+  const from = (query?.numero ?? body?.From ?? '').replace(/\D/g, '')
   const contexto = query?.contexto ?? ''          // passed via URL query from /outbound
   const host = PUBLIC_HOST.replace(/^https?:\/\//, '')
 
@@ -91,6 +93,7 @@ app.post('/outbound', async (req, reply) => {
   const to = numero.startsWith('+') ? numero : `+${numero}`
 
   const twimlUrl = new URL(`${PUBLIC_HOST}/twiml`)
+  twimlUrl.searchParams.set('numero', numero)   // lead's number — From/To are swapped in outbound
   if (referidor) twimlUrl.searchParams.set('referidor', referidor)
   if (contexto) twimlUrl.searchParams.set('contexto', contexto)
 
