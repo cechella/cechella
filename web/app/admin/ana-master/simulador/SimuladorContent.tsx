@@ -1443,7 +1443,7 @@ function SimuladorInner() {
                     { gate: 'GATE_PAGAMENTO', next_stage: 'referidos' },
                   ]},
               ]
-              const speechComplete = { state: 'COMPLETE', parte_atual: 'complete' as any, partes_entregues: [1,2,3,4] as any, parte_em_execucao: undefined, parte_interrompida: false, pergunta_final_feita: true, resposta_final_recebida: true, waiting_for_lead: false }
+              const speechComplete: SpeechProgress = { state: 'COMPLETE', parte_atual: 'complete', partes_entregues: [1,2,3,4], parte_em_execucao: undefined, pergunta_final_feita: true, resposta_final_recebida: true, waiting_for_lead: false }
               return shortcuts.map(s => (
                 <button key={s.stage} onClick={() => {
                   setShowStartPicker(false)
