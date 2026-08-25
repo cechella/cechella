@@ -169,18 +169,22 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
     }
   }
 
-  // Automatic PIX trigger: when lead says "pix"/"cartão" while in fechamento stage,
+  // Automatic PIX trigger: when lead says "pix"/"cartão" after 90s of call,
   // dispatch PIX immediately without depending on tool calls or gate approval.
+  // Time guard (90s) replaces fragile stage-text detection.
+  const sessionStartMs = Date.now()
   let pixAutoSent = false
   function tryAutoPix(leadText: string, callSid: string, telefone: string) {
-    if (pixAutoSent || currentDetectedStage !== 'fechamento') return
+    if (pixAutoSent) return
+    const elapsedSec = (Date.now() - sessionStartMs) / 1000
+    if (elapsedSec < 90) return // too early — can't be at fechamento yet
     const t = leadText.toLowerCase()
     let metodo: 'pix' | 'cartao' | null = null
     if (/\bpix\b|pix\s*(a|à)\s*vista|avista|à\s*vista/i.test(t)) metodo = 'pix'
     else if (/cart[aã]o|parcel/i.test(t)) metodo = 'cartao'
     if (!metodo) return
     pixAutoSent = true
-    console.log(`[ANA MASTER] 💳 auto-PIX triggered — metodo=${metodo} telefone=${telefone}`)
+    console.log(`[ANA MASTER] 💳 auto-PIX triggered — metodo=${metodo} elapsed=${Math.round(elapsedSec)}s telefone=${telefone}`)
     fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
