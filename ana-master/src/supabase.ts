@@ -24,7 +24,7 @@ export async function upsertCall(callSid: string, telefone: string) {
   const { data } = await supabase
     .from('ana_calls')
     .upsert(
-      { call_sid: callSid, telefone: norm, stage: 'apresentacao', status: 'active', gates_passed: [], memories: {}, em_ligacao: true },
+      { call_sid: callSid, telefone: norm, stage: 'apresentacao', status: 'active', gates_passed: [], memories: { telefone: norm }, em_ligacao: true },
       { onConflict: 'call_sid' }
     )
     .select()
