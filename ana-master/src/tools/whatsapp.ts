@@ -49,14 +49,26 @@ export async function iniciarColetaReferidos(telefone: string): Promise<{ link: 
 
   const link = `${APP_URL}/indicar/${token}`
   const phone = normalizePhone(telefone)
+  const TUTORIAL_VIDEO_URL = 'https://pub-7091151189544b0980e12e81533a5213.r2.dev/tutorialwpp.mp4'
+  const caption =
+    `✅ Código recebido!\n\n` +
+    `1️⃣ Toque no + à esquerda\n2️⃣ Escolha Contato\n3️⃣ Busque e selecione suas amigas\n4️⃣ Toque em Enviar\n\n` +
+    `Você pode selecionar várias de uma vez! 💜\n\n` +
+    `👉 ${link}`
 
-  await zapiPost('send-text', {
-    phone,
-    message:
-      `✨ Seu link especial de indicações chegou! 💜\n\n` +
-      `👉 ${link}\n\n` +
-      `Nossa meta são 20 amigas — o sistema avisa quando chegar lá. Pode começar! 💜`,
-  })
+  let enviou = false
+  try {
+    const r = await fetch(`${ZAPI_BASE}/send-video`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_CLIENT_TOKEN },
+      body: JSON.stringify({ phone, video: TUTORIAL_VIDEO_URL, caption }),
+    })
+    enviou = r.ok
+  } catch { /* fallback abaixo */ }
+
+  if (!enviou) {
+    await zapiPost('send-text', { phone, message: caption })
+  }
 
   return { link, token }
 }
