@@ -1414,26 +1414,46 @@ function SimuladorInner() {
           <div style={{ padding: 12, borderBottom: '1px solid #1C1C1E', background: '#0D0D0F' }}>
             <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', color: '#52525E', textTransform: 'uppercase', margin: '0 0 10px' }}>Como iniciar?</p>
 
-            {/* Atalho: ir direto para Pagamento */}
-            <button onClick={() => {
-              setShowStartPicker(false)
+            {/* Atalhos rápidos de etapa */}
+            {(() => {
               const now = new Date().toISOString()
-              const cp: CheckpointData = {
-                stage: 'fechamento',
-                speech_progress: { state: 'COMPLETE', parte_atual: 'complete' as any, partes_entregues: [1,2,3,4] as any, parte_em_execucao: undefined, parte_interrompida: false, pergunta_final_feita: true, resposta_final_recebida: true, waiting_for_lead: false },
-                gate_log: [
-                  { gate: 'GATE_ABERTURA', ts: now, next_stage: 'conexao' },
-                  { gate: 'GATE_CONEXAO', ts: now, next_stage: 'combinado' },
-                  { gate: 'GATE_COMBINADO', ts: now, next_stage: 'speech' },
-                  { gate: 'GATE_SPEECH', ts: now, next_stage: 'fechamento' },
-                ],
-                ts: now,
-              }
-              startSession(cp)
-            }} style={{ width: '100%', textAlign: 'left', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 8, padding: '8px 12px', marginBottom: 6, cursor: 'pointer' }}>
-              <p style={{ fontSize: 11, fontWeight: 700, color: '#22C55E', margin: 0 }}>⚡ Ir para Pagamento</p>
-              <p style={{ fontSize: 10, color: '#52525E', margin: '2px 0 0' }}>ANA inicia direto no fechamento — diga "Pix" ou "Cartão"</p>
-            </button>
+              const shortcuts: { label: string; detail: string; stage: string; gates: {gate:string;next_stage:string}[] }[] = [
+                { label: '⚡ Ir para Fechamento', detail: 'Apresentação feita — diga o preço e pergunte Pix ou Cartão', stage: 'fechamento',
+                  gates: [
+                    { gate: 'GATE_ABERTURA', next_stage: 'conexao' },
+                    { gate: 'GATE_CONEXAO', next_stage: 'combinado' },
+                    { gate: 'GATE_COMBINADO', next_stage: 'speech' },
+                    { gate: 'GATE_SPEECH', next_stage: 'fechamento' },
+                  ]},
+                { label: '💳 Ir para Pagamento', detail: 'Lead disse Pix/Cartão — diga "Pix" para disparar o link', stage: 'pagamento',
+                  gates: [
+                    { gate: 'GATE_ABERTURA', next_stage: 'conexao' },
+                    { gate: 'GATE_CONEXAO', next_stage: 'combinado' },
+                    { gate: 'GATE_COMBINADO', next_stage: 'speech' },
+                    { gate: 'GATE_SPEECH', next_stage: 'fechamento' },
+                    { gate: 'GATE_FECHAMENTO', next_stage: 'pagamento' },
+                  ]},
+                { label: '👥 Ir para Referidos', detail: 'Pagamento confirmado — enviar link e coletar indicações', stage: 'referidos',
+                  gates: [
+                    { gate: 'GATE_ABERTURA', next_stage: 'conexao' },
+                    { gate: 'GATE_CONEXAO', next_stage: 'combinado' },
+                    { gate: 'GATE_COMBINADO', next_stage: 'speech' },
+                    { gate: 'GATE_SPEECH', next_stage: 'fechamento' },
+                    { gate: 'GATE_FECHAMENTO', next_stage: 'pagamento' },
+                    { gate: 'GATE_PAGAMENTO', next_stage: 'referidos' },
+                  ]},
+              ]
+              const speechComplete = { state: 'COMPLETE', parte_atual: 'complete' as any, partes_entregues: [1,2,3,4] as any, parte_em_execucao: undefined, parte_interrompida: false, pergunta_final_feita: true, resposta_final_recebida: true, waiting_for_lead: false }
+              return shortcuts.map(s => (
+                <button key={s.stage} onClick={() => {
+                  setShowStartPicker(false)
+                  startSession({ stage: s.stage, speech_progress: speechComplete, gate_log: s.gates.map(g => ({ ...g, ts: now })), ts: now })
+                }} style={{ width: '100%', textAlign: 'left', background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 8, padding: '8px 12px', marginBottom: 6, cursor: 'pointer' }}>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: '#22C55E', margin: 0 }}>{s.label}</p>
+                  <p style={{ fontSize: 10, color: '#52525E', margin: '2px 0 0' }}>{s.detail}</p>
+                </button>
+              ))
+            })()}
 
             {/* Opção 1: do zero */}
             <button onClick={() => { setShowStartPicker(false); startSession() }} style={{ width: '100%', textAlign: 'left', background: 'rgba(123,63,228,0.08)', border: '1px solid rgba(123,63,228,0.25)', borderRadius: 8, padding: '8px 12px', marginBottom: 6, cursor: 'pointer' }}>
