@@ -1,6 +1,6 @@
 import { verifyPayment, checkReferidos, updateLeadsGanho, executeGateTransition, saveMemory, getMemories, getCallStage } from './supabase.js'
 import { GateId, GATE_TRANSITIONS, STAGE_INSTRUCTIONS, Stage } from './state-machine.js'
-import { sendWelcome, sendWhatsApp } from './tools/whatsapp.js'
+import { sendWelcome } from './tools/whatsapp.js'
 import { APP_URL } from './config.js'
 
 export interface GateEvidence {
@@ -135,15 +135,16 @@ export async function validateGate(
         return { approved: false, reason: 'Parcelamento deve ser apresentado como ATÉ 6X SEM JUROS — nunca 12x.' }
       }
       await saveMemory(callSid, 'forma_pagamento_escolhida', evidence.forma_pagamento_escolhida)
-      // Envia link de pagamento no WhatsApp da lead — igual ao simulador browser
+      // Gera PIX real via Mercado Pago e envia as 3 mensagens no WhatsApp da lead
       const memoriesFechamento = await getMemories(callSid)
       const telFechamento = (memoriesFechamento.telefone as string) ?? ''
       if (telFechamento) {
-        const payPath = evidence.forma_pagamento_escolhida === 'cartao' ? 'pagamento/cartao' : 'pagamento/pix'
-        const payLink = `${APP_URL}/${payPath}?telefone=${encodeURIComponent(telFechamento)}`
-        await sendWhatsApp(telFechamento,
-          `💳 Aqui está o link para finalizar o seu pagamento!\n\n👉 ${payLink}\n\nClique e conclua em segundos — estou aqui com você! 💜`
-        ).catch(() => { /* falha silenciosa — não bloqueia o gate */ })
+        const metodo = evidence.forma_pagamento_escolhida === 'cartao' ? 'cartao' : 'pix'
+        fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ callSid, telefone: telFechamento, metodo }),
+        }).catch(() => { /* falha silenciosa — não bloqueia o gate */ })
       }
       break
     }
