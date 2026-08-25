@@ -207,6 +207,31 @@ export function buildTools(session: SessionRef) {
     },
 
     {
+      name: 'solicitar_pagamento',
+      description:
+        'Gera e envia o link de pagamento (Pix ou cartão) no WhatsApp da lead. Chame imediatamente após a lead confirmar a forma de pagamento. O sistema envia automaticamente as mensagens — nunca diga que enviou antes de chamar esta ferramenta.',
+      parameters: z.object({
+        metodo: z.enum(['pix', 'cartao']).describe('Forma de pagamento escolhida pela lead'),
+      }),
+      execute: async ({ metodo }: { metodo: 'pix' | 'cartao' }) => {
+        const result = await validateGate(
+          'GATE_FECHAMENTO' as GateId,
+          {
+            investimento_apresentado: true,
+            forma_pagamento_escolhida: metodo,
+            parcelamento_6x_mencionado: true,
+            telefone: session.telefone,
+          } as any,
+          session.callSid,
+        )
+        if (result.approved) {
+          return `{"ok":true,"metodo":"${metodo}","enviado":true}`
+        }
+        return `{"ok":false,"motivo":"${result.reason.replace(/"/g, "'")}"}`
+      },
+    },
+
+    {
       name: 'send_whatsapp',
       description: 'Envia uma mensagem de texto no WhatsApp da lead.',
       parameters: z.object({
