@@ -209,13 +209,21 @@ export function buildTools(session: SessionRef) {
     {
       name: 'solicitar_pagamento',
       description:
-        'Gera e envia o link de pagamento (Pix ou cartão) no WhatsApp da lead. Chame imediatamente após a lead confirmar a forma de pagamento. O sistema envia automaticamente as mensagens — nunca diga que enviou antes de chamar esta ferramenta.',
+        'Gera e envia o link de pagamento (Pix ou cartão) no WhatsApp da lead. Chame imediatamente após a lead confirmar a forma de pagamento. Também use para verificar se o pagamento foi confirmado — retorna paid:true quando o sistema confirmar.',
       parameters: z.object({
         metodo: z.enum(['pix', 'cartao']).describe('Forma de pagamento escolhida pela lead'),
       }),
       execute: async ({ metodo }: { metodo: 'pix' | 'cartao' }) => {
         try {
           const { APP_URL } = await import('../config.js')
+          const { verifyPayment } = await import('../supabase.js')
+          // Check if payment already confirmed before sending (lead may call after paying)
+          if (session.telefone) {
+            const paid = await verifyPayment(session.telefone)
+            if (paid) {
+              return `{"ok":true,"paid":true,"metodo":"${metodo}","confirmado":true}`
+            }
+          }
           const res = await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -223,7 +231,12 @@ export function buildTools(session: SessionRef) {
           })
           const data = await res.json().catch(() => ({}))
           if (res.ok) {
-            return `{"ok":true,"metodo":"${metodo}","enviado":true,"paymentId":"${(data as any).paymentId ?? ''}"}`
+            // Re-check payment after sending (webhook may have fired already)
+            const paidNow = session.telefone ? await verifyPayment(session.telefone) : false
+            if (paidNow) {
+              return `{"ok":true,"paid":true,"metodo":"${metodo}","enviado":true}`
+            }
+            return `{"ok":true,"paid":false,"metodo":"${metodo}","enviado":true,"aguardando":true}`
           }
           return `{"ok":false,"motivo":"${JSON.stringify(data).replace(/"/g, "'")}"}`
         } catch (e: any) {
