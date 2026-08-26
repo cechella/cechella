@@ -96,7 +96,9 @@ export function buildTools(session: SessionRef) {
       description: 'Verifica no sistema se o pagamento da lead foi confirmado.',
       parameters: z.object({}),
       execute: async () => {
+        console.log(`[VERIFICAR_PAGAMENTO] telefone=${session.telefone} callSid=${session.callSid}`)
         const pago = await verifyPayment(session.telefone)
+        console.log(`[VERIFICAR_PAGAMENTO] resultado=${pago} telefone=${session.telefone}`)
         return pago
           ? 'Pagamento confirmado! ✅'
           : 'Pagamento ainda não confirmado. Aguarde e verifique novamente em alguns instantes.'
@@ -216,26 +218,31 @@ export function buildTools(session: SessionRef) {
       execute: async ({ metodo }: { metodo: 'pix' | 'cartao' }) => {
         try {
           const { APP_URL } = await import('../config.js')
-          const { verifyPayment } = await import('../supabase.js')
+          const { verifyPayment, verifyPaymentByCallSid } = await import('../supabase.js')
+          console.log(`[SOLICITAR_PAGAMENTO] inicio callSid=${session.callSid} telefone=${session.telefone} metodo=${metodo}`)
           // Send PIX (dedup-safe — PIX route reuses existing pending payment)
           await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ callSid: session.callSid, telefone: session.telefone, metodo }),
           }).catch(() => {})
-          // Poll for payment confirmation — up to 90s (webhook usually arrives in <10s with notification_url)
+          // Poll for payment confirmation — up to 120s (webhook usually arrives in <10s with notification_url)
           if (session.telefone) {
-            for (let i = 0; i < 18; i++) {
+            for (let i = 0; i < 24; i++) {
               await new Promise(r => setTimeout(r, 5000))
               const paid = await verifyPayment(session.telefone)
-              if (paid) {
-                console.log(`[ANA MASTER] ✅ pagamento confirmado após ${(i + 1) * 5}s`)
+              const paidBySid = !paid ? await verifyPaymentByCallSid(session.callSid) : false
+              console.log(`[SOLICITAR_PAGAMENTO] poll=${i + 1}/24 telefone=${session.telefone} paid=${paid} paidBySid=${paidBySid}`)
+              if (paid || paidBySid) {
+                console.log(`[SOLICITAR_PAGAMENTO] ✅ confirmado após ${(i + 1) * 5}s`)
                 return `{"ok":true,"paid":true,"metodo":"${metodo}","confirmado":true}`
               }
             }
           }
+          console.log(`[SOLICITAR_PAGAMENTO] ⏰ timeout 120s telefone=${session.telefone}`)
           return `{"ok":true,"paid":false,"metodo":"${metodo}","enviado":true,"aguardando":true}`
         } catch (e: any) {
+          console.log(`[SOLICITAR_PAGAMENTO] ❌ erro: ${e.message}`)
           return `{"ok":false,"motivo":"${e.message}"}`
         }
       },

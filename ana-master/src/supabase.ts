@@ -144,6 +144,16 @@ export async function verifyPayment(telefone: string): Promise<boolean> {
   return lead?.status_pagamento === 'pago'
 }
 
+export async function verifyPaymentByCallSid(callSid: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('pagamentos')
+    .select('status')
+    .eq('call_sid', callSid)
+    .eq('status', 'approved')
+    .maybeSingle()
+  return !!data
+}
+
 export async function checkReferidos(token: string): Promise<{ completo: boolean; semDados: number; missaoCompleta: boolean }> {
   // Resolve phone from leads via token
   const { data: lead } = await supabase
