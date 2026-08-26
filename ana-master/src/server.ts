@@ -123,6 +123,16 @@ app.post('/outbound', async (req, reply) => {
   if (!res.ok) return reply.status(res.status).send({ error: data?.message ?? 'Twilio error' })
 
   app.log.info({ sid: data.sid, to }, 'Outbound call initiated')
+
+  // Garante que o lead existe na tabela leads antes da ligação começar
+  // Sem isso, o CRM fica vazio quando o banco está zerado
+  const phone = numero.startsWith('55') ? numero : `55${numero}`
+  const { supabase: sb } = await import('./supabase.js')
+  await sb.from('leads').upsert(
+    { telefone: phone, etapa: 'apresentacao', etapa_agente: 1, origem: 'ptl', updated_at: new Date().toISOString() },
+    { onConflict: 'telefone' }
+  )
+
   return reply.send({ ok: true, sid: data.sid, status: data.status })
 })
 
