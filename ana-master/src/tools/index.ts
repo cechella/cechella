@@ -223,9 +223,9 @@ export function buildTools(session: SessionRef) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ callSid: session.callSid, telefone: session.telefone, metodo }),
           }).catch(() => {})
-          // Poll for payment confirmation — up to 30s (webhook usually arrives in <5s)
+          // Poll for payment confirmation — up to 90s (webhook usually arrives in <10s with notification_url)
           if (session.telefone) {
-            for (let i = 0; i < 6; i++) {
+            for (let i = 0; i < 18; i++) {
               await new Promise(r => setTimeout(r, 5000))
               const paid = await verifyPayment(session.telefone)
               if (paid) {
