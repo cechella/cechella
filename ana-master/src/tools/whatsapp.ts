@@ -41,6 +41,7 @@ export async function iniciarColetaReferidos(telefone: string): Promise<{ link: 
   if (!lead || lead.status_pagamento !== 'pago') return null
 
   let token = lead.token_indicacao as string | null
+  const webhookAlreadySent = !!token // webhook sets token before sending video
   if (!token) {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
     token = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
@@ -48,6 +49,10 @@ export async function iniciarColetaReferidos(telefone: string): Promise<{ link: 
   }
 
   const link = `${APP_URL}/indicar/${token}`
+
+  // Skip WhatsApp send if webhook already sent the video (token was already set by webhook)
+  if (webhookAlreadySent) return { link, token }
+
   const phone = normalizePhone(telefone)
   const TUTORIAL_VIDEO_URL = 'https://pub-7091151189544b0980e12e81533a5213.r2.dev/tutorialwpp.mp4'
   const caption =
