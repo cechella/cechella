@@ -5,6 +5,7 @@ import { createAnaMasterSession } from './realtime.js'
 import { registerSseClient } from './sse-registry.js'
 import { supabase } from './supabase.js'
 import { injectPaymentConfirmed } from './session-registry.js'
+import { iniciarColetaReferidos } from './tools/whatsapp.js'
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN!
@@ -22,9 +23,15 @@ supabase
     'postgres_changes' as any,
     { event: 'UPDATE', schema: 'public', table: 'pagamentos' },
     (payload: any) => {
-      const { call_sid, status } = payload.new ?? {}
+      const { call_sid, status, lead_telefone } = payload.new ?? {}
       if (status === 'approved' && call_sid) {
-        console.log(`[SERVER] 💰 pagamento aprovado call_sid=${call_sid} — injetando confirmação na sessão`)
+        console.log(`[SERVER] 💰 pagamento aprovado call_sid=${call_sid} — enviando link referidos + injetando confirmação`)
+        // Auto-send referral link via WhatsApp before injecting into session
+        if (lead_telefone) {
+          iniciarColetaReferidos(lead_telefone)
+            .then(r => console.log(`[SERVER] referidos link enviado token=${r?.token ?? 'null'}`))
+            .catch(e => console.error(`[SERVER] referidos link erro: ${e.message}`))
+        }
         injectPaymentConfirmed(call_sid)
       }
     },

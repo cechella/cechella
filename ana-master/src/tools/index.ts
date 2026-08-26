@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { supabase, getMemories, saveMemory, checkReferidos } from '../supabase.js'
-import { iniciarColetaReferidos } from './whatsapp.js'
+import { supabase, getMemories, saveMemory, checkReferidos, updateLeadsGanho } from '../supabase.js'
+import { iniciarColetaReferidos, sendWelcome } from './whatsapp.js'
 
 export type SessionRef = {
   callSid: string
@@ -112,7 +112,12 @@ export function buildTools(session: SessionRef) {
         const token = memories.token_indicacao as string | undefined
         if (!token) return '{"erro":"token_nao_encontrado","mensagem":"O link foi enviado? Chame iniciar_coleta_referidos primeiro."}'
         const ref = await checkReferidos(token)
-        console.log(`[REFERIDOS] verificar token=${token} completo=${ref.completo} semDados=${ref.semDados} missaoCompleta=${ref.missaoCompleta}`)
+        console.log(`[REFERIDOS] verificar token=${token} total=${ref.total} completo=${ref.completo} semDados=${ref.semDados} missaoCompleta=${ref.missaoCompleta}`)
+        if (ref.missaoCompleta) {
+          console.log(`[REFERIDOS] 🏆 missão completa — marcando GANHO e enviando boas-vindas`)
+          updateLeadsGanho(session.callSid).catch(() => {})
+          if (session.telefone) sendWelcome(session.telefone).catch(() => {})
+        }
         return JSON.stringify(ref)
       },
     },
