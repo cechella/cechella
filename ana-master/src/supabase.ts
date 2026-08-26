@@ -145,14 +145,25 @@ export async function verifyPayment(telefone: string): Promise<boolean> {
 }
 
 export async function checkReferidos(token: string): Promise<{ completo: boolean; semDados: number; missaoCompleta: boolean }> {
+  // Resolve phone from leads via token
+  const { data: lead } = await supabase
+    .from('leads')
+    .select('telefone')
+    .eq('token_indicacao', token)
+    .maybeSingle()
+
+  if (!lead?.telefone) return { completo: false, semDados: 20, missaoCompleta: false }
+
+  const phone = String(lead.telefone).replace(/\D/g, '')
+
   const { data } = await supabase
-    .from('indicacoes')
-    .select('id, profissao, hobby, recusou')
-    .eq('token_origem', token)
+    .from('contatos_referidos')
+    .select('id, profissao, hobby, status')
+    .or(`indicado_por_telefone.eq.${phone},indicado_por_telefone.eq.55${phone},indicado_por_telefone.eq.${phone.replace(/^55/, '')}`)
 
   if (!data || data.length === 0) return { completo: false, semDados: 20, missaoCompleta: false }
 
-  const ativos = data.filter((r: any) => !r.recusou)
+  const ativos = data.filter((r: any) => r.status !== 'recusou')
   const semDados = ativos.filter((r: any) => !r.profissao || !r.hobby).length
   const completo = ativos.length >= 20
   const missaoCompleta = completo && semDados === 0
