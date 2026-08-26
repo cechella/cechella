@@ -194,6 +194,17 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ callSid, telefone, metodo }),
     }).catch((e) => console.error('[ANA MASTER] auto-PIX fetch error:', e))
+    // Advance stage fechamento → pagamento so GATE_PAGAMENTO invariant passes
+    import('./supabase.js').then(({ saveMemory, executeGateTransition }) => {
+      saveMemory(callSid, 'forma_pagamento_escolhida', metodo).catch(() => {})
+      executeGateTransition(callSid, 'GATE_FECHAMENTO', 'fechamento', 'pagamento', {
+        investimento_apresentado: true,
+        forma_pagamento_escolhida: metodo,
+        parcelamento_6x_mencionado: true,
+      }).then((r) => {
+        console.log(`[ANA MASTER] 🔀 stage fechamento→pagamento: transitioned=${r.transitioned} reason=${r.reason}`)
+      }).catch((e) => console.error('[ANA MASTER] stage advance error:', e))
+    }).catch(() => {})
   }
 
   // Transport created IMMEDIATELY so it sets up WebSocket listeners and captures the Twilio
