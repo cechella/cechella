@@ -167,11 +167,12 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       setTimeout(() => {
         if (!pixAutoSent && sessionRef.callSid !== 'unknown') {
           pixAutoSent = true
-          console.log(`[ANA MASTER] ⏰ timeout auto-PIX — metodo=pix (fallback por transcrição irreconhecível)`)
+          const metodo = sessionRef.metodoEscolhido ?? 'pix'
+          console.log(`[ANA MASTER] ⏰ timeout auto-PIX — metodo=${metodo} (fallback por transcrição irreconhecível)`)
           fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ callSid: sessionRef.callSid, telefone: sessionRef.telefone, metodo: 'pix' }),
+            body: JSON.stringify({ callSid: sessionRef.callSid, telefone: sessionRef.telefone, metodo }),
           }).catch((e: Error) => console.error('[ANA MASTER] timeout auto-PIX error:', e.message))
         }
       }, 10000)

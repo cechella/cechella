@@ -91,10 +91,20 @@ export async function POST(req: NextRequest) {
       await zapiSend(phone, `💳 Gerando seu link de pagamento, aguarde um momento! 💜`)
       await zapiSend(phone, `Seu acesso está quase liberado! 🎉\n\nClique aqui para finalizar com segurança 👇\n${link}\n\n🔒 Ambiente 100% seguro — Mercado Pago`)
 
+      // Notify Ana that cartão link arrived on lead's WhatsApp
+      const ANA_MASTER_URL_CARTAO = process.env.ANA_MASTER_URL ?? 'http://localhost:3001'
+      fetch(`${ANA_MASTER_URL_CARTAO}/inject-pix-sent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callSid, metodo: 'cartao' }),
+      }).catch(() => {})
+
       return NextResponse.json({ ok: true, payment_id: token, metodo: 'cartao', link, valor })
     }
 
     // PIX via Mercado Pago
+    const ANA_MASTER_URL = process.env.ANA_MASTER_URL ?? 'http://localhost:3001'
+
     await zapiSend(phone, `💳 Gerando seu PIX agora, aguarde um momento! 💜`)
 
     const mpRes = await fetch('https://api.mercadopago.com/v1/payments', {
@@ -149,6 +159,13 @@ export async function POST(req: NextRequest) {
     await zapiSend(phone, `🏦 Pagamento gerado!\n\n💰 Valor: ${valorFmt}\n\nCopia e Cola PIX abaixo 👇`)
     await zapiSend(phone, pixCode)
     await zapiSend(phone, `Após pagar, me avise aqui! 🎯`)
+
+    // Notify Ana that PIX data arrived on lead's WhatsApp
+    fetch(`${ANA_MASTER_URL}/inject-pix-sent`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callSid, metodo: 'pix' }),
+    }).catch(() => {})
 
     return NextResponse.json({ ok: true, payment_id: paymentId, metodo: 'pix', valor })
   } catch (e: any) {

@@ -5,6 +5,7 @@ import { iniciarColetaReferidos, sendWelcome } from './whatsapp.js'
 export type SessionRef = {
   callSid: string
   telefone: string
+  metodoEscolhido?: 'pix' | 'cartao'
 }
 
 export function buildTools(session: SessionRef) {
@@ -20,6 +21,9 @@ export function buildTools(session: SessionRef) {
         try {
           const { APP_URL } = await import('../config.js')
           console.log(`[PAG] inicio callSid=${session.callSid} telefone=${session.telefone} metodo=${metodo}`)
+
+          // Save chosen method so timeout fallback uses the correct one
+          session.metodoEscolhido = metodo
 
           // Send PIX link (dedup-safe — auto-PIX may have already sent it)
           await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
@@ -81,7 +85,7 @@ export function buildTools(session: SessionRef) {
             : `{"ok":true,"paid":false,"metodo":"${metodo}","aguardando":true}`
         } catch (e: any) {
           console.error(`[PAG] erro: ${e.message}`)
-          return `{"ok":false,"motivo":"${e.message}"}`
+          return `{"ok":true,"paid":false,"aguardando":true}`
         }
       },
     },

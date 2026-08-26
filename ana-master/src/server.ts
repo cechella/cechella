@@ -4,7 +4,7 @@ import { PORT, PUBLIC_HOST } from './config.js'
 import { createAnaMasterSession } from './realtime.js'
 import { registerSseClient } from './sse-registry.js'
 import { supabase } from './supabase.js'
-import { injectPaymentConfirmed, injectReferralLinkSent } from './session-registry.js'
+import { injectPaymentConfirmed, injectReferralLinkSent, injectPixDataSent } from './session-registry.js'
 import { iniciarColetaReferidos } from './tools/whatsapp.js'
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
@@ -193,6 +193,18 @@ app.post('/recording-status', async (req, reply) => {
   }
 
   return reply.status(204).send()
+})
+
+// Internal endpoint — called by web/Vercel route after sending PIX/cartão data to lead's WhatsApp
+// Injects a natural notification into Ana's active Realtime session
+app.post('/inject-pix-sent', async (req, reply) => {
+  const body = req.body as Record<string, string>
+  const callSid = body?.callSid
+  const metodo = (body?.metodo ?? 'pix') as 'pix' | 'cartao'
+  if (!callSid) return reply.status(400).send({ error: 'callSid obrigatório' })
+  const ok = injectPixDataSent(callSid, metodo)
+  console.log(`[SERVER] /inject-pix-sent callSid=${callSid} metodo=${metodo} ok=${ok}`)
+  return reply.send({ ok })
 })
 
 // SSE live transcript stream — browser connects here to receive real-time turns
