@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { validateGate } from '../gate-validator.js'
 import { GateId, GATES } from '../state-machine.js'
-import { getLeadByPhone, getMemories, saveMemory, verifyPayment, checkReferidos, saveSpeechProgress } from '../supabase.js'
+import { supabase, getLeadByPhone, getMemories, saveMemory, verifyPayment, checkReferidos, saveSpeechProgress } from '../supabase.js'
 import { sendWhatsApp, iniciarColetaReferidos } from './whatsapp.js'
 import {
   SpeechProgress, initialSpeechProgress, isComplete,
@@ -218,31 +218,69 @@ export function buildTools(session: SessionRef) {
       execute: async ({ metodo }: { metodo: 'pix' | 'cartao' }) => {
         try {
           const { APP_URL } = await import('../config.js')
-          const { verifyPayment, verifyPaymentByCallSid } = await import('../supabase.js')
-          console.log(`[SOLICITAR_PAGAMENTO] inicio callSid=${session.callSid} telefone=${session.telefone} metodo=${metodo}`)
-          // Send PIX (dedup-safe — PIX route reuses existing pending payment)
+          console.log(`[PAG] inicio callSid=${session.callSid} telefone=${session.telefone} metodo=${metodo}`)
+
+          // 1. Envia PIX (dedup-safe — reutiliza pagamento pendente existente)
           await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ callSid: session.callSid, telefone: session.telefone, metodo }),
-          }).catch(() => {})
-          // Poll for payment confirmation — up to 120s (webhook usually arrives in <10s with notification_url)
-          if (session.telefone) {
-            for (let i = 0; i < 24; i++) {
-              await new Promise(r => setTimeout(r, 5000))
-              const paid = await verifyPayment(session.telefone)
-              const paidBySid = !paid ? await verifyPaymentByCallSid(session.callSid) : false
-              console.log(`[SOLICITAR_PAGAMENTO] poll=${i + 1}/24 telefone=${session.telefone} paid=${paid} paidBySid=${paidBySid}`)
-              if (paid || paidBySid) {
-                console.log(`[SOLICITAR_PAGAMENTO] ✅ confirmado após ${(i + 1) * 5}s`)
-                return `{"ok":true,"paid":true,"metodo":"${metodo}","confirmado":true}`
-              }
+          }).catch((e: Error) => console.log(`[PAG] erro envio PIX: ${e.message}`))
+
+          // 2. Aguarda confirmação via Supabase Realtime — evento-driven, responde em <1s após webhook
+          // Filtra por call_sid (único por ligação) — imune a dados antigos do mesmo telefone
+          const paid = await new Promise<boolean>((resolve) => {
+            let settled = false
+            const finish = (result: boolean) => {
+              if (settled) return
+              settled = true
+              clearTimeout(timer)
+              supabase.removeChannel(channel).catch(() => {})
+              console.log(`[PAG] ${result ? '✅ confirmado' : '⏰ timeout'} callSid=${session.callSid}`)
+              resolve(result)
             }
-          }
-          console.log(`[SOLICITAR_PAGAMENTO] ⏰ timeout 120s telefone=${session.telefone}`)
-          return `{"ok":true,"paid":false,"metodo":"${metodo}","enviado":true,"aguardando":true}`
+
+            // Lead tem até 5 minutos para abrir o app do banco e pagar
+            const timer = setTimeout(() => finish(false), 5 * 60 * 1000)
+
+            const channel = supabase
+              .channel(`pag:${session.callSid}`)
+              .on(
+                'postgres_changes' as any,
+                { event: 'UPDATE', schema: 'public', table: 'pagamentos', filter: `call_sid=eq.${session.callSid}` },
+                (payload: any) => {
+                  console.log(`[PAG] realtime pagamentos.status=${payload.new?.status}`)
+                  if (payload.new?.status === 'approved') finish(true)
+                }
+              )
+              .subscribe(async (status: string) => {
+                console.log(`[PAG] realtime subscribe status=${status}`)
+                if (status === 'SUBSCRIBED') {
+                  // Verifica se já estava pago antes de subscrever (race condition)
+                  const { data } = await supabase
+                    .from('pagamentos').select('status')
+                    .eq('call_sid', session.callSid).eq('status', 'approved').maybeSingle()
+                  if (data) { console.log(`[PAG] já aprovado no DB`); finish(true) }
+                }
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                  // Fallback: poll por call_sid a cada 3s se Realtime falhar
+                  console.log(`[PAG] realtime falhou (${status}), fallback poll por callSid`)
+                  const poll = setInterval(async () => {
+                    if (settled) { clearInterval(poll); return }
+                    const { data } = await supabase
+                      .from('pagamentos').select('status')
+                      .eq('call_sid', session.callSid).eq('status', 'approved').maybeSingle()
+                    if (data) { clearInterval(poll); finish(true) }
+                  }, 3000)
+                }
+              })
+          })
+
+          return paid
+            ? `{"ok":true,"paid":true,"metodo":"${metodo}","confirmado":true}`
+            : `{"ok":true,"paid":false,"metodo":"${metodo}","enviado":true,"aguardando":true}`
         } catch (e: any) {
-          console.log(`[SOLICITAR_PAGAMENTO] ❌ erro: ${e.message}`)
+          console.log(`[PAG] ❌ ${e.message}`)
           return `{"ok":false,"motivo":"${e.message}"}`
         }
       },
