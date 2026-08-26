@@ -161,7 +161,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
   let anaAskedPayment = false
   let pixAutoSent = false
   function noteAnaText(anaText: string) {
-    if (!anaAskedPayment && /pix\s*ou\s*cart[aã]o|cart[aã]o\s*ou\s*pix|como.*prefer.*pagar|pix.*cart[aã]o/i.test(anaText)) {
+    if (!anaAskedPayment && /pix|cart[aã]o|pagamento|pagar/i.test(anaText)) {
       anaAskedPayment = true
       console.log('[ANA MASTER] 💬 Ana perguntou sobre pagamento — aguardando resposta da lead')
     }
