@@ -209,38 +209,26 @@ export function buildTools(session: SessionRef) {
     },
 
     {
-      name: 'enviar_link_pagamento',
+      name: 'solicitar_pagamento',
       description:
-        'PASSO 1 DO PAGAMENTO. Envia o link de pagamento (Pix ou cartão) no WhatsApp da lead. Chame assim que a lead confirmar a forma de pagamento. Retorna imediatamente — não espera confirmação. Após chamar esta ferramenta, diga à lead que o link foi enviado e que ela pode pagar agora. Depois chame aguardar_confirmacao_pagamento.',
+        'Gera e envia o link de pagamento (Pix ou cartão) no WhatsApp da lead. Chame imediatamente após a lead confirmar a forma de pagamento. Também use para verificar se o pagamento foi confirmado — retorna paid:true quando o sistema confirmar.',
       parameters: z.object({
         metodo: z.enum(['pix', 'cartao']).describe('Forma de pagamento escolhida pela lead'),
       }),
       execute: async ({ metodo }: { metodo: 'pix' | 'cartao' }) => {
         try {
           const { APP_URL } = await import('../config.js')
-          console.log(`[PAG] enviando link callSid=${session.callSid} telefone=${session.telefone} metodo=${metodo}`)
-          const res = await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+          console.log(`[PAG] inicio callSid=${session.callSid} telefone=${session.telefone} metodo=${metodo}`)
+
+          // 1. Envia PIX (dedup-safe — reutiliza pagamento pendente existente)
+          await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ callSid: session.callSid, telefone: session.telefone, metodo }),
-          }).catch((e: Error) => { console.log(`[PAG] erro envio: ${e.message}`); return null })
-          console.log(`[PAG] link enviado status=${res?.status}`)
-          return `{"ok":true,"enviado":true,"metodo":"${metodo}","instrucao":"Link enviado no WhatsApp. Diga à lead que já chegou e que ela pode pagar agora. Depois chame aguardar_confirmacao_pagamento."}`
-        } catch (e: any) {
-          console.log(`[PAG] ❌ envio ${e.message}`)
-          return `{"ok":false,"motivo":"${e.message}"}`
-        }
-      },
-    },
+          }).catch((e: Error) => console.log(`[PAG] erro envio PIX: ${e.message}`))
 
-    {
-      name: 'aguardar_confirmacao_pagamento',
-      description:
-        'PASSO 2 DO PAGAMENTO. Aguarda a confirmação do pagamento em tempo real. Chame SOMENTE após enviar_link_pagamento. Fica aguardando até 5 minutos — quando retornar paid:true, o pagamento foi confirmado no sistema e você pode avançar para a coleta de referidos. Enquanto espera, fique em silêncio ou diga algo como "pode pagar quando quiser, eu aguardo aqui".',
-      parameters: z.object({}),
-      execute: async () => {
-        try {
-          console.log(`[PAG] aguardando confirmacao callSid=${session.callSid}`)
+          // 2. Aguarda confirmação via Supabase Realtime — evento-driven, responde em <1s após webhook
+          // Filtra por call_sid (único por ligação) — imune a dados antigos do mesmo telefone
           const paid = await new Promise<boolean>((resolve) => {
             let settled = false
             const finish = (result: boolean) => {
@@ -252,6 +240,7 @@ export function buildTools(session: SessionRef) {
               resolve(result)
             }
 
+            // Lead tem até 5 minutos para abrir o app do banco e pagar
             const timer = setTimeout(() => finish(false), 5 * 60 * 1000)
 
             const channel = supabase
@@ -267,13 +256,15 @@ export function buildTools(session: SessionRef) {
               .subscribe(async (status: string) => {
                 console.log(`[PAG] realtime subscribe status=${status}`)
                 if (status === 'SUBSCRIBED') {
+                  // Verifica se já estava pago antes de subscrever (race condition)
                   const { data } = await supabase
                     .from('pagamentos').select('status')
                     .eq('call_sid', session.callSid).eq('status', 'approved').maybeSingle()
                   if (data) { console.log(`[PAG] já aprovado no DB`); finish(true) }
                 }
                 if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                  console.log(`[PAG] realtime falhou (${status}), fallback poll`)
+                  // Fallback: poll por call_sid a cada 3s se Realtime falhar
+                  console.log(`[PAG] realtime falhou (${status}), fallback poll por callSid`)
                   const poll = setInterval(async () => {
                     if (settled) { clearInterval(poll); return }
                     const { data } = await supabase
@@ -286,10 +277,10 @@ export function buildTools(session: SessionRef) {
           })
 
           return paid
-            ? `{"ok":true,"paid":true,"instrucao":"Pagamento confirmado! Parabenize a lead naturalmente e avance para a coleta de referidos chamando iniciar_coleta_referidos."}`
-            : `{"ok":true,"paid":false,"instrucao":"Tempo esgotado sem confirmação. Pergunte à lead se ela conseguiu pagar ou se precisa de ajuda."}`
+            ? `{"ok":true,"paid":true,"metodo":"${metodo}","confirmado":true}`
+            : `{"ok":true,"paid":false,"metodo":"${metodo}","enviado":true,"aguardando":true}`
         } catch (e: any) {
-          console.log(`[PAG] ❌ aguardar ${e.message}`)
+          console.log(`[PAG] ❌ ${e.message}`)
           return `{"ok":false,"motivo":"${e.message}"}`
         }
       },
