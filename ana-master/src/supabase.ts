@@ -173,7 +173,7 @@ export async function verifyPaymentByCallSid(callSid: string): Promise<boolean> 
   return !!data
 }
 
-export async function checkReferidos(token: string): Promise<{ completo: boolean; semDados: number; missaoCompleta: boolean }> {
+export async function checkReferidos(token: string): Promise<{ total: number; completo: boolean; semDados: number; missaoCompleta: boolean }> {
   // Resolve phone from leads via token
   const { data: lead } = await supabase
     .from('leads')
@@ -197,5 +197,5 @@ export async function checkReferidos(token: string): Promise<{ completo: boolean
   const completo = ativos.length >= 20
   const missaoCompleta = completo && semDados === 0
 
-  return { completo, semDados, missaoCompleta }
+  return { total: ativos.length, completo, semDados, missaoCompleta }
 }

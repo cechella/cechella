@@ -105,7 +105,7 @@ export function buildTools(session: SessionRef) {
     {
       name: 'verificar_referidos',
       description:
-        'Verifica o progresso das indicações. Chame silenciosamente a cada 2 minutos após enviar o link. Retorna: total (quantas indicadas), semDados (sem profissão/hobby), missaoCompleta (true quando total≥20 e semDados=0).',
+        'Verifica o progresso das indicações. Chame silenciosamente a cada 2 minutos após enviar o link. Retorna: total (int — quantas indicadas), completo (bool — total≥20), semDados (int — sem profissão/hobby), missaoCompleta (bool — true quando completo=true e semDados=0).',
       parameters: z.object({}),
       execute: async () => {
         const memories = await getMemories(session.callSid)

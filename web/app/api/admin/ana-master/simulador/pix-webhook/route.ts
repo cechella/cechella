@@ -43,18 +43,21 @@ async function handlePaymentConfirmed(callSid: string, paymentId: string) {
     .eq('payment_id', paymentId)
     .maybeSingle()
 
+  const tel = String(pag?.lead_telefone || '').replace(/\D/g, '')
+  if (tel) {
+    // Update leads BEFORE pagamentos so Realtime subscribers find status_pagamento='pago' immediately
+    await supabase
+      .from('leads')
+      .update({ status_pagamento: 'pago', updated_at: new Date().toISOString() })
+      .or(`telefone.eq.${tel},telefone.eq.55${tel},telefone.eq.${tel.replace(/^55/, '')}`)
+  }
+
   await supabase
     .from('pagamentos')
     .update({ status: 'approved', updated_at: new Date().toISOString() })
     .eq('payment_id', paymentId)
 
-  const tel = String(pag?.lead_telefone || '').replace(/\D/g, '')
   if (tel) {
-    await supabase
-      .from('leads')
-      .update({ status_pagamento: 'pago', updated_at: new Date().toISOString() })
-      .or(`telefone.eq.${tel},telefone.eq.55${tel},telefone.eq.${tel.replace(/^55/, '')}`)
-
     // Generate referral token only — no WhatsApp here.
     // Ana confirms payment verbally first, then iniciar_coleta_referidos sends the video.
     try {
