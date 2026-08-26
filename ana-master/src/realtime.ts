@@ -170,10 +170,12 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
   // Lead says "pix"/"cartão" after Ana asked → dispatch PIX immediately, no tool call needed.
   // This is the primary PIX dispatch mechanism — independent of model tool calls.
   function tryAutoPix(leadText: string, callSid: string, telefone: string) {
-    if (pixAutoSent || !anaAskedPayment) return
+    if (pixAutoSent) return
+    const stageOk = anaAskedPayment || ['fechamento', 'pagamento', 'referidos', 'encerramento'].includes(currentDetectedStage)
+    if (!stageOk) return
     const t = leadText.toLowerCase()
     let metodo: 'pix' | 'cartao' | null = null
-    if (/\bpix\b|pix\s*(a|à)\s*vista|avista|à\s*vista/i.test(t)) metodo = 'pix'
+    if (/\bpix\b|ピック|picks?|pik|pixe|pix\s*(a|à)\s*vista|avista|à\s*vista/i.test(leadText)) metodo = 'pix'
     else if (/cart[aã]o|parcel/i.test(t)) metodo = 'cartao'
     if (!metodo) return
     pixAutoSent = true
