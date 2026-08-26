@@ -1,300 +1,68 @@
 import { z } from 'zod'
-import { validateGate } from '../gate-validator.js'
-import { GateId, GATES } from '../state-machine.js'
-import { supabase, getLeadByPhone, getMemories, saveMemory, verifyPayment, checkReferidos, saveSpeechProgress } from '../supabase.js'
-import { sendWhatsApp, iniciarColetaReferidos } from './whatsapp.js'
-import {
-  SpeechProgress, initialSpeechProgress, isComplete,
-  getPartInstruction, classifyLeadTurn, LeadTurnDisposition,
-} from '../speech-progress.js'
+import { getMemories, saveMemory, checkReferidos } from '../supabase.js'
+import { iniciarColetaReferidos } from './whatsapp.js'
 
 export type SessionRef = {
   callSid: string
   telefone: string
-  goldenMode: boolean
-  speechProgress: SpeechProgress
-  updateInstructions: (instructions: string) => Promise<void>
-  onLeadTurn: (transcript: string) => Promise<void>
 }
 
 export function buildTools(session: SessionRef) {
   return [
     {
-      name: 'gateValidator',
-      description:
-        'Valida o gate atual no servidor. Chame quando a etapa estiver concluída. O servidor decide se pode avançar — você nunca avança sozinho. IMPORTANTE: o resultado desta ferramenta é INTERNO — nunca verbalize nem mencione para a lead que está validando, esperando aprovação, ou que houve qualquer processo técnico. Continue a conversa naturalmente.',
-      parameters: z.object({
-        gate_id: z
-          .enum(GATES as unknown as [string, ...string[]])
-          .describe('ID do gate a validar'),
-        evidence: z
-          .record(z.string(), z.unknown())
-          .describe('Evidências coletadas nesta etapa'),
-      }),
-      execute: async ({
-        gate_id,
-        evidence,
-      }: {
-        gate_id: string
-        evidence: Record<string, unknown>
-      }) => {
-        // Guard: Twilio 'start' event may not have fired yet
-        if (session.callSid === 'unknown') {
-          return '{"gate":"bloqueado","sistema":"sessao_inicializando"}'
-        }
-
-        const result = await validateGate(
-          gate_id as GateId,
-          {
-            ...evidence,
-            telefone: session.telefone,
-            speech_progress_complete: isComplete(session.speechProgress),
-          } as any,
-          session.callSid,
-        )
-
-        if (result.approved && result.next_instructions) {
-          await session.updateInstructions(result.next_instructions)
-        }
-
-        // Return neutral internal signal — never include stage name to prevent verbalization
-        return result.approved
-          ? '{"gate":"aprovado"}'
-          : `{"gate":"bloqueado","sistema":"${result.reason.replace(/"/g, "'")}"}`
-      },
-    },
-
-    {
-      name: 'get_lead_context',
-      description: 'Recupera contexto da lead: nome, quem indicou, histórico de memórias.',
-      parameters: z.object({}),
-      execute: async () => {
-        const [lead, memories] = await Promise.all([
-          getLeadByPhone(session.telefone),
-          getMemories(session.callSid),
-        ])
-        return JSON.stringify({ lead, memories })
-      },
-    },
-
-    {
-      name: 'save_memory',
-      description:
-        'Salva uma informação importante da lead para uso posterior na ligação.',
-      parameters: z.object({
-        key: z.string().describe('Chave da memória (ex: contexto_vida, interesse_protocolo)'),
-        value: z.string().describe('Valor a salvar'),
-      }),
-      execute: async ({ key, value }: { key: string; value: string }) => {
-        await saveMemory(session.callSid, key, value)
-        return `Memória "${key}" salva.`
-      },
-    },
-
-    {
-      name: 'verificar_pagamento',
-      description: 'Verifica no sistema se o pagamento da lead foi confirmado.',
-      parameters: z.object({}),
-      execute: async () => {
-        console.log(`[VERIFICAR_PAGAMENTO] telefone=${session.telefone} callSid=${session.callSid}`)
-        const pago = await verifyPayment(session.telefone)
-        console.log(`[VERIFICAR_PAGAMENTO] resultado=${pago} telefone=${session.telefone}`)
-        return pago
-          ? 'Pagamento confirmado! ✅'
-          : 'Pagamento ainda não confirmado. Aguarde e verifique novamente em alguns instantes.'
-      },
-    },
-
-    {
-      name: 'iniciar_coleta_referidos',
-      description:
-        'Envia o link de indicações no WhatsApp da lead. SOMENTE após pagamento confirmado. O link é o ÚNICO canal — nunca colete contatos por voz.',
-      parameters: z.object({}),
-      execute: async () => {
-        const result = await iniciarColetaReferidos(session.telefone)
-        if (!result) {
-          return 'Pagamento não confirmado — não é possível enviar o link ainda.'
-        }
-        await saveMemory(session.callSid, 'token_indicacao', result.token)
-        return `Link enviado no WhatsApp: ${result.link}. Token: ${result.token}. Aguarde a lead abrir o link.`
-      },
-    },
-
-    {
-      name: 'verificar_referidos',
-      description:
-        'Verifica o progresso do formulário de indicações. Chame a cada 2 minutos após enviar o link.',
-      parameters: z.object({}),
-      execute: async () => {
-        const memories = await getMemories(session.callSid)
-        const token = memories.token_indicacao as string | undefined
-        if (!token) return 'Token não encontrado. O link foi enviado?'
-        const ref = await checkReferidos(token)
-        if (ref.missaoCompleta) {
-          return '✅ Missão completa! 20+ indicadas, semDados=0. Pode chamar gateValidator GATE_REFERIDOS.'
-        }
-        if (ref.semDados > 0) {
-          return `⏳ ${ref.semDados} indicadas ainda sem profissão/hobby. Peça para a lead completar no formulário.`
-        }
-        return `⏳ Formulário em andamento. completo=${ref.completo}, semDados=${ref.semDados}`
-      },
-    },
-
-    {
-      name: 'registrar_parte_speech',
-      description:
-        'Registra que uma parte do Speech foi concluída. SOMENTE chame depois de entregar completamente a parte. NUNCA chame partes fora de ordem. NUNCA verbalize esta ação — proibido dizer "vou registrar", "vou salvar", "vou avançar", "agora vou para a próxima parte" ou qualquer referência ao mecanismo interno.',
-      parameters: z.object({
-        parte: z.union([
-          z.literal(1), z.literal(2), z.literal(3), z.literal(4),
-          z.literal('pergunta_feita'), z.literal('resposta_recebida'),
-        ]).describe('Qual parte ou marco foi concluído'),
-      }),
-      execute: async ({ parte }: { parte: number | string }) => {
-        const sp = session.speechProgress
-
-        // Validate ordering
-        if (typeof parte === 'number') {
-          if (parte !== sp.parte_atual) {
-            return `{"error":"Ordem incorreta. parte_atual=${sp.parte_atual}, tentou registrar parte=${parte}. Não pule partes."}`
-          }
-          if (sp.parte_em_execucao !== parte) {
-            return `{"error":"Parte ${parte} não está em execução (parte_em_execucao=${sp.parte_em_execucao}). Entregue o conteúdo da parte antes de registrar."}`
-          }
-          if (sp.parte_interrompida) {
-            return `{"error":"Parte ${parte} foi interrompida — conclua o conteúdo restante antes de registrar."}`
-          }
-          sp.partes_entregues.push(parte as any)
-          sp.parte_em_execucao = undefined
-          sp.parte_interrompida = false
-
-          if (parte < 4) {
-            // Parts 1-3: wait for lead turn before next part
-            sp.parte_atual = (parte + 1) as any
-            sp.state = 'WAITING_LEAD'
-            sp.waiting_for_lead = true
-            await saveSpeechProgress(session.callSid, sp as any)
-            return `{"ok":true,"parte_registrada":${parte},"aguardando":"turno_da_lead","instrucao":"ENCERRE SEU TURNO AGORA. NÃO adicione perguntas. A lead falará quando quiser. O backend liberará a próxima parte após o turno dela."}`
-          } else {
-            // Part 4: immediately inject final_question instruction — no lead turn needed
-            sp.parte_atual = 'final_question' as any
-            sp.state = 'WAITING_LEAD'
-            sp.waiting_for_lead = false
-            await saveSpeechProgress(session.callSid, sp as any)
-            await session.updateInstructions(getPartInstruction('final_question'))
-            return `{"ok":true,"parte_registrada":4,"proximo":"pergunta_final","instrucao":"Faça agora a pergunta final Gold: '[Nome], o que mais te chamou atenção do que eu acabei de te apresentar?' Depois chame registrar_parte_speech(parte='pergunta_feita')."}`
-          }
-        }
-
-        if (parte === 'pergunta_feita') {
-          sp.pergunta_final_feita = true
-          sp.state = 'WAITING_FINAL_RESPONSE'
-          sp.waiting_for_lead = true
-          await saveSpeechProgress(session.callSid, sp as any)
-          return `{"ok":true,"pergunta_final":"registrada","aguardando":"resposta_final_da_lead","instrucao":"PARE. Aguarde a resposta real da lead à pergunta final."}`
-        }
-
-        if (parte === 'resposta_recebida') {
-          sp.resposta_final_recebida = true
-          sp.parte_atual = 'complete'
-          sp.state = 'COMPLETE'
-          sp.waiting_for_lead = false
-          await saveSpeechProgress(session.callSid, sp as any)
-          await session.updateInstructions(getPartInstruction('complete'))
-          return `{"ok":true,"speech_progress":"COMPLETE","instrucao":"Pode chamar gateValidator GATE_SPEECH agora com todas as evidências."}`
-        }
-
-        return `{"error":"parte inválida: ${parte}"}`
-      },
-    },
-
-    {
       name: 'solicitar_pagamento',
       description:
-        'Gera e envia o link de pagamento (Pix ou cartão) no WhatsApp da lead. Chame imediatamente após a lead confirmar a forma de pagamento. Também use para verificar se o pagamento foi confirmado — retorna paid:true quando o sistema confirmar.',
+        'Chame assim que a lead confirmar a forma de pagamento (PIX ou cartão). O sistema envia o link de pagamento automaticamente no WhatsApp da lead. Após chamar esta ferramenta, diga à lead que o link acabou de chegar no WhatsApp dela. A confirmação do pagamento chegará automaticamente — continue a conversa natural enquanto aguarda. NUNCA confirme pagamento antes de receber confirmação do sistema.',
       parameters: z.object({
         metodo: z.enum(['pix', 'cartao']).describe('Forma de pagamento escolhida pela lead'),
       }),
       execute: async ({ metodo }: { metodo: 'pix' | 'cartao' }) => {
         try {
           const { APP_URL } = await import('../config.js')
-          console.log(`[PAG] inicio callSid=${session.callSid} telefone=${session.telefone} metodo=${metodo}`)
-
-          // 1. Envia PIX (dedup-safe — reutiliza pagamento pendente existente)
-          await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+          console.log(`[PAG] enviando link callSid=${session.callSid} telefone=${session.telefone} metodo=${metodo}`)
+          const res = await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ callSid: session.callSid, telefone: session.telefone, metodo }),
-          }).catch((e: Error) => console.log(`[PAG] erro envio PIX: ${e.message}`))
-
-          // 2. Aguarda confirmação via Supabase Realtime — evento-driven, responde em <1s após webhook
-          // Filtra por call_sid (único por ligação) — imune a dados antigos do mesmo telefone
-          const paid = await new Promise<boolean>((resolve) => {
-            let settled = false
-            const finish = (result: boolean) => {
-              if (settled) return
-              settled = true
-              clearTimeout(timer)
-              supabase.removeChannel(channel).catch(() => {})
-              console.log(`[PAG] ${result ? '✅ confirmado' : '⏰ timeout'} callSid=${session.callSid}`)
-              resolve(result)
-            }
-
-            // Lead tem até 5 minutos para abrir o app do banco e pagar
-            const timer = setTimeout(() => finish(false), 5 * 60 * 1000)
-
-            const channel = supabase
-              .channel(`pag:${session.callSid}`)
-              .on(
-                'postgres_changes' as any,
-                { event: 'UPDATE', schema: 'public', table: 'pagamentos', filter: `call_sid=eq.${session.callSid}` },
-                (payload: any) => {
-                  console.log(`[PAG] realtime pagamentos.status=${payload.new?.status}`)
-                  if (payload.new?.status === 'approved') finish(true)
-                }
-              )
-              .subscribe(async (status: string) => {
-                console.log(`[PAG] realtime subscribe status=${status}`)
-                if (status === 'SUBSCRIBED') {
-                  // Verifica se já estava pago antes de subscrever (race condition)
-                  const { data } = await supabase
-                    .from('pagamentos').select('status')
-                    .eq('call_sid', session.callSid).eq('status', 'approved').maybeSingle()
-                  if (data) { console.log(`[PAG] já aprovado no DB`); finish(true) }
-                }
-                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                  // Fallback: poll por call_sid a cada 3s se Realtime falhar
-                  console.log(`[PAG] realtime falhou (${status}), fallback poll por callSid`)
-                  const poll = setInterval(async () => {
-                    if (settled) { clearInterval(poll); return }
-                    const { data } = await supabase
-                      .from('pagamentos').select('status')
-                      .eq('call_sid', session.callSid).eq('status', 'approved').maybeSingle()
-                    if (data) { clearInterval(poll); finish(true) }
-                  }, 3000)
-                }
-              })
           })
-
-          return paid
-            ? `{"ok":true,"paid":true,"metodo":"${metodo}","confirmado":true}`
-            : `{"ok":true,"paid":false,"metodo":"${metodo}","enviado":true,"aguardando":true}`
+          console.log(`[PAG] link enviado status=${res.status}`)
+          await saveMemory(session.callSid, 'forma_pagamento_escolhida', metodo).catch(() => {})
+          return `{"ok":true,"enviado":true,"metodo":"${metodo}"}`
         } catch (e: any) {
-          console.log(`[PAG] ❌ ${e.message}`)
+          console.error(`[PAG] erro ao enviar link: ${e.message}`)
           return `{"ok":false,"motivo":"${e.message}"}`
         }
       },
     },
 
     {
-      name: 'send_whatsapp',
-      description: 'Envia uma mensagem de texto no WhatsApp da lead.',
-      parameters: z.object({
-        mensagem: z.string().describe('Texto a enviar'),
-      }),
-      execute: async ({ mensagem }: { mensagem: string }) => {
-        await sendWhatsApp(session.telefone, mensagem)
-        return 'Mensagem enviada.'
+      name: 'iniciar_coleta_referidos',
+      description:
+        'Envia o link de indicações no WhatsApp da lead. Chame somente após o pagamento ter sido confirmado. O link é o ÚNICO canal para coletar referidos — nunca colete contatos por voz.',
+      parameters: z.object({}),
+      execute: async () => {
+        const result = await iniciarColetaReferidos(session.telefone)
+        if (!result) {
+          return 'Pagamento não confirmado — não é possível enviar o link ainda.'
+        }
+        await saveMemory(session.callSid, 'token_indicacao', result.token).catch(() => {})
+        console.log(`[REFERIDOS] link enviado token=${result.token}`)
+        return `{"ok":true,"link_enviado":true,"token":"${result.token}"}`
+      },
+    },
+
+    {
+      name: 'verificar_referidos',
+      description:
+        'Verifica o progresso das indicações. Chame silenciosamente a cada 2 minutos após enviar o link. Retorna: total (quantas indicadas), semDados (sem profissão/hobby), missaoCompleta (true quando total≥20 e semDados=0).',
+      parameters: z.object({}),
+      execute: async () => {
+        const memories = await getMemories(session.callSid)
+        const token = memories.token_indicacao as string | undefined
+        if (!token) return '{"erro":"token_nao_encontrado","mensagem":"O link foi enviado? Chame iniciar_coleta_referidos primeiro."}'
+        const ref = await checkReferidos(token)
+        console.log(`[REFERIDOS] verificar token=${token} completo=${ref.completo} semDados=${ref.semDados} missaoCompleta=${ref.missaoCompleta}`)
+        return JSON.stringify(ref)
       },
     },
   ]

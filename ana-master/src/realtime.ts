@@ -1,15 +1,10 @@
 import { RealtimeAgent, RealtimeSession } from '@openai/agents/realtime'
 import { TwilioRealtimeTransportLayer } from '@openai/agents-extensions'
-import { OPENAI_API_KEY, REALTIME_DEFAULTS, APP_URL } from './config.js'
-import { ANA_BASE_PROMPT } from './state-machine.js'
+import { OPENAI_API_KEY, REALTIME_DEFAULTS } from './config.js'
 import { buildTools, SessionRef } from './tools/index.js'
-import { upsertCall, saveMemory, appendTranscript, updateCallStage, endCall, supabase } from './supabase.js'
+import { upsertCall, appendTranscript, updateCallStage, endCall, supabase } from './supabase.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
-import { initialSpeechProgress, classifyLeadTurn, getPartInstruction, LeadTurnDisposition } from './speech-progress.js'
-
-// Fallback minimal prompt — used only if Supabase is unreachable before session starts.
-// Must NOT contain any "fale primeiro" instruction — only sendMessage('iniciar') triggers speech.
-const ANA_FALLBACK_PROMPT = ANA_BASE_PROMPT
+import { registerSession, unregisterSession } from './session-registry.js'
 
 async function loadGoldenPrompt(): Promise<string> {
   try {
@@ -20,13 +15,12 @@ async function loadGoldenPrompt(): Promise<string> {
       .single()
     if (data?.instructions) return data.instructions as string
   } catch (e) {
-    console.error('[ANA MASTER] Failed to load GOLDEN_PROMPT from Supabase, falling back:', e)
+    console.error('[ANA MASTER] Failed to load GOLDEN_PROMPT from Supabase:', e)
   }
-  return ANA_FALLBACK_PROMPT
+  return 'Você é ANA, consultora de saúde hormonal da Hormone Ecosystem.'
 }
 
-// gpt-realtime-2.1 envia PCM 24kHz no output apesar de output_audio_format=g711_ulaw.
-// Intercepta ws.send (server→Twilio) e converte PCM 16-bit LE 24kHz → mulaw 8kHz.
+// PCM/mulaw conversion — gpt-realtime-2.1 outputs PCM 24kHz regardless of format setting
 function linearToMulaw(s: number): number {
   const BIAS = 0x84, CLIP = 32635
   const sign = s < 0 ? 0x80 : 0
@@ -60,7 +54,6 @@ function mulawToLinear(u: number): number {
   return sign ? -value : value
 }
 
-// Inbound: Twilio mulaw 8kHz → PCM 24kHz (gpt-realtime-2.1 ignora g711_ulaw input)
 function wrapTwilioInputMulawToPcm(ws: any): any {
   const originalOn = ws.on.bind(ws)
   ws.on = function (event: string, handler: any, ...rest: any[]) {
@@ -99,7 +92,6 @@ function wrapTwilioWithPcmToMulaw(ws: any): any {
       if (msg.event === 'media' && msg.media?.payload) {
         const raw = Buffer.from(msg.media.payload, 'base64')
         if (detectedFormat === 'unknown') {
-          // mulaw 8kHz 20ms ≈ 160 bytes; PCM 24kHz 20ms ≈ 960 bytes
           detectedFormat = raw.length <= 200 ? 'mulaw' : 'pcm'
           console.log('[ANA MASTER] output format detected:', detectedFormat, '| payload bytes:', raw.length)
         }
@@ -115,40 +107,34 @@ function wrapTwilioWithPcmToMulaw(ws: any): any {
   return ws
 }
 
-// Passive stage detection from ANA's transcript — same patterns as the simulador client.
-// Runs server-side so it works for both PTL and WebRTC calls without touching gate logic.
+// Passive stage detection from transcript — writes to DB for CRM display
 const STAGE_PATTERNS: Array<{ stage: string; patterns: RegExp[] }> = [
-  { stage: 'apresentacao', patterns: [/qual é o teu nome/i, /pra eu te chamar direitinho/i, /pode repetir (o )?teu nome/i] },
-  { stage: 'conexao',      patterns: [/me conta um pouco de como é o teu dia a dia/i, /me conta como é o teu dia a dia/i] },
-  { stage: 'combinado',    patterns: [/vamos fazer um combinad[ao]/i, /combinadinh[ao]/i] },
+  { stage: 'apresentacao', patterns: [/qual é o teu nome/i, /pra eu te chamar direitinho/i] },
+  { stage: 'conexao',      patterns: [/me conta um pouco de como é o teu dia a dia/i] },
+  { stage: 'combinado',    patterns: [/vamos fazer um combinad[ao]/i] },
   { stage: 'speech',       patterns: [/pellet/i, /implante hormonal/i, /grão de arroz/i] },
-  { stage: 'fechamento',   patterns: [/lembra do nosso combinado/i, /faz sentido pra você/i, /pix ou cartão/i] },
+  { stage: 'fechamento',   patterns: [/lembra do nosso combinado/i, /pix ou cartão/i] },
   { stage: 'pagamento',    patterns: [/confirmei aqui/i, /pagamento recebido/i] },
-  { stage: 'referidos',    patterns: [/você conhece alguma amiga/i, /tomou essa decisão tão importante/i] },
-  { stage: 'encerramento', patterns: [/nossa equipe vai entrar em contato/i, /foi uma honra conversar/i, /cuida-se/i] },
+  { stage: 'referidos',    patterns: [/você conhece alguma amiga/i, /tomou essa decisão/i] },
+  { stage: 'encerramento', patterns: [/nossa equipe vai entrar em contato/i, /foi uma honra conversar/i] },
 ]
 
-// Keeps track of the highest stage reached per callSid so we never go backwards.
 const STAGE_ORDER = ['apresentacao', 'conexao', 'combinado', 'speech', 'fechamento', 'pagamento', 'referidos', 'encerramento']
 
-function detectStageFromText(text: string): string | null {
-  for (const { stage, patterns } of STAGE_PATTERNS) {
-    if (patterns.some(p => p.test(text))) return stage
-  }
-  return null
-}
-
-// Per-session stage state — prevents going backwards and avoids duplicate DB writes.
 function makeStageTracker() {
-  let currentIdx = -1  // -1 so index 0 (apresentacao) is not blocked on first detection
+  let currentIdx = -1
   return function advanceStage(callSid: string, text: string) {
-    const detected = detectStageFromText(text)
-    if (!detected) return
-    const detectedIdx = STAGE_ORDER.indexOf(detected)
-    if (detectedIdx <= currentIdx) return  // never go backwards
-    currentIdx = detectedIdx
-    console.log(`[ANA MASTER] 🎯 stage detected: ${detected} for ${callSid}`)
-    updateCallStage(callSid, detected).catch(() => {})
+    for (const { stage, patterns } of STAGE_PATTERNS) {
+      if (patterns.some(p => p.test(text))) {
+        const idx = STAGE_ORDER.indexOf(stage)
+        if (idx > currentIdx) {
+          currentIdx = idx
+          console.log(`[ANA MASTER] 🎯 stage detected: ${stage} for ${callSid}`)
+          updateCallStage(callSid, stage).catch(() => {})
+        }
+        break
+      }
+    }
   }
 }
 
@@ -156,128 +142,20 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
   console.log('[ANA MASTER] session starting')
   const advanceStage = makeStageTracker()
 
-  // Tracks the most recent stage detected from Ana's transcript (in-memory, per session)
-  let currentDetectedStage = 'apresentacao'
-  const originalAdvanceStage = advanceStage
-  const advanceStageWithTracking = (callSid: string, text: string) => {
-    originalAdvanceStage(callSid, text)
-    const detected = detectStageFromText(text)
-    if (detected) {
-      const detectedIdx = STAGE_ORDER.indexOf(detected)
-      const currentIdx = STAGE_ORDER.indexOf(currentDetectedStage)
-      if (detectedIdx > currentIdx) currentDetectedStage = detected
-    }
-  }
-
-  // Automatic PIX trigger:
-  // 1. Ana asks "pix ou cartão?" → anaAskedPayment = true
-  // 2. Lead replies with "pix" or "cartão" → dispatch PIX immediately
-  let anaAskedPayment = false
-  let pixAutoSent = false
-  function noteAnaText(anaText: string) {
-    if (!anaAskedPayment && /pix\s*ou\s*cart[aã]o|cart[aã]o\s*ou\s*pix|forma.*pagamento|como.*pagar|pagar.*pix/i.test(anaText)) {
-      anaAskedPayment = true
-      console.log('[ANA MASTER] 💬 Ana perguntou sobre forma de pagamento — aguardando resposta da lead')
-    }
-  }
-  function tryAutoPix(leadText: string, callSid: string, telefone: string) {
-    if (pixAutoSent || !anaAskedPayment) return
-    const t = leadText.toLowerCase()
-    let metodo: 'pix' | 'cartao' | null = null
-    if (/\bpix\b|pix\s*(a|à)\s*vista|avista|à\s*vista/i.test(t)) metodo = 'pix'
-    else if (/cart[aã]o|parcel/i.test(t)) metodo = 'cartao'
-    if (!metodo) return
-    pixAutoSent = true
-    console.log(`[ANA MASTER] 💳 auto-PIX triggered — metodo=${metodo} telefone=${telefone}`)
-    fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ callSid, telefone, metodo }),
-    }).catch((e) => console.error('[ANA MASTER] auto-PIX fetch error:', e))
-    // Advance stage fechamento → pagamento so GATE_PAGAMENTO invariant passes
-    import('./supabase.js').then(({ saveMemory, executeGateTransition }) => {
-      saveMemory(callSid, 'forma_pagamento_escolhida', metodo).catch(() => {})
-      executeGateTransition(callSid, 'GATE_FECHAMENTO', 'fechamento', 'pagamento', {
-        investimento_apresentado: true,
-        forma_pagamento_escolhida: metodo,
-        parcelamento_6x_mencionado: true,
-      }).then((r) => {
-        console.log(`[ANA MASTER] 🔀 stage fechamento→pagamento: transitioned=${r.transitioned} reason=${r.reason}`)
-      }).catch((e) => console.error('[ANA MASTER] stage advance error:', e))
-    }).catch(() => {})
-  }
-
-  // Transport created IMMEDIATELY so it sets up WebSocket listeners and captures the Twilio
-  // 'start' event (which carries streamSid — required to send audio back to Twilio).
-  // INBOUND: mulaw→PCM | OUTBOUND: PCM→mulaw
   const transport = new TwilioRealtimeTransportLayer({
     twilioWebSocket: wrapTwilioWithPcmToMulaw(wrapTwilioInputMulawToPcm(twilioWebSocket)),
   } as any)
 
-  // SessionRef created BEFORE loadGoldenPrompt() so the transport listener below
-  // can capture the Twilio 'start' event (and its callSid) even during the await.
   const sessionRef: SessionRef = {
     callSid: 'unknown',
     telefone: '',
-    goldenMode: false,
-    speechProgress: initialSpeechProgress(),
-    updateInstructions: async (instructions: string) => {
-      await (realtimeSession as any).updateSession({
-        instructions: `${ANA_BASE_PROMPT}\n\n${instructions}`,
-      })
-    },
-    onLeadTurn: async (transcript: string) => {
-      if (sessionRef.goldenMode) return  // gold: ANA segue GOLDEN_PROMPT livremente
-      const sp = sessionRef.speechProgress
-      if (!sp.waiting_for_lead) return
-
-      const disposition: LeadTurnDisposition = classifyLeadTurn(transcript, sp.state)
-      sp.last_lead_disposition = disposition
-      console.log(`[SPEECH PROGRESS] lead turn — disposition=${disposition} parte_atual=${sp.parte_atual} state=${sp.state}`)
-
-      if (sp.state === 'WAITING_FINAL_RESPONSE') {
-        // Final question response — always inject awaiting_final instruction
-        sp.waiting_for_lead = false
-        await sessionRef.updateInstructions(getPartInstruction('awaiting_final'))
-        return
-      }
-
-      if (sp.state !== 'WAITING_LEAD') return
-
-      switch (disposition) {
-        case 'BACKCHANNEL':
-        case 'CONTINUE': {
-          // Lead confirmed — unlock next part (parts 1-3 only; part 4 injects final_question directly)
-          const next = String(sp.parte_atual)
-          sp.waiting_for_lead = false
-          if (typeof sp.parte_atual === 'number') sp.parte_em_execucao = sp.parte_atual
-          await sessionRef.updateInstructions(getPartInstruction(next))
-          break
-        }
-        case 'QUESTION': {
-          break
-        }
-        case 'INTERRUPTION': {
-          sp.parte_interrompida = true
-          break
-        }
-        case 'CONFUSION':
-        case 'OBJECTION':
-        case 'UNKNOWN':
-          break
-      }
-    },
   }
 
-  // INBOUND_AUDIO_DIAGNOSTIC: count every Twilio event type to prove audio chain
   const DIAG = process.env.INBOUND_AUDIO_DIAGNOSTIC === 'true'
   let mediaCount = 0
   let totalInboundBytes = 0
-
-  // Register listener BEFORE loadGoldenPrompt() await so we never miss the Twilio 'start'
-  // event that carries callSid. Previously this listener was registered after the await,
-  // causing callSid to stay 'unknown' and all Supabase writes to be silently dropped.
   let dbInitialized = false
+
   ;(transport as any).on('*', async (event: any) => {
     if (event?.type !== 'twilio_message') return
     const msg = event.message ?? event.data
@@ -302,16 +180,15 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
         ?? msg.start?.customParameters?.callSid
         ?? `stream_${msg.start?.streamSid ?? Date.now()}`
       const telefone = String(msg.start?.customParameters?.from ?? '').replace(/\D/g, '')
-      const contextoFromStart = String(msg.start?.customParameters?.contexto ?? '')
       sessionRef.callSid = callSid
       sessionRef.telefone = telefone
-      console.log('[ANA MASTER] start event — callSid:', callSid, '| telefone:', telefone, '| contexto:', contextoFromStart)
+      console.log('[ANA MASTER] start event — callSid:', callSid, '| telefone:', telefone)
       await upsertCall(callSid, telefone).catch(() => {})
-      await saveMemory(callSid, 'telefone', telefone).catch(() => {})
-      if (contextoFromStart === 'gold') {
-        sessionRef.goldenMode = true
-        console.log('[ANA MASTER] contexto=gold — goldenMode ativo, speech-progress desabilitado')
-      }
+
+      // Register transport so payment webhook can inject confirmation
+      registerSession(callSid, {
+        sendEvent: (ev: object) => (transport as any).sendEvent?.(ev)?.catch?.(() => {}),
+      })
     }
 
     if (msg?.event === 'stop') {
@@ -319,38 +196,32 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       if (sessionRef.callSid !== 'unknown') {
         pushCallEndedEvent(sessionRef.callSid)
         endCall(sessionRef.callSid).catch(() => {})
+        unregisterSession(sessionRef.callSid)
       }
     }
   })
 
-  // Load GOLDEN_PROMPT — listener is already registered above so 'start' event is never missed
   const instructions = await loadGoldenPrompt()
   console.log('[ANA MASTER] GOLDEN_PROMPT loaded — length:', instructions.length)
 
   const agent = new RealtimeAgent({
     name: 'ANA',
-    instructions,  // GOLDEN_PROMPT — same as the simulator, from the first word
+    instructions,
     voice: REALTIME_DEFAULTS.voice as any,
     tools: buildTools(sessionRef) as any,
   })
 
-  let realtimeSession: RealtimeSession
-
-  realtimeSession = new RealtimeSession(agent, {
+  const realtimeSession = new RealtimeSession(agent, {
     transport,
     model: REALTIME_DEFAULTS.model,
   } as any)
 
-  // Prevent unhandled error crash if OpenAI rejects the session
   realtimeSession.on('error', (err: unknown) => {
     console.error('[ANA MASTER] RealtimeSession error:', err)
   })
 
-  // Tracks which item_ids have already been processed via response.audio_transcript.done
-  // to avoid double-processing in the response.done fallback.
   const processedItems = new Set<string>()
 
-  // Debug: log session config and VAD events
   ;(transport as any).on('*', (event: any) => {
     if (event?.type === 'session.updated') {
       const s = event?.session ?? {}
@@ -358,11 +229,8 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
         'input_audio_format:', s.input_audio_format,
         '| output_audio_format:', s.output_audio_format,
         '| turn_detection:', JSON.stringify(s.turn_detection),
-        '| input_audio_transcription:', JSON.stringify(s.input_audio_transcription),
       )
-      if (DIAG) console.log('[DIAG] session completa:', JSON.stringify(s))
     }
-    // PRIMARY: fires once per audio content part with the complete transcript — most reliable source
     if (event?.type === 'response.audio_transcript.done') {
       const text = event?.transcript as string | undefined
       const itemId = event?.item_id as string | undefined
@@ -371,15 +239,8 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
         if (itemId) processedItems.add(itemId)
         appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
         pushTranscriptEvent(sessionRef.callSid, 'assistant', text)
-        advanceStageWithTracking(sessionRef.callSid, text)
-        noteAnaText(text)
+        advanceStage(sessionRef.callSid, text)
       }
-    }
-    if (event?.type === 'response.output_audio.delta') {
-      console.log('[ANA MASTER] audio delta recebido — bytes:', event?.delta?.length ?? 0)
-    }
-    if (event?.type === 'response.done') {
-      console.log('[ANA MASTER] response.done')
     }
     if (event?.type === 'input_audio_buffer.speech_started') {
       console.log('[ANA MASTER] 🎤 VAD: fala detectada!')
@@ -387,47 +248,35 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
     if (event?.type === 'input_audio_buffer.speech_stopped') {
       console.log('[ANA MASTER] 🎤 VAD: fala parou')
     }
-    if (event?.type === 'input_audio_buffer.committed') {
-      console.log('[ANA MASTER] 🎤 audio buffer committed')
-    }
     if (event?.type === 'conversation.item.input_audio_transcription.completed') {
       const text = event?.transcript as string | undefined
       console.log('[ANA MASTER] 📝 user:', text)
       if (text && sessionRef.callSid !== 'unknown') {
         appendTranscript(sessionRef.callSid, 'user', text).catch(() => {})
         pushTranscriptEvent(sessionRef.callSid, 'user', text)
-        // Automatic PIX trigger — fires as soon as lead says "pix"/"cartão" in fechamento stage
-        tryAutoPix(text, sessionRef.callSid, sessionRef.telefone)
-        // Speech progress: classify lead turn and potentially unlock next part
-        if (sessionRef.speechProgress.waiting_for_lead) {
-          sessionRef.onLeadTurn(text).catch(() => {})
-        }
       }
     }
-    // FALLBACK: response.done — only processes items not already handled by transcript.done
     if (event?.type === 'response.done') {
+      console.log('[ANA MASTER] response.done')
       const output: any[] = event?.response?.output ?? []
       for (const item of output) {
         if (item?.id && processedItems.has(item.id)) continue
         for (const content of (item?.content ?? [])) {
           const text = content?.transcript ?? content?.text
-          console.log('[ANA MASTER] 📝 assistant raw (fallback):', JSON.stringify({ type: content?.type, transcript: content?.transcript, text: content?.text }))
           if (text && sessionRef.callSid !== 'unknown') {
+            console.log('[ANA MASTER] 📝 assistant raw (fallback):', text.slice(0, 100))
             appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
             pushTranscriptEvent(sessionRef.callSid, 'assistant', text)
-            advanceStageWithTracking(sessionRef.callSid, text)
-            noteAnaText(text)
+            advanceStage(sessionRef.callSid, text)
           }
         }
       }
-      // Clear processed items after each response cycle
       processedItems.clear()
     }
   })
 
   await realtimeSession.connect({ apiKey: OPENAI_API_KEY })
 
-  // Override input_audio_format to pcm16 — the inbound wrapper already converted mulaw→PCM
   ;(transport as any).sendEvent?.({
     type: 'session.update',
     session: {
@@ -436,7 +285,6 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
     },
   })?.catch?.(() => {})
 
-  // Trigger ANA to speak first — outbound call, AI must initiate.
   setTimeout(() => {
     try {
       realtimeSession.sendMessage('iniciar')

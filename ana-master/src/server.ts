@@ -3,6 +3,8 @@ import websocket from '@fastify/websocket'
 import { PORT, PUBLIC_HOST } from './config.js'
 import { createAnaMasterSession } from './realtime.js'
 import { registerSseClient } from './sse-registry.js'
+import { supabase } from './supabase.js'
+import { injectPaymentConfirmed } from './session-registry.js'
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN!
@@ -11,6 +13,25 @@ const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER!
 const app = Fastify({ logger: true })
 
 await app.register(websocket)
+
+// Global payment confirmation listener — fires as soon as MercadoPago webhook updates pagamentos.status=approved.
+// Injects a context message into the active Realtime session so Ana reacts naturally without any blocking.
+supabase
+  .channel('payment-confirmations')
+  .on(
+    'postgres_changes' as any,
+    { event: 'UPDATE', schema: 'public', table: 'pagamentos' },
+    (payload: any) => {
+      const { call_sid, status } = payload.new ?? {}
+      if (status === 'approved' && call_sid) {
+        console.log(`[SERVER] 💰 pagamento aprovado call_sid=${call_sid} — injetando confirmação na sessão`)
+        injectPaymentConfirmed(call_sid)
+      }
+    },
+  )
+  .subscribe((status: string) => {
+    console.log(`[SERVER] payment listener status=${status}`)
+  })
 
 // Parse Twilio's application/x-www-form-urlencoded webhook bodies
 // Must be registered BEFORE any routes that consume this content type
