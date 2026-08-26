@@ -31,9 +31,13 @@ export async function upsertCall(callSid: string, telefone: string) {
     .or(`telefone.eq.${norm},telefone.eq.${bare}`)
     .maybeSingle()
   if (!existingLead) {
-    await supabase.from('leads').insert({
+    const { error: leadErr } = await supabase.from('leads').insert({
       telefone: norm, etapa: 'apresentacao', etapa_agente: 1, origem: 'ptl',
     })
+    if (leadErr) console.error(`[UPSERT_CALL] erro ao inserir lead: ${leadErr.message} | code=${leadErr.code}`)
+    else console.log(`[UPSERT_CALL] lead inserido telefone=${norm}`)
+  } else {
+    console.log(`[UPSERT_CALL] lead já existe telefone=${norm}`)
   }
 
   const { data } = await supabase
