@@ -4,7 +4,7 @@ import { PORT, PUBLIC_HOST } from './config.js'
 import { createAnaMasterSession } from './realtime.js'
 import { registerSseClient } from './sse-registry.js'
 import { supabase } from './supabase.js'
-import { injectPaymentConfirmed } from './session-registry.js'
+import { injectPaymentConfirmed, injectReferralLinkSent } from './session-registry.js'
 import { iniciarColetaReferidos } from './tools/whatsapp.js'
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
@@ -29,7 +29,10 @@ supabase
         // Auto-send referral link via WhatsApp before injecting into session
         if (lead_telefone) {
           iniciarColetaReferidos(lead_telefone)
-            .then(r => console.log(`[SERVER] referidos link enviado token=${r?.token ?? 'null'}`))
+            .then(r => {
+              console.log(`[SERVER] referidos link enviado token=${r?.token ?? 'null'}`)
+              if (r?.token) injectReferralLinkSent(call_sid)
+            })
             .catch(e => console.error(`[SERVER] referidos link erro: ${e.message}`))
         }
         injectPaymentConfirmed(call_sid)
