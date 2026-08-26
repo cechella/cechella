@@ -21,6 +21,21 @@ export interface AnaCall {
 
 export async function upsertCall(callSid: string, telefone: string) {
   const norm = telefone.startsWith('55') ? telefone : `55${telefone}`
+  const bare = norm.replace(/^55/, '')
+
+  // Garante que o lead existe em leads (lido pelo CRM)
+  // telefone não tem UNIQUE constraint — verificamos antes de inserir
+  const { data: existingLead } = await supabase
+    .from('leads')
+    .select('id')
+    .or(`telefone.eq.${norm},telefone.eq.${bare}`)
+    .maybeSingle()
+  if (!existingLead) {
+    await supabase.from('leads').insert({
+      telefone: norm, etapa: 'apresentacao', etapa_agente: 1, origem: 'ptl',
+    })
+  }
+
   const { data } = await supabase
     .from('ana_calls')
     .upsert(
