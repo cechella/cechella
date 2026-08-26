@@ -316,6 +316,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
             appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
             pushTranscriptEvent(sessionRef.callSid, 'assistant', text)
             advanceStage(sessionRef.callSid, text)
+            noteAnaText(text)
           }
         }
       }
