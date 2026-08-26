@@ -44,7 +44,8 @@ export async function iniciarColetaReferidos(telefone: string): Promise<{ link: 
   if (!token) {
     const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
     token = Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
-    await supabase.from('leads').update({ token_indicacao: token }).eq('id', lead.id)
+    const { error: tokenErr } = await supabase.from('leads').update({ token_indicacao: token }).eq('id', lead.id)
+    if (tokenErr) console.error('[REFERIDOS] falha ao salvar token_indicacao:', tokenErr.message, '| token:', token)
   }
 
   const link = `${APP_URL}/indicar/${token}`
