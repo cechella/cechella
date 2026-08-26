@@ -126,12 +126,18 @@ app.post('/outbound', async (req, reply) => {
 
   // Garante que o lead existe na tabela leads antes da ligação começar
   // Sem isso, o CRM fica vazio quando o banco está zerado
+  // telefone não tem UNIQUE constraint — não podemos usar upsert, usamos insert condicional
   const phone = numero.startsWith('55') ? numero : `55${numero}`
+  const bare = phone.replace(/^55/, '')
   const { supabase: sb } = await import('./supabase.js')
-  await sb.from('leads').upsert(
-    { telefone: phone, etapa: 'apresentacao', etapa_agente: 1, origem: 'ptl', updated_at: new Date().toISOString() },
-    { onConflict: 'telefone' }
-  )
+  const { data: existingLead } = await sb.from('leads').select('id')
+    .or(`telefone.eq.${phone},telefone.eq.${bare}`)
+    .maybeSingle()
+  if (!existingLead) {
+    await sb.from('leads').insert({
+      telefone: phone, etapa: 'apresentacao', etapa_agente: 1, origem: 'ptl',
+    })
+  }
 
   return reply.send({ ok: true, sid: data.sid, status: data.status })
 })
