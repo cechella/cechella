@@ -217,28 +217,24 @@ export function buildTools(session: SessionRef) {
         try {
           const { APP_URL } = await import('../config.js')
           const { verifyPayment } = await import('../supabase.js')
-          // Check if payment already confirmed before sending (lead may call after paying)
-          if (session.telefone) {
-            const paid = await verifyPayment(session.telefone)
-            if (paid) {
-              return `{"ok":true,"paid":true,"metodo":"${metodo}","confirmado":true}`
-            }
-          }
-          const res = await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+          // Send PIX (dedup-safe — PIX route reuses existing pending payment)
+          await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ callSid: session.callSid, telefone: session.telefone, metodo }),
-          })
-          const data = await res.json().catch(() => ({}))
-          if (res.ok) {
-            // Re-check payment after sending (webhook may have fired already)
-            const paidNow = session.telefone ? await verifyPayment(session.telefone) : false
-            if (paidNow) {
-              return `{"ok":true,"paid":true,"metodo":"${metodo}","enviado":true}`
+          }).catch(() => {})
+          // Poll for payment confirmation — up to 30s (webhook usually arrives in <5s)
+          if (session.telefone) {
+            for (let i = 0; i < 6; i++) {
+              await new Promise(r => setTimeout(r, 5000))
+              const paid = await verifyPayment(session.telefone)
+              if (paid) {
+                console.log(`[ANA MASTER] ✅ pagamento confirmado após ${(i + 1) * 5}s`)
+                return `{"ok":true,"paid":true,"metodo":"${metodo}","confirmado":true}`
+              }
             }
-            return `{"ok":true,"paid":false,"metodo":"${metodo}","enviado":true,"aguardando":true}`
           }
-          return `{"ok":false,"motivo":"${JSON.stringify(data).replace(/"/g, "'")}"}`
+          return `{"ok":true,"paid":false,"metodo":"${metodo}","enviado":true,"aguardando":true}`
         } catch (e: any) {
           return `{"ok":false,"motivo":"${e.message}"}`
         }
