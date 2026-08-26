@@ -181,7 +181,7 @@ export async function checkReferidos(token: string): Promise<{ total: number; co
     .eq('token_indicacao', token)
     .maybeSingle()
 
-  if (!lead?.telefone) return { completo: false, semDados: 20, missaoCompleta: false }
+  if (!lead?.telefone) return { total: 0, completo: false, semDados: 20, missaoCompleta: false }
 
   const phone = String(lead.telefone).replace(/\D/g, '')
 
@@ -190,7 +190,7 @@ export async function checkReferidos(token: string): Promise<{ total: number; co
     .select('id, profissao, hobby, status')
     .or(`indicado_por_telefone.eq.${phone},indicado_por_telefone.eq.55${phone},indicado_por_telefone.eq.${phone.replace(/^55/, '')}`)
 
-  if (!data || data.length === 0) return { completo: false, semDados: 20, missaoCompleta: false }
+  if (!data || data.length === 0) return { total: 0, completo: false, semDados: 20, missaoCompleta: false }
 
   const ativos = data.filter((r: any) => r.status !== 'recusou')
   const semDados = ativos.filter((r: any) => !r.profissao || !r.hobby).length
