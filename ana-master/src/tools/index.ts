@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { getMemories, saveMemory, checkReferidos } from '../supabase.js'
+import { supabase, getMemories, saveMemory, checkReferidos } from '../supabase.js'
 import { iniciarColetaReferidos } from './whatsapp.js'
 
 export type SessionRef = {
@@ -12,24 +12,75 @@ export function buildTools(session: SessionRef) {
     {
       name: 'solicitar_pagamento',
       description:
-        'Chame assim que a lead confirmar a forma de pagamento (PIX ou cartão). O sistema envia o link de pagamento automaticamente no WhatsApp da lead. Após chamar esta ferramenta, diga à lead que o link acabou de chegar no WhatsApp dela. A confirmação do pagamento chegará automaticamente — continue a conversa natural enquanto aguarda. NUNCA confirme pagamento antes de receber confirmação do sistema.',
+        'Chame assim que a lead confirmar a forma de pagamento (PIX ou cartão). O sistema envia o link de pagamento no WhatsApp e aguarda confirmação. Quando retornar paid:true, o pagamento foi confirmado — celebre naturalmente e avance para referidos. NUNCA confirme pagamento sem receber paid:true desta ferramenta.',
       parameters: z.object({
         metodo: z.enum(['pix', 'cartao']).describe('Forma de pagamento escolhida pela lead'),
       }),
       execute: async ({ metodo }: { metodo: 'pix' | 'cartao' }) => {
         try {
           const { APP_URL } = await import('../config.js')
-          console.log(`[PAG] enviando link callSid=${session.callSid} telefone=${session.telefone} metodo=${metodo}`)
-          const res = await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+          console.log(`[PAG] inicio callSid=${session.callSid} telefone=${session.telefone} metodo=${metodo}`)
+
+          // Send PIX link (dedup-safe — auto-PIX may have already sent it)
+          await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ callSid: session.callSid, telefone: session.telefone, metodo }),
-          })
-          console.log(`[PAG] link enviado status=${res.status}`)
+          }).catch((e: Error) => console.log(`[PAG] send error (ok if already sent): ${e.message}`))
+
           await saveMemory(session.callSid, 'forma_pagamento_escolhida', metodo).catch(() => {})
-          return `{"ok":true,"enviado":true,"metodo":"${metodo}"}`
+          console.log(`[PAG] aguardando confirmação callSid=${session.callSid}`)
+
+          // Wait for payment confirmation via Supabase Realtime (up to 5 min)
+          const paid = await new Promise<boolean>((resolve) => {
+            let settled = false
+            const finish = (result: boolean) => {
+              if (settled) return
+              settled = true
+              clearTimeout(timer)
+              supabase.removeChannel(channel).catch(() => {})
+              console.log(`[PAG] ${result ? '✅ confirmado' : '⏰ timeout'} callSid=${session.callSid}`)
+              resolve(result)
+            }
+
+            const timer = setTimeout(() => finish(false), 5 * 60 * 1000)
+
+            const channel = supabase
+              .channel(`pag:${session.callSid}`)
+              .on(
+                'postgres_changes' as any,
+                { event: 'UPDATE', schema: 'public', table: 'pagamentos', filter: `call_sid=eq.${session.callSid}` },
+                (payload: any) => {
+                  console.log(`[PAG] realtime status=${payload.new?.status}`)
+                  if (payload.new?.status === 'approved') finish(true)
+                },
+              )
+              .subscribe(async (status: string) => {
+                console.log(`[PAG] realtime subscribe status=${status}`)
+                if (status === 'SUBSCRIBED') {
+                  const { data } = await supabase
+                    .from('pagamentos').select('status')
+                    .eq('call_sid', session.callSid).eq('status', 'approved').maybeSingle()
+                  if (data) { console.log('[PAG] já aprovado no DB'); finish(true) }
+                }
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                  console.log(`[PAG] realtime falhou (${status}), fallback poll`)
+                  const poll = setInterval(async () => {
+                    if (settled) { clearInterval(poll); return }
+                    const { data } = await supabase
+                      .from('pagamentos').select('status')
+                      .eq('call_sid', session.callSid).eq('status', 'approved').maybeSingle()
+                    if (data) { clearInterval(poll); finish(true) }
+                  }, 3000)
+                }
+              })
+          })
+
+          return paid
+            ? `{"ok":true,"paid":true,"metodo":"${metodo}"}`
+            : `{"ok":true,"paid":false,"metodo":"${metodo}","aguardando":true}`
         } catch (e: any) {
-          console.error(`[PAG] erro ao enviar link: ${e.message}`)
+          console.error(`[PAG] erro: ${e.message}`)
           return `{"ok":false,"motivo":"${e.message}"}`
         }
       },

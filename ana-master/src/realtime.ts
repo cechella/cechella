@@ -1,6 +1,6 @@
 import { RealtimeAgent, RealtimeSession } from '@openai/agents/realtime'
 import { TwilioRealtimeTransportLayer } from '@openai/agents-extensions'
-import { OPENAI_API_KEY, REALTIME_DEFAULTS } from './config.js'
+import { OPENAI_API_KEY, REALTIME_DEFAULTS, APP_URL } from './config.js'
 import { buildTools, SessionRef } from './tools/index.js'
 import { upsertCall, appendTranscript, updateCallStage, endCall, supabase } from './supabase.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
@@ -140,7 +140,50 @@ function makeStageTracker() {
 
 export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { contexto?: string } = {}) {
   console.log('[ANA MASTER] session starting')
-  const advanceStage = makeStageTracker()
+
+  // Stage tracker with in-memory current stage so auto-PIX knows when to fire
+  let currentDetectedStage = 'apresentacao'
+  const baseAdvanceStage = makeStageTracker()
+  const advanceStage = (callSid: string, text: string) => {
+    baseAdvanceStage(callSid, text)
+    for (const { stage, patterns } of STAGE_PATTERNS) {
+      if (patterns.some(p => p.test(text))) {
+        const idx = STAGE_ORDER.indexOf(stage)
+        if (idx > STAGE_ORDER.indexOf(currentDetectedStage)) {
+          currentDetectedStage = stage
+        }
+        break
+      }
+    }
+  }
+
+  // Ana asks about payment method → set flag so auto-PIX knows to watch for "pix"/"cartão"
+  let anaAskedPayment = false
+  let pixAutoSent = false
+  function noteAnaText(anaText: string) {
+    if (!anaAskedPayment && /pix\s*ou\s*cart[aã]o|cart[aã]o\s*ou\s*pix|como.*prefer.*pagar|pix.*cartão/i.test(anaText)) {
+      anaAskedPayment = true
+      console.log('[ANA MASTER] 💬 Ana perguntou sobre pagamento — aguardando resposta da lead')
+    }
+  }
+
+  // Lead says "pix"/"cartão" after Ana asked → dispatch PIX immediately, no tool call needed.
+  // This is the primary PIX dispatch mechanism — independent of model tool calls.
+  function tryAutoPix(leadText: string, callSid: string, telefone: string) {
+    if (pixAutoSent || !anaAskedPayment) return
+    const t = leadText.toLowerCase()
+    let metodo: 'pix' | 'cartao' | null = null
+    if (/\bpix\b|pix\s*(a|à)\s*vista|avista|à\s*vista/i.test(t)) metodo = 'pix'
+    else if (/cart[aã]o|parcel/i.test(t)) metodo = 'cartao'
+    if (!metodo) return
+    pixAutoSent = true
+    console.log(`[ANA MASTER] 💳 auto-PIX triggered — metodo=${metodo} telefone=${telefone}`)
+    fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callSid, telefone, metodo }),
+    }).catch((e: Error) => console.error('[ANA MASTER] auto-PIX fetch error:', e.message))
+  }
 
   const transport = new TwilioRealtimeTransportLayer({
     twilioWebSocket: wrapTwilioWithPcmToMulaw(wrapTwilioInputMulawToPcm(twilioWebSocket)),
@@ -243,6 +286,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
         appendTranscript(sessionRef.callSid, 'assistant', text).catch(() => {})
         pushTranscriptEvent(sessionRef.callSid, 'assistant', text)
         advanceStage(sessionRef.callSid, text)
+        noteAnaText(text)
       }
     }
     if (event?.type === 'input_audio_buffer.speech_started') {
@@ -257,6 +301,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       if (text && sessionRef.callSid !== 'unknown') {
         appendTranscript(sessionRef.callSid, 'user', text).catch(() => {})
         pushTranscriptEvent(sessionRef.callSid, 'user', text)
+        tryAutoPix(text, sessionRef.callSid, sessionRef.telefone)
       }
     }
     if (event?.type === 'response.done') {
