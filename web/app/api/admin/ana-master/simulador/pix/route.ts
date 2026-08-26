@@ -50,6 +50,13 @@ export async function POST(req: NextRequest) {
         await zapiSend(phone, `✅ Seu PIX ainda está ativo!\n\n⏳ Expira em ${min} minutos\n\nCopia e Cola PIX abaixo 👇`)
         await zapiSend(phone, existing.pix_code)
       }
+      // Notify Ana even on dedup — PIX data just arrived on lead's WhatsApp
+      const ANA_MASTER_URL_DEDUP = process.env.ANA_MASTER_URL ?? 'http://localhost:3001'
+      fetch(`${ANA_MASTER_URL_DEDUP}/inject-pix-sent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ callSid, metodo }),
+      }).catch(() => {})
       return NextResponse.json({ ok: true, payment_id: existing.payment_id, reused: true })
     }
 
