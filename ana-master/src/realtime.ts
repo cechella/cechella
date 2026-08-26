@@ -204,11 +204,14 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
   const instructions = await loadGoldenPrompt()
   console.log('[ANA MASTER] GOLDEN_PROMPT loaded — length:', instructions.length)
 
+  const tools = buildTools(sessionRef)
+  console.log('[ANA MASTER] tools registradas:', tools.map(t => t.name).join(', '))
+
   const agent = new RealtimeAgent({
     name: 'ANA',
     instructions,
     voice: REALTIME_DEFAULTS.voice as any,
-    tools: buildTools(sessionRef) as any,
+    tools: tools as any,
   })
 
   const realtimeSession = new RealtimeSession(agent, {
