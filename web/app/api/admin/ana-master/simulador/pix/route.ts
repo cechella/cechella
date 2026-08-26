@@ -109,6 +109,7 @@ export async function POST(req: NextRequest) {
         description: 'Programa Hormonal Dr. Vinicius',
         payment_method_id: 'pix',
         payer: { email: 'pagador@hormonioclinica.com' },
+        notification_url: 'https://www.hormoneecosystem.com/api/admin/ana-master/simulador/pix-webhook',
         metadata: { telefone: phone, origem: 'gold', call_sid: callSid },
       }),
     })
