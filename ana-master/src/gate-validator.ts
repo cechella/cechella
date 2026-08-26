@@ -173,8 +173,14 @@ export async function validateGate(
     }
 
     case 'GATE_REFERIDOS': {
-      if (!evidence.token_indicacao) return { approved: false, reason: 'Token de indicação não encontrado. Link foi enviado?' }
-      const ref = await checkReferidos(evidence.token_indicacao)
+      // Auto-fetch token from memories if Ana didn't pass it explicitly
+      let tokenRef = evidence.token_indicacao
+      if (!tokenRef) {
+        const mem = await getMemories(callSid)
+        tokenRef = mem.token_indicacao as string | undefined
+      }
+      if (!tokenRef) return { approved: false, reason: 'Token de indicação não encontrado. Chame iniciar_coleta_referidos antes.' }
+      const ref = await checkReferidos(tokenRef)
       if (!ref.missaoCompleta) {
         if (ref.semDados > 0) {
           return { approved: false, reason: `${ref.semDados} indicadas ainda sem profissão/hobby. Peça para a lead completar no link.` }
@@ -189,9 +195,14 @@ export async function validateGate(
       if (!evidence.negativas_verificadas) {
         return { approved: false, reason: 'Verificação de negativas não executada. Confirme se alguma indicada recusou contato.' }
       }
-      // C2: Referidos semDados=0 — recheck from DB via token
-      if (evidence.token_indicacao) {
-        const ref = await checkReferidos(evidence.token_indicacao)
+      // C2: Referidos semDados=0 — recheck from DB via token (auto-fetch from memories if needed)
+      let tokenVal = evidence.token_indicacao
+      if (!tokenVal) {
+        const mem = await getMemories(callSid)
+        tokenVal = mem.token_indicacao as string | undefined
+      }
+      if (tokenVal) {
+        const ref = await checkReferidos(tokenVal)
         if (!ref.missaoCompleta) {
           return { approved: false, reason: `Referidos incompletos. semDados=${ref.semDados}. Missão não concluída.` }
         }
