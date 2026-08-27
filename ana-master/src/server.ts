@@ -43,6 +43,25 @@ supabase
     console.log(`[SERVER] payment listener status=${status}`)
   })
 
+// PIX/cartão data sent listener — fires as soon as a new payment row is inserted in pagamentos.
+// Same pattern as payment-confirmations: Supabase Realtime → inject into active session, no HTTP dependency.
+supabase
+  .channel('pix-data-sent')
+  .on(
+    'postgres_changes' as any,
+    { event: 'INSERT', schema: 'public', table: 'pagamentos' },
+    (payload: any) => {
+      const { call_sid, metodo } = payload.new ?? {}
+      if (call_sid && metodo) {
+        console.log(`[SERVER] 💳 PIX/cartão inserido call_sid=${call_sid} metodo=${metodo} — injetando notificação`)
+        injectPixDataSent(call_sid, metodo as 'pix' | 'cartao')
+      }
+    },
+  )
+  .subscribe((status: string) => {
+    console.log(`[SERVER] pix-data-sent listener status=${status}`)
+  })
+
 // Parse Twilio's application/x-www-form-urlencoded webhook bodies
 // Must be registered BEFORE any routes that consume this content type
 app.addContentTypeParser(

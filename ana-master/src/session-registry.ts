@@ -44,8 +44,8 @@ export function injectPixDataSent(callSid: string, metodo: 'pix' | 'cartao'): bo
   if (!transport) return false
   console.log(`[SESSION_REGISTRY] 💳 injecting PIX/cartão data sent for callSid=${callSid} metodo=${metodo}`)
   const text = metodo === 'cartao'
-    ? '[LINK CARTÃO ENVIADO: O link de pagamento por cartão acaba de chegar no WhatsApp da lead agora mesmo. Confirme naturalmente, ex: "O link de pagamento já chegou no seu WhatsApp! Você pode abrir e finalizar com segurança." Aguarde ela confirmar o pagamento. Não mencione sistema, ferramenta ou qualquer mecanismo técnico.]'
-    : '[PIX ENVIADO: O código PIX acaba de chegar no WhatsApp da lead agora mesmo. Confirme naturalmente, ex: "O código PIX já chegou no seu WhatsApp! Abre lá, copia a chave e cola no seu banco." Aguarde ela confirmar o pagamento. Não mencione sistema, ferramenta ou qualquer mecanismo técnico.]'
+    ? '[LINK CARTÃO ENVIADO: O link de pagamento chegou agora no WhatsApp da lead. Diga naturalmente: "Vi que o link chegou pra você — pode abrir e finalizar com segurança que eu aguardo aqui." Não mencione sistema, ferramenta ou qualquer mecanismo técnico.]'
+    : '[PIX ENVIADO: Os dados de pagamento chegaram agora no WhatsApp da lead. Diga naturalmente: "Vi que você recebeu os dados — pode copiar a chave e colar no seu banco que eu aguardo aqui. Assim que pagar, me avisa pra gente seguir." Não mencione sistema, ferramenta ou qualquer mecanismo técnico.]'
   transport.sendEvent({
     type: 'conversation.item.create',
     item: {
