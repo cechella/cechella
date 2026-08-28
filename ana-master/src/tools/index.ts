@@ -13,17 +13,27 @@ export function buildTools(session: SessionRef) {
     {
       name: 'solicitar_pagamento',
       description:
-        'Chame assim que a lead confirmar a forma de pagamento (PIX ou cartão). O sistema envia o link de pagamento no WhatsApp e aguarda confirmação. Quando retornar paid:true, o pagamento foi confirmado — celebre naturalmente e avance para referidos. NUNCA confirme pagamento sem receber paid:true desta ferramenta.',
+        'Chame assim que a lead confirmar a forma de pagamento (PIX ou cartão). O sistema envia o link de pagamento no WhatsApp e aguarda confirmação. Quando retornar paid:true, o pagamento foi confirmado — celebre naturalmente e avance para referidos. NUNCA confirme pagamento sem receber paid:true desta ferramenta. Inclua sempre o nome da lead no parâmetro nome_lead.',
       parameters: z.object({
         metodo: z.enum(['pix', 'cartao']).describe('Forma de pagamento escolhida pela lead'),
+        nome_lead: z.string().optional().describe('Nome da lead descoberto na conversa (ex: "Adriana")'),
       }),
-      execute: async ({ metodo }: { metodo: 'pix' | 'cartao' }) => {
+      execute: async ({ metodo, nome_lead }: { metodo: 'pix' | 'cartao'; nome_lead?: string }) => {
         try {
           const { APP_URL } = await import('../config.js')
           console.log(`[PAG] inicio callSid=${session.callSid} telefone=${session.telefone} metodo=${metodo}`)
 
           // Save chosen method so timeout fallback uses the correct one
           session.metodoEscolhido = metodo
+
+          // Save lead name to leads table if provided and not yet set
+          if (nome_lead && session.telefone) {
+            const phone = session.telefone.replace(/\D/g, '')
+            supabase.from('leads').update({ nome: nome_lead })
+              .eq('telefone', phone).is('nome', null)
+              .then(() => console.log(`[PAG] nome_lead salvo: ${nome_lead}`))
+              .catch(() => {})
+          }
 
           // Send PIX link (dedup-safe — auto-PIX may have already sent it)
           await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
