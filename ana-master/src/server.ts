@@ -3,7 +3,7 @@ import websocket from '@fastify/websocket'
 import { PORT, PUBLIC_HOST } from './config.js'
 import { createAnaMasterSession } from './realtime.js'
 import { registerSseClient } from './sse-registry.js'
-import { supabase } from './supabase.js'
+import { supabase, saveMemory } from './supabase.js'
 import { injectPaymentConfirmed, injectReferralLinkSent, injectPixDataSent } from './session-registry.js'
 import { iniciarColetaReferidos } from './tools/whatsapp.js'
 
@@ -31,7 +31,10 @@ supabase
           iniciarColetaReferidos(lead_telefone)
             .then(r => {
               console.log(`[SERVER] referidos link enviado token=${r?.token ?? 'null'}`)
-              if (r?.token) injectReferralLinkSent(call_sid)
+              if (r?.token) {
+                saveMemory(call_sid, 'token_indicacao', r.token).catch(() => {})
+                injectReferralLinkSent(call_sid)
+              }
             })
             .catch(e => console.error(`[SERVER] referidos link erro: ${e.message}`))
         }
