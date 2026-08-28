@@ -9,32 +9,6 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-const ZAPI_BASE = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5'
-const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
-const APP_URL = 'https://www.hormoneecosystem.com'
-const TUTORIAL_VIDEO_URL = 'https://pub-7091151189544b0980e12e81533a5213.r2.dev/tutorialwpp.mp4'
-
-function normalize(phone: string) {
-  const d = String(phone).replace(/\D/g, '')
-  return d.startsWith('55') ? d : `55${d}`
-}
-
-async function zapiSend(phone: string, message: string) {
-  await fetch(`${ZAPI_BASE}/send-text`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-    body: JSON.stringify({ phone: normalize(phone), message }),
-  }).catch(() => {})
-}
-
-async function zapiSendVideo(phone: string, video: string, caption: string) {
-  await fetch(`${ZAPI_BASE}/send-video`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-    body: JSON.stringify({ phone: normalize(phone), video, caption }),
-  }).catch(() => {})
-}
-
 async function handlePaymentConfirmed(callSid: string, paymentId: string) {
   // Fetch pagamento by payment_id (avoids schema cache issue with call_sid column)
   const { data: pag } = await supabase
@@ -57,17 +31,6 @@ async function handlePaymentConfirmed(callSid: string, paymentId: string) {
     .update({ status: 'approved', updated_at: new Date().toISOString() })
     .eq('payment_id', paymentId)
 
-  if (tel) {
-    // Generate referral token only — no WhatsApp here.
-    // Ana confirms payment verbally first, then iniciar_coleta_referidos sends the video.
-    try {
-      await fetch(`${APP_URL}/api/admin/ana-master/simulador/referidos`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ telefone: tel, callSid }),
-      })
-    } catch {}
-  }
 }
 
 // Mercado Pago production webhook
