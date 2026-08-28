@@ -228,8 +228,8 @@ export default function PaginaIndicacao() {
   }
 
   const confirmarAbrirWhatsApp = () => {
-    const msg = encodeURIComponent(`REF-${token}`)
-    window.open(`https://wa.me/5547988507977?text=${msg}`, '_blank')
+    // sessao_wpp já registrada automaticamente quando o link foi enviado — não precisa do REF-TOKEN manual
+    window.open(`https://wa.me/5547988507977`, '_blank')
     setShowPopup(false)
     setShowTutorial(false)
     // Persiste flag no sessionStorage para sobreviver reload do iOS
