@@ -31,8 +31,10 @@ export function buildTools(session: SessionRef) {
             const phone = session.telefone.replace(/\D/g, '')
             supabase.from('leads').update({ nome: nome_lead })
               .eq('telefone', phone).is('nome', null)
-              .then(() => console.log(`[PAG] nome_lead salvo: ${nome_lead}`))
-              .catch(() => {})
+              .then(({ error }) => {
+                if (error) console.error(`[PAG] nome_lead erro: ${error.message}`)
+                else console.log(`[PAG] nome_lead salvo: ${nome_lead}`)
+              })
           }
 
           // Send PIX link (dedup-safe — auto-PIX may have already sent it)
