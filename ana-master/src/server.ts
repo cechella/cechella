@@ -4,7 +4,7 @@ import { PORT, PUBLIC_HOST } from './config.js'
 import { createAnaMasterSession } from './realtime.js'
 import { registerSseClient } from './sse-registry.js'
 import { supabase, saveMemory } from './supabase.js'
-import { injectPaymentConfirmed, injectReferralLinkSent, injectPixDataSent } from './session-registry.js'
+import { injectPaymentConfirmed, injectReferralLinkSent, injectPixDataSent, injectReferidosUpdate } from './session-registry.js'
 import { iniciarColetaReferidos } from './tools/whatsapp.js'
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
@@ -63,6 +63,49 @@ supabase
   )
   .subscribe((status: string) => {
     console.log(`[SERVER] pix-data-sent listener status=${status}`)
+  })
+
+// Referidos real-time listener — fires when a contact is inserted in contatos_referidos.
+// Looks up the active call for that lead's phone and injects the updated count into Ana's session.
+supabase
+  .channel('referidos-inserts')
+  .on(
+    'postgres_changes' as any,
+    { event: 'INSERT', schema: 'public', table: 'contatos_referidos' },
+    async (payload: any) => {
+      const indicadorPhone = payload.new?.indicado_por_telefone as string | undefined
+      if (!indicadorPhone) return
+
+      // Find active call for this lead
+      const digits = String(indicadorPhone).replace(/\D/g, '')
+      const bare = digits.replace(/^55/, '')
+      const { data: call } = await supabase
+        .from('ana_calls')
+        .select('call_sid')
+        .eq('em_ligacao', true)
+        .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${bare}`)
+        .maybeSingle()
+
+      if (!call?.call_sid) return
+
+      // Count total referidos and semDados for this lead
+      const { data: refs } = await supabase
+        .from('contatos_referidos')
+        .select('profissao, hobby, status')
+        .or(`indicado_por_telefone.eq.${digits},indicado_por_telefone.eq.55${digits},indicado_por_telefone.eq.${bare}`)
+
+      if (!refs) return
+      const ativos = refs.filter((r: any) => r.status !== 'recusou')
+      const semDados = ativos.filter((r: any) => !r.profissao || !r.hobby).length
+      const total = ativos.length
+      const missaoCompleta = total >= 20 && semDados === 0
+
+      console.log(`[SERVER] 👥 referidos update call_sid=${call.call_sid} total=${total} semDados=${semDados} missaoCompleta=${missaoCompleta}`)
+      injectReferidosUpdate(call.call_sid, total, semDados, missaoCompleta)
+    },
+  )
+  .subscribe((status: string) => {
+    console.log(`[SERVER] referidos listener status=${status}`)
   })
 
 // Parse Twilio's application/x-www-form-urlencoded webhook bodies

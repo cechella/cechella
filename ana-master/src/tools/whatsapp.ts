@@ -50,6 +50,17 @@ export async function iniciarColetaReferidos(telefone: string): Promise<{ link: 
 
   const link = `${APP_URL}/indicar/${token}`
 
+  // Registra sessão diretamente no banco — elimina necessidade do REF-TOKEN manual via WhatsApp.
+  // n8n já busca token por telefone em sessao_wpp; com isso, a lead pode compartilhar contatos
+  // sem precisar enviar nenhuma mensagem de texto antes.
+  const phoneNorm = normalizePhone(telefone)
+  supabase.from('sessao_wpp')
+    .upsert({ phone: phoneNorm, token }, { onConflict: 'phone' })
+    .then(({ error }) => {
+      if (error) console.error('[REFERIDOS] falha ao registrar sessao_wpp:', error.message)
+      else console.log(`[REFERIDOS] sessao_wpp registrada phone=${phoneNorm} token=${token}`)
+    })
+
   const phone = normalizePhone(telefone)
   const TUTORIAL_VIDEO_URL = 'https://pub-7091151189544b0980e12e81533a5213.r2.dev/tutorialwpp.mp4'
   const caption =
