@@ -69,7 +69,7 @@ export function injectReferralLinkSent(callSid: string): boolean {
       role: 'user',
       content: [{
         type: 'input_text',
-        text: '[LINK DE INDICAÇÕES ENVIADO: O sistema acabou de enviar o link de indicações para o WhatsApp da lead agora mesmo. Diga naturalmente: "Que bom! O link já foi pro seu WhatsApp agora mesmo. Pode abrir?" e então guie-a: "No link, toca em Importar amigas pelo WhatsApp, seleciona suas amigas e toca em Enviar. Depois volte para o link e seus contatos aparecerão automaticamente." Fique em silêncio aguardando — você receberá atualizações automáticas do sistema quando os contatos chegarem. Não chame verificar_referidos() nem pergunte quantos enviou. Não mencione sistema, ferramenta ou mecanismo técnico.]',
+        text: '[LINK DE INDICAÇÕES ENVIADO: O link de indicações já está no WhatsApp da lead. Use sua abertura normal de referidos — pergunte se ela conhece amigas que também podem se beneficiar — e AGUARDE ela responder positivamente. Somente após a confirmação dela ("sim", "posso ajudar", "claro" ou equivalente), diga: "O link já foi pro seu WhatsApp agora mesmo. Pode abrir?" e então explique: "No link, toca em Importar amigas pelo WhatsApp, seleciona suas amigas e toca em Enviar. Você pode selecionar várias de uma vez. O objetivo é chegar em pelo menos 20." Não mencione o link antes da confirmação. Não mencione sistema, ferramenta ou mecanismo técnico.]',
       }],
     },
   })
