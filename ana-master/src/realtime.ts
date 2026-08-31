@@ -321,7 +321,9 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
         // WAIT_FOR_YES: lead respondeu ao "Posso te pedir um favor?"
         if (sessionRef.waitForYes) {
           const t = text.toLowerCase()
-          const isYes = /\b(sim|claro|pode|ok|pode ser|com certeza|tá|ta|bom|oi|ola|claro que|lógico|logico)\b/.test(t)
+          // Strict list — avoids false positives from Bluetooth echo transcriptions.
+          // Removed: tá, ta, bom, oi, ola (too common in noise/echo artifacts).
+          const isYes = /\b(sim|claro|pode|ok|com certeza|lógico|logico|vai|certo|fechado|obvio|obviamente|pode sim|claro que sim)\b/.test(t)
           if (isYes) {
             sessionRef.waitForYes = false
             sessionRef.referralsWaiting = true
@@ -358,6 +360,27 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
     }
     if (event?.type === 'response.done') {
       console.log('[ANA MASTER] response.done')
+
+      // ETAPA 7: dispara a frase de abertura APÓS o response.done do tool call do pagamento.
+      // Fazemos isso aqui (e não dentro do execute do tool) para garantir que o modelo não
+      // insira texto próprio antes da frase — o response.cancel limpa qualquer saída em fila.
+      if (sessionRef.pendingEtapa7) {
+        sessionRef.pendingEtapa7 = false
+        const nome = sessionRef.nomeLead ?? 'você'
+        console.log(`[ANA MASTER] 🎯 pendingEtapa7 — cancelando saída e disparando frase ETAPA 7 callSid=${sessionRef.callSid}`)
+        sessionRef.sendEvent?.({ type: 'response.cancel' })
+        sessionRef.sendEvent?.({ type: 'output_audio_buffer.clear' })
+        setTimeout(() => {
+          sessionRef.sendEvent?.({
+            type: 'response.create',
+            response: {
+              instructions: `INSTRUÇÃO OBRIGATÓRIA: diga APENAS esta frase exata e nada mais: "${nome}, você acabou de receber um link no seu WhatsApp. Posso te pedir um favor?" — depois fique em silêncio total. Não adicione nenhuma palavra antes ou depois desta frase.`,
+            },
+          })
+        }, 150)
+        return
+      }
+
       const output: any[] = event?.response?.output ?? []
       for (const item of output) {
         if (item?.id && processedItems.has(item.id)) continue

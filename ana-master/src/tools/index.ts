@@ -8,6 +8,7 @@ export type SessionRef = {
   metodoEscolhido?: 'pix' | 'cartao'
   nomeLead?: string
   waitForYes?: boolean
+  pendingEtapa7?: boolean
   referralsWaiting?: boolean
   sendEvent?: (ev: object) => void
 }
@@ -105,17 +106,12 @@ export function buildTools(session: SessionRef) {
 
           if (paid) {
             // Keep create_response=false — WAIT_FOR_YES state begins now.
-            // Fire the mandatory Stage 7 opening via response.create (manual, not auto).
-            const nome = session.nomeLead ?? nome_lead ?? 'você'
+            // Flag pendingEtapa7 so response.done handler fires the phrase AFTER this tool
+            // response completes, preventing the model from prepending its own confirmation text.
             session.waitForYes = true
-            console.log(`[PAG] ✅ paid — disparando abertura ETAPA 7 WAIT_FOR_YES callSid=${session.callSid}`)
-            session.sendEvent?.({
-              type: 'response.create',
-              response: {
-                instructions: `INSTRUÇÃO OBRIGATÓRIA: diga APENAS esta frase exata e nada mais: "${nome}, você acabou de receber um link no seu WhatsApp. Posso te pedir um favor?" — depois fique em silêncio total. Não adicione nenhuma palavra antes ou depois desta frase.`,
-              },
-            })
-            return `{"ok":true,"paid":true,"metodo":"${metodo}","estado":"WAIT_FOR_YES","instrucao":"A frase de abertura foi disparada. Fique em silêncio até a lead responder — NÃO gere mais nada."}`
+            session.pendingEtapa7 = true
+            console.log(`[PAG] ✅ paid — WAIT_FOR_YES ativado, ETAPA 7 será disparada no response.done callSid=${session.callSid}`)
+            return `{"ok":true,"paid":true,"metodo":"${metodo}","estado":"WAIT_FOR_YES"}`
           } else {
             // Timeout — re-enable auto-responses and report failure
             session.sendEvent?.({
@@ -144,8 +140,11 @@ export function buildTools(session: SessionRef) {
         }
         await saveMemory(session.callSid, 'token_indicacao', result.token).catch(() => {})
         console.log(`[REFERIDOS] link enviado token=${result.token}`)
-        // Disable auto-responses during referrals collection — only system notifications or direct questions trigger speech
+        // Cancel any in-progress response before silencing — prevents the model from generating
+        // a preamble from the tool result while create_response: false is still in transit.
         session.referralsWaiting = true
+        session.sendEvent?.({ type: 'response.cancel' })
+        session.sendEvent?.({ type: 'output_audio_buffer.clear' })
         session.sendEvent?.({
           type: 'session.update',
           session: { turn_detection: { type: 'semantic_vad', eagerness: 'low', create_response: false } },
