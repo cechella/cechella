@@ -206,6 +206,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
   const sessionRef: SessionRef = {
     callSid: 'unknown',
     telefone: '',
+    sendEvent: (ev: object) => (transport as any).sendEvent?.(ev)?.catch?.(() => {}),
   }
 
   const DIAG = process.env.INBOUND_AUDIO_DIAGNOSTIC === 'true'

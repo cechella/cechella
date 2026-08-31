@@ -6,6 +6,7 @@ export type SessionRef = {
   callSid: string
   telefone: string
   metodoEscolhido?: 'pix' | 'cartao'
+  sendEvent?: (ev: object) => void
 }
 
 export function buildTools(session: SessionRef) {
@@ -45,7 +46,13 @@ export function buildTools(session: SessionRef) {
           }).catch((e: Error) => console.log(`[PAG] send error (ok if already sent): ${e.message}`))
 
           await saveMemory(session.callSid, 'forma_pagamento_escolhida', metodo).catch(() => {})
-          console.log(`[PAG] aguardando confirmação callSid=${session.callSid}`)
+
+          // Disable auto-responses while waiting for payment — VAD stays active but won't trigger speech
+          session.sendEvent?.({
+            type: 'session.update',
+            session: { turn_detection: { type: 'server_vad', create_response: false } },
+          })
+          console.log(`[PAG] create_response=false — aguardando confirmação callSid=${session.callSid}`)
 
           // Wait for payment confirmation via Supabase Realtime (up to 5 min)
           const paid = await new Promise<boolean>((resolve) => {
@@ -91,6 +98,13 @@ export function buildTools(session: SessionRef) {
                 }
               })
           })
+
+          // Re-enable auto-responses now that payment window is closed
+          session.sendEvent?.({
+            type: 'session.update',
+            session: { turn_detection: { type: 'server_vad', create_response: true } },
+          })
+          console.log(`[PAG] create_response=true — janela de pagamento encerrada callSid=${session.callSid}`)
 
           return paid
             ? `{"ok":true,"paid":true,"metodo":"${metodo}"}`
