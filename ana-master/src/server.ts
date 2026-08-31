@@ -65,43 +65,57 @@ supabase
     console.log(`[SERVER] pix-data-sent listener status=${status}`)
   })
 
+// Debounce map: phone → timer. Accumulates rapid INSERTs into a single injection after 4 s.
+const referidosDebounce = new Map<string, ReturnType<typeof setTimeout>>()
+
+async function processReferidosUpdate(indicadorPhone: string) {
+  const digits = String(indicadorPhone).replace(/\D/g, '')
+  const bare = digits.replace(/^55/, '')
+  const { data: call } = await supabase
+    .from('ana_calls')
+    .select('call_sid')
+    .eq('em_ligacao', true)
+    .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${bare}`)
+    .maybeSingle()
+
+  if (!call?.call_sid) return
+
+  const { data: refs } = await supabase
+    .from('contatos_referidos')
+    .select('profissao, hobby, status')
+    .or(`indicado_por_telefone.eq.${digits},indicado_por_telefone.eq.55${digits},indicado_por_telefone.eq.${bare}`)
+
+  if (!refs) return
+  const ativos = refs.filter((r: any) => r.status !== 'recusou')
+  const semDados = ativos.filter((r: any) => !r.profissao || !r.hobby).length
+  const total = ativos.length
+  const missaoCompleta = total >= 20 && semDados === 0
+
+  console.log(`[SERVER] 👥 referidos update call_sid=${call.call_sid} total=${total} semDados=${semDados} missaoCompleta=${missaoCompleta}`)
+  injectReferidosUpdate(call.call_sid, total, semDados, missaoCompleta)
+}
+
 // Referidos real-time listener — fires when a contact is inserted in contatos_referidos.
-// Looks up the active call for that lead's phone and injects the updated count into Ana's session.
+// Debounced: rapid batch inserts (e.g. 10 contacts at once) accumulate for 4 s and trigger a single injection.
 supabase
   .channel('referidos-inserts')
   .on(
     'postgres_changes' as any,
     { event: 'INSERT', schema: 'public', table: 'contatos_referidos' },
-    async (payload: any) => {
+    (payload: any) => {
       const indicadorPhone = payload.new?.indicado_por_telefone as string | undefined
       if (!indicadorPhone) return
 
-      // Find active call for this lead
-      const digits = String(indicadorPhone).replace(/\D/g, '')
-      const bare = digits.replace(/^55/, '')
-      const { data: call } = await supabase
-        .from('ana_calls')
-        .select('call_sid')
-        .eq('em_ligacao', true)
-        .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${bare}`)
-        .maybeSingle()
-
-      if (!call?.call_sid) return
-
-      // Count total referidos and semDados for this lead
-      const { data: refs } = await supabase
-        .from('contatos_referidos')
-        .select('profissao, hobby, status')
-        .or(`indicado_por_telefone.eq.${digits},indicado_por_telefone.eq.55${digits},indicado_por_telefone.eq.${bare}`)
-
-      if (!refs) return
-      const ativos = refs.filter((r: any) => r.status !== 'recusou')
-      const semDados = ativos.filter((r: any) => !r.profissao || !r.hobby).length
-      const total = ativos.length
-      const missaoCompleta = total >= 20 && semDados === 0
-
-      console.log(`[SERVER] 👥 referidos update call_sid=${call.call_sid} total=${total} semDados=${semDados} missaoCompleta=${missaoCompleta}`)
-      injectReferidosUpdate(call.call_sid, total, semDados, missaoCompleta)
+      const key = String(indicadorPhone).replace(/\D/g, '')
+      const existing = referidosDebounce.get(key)
+      if (existing) clearTimeout(existing)
+      const timer = setTimeout(() => {
+        referidosDebounce.delete(key)
+        processReferidosUpdate(indicadorPhone).catch(e =>
+          console.error(`[SERVER] referidos update error: ${e.message}`)
+        )
+      }, 4000)
+      referidosDebounce.set(key, timer)
     },
   )
   .subscribe((status: string) => {

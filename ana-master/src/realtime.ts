@@ -345,6 +345,12 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
     session: {
       input_audio_format: 'pcm16',
       input_audio_transcription: { model: 'gpt-4o-transcribe' },
+      turn_detection: {
+        type: 'server_vad',
+        threshold: 0.4,
+        prefix_padding_ms: 400,
+        silence_duration_ms: 1200,
+      },
     },
   })?.catch?.(() => {})
 

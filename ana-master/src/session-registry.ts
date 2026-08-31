@@ -31,7 +31,7 @@ export function injectPaymentConfirmed(callSid: string): boolean {
       role: 'user',
       content: [{
         type: 'input_text',
-        text: '[PAGAMENTO CONFIRMADO: O sistema confirmou o pagamento agora. Celebre naturalmente com a lead e avance para a etapa de referidos. Não mencione sistema, ferramenta ou qualquer mecanismo técnico.]',
+        text: '[External event — authoritative state update, not user speech] [PAGAMENTO CONFIRMADO: O sistema confirmou o pagamento agora. Celebre naturalmente com a lead e avance para a etapa de referidos. Não mencione sistema, ferramenta ou qualquer mecanismo técnico.]',
       }],
     },
   })
@@ -44,8 +44,8 @@ export function injectPixDataSent(callSid: string, metodo: 'pix' | 'cartao'): bo
   if (!transport) return false
   console.log(`[SESSION_REGISTRY] 💳 injecting PIX/cartão data sent for callSid=${callSid} metodo=${metodo}`)
   const text = metodo === 'cartao'
-    ? '[LINK CARTÃO ENVIADO: O link de pagamento chegou agora no WhatsApp da lead. Diga naturalmente: "Vi que o link chegou pra você — pode abrir e finalizar com segurança que eu aguardo aqui." Não mencione sistema, ferramenta ou qualquer mecanismo técnico.]'
-    : '[PIX ENVIADO: Os dados de pagamento chegaram agora no WhatsApp da lead. Diga naturalmente: "Vi que você recebeu os dados — pode copiar a chave e colar no seu banco que eu aguardo aqui. Assim que pagar, me avisa pra gente seguir." Não mencione sistema, ferramenta ou qualquer mecanismo técnico.]'
+    ? '[External event — authoritative state update, not user speech] [LINK CARTÃO ENVIADO: O link de pagamento chegou agora no WhatsApp da lead. Diga naturalmente: "Vi que o link chegou pra você — pode abrir e finalizar com segurança que eu aguardo aqui." Não mencione sistema, ferramenta ou qualquer mecanismo técnico.]'
+    : '[External event — authoritative state update, not user speech] [PIX ENVIADO: Os dados de pagamento chegaram agora no WhatsApp da lead. Diga naturalmente: "Vi que você recebeu os dados — pode copiar a chave e colar no seu banco que eu aguardo aqui. Assim que pagar, me avisa pra gente seguir." Não mencione sistema, ferramenta ou qualquer mecanismo técnico.]'
   transport.sendEvent({
     type: 'conversation.item.create',
     item: {
@@ -69,7 +69,7 @@ export function injectReferralLinkSent(callSid: string): boolean {
       role: 'user',
       content: [{
         type: 'input_text',
-        text: '[LINK DE INDICAÇÕES ENVIADO: O link de indicações já está no WhatsApp da lead. Use sua abertura normal de referidos — pergunte se ela conhece amigas que também podem se beneficiar — e AGUARDE ela responder positivamente. Somente após a confirmação dela ("sim", "posso ajudar", "claro" ou equivalente), diga: "O link já foi pro seu WhatsApp agora mesmo. Pode abrir?" e então explique: "No link, toca em Importar amigas pelo WhatsApp, seleciona suas amigas e toca em Enviar. Você pode selecionar várias de uma vez. O objetivo é chegar em pelo menos 20." Não mencione o link antes da confirmação. Não mencione sistema, ferramenta ou mecanismo técnico.]',
+        text: '[External event — authoritative state update, not user speech] [LINK DE INDICAÇÕES ENVIADO: O link de indicações já está no WhatsApp da lead. Use sua abertura normal de referidos — pergunte se ela conhece amigas que também podem se beneficiar — e AGUARDE ela responder positivamente. Somente após a confirmação dela ("sim", "posso ajudar", "claro" ou equivalente), diga: "O link já foi pro seu WhatsApp agora mesmo. Pode abrir?" e então explique: "No link, toca em Importar amigas pelo WhatsApp, seleciona suas amigas e toca em Enviar. Você pode selecionar várias de uma vez. O objetivo é chegar em pelo menos 20." Não mencione o link antes da confirmação. Não mencione sistema, ferramenta ou mecanismo técnico.]',
       }],
     },
   })
@@ -86,13 +86,14 @@ export function injectReferidosUpdate(callSid: string, total: number, semDados: 
   console.log(`[SESSION_REGISTRY] 👥 injecting referidos update callSid=${callSid} total=${total} semDados=${semDados} missaoCompleta=${missaoCompleta}`)
 
   let text: string
+  const prefix = '[External event — authoritative state update, not user speech]'
   if (missaoCompleta) {
-    text = `[REFERIDOS COMPLETOS: A lead completou as 20 indicações com todos os dados preenchidos. Celebre naturalmente: "Perfeito, missão cumprida! Você indicou 20 amigas — nossa equipe vai entrar em contato com cada uma delas. Foi um prazer falar com você!" e encerre a ligação com carinho. Não mencione sistema ou ferramenta.]`
+    text = `${prefix} [REFERIDOS COMPLETOS: A lead completou as 20 indicações com todos os dados preenchidos. Celebre naturalmente: "Perfeito, missão cumprida! Você indicou 20 amigas — nossa equipe vai entrar em contato com cada uma delas. Foi um prazer falar com você!" e encerre a ligação com carinho. Não mencione sistema ou ferramenta.]`
   } else if (total >= 20 && semDados > 0) {
-    text = `[REFERIDOS ATUALIZAÇÃO: A lead já enviou ${total} amigas — meta atingida! Mas ${semDados} ainda estão sem profissão e hobby. Diga naturalmente: "Que ótimo, você já tem ${total} amigas enviadas! Só falta preencher a profissão e o hobby de cada uma no link — é rapidinho, pode fazer agora?" Aguarde silenciosamente. Não mencione sistema ou ferramenta.]`
+    text = `${prefix} [REFERIDOS ATUALIZAÇÃO: A lead já enviou ${total} amigas — meta atingida! Mas ${semDados} ainda estão sem profissão e hobby. Diga naturalmente: "Que ótimo, você já tem ${total} amigas enviadas! Só falta preencher a profissão e o hobby de cada uma no link — é rapidinho, pode fazer agora?" Aguarde. Não mencione sistema ou ferramenta.]`
   } else {
     const faltam = 20 - total
-    text = `[REFERIDOS ATUALIZAÇÃO: A lead acabou de enviar contatos. Total atual: ${total} de 20 amigas indicadas, faltam ${faltam}. Diga naturalmente: "Recebi ${total} amigas suas — faltam só ${faltam} para completar!" e incentive ela a continuar. Não mencione sistema ou ferramenta.]`
+    text = `${prefix} [REFERIDOS ATUALIZAÇÃO: A lead acabou de enviar contatos. Total atual: ${total} de 20 amigas indicadas, faltam ${faltam}. Diga naturalmente: "Recebi ${total} amigas suas — faltam só ${faltam} para completar!" e incentive ela a continuar. Não mencione sistema ou ferramenta.]`
   }
 
   transport.sendEvent({
