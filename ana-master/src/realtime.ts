@@ -351,6 +351,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
         prefix_padding_ms: 400,
         silence_duration_ms: 1200,
       },
+      reasoning: { effort: 'low' },
     },
   })?.catch?.(() => {})
 
