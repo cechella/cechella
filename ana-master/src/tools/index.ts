@@ -50,7 +50,7 @@ export function buildTools(session: SessionRef) {
           // Disable auto-responses while waiting for payment — VAD stays active but won't trigger speech
           session.sendEvent?.({
             type: 'session.update',
-            session: { turn_detection: { type: 'server_vad', create_response: false } },
+            session: { turn_detection: { type: 'semantic_vad', eagerness: 'low', create_response: false } },
           })
           console.log(`[PAG] create_response=false — aguardando confirmação callSid=${session.callSid}`)
 
@@ -102,7 +102,7 @@ export function buildTools(session: SessionRef) {
           // Re-enable auto-responses now that payment window is closed
           session.sendEvent?.({
             type: 'session.update',
-            session: { turn_detection: { type: 'server_vad', create_response: true } },
+            session: { turn_detection: { type: 'semantic_vad', eagerness: 'low', create_response: true } },
           })
           console.log(`[PAG] create_response=true — janela de pagamento encerrada callSid=${session.callSid}`)
 
