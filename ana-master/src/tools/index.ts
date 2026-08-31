@@ -6,6 +6,9 @@ export type SessionRef = {
   callSid: string
   telefone: string
   metodoEscolhido?: 'pix' | 'cartao'
+  nomeLead?: string
+  waitForYes?: boolean
+  referralsWaiting?: boolean
   sendEvent?: (ev: object) => void
 }
 
@@ -29,6 +32,7 @@ export function buildTools(session: SessionRef) {
 
           // Save lead name to leads table if provided and not yet set
           if (nome_lead && session.telefone) {
+            session.nomeLead = nome_lead
             const phone = session.telefone.replace(/\D/g, '')
             supabase.from('leads').update({ nome: nome_lead })
               .eq('telefone', phone).is('nome', null)
@@ -99,16 +103,28 @@ export function buildTools(session: SessionRef) {
               })
           })
 
-          // Re-enable auto-responses now that payment window is closed
-          session.sendEvent?.({
-            type: 'session.update',
-            session: { turn_detection: { type: 'semantic_vad', eagerness: 'low', create_response: true } },
-          })
-          console.log(`[PAG] create_response=true — janela de pagamento encerrada callSid=${session.callSid}`)
-
-          return paid
-            ? `{"ok":true,"paid":true,"metodo":"${metodo}"}`
-            : `{"ok":true,"paid":false,"metodo":"${metodo}","aguardando":true}`
+          if (paid) {
+            // Keep create_response=false — WAIT_FOR_YES state begins now.
+            // Fire the mandatory Stage 7 opening via response.create (manual, not auto).
+            const nome = session.nomeLead ?? nome_lead ?? 'você'
+            session.waitForYes = true
+            console.log(`[PAG] ✅ paid — disparando abertura ETAPA 7 WAIT_FOR_YES callSid=${session.callSid}`)
+            session.sendEvent?.({
+              type: 'response.create',
+              response: {
+                instructions: `INSTRUÇÃO OBRIGATÓRIA: diga APENAS esta frase exata e nada mais: "${nome}, você acabou de receber um link no seu WhatsApp. Posso te pedir um favor?" — depois fique em silêncio total. Não adicione nenhuma palavra antes ou depois desta frase.`,
+              },
+            })
+            return `{"ok":true,"paid":true,"metodo":"${metodo}","estado":"WAIT_FOR_YES","instrucao":"A frase de abertura foi disparada. Fique em silêncio até a lead responder — NÃO gere mais nada."}`
+          } else {
+            // Timeout — re-enable auto-responses and report failure
+            session.sendEvent?.({
+              type: 'session.update',
+              session: { turn_detection: { type: 'semantic_vad', eagerness: 'low', create_response: true } },
+            })
+            console.log(`[PAG] ⏰ timeout — create_response=true restaurado callSid=${session.callSid}`)
+            return `{"ok":true,"paid":false,"metodo":"${metodo}","aguardando":true}`
+          }
         } catch (e: any) {
           console.error(`[PAG] erro: ${e.message}`)
           return `{"ok":true,"paid":false,"aguardando":true}`
@@ -128,7 +144,14 @@ export function buildTools(session: SessionRef) {
         }
         await saveMemory(session.callSid, 'token_indicacao', result.token).catch(() => {})
         console.log(`[REFERIDOS] link enviado token=${result.token}`)
-        return `{"ok":true,"link_enviado":true,"token":"${result.token}"}`
+        // Disable auto-responses during referrals collection — only system notifications or direct questions trigger speech
+        session.referralsWaiting = true
+        session.sendEvent?.({
+          type: 'session.update',
+          session: { turn_detection: { type: 'semantic_vad', eagerness: 'low', create_response: false } },
+        })
+        console.log(`[REFERIDOS] create_response=false — aguardando ações da lead callSid=${session.callSid}`)
+        return `{"ok":true,"link_enviado":true,"token":"${result.token}","estado":"WAIT_LINK_OPEN","instrucao":"Aguarde a lead abrir o link em silêncio. Não repita instruções. Só fale se a lead fizer uma pergunta direta ou chegar notificação do sistema."}`
       },
     },
 
@@ -147,6 +170,13 @@ export function buildTools(session: SessionRef) {
           console.log(`[REFERIDOS] 🏆 missão completa — marcando GANHO e enviando boas-vindas`)
           updateLeadsGanho(session.callSid).catch(() => {})
           if (session.telefone) sendWelcome(session.telefone).catch(() => {})
+          // Re-enable auto-responses for the closing stage
+          session.referralsWaiting = false
+          session.sendEvent?.({
+            type: 'session.update',
+            session: { turn_detection: { type: 'semantic_vad', eagerness: 'low', create_response: true } },
+          })
+          console.log(`[REFERIDOS] create_response=true — missão completa, avançando para encerramento callSid=${session.callSid}`)
         }
         return JSON.stringify(ref)
       },

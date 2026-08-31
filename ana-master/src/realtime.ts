@@ -317,6 +317,43 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
         appendTranscript(sessionRef.callSid, 'user', text).catch(() => {})
         pushTranscriptEvent(sessionRef.callSid, 'user', text)
         tryAutoPix(text, sessionRef.callSid, sessionRef.telefone)
+
+        // WAIT_FOR_YES: lead respondeu ao "Posso te pedir um favor?"
+        if (sessionRef.waitForYes) {
+          const t = text.toLowerCase()
+          const isYes = /\b(sim|claro|pode|ok|pode ser|com certeza|tá|ta|bom|oi|ola|claro que|lógico|logico)\b/.test(t)
+          if (isYes) {
+            sessionRef.waitForYes = false
+            sessionRef.referralsWaiting = true
+            console.log('[ANA MASTER] ✅ WAIT_FOR_YES confirmado — disparando speech emocional')
+            sessionRef.sendEvent?.({
+              type: 'response.create',
+              response: {
+                instructions: `INSTRUÇÃO OBRIGATÓRIA: diga APENAS este discurso exato e nada mais: "Você acabou de tomar uma das melhores decisões da sua saúde. Tenho certeza que você conhece outras mulheres passando pelo mesmo que você passou — ondas de calor, cansaço, sono ruim, falta de energia... Vou te ensinar agora como me mandar os contatos direto pelo WhatsApp. É super fácil. Pode abrir o link que chegou aí?" — depois aguarde em silêncio.`,
+              },
+            })
+          } else {
+            // Pergunta ou resposta ambígua — responde normalmente (VAD captou, create_response=false, mas pode criar manual)
+            const isQuestion = /\?/.test(text) || /como|o que|quando|onde|qual|por que|porque/.test(t)
+            if (isQuestion) {
+              console.log('[ANA MASTER] ❓ WAIT_FOR_YES — pergunta detectada, respondendo manualmente')
+              sessionRef.sendEvent?.({ type: 'response.create' })
+            }
+          }
+          return
+        }
+
+        // REFERRALS WAITING: lead executando ação — só responde a pergunta direta
+        if (sessionRef.referralsWaiting) {
+          const t = text.toLowerCase()
+          const isQuestion = /\?/.test(text) || /\b(como|o que|quando|onde|qual|por que|porque|nao consigo|nao ta|não ta|não tá|nao tá|abri|enviei|mandei|consegui|pronto)\b/.test(t)
+          if (isQuestion) {
+            console.log('[ANA MASTER] ❓ REFERRALS WAITING — pergunta detectada, respondendo manualmente')
+            sessionRef.sendEvent?.({ type: 'response.create' })
+          } else {
+            console.log('[ANA MASTER] 🔇 REFERRALS WAITING — silêncio (sem pergunta direta)')
+          }
+        }
       }
     }
     if (event?.type === 'response.done') {
