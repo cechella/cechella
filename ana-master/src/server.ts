@@ -95,29 +95,27 @@ async function processReferidosUpdate(indicadorPhone: string) {
   injectReferidosUpdate(call.call_sid, total, semDados, missaoCompleta)
 }
 
-// Referidos real-time listener — fires when a contact is inserted in contatos_referidos.
-// Debounced: rapid batch inserts (e.g. 10 contacts at once) accumulate for 4 s and trigger a single injection.
+function handleReferidosPayload(payload: any) {
+  const indicadorPhone = (payload.new?.indicado_por_telefone ?? payload.old?.indicado_por_telefone) as string | undefined
+  if (!indicadorPhone) return
+  const key = String(indicadorPhone).replace(/\D/g, '')
+  const existing = referidosDebounce.get(key)
+  if (existing) clearTimeout(existing)
+  const timer = setTimeout(() => {
+    referidosDebounce.delete(key)
+    processReferidosUpdate(indicadorPhone).catch(e =>
+      console.error(`[SERVER] referidos update error: ${e.message}`)
+    )
+  }, 4000)
+  referidosDebounce.set(key, timer)
+}
+
+// Referidos real-time listener — INSERT (new contact) + UPDATE (profissao/hobby filled in).
+// Debounced: rapid events accumulate for 4 s and trigger a single injection.
 supabase
   .channel('referidos-inserts')
-  .on(
-    'postgres_changes' as any,
-    { event: 'INSERT', schema: 'public', table: 'contatos_referidos' },
-    (payload: any) => {
-      const indicadorPhone = payload.new?.indicado_por_telefone as string | undefined
-      if (!indicadorPhone) return
-
-      const key = String(indicadorPhone).replace(/\D/g, '')
-      const existing = referidosDebounce.get(key)
-      if (existing) clearTimeout(existing)
-      const timer = setTimeout(() => {
-        referidosDebounce.delete(key)
-        processReferidosUpdate(indicadorPhone).catch(e =>
-          console.error(`[SERVER] referidos update error: ${e.message}`)
-        )
-      }, 4000)
-      referidosDebounce.set(key, timer)
-    },
-  )
+  .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'contatos_referidos' }, handleReferidosPayload)
+  .on('postgres_changes' as any, { event: 'UPDATE', schema: 'public', table: 'contatos_referidos' }, handleReferidosPayload)
   .subscribe((status: string) => {
     console.log(`[SERVER] referidos listener status=${status}`)
   })
