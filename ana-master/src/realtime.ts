@@ -405,7 +405,7 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
     type: 'session.update',
     session: {
       input_audio_format: 'pcm16',
-      input_audio_transcription: { model: 'gpt-4o-transcribe' },
+      input_audio_transcription: { model: 'gpt-4o-transcribe', language: 'pt' },
       turn_detection: {
         type: 'semantic_vad',
         eagerness: 'low',
