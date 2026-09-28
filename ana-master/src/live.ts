@@ -4,13 +4,13 @@
 
 import WebSocket from 'ws'
 import { OPENAI_API_KEY } from './config.js'
-import { upsertCall, saveMemory, appendTranscript, getVoiceConfig } from './supabase.js'
+import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, supabase } from './supabase.js'
 import { registerLiveSession, unregisterLiveSession } from './live-registry.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
 
 const LIVE_ENDPOINT = 'wss://api.openai.com/v1/live/sessions'
 
-const ANA_LIVE_PROMPT = `ANA MASTER — REALTIME GOLDEN VOICE
+const ANA_LIVE_PROMPT_FALLBACK = `ANA MASTER — REALTIME GOLDEN VOICE
 FULL SALES CONVERSATION — SYSTEM INSTRUCTIONS
 TELEPHONE / TWILIO READY
 
@@ -302,12 +302,26 @@ INÍCIO DA LIGAÇÃO
 
 Você recebe a ligação e fala PRIMEIRO.`
 
+async function loadGoldenPrompt(): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('ana_realtime_profiles')
+      .select('instructions')
+      .eq('profile', 'gold')
+      .single()
+    if (data?.instructions) return data.instructions as string
+  } catch (e) {
+    console.error('[ANA LIVE] Failed to load prompt from Supabase:', e)
+  }
+  return ANA_LIVE_PROMPT_FALLBACK
+}
+
 export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string; earlyQueue?: (Buffer | string)[] } = {}) {
-  const dbConfig = await getVoiceConfig()
+  const [dbConfig, instructions] = await Promise.all([getVoiceConfig(), loadGoldenPrompt()])
   const voice  = dbConfig?.voice  ?? 'bossa'
   const model  = dbConfig?.model  ?? 'gpt-live-1'
 
-  console.log('[ANA LIVE] session starting — voice:', voice, 'model:', model)
+  console.log('[ANA LIVE] session starting — voice:', voice, 'model:', model, 'prompt_len:', instructions.length)
 
   // Mutable state — filled from Twilio 'start' event
   let callSid     = 'unknown'
@@ -370,7 +384,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
       event_id: 'ana_live_start',
       session: {
         model,
-        instructions: ANA_LIVE_PROMPT + (opts.contexto ? `\n\nCONTEXTO: ${opts.contexto}` : ''),
+        instructions: instructions + (opts.contexto ? `\n\nCONTEXTO: ${opts.contexto}` : ''),
         input: [],
         audio: {
           format: { type: 'audio/pcmu', rate: 8000 },
