@@ -146,12 +146,16 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
       // ── Audio output — PCMU passthrough: OpenAI → Twilio ──────────────────
 
       case 'session.output_audio.delta':
-        if (event.delta && streamSid) {
-          sendToTwilio({
-            event: 'media',
-            streamSid,
-            media: { payload: event.delta },
-          })
+        if (event.delta) {
+          if (streamSid) {
+            sendToTwilio({
+              event: 'media',
+              streamSid,
+              media: { payload: event.delta },
+            })
+          } else {
+            console.warn('[ANA LIVE] output_audio.delta arrived but streamSid is empty — dropping audio')
+          }
         }
         break
 
@@ -249,13 +253,14 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
       case 'start':
         if (dbInitialized) break
         dbInitialized = true
-        streamSid = msg.start?.streamSid ?? ''
+        // streamSid appears at top-level AND inside start — take whichever is set
+        streamSid = msg.streamSid ?? msg.start?.streamSid ?? ''
         callSid   = msg.start?.callSid
           ?? msg.start?.customParameters?.callSid
           ?? `stream_${streamSid}`
         telefone  = String(msg.start?.customParameters?.from ?? '').replace(/\D/g, '')
 
-        console.log(`[ANA LIVE] start callSid=${callSid} telefone=${telefone} streamSid=${streamSid}`)
+        console.log(`[ANA LIVE] start callSid=${callSid} telefone=${telefone} streamSid=${streamSid} raw_keys=${Object.keys(msg.start ?? {}).join(',')}`)
 
         upsertCall(callSid, telefone).catch(() => {})
         saveMemory(callSid, 'telefone', telefone).catch(() => {})
