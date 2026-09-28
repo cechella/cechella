@@ -34,12 +34,7 @@ BASE CIENTÍFICA: Implante hormonal = pellet do tamanho de um grão de arroz, in
 
 INÍCIO: Você recebe a ligação e fala PRIMEIRO. Aguarde a instrução de abertura.`
 
-export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string } = {}) {
-  // Buffer Twilio messages synchronously before any await — prevents 'start' event being dropped
-  const messageQueue: (Buffer | string)[] = []
-  const earlyListener = (data: Buffer | string) => messageQueue.push(data)
-  twilioWs.on('message', earlyListener)
-
+export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string; earlyQueue?: (Buffer | string)[] } = {}) {
   const dbConfig = await getVoiceConfig()
   const voice  = dbConfig?.voice  ?? 'bossa'
   const model  = dbConfig?.model  ?? 'gpt-live-1'
@@ -292,10 +287,9 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
     }
   }
 
-  // Swap early buffer listener for the real handler, then replay any buffered messages
-  twilioWs.off('message', earlyListener)
+  // Register real handler and replay any messages buffered in server.ts before this function was called
   twilioWs.on('message', handleTwilioMessage)
-  for (const buffered of messageQueue) handleTwilioMessage(buffered)
+  for (const buffered of opts.earlyQueue ?? []) handleTwilioMessage(buffered)
 
 
   twilioWs.on('close', () => {

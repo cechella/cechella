@@ -138,7 +138,7 @@ function makeStageTracker() {
   }
 }
 
-export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { contexto?: string } = {}) {
+export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { contexto?: string; earlyQueue?: (Buffer | string)[] } = {}) {
   const dbConfig = await getVoiceConfig()
   const voice = dbConfig?.voice ?? REALTIME_DEFAULTS.voice
   const model = dbConfig?.model ?? REALTIME_DEFAULTS.model

@@ -180,21 +180,28 @@ app.get('/media-stream', { websocket: true }, async (socket, req) => {
 
   const rawWs = (socket as any).socket
 
+  // Buffer Twilio messages synchronously before any await — prevents 'start' event being dropped
+  const earlyQueue: (Buffer | string)[] = []
+  const earlyListener = (data: Buffer | string) => earlyQueue.push(data)
+  rawWs.on('message', earlyListener)
+
   // Feature flag: read voice_stack from Supabase Gold Config (or env fallback)
   const dbConfig = await getVoiceConfig().catch(() => null)
   const voiceStack = dbConfig?.voice_stack ?? process.env.ANA_VOICE_STACK ?? 'realtime'
 
   app.log.info({ voiceStack }, 'ANA voice stack selected')
 
+  rawWs.off('message', earlyListener)
+
   if (voiceStack === 'live') {
-    createAnaLiveSession(rawWs, { contexto })
+    createAnaLiveSession(rawWs, { contexto, earlyQueue })
       .then(() => { app.log.info('ANA LIVE session started') })
       .catch((err: unknown) => {
         app.log.error({ err }, 'Failed to start Live session — closing stream')
         socket.destroy()
       })
   } else {
-    createAnaMasterSession(rawWs, { contexto })
+    createAnaMasterSession(rawWs, { contexto, earlyQueue })
       .then(() => { app.log.info({ contexto }, 'ANA MASTER session started') })
       .catch((err: unknown) => {
         app.log.error({ err }, 'Failed to start RealtimeSession — closing stream')
