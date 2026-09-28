@@ -3,8 +3,9 @@
 // Runs in parallel with realtime.ts (gpt-realtime-2.1 + marin) — feature flag selects which.
 
 import WebSocket from 'ws'
-import { OPENAI_API_KEY } from './config.js'
-import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, supabase } from './supabase.js'
+import { OPENAI_API_KEY, APP_URL } from './config.js'
+import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, getMemories, checkReferidos, updateLeadsGanho, supabase } from './supabase.js'
+import { iniciarColetaReferidos, sendWelcome } from './tools/whatsapp.js'
 import { registerLiveSession, unregisterLiveSession } from './live-registry.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
 
@@ -335,10 +336,45 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let inputTimer:  ReturnType<typeof setTimeout> | null = null
   let outputTimer: ReturnType<typeof setTimeout> | null = null
 
+  // Tool state — tracks conversation progress for delegation routing
+  let liveMetodo: 'pix' | 'cartao' | null = null
+  let liveNomeLead: string | null = null
+  let liveWaitForYes = false
+  let liveReferralsWaiting = false
+  let livePagamentoConfirmado = false
+  let liveTokenIndicacao: string | null = null
+
   function flushInput() {
     const text = inputBuf.trim()
     inputBuf = ''
-    if (text && callSid !== 'unknown') {
+    if (!text) return
+
+    // Detect payment method from user speech
+    const lower = text.toLowerCase()
+    if (/\bpix\b/.test(lower)) liveMetodo = 'pix'
+    if (/\bcart[aã]o\b/.test(lower)) liveMetodo = 'cartao'
+
+    // Detect lead name (e.g. "meu nome é Adriana")
+    const nameMatch = text.match(/(?:meu nome [eé]|me chamo|sou a?)\s+([A-ZÀ-Ú][a-zà-ú]+)/i)
+    if (nameMatch) liveNomeLead = nameMatch[1]
+
+    // WAIT_FOR_YES: detect confirmation after "Posso te pedir um favor?"
+    if (liveWaitForYes) {
+      const isYes = /\b(sim|claro|pode|ok|com certeza|lógico|logico|vai|certo|fechado|obvio|obviamente|pode sim|claro que sim)\b/.test(lower)
+      if (isYes) {
+        liveWaitForYes = false
+        liveReferralsWaiting = true
+        console.log('[ANA LIVE] ✅ WAIT_FOR_YES confirmado — disparando speech etapa 7')
+        sendToLive({
+          type: 'session.commentary.append',
+          event_id: `etapa7_speech_${Date.now()}`,
+          delegation_id: null,
+          content: 'Você acabou de tomar uma das melhores decisões da sua saúde. Tenho certeza que você conhece outras mulheres passando pelo mesmo que você passou — ondas de calor, cansaço, sono ruim, falta de energia... Vou te ensinar agora como me mandar os contatos direto pelo WhatsApp. É super fácil. Pode abrir o link que chegou aí?',
+        })
+      }
+    }
+
+    if (callSid !== 'unknown') {
       console.log('[ANA LIVE] 📝 user:', text)
       appendTranscript(callSid, 'user', text).catch(() => {})
       pushTranscriptEvent(callSid, 'user', text)
@@ -459,21 +495,194 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         }
         break
 
-      // ── Delegation (client) ────────────────────────────────────────────────
-      // Phase 7: full tool routing. Phase 1: acknowledge silently.
+      // ── Delegation (client) — Phase 7: full tool routing ──────────────────
 
       case 'session.delegation.created': {
         const delegationId = event.delegation?.id
-        console.log(`[ANA LIVE] delegation.created id=${delegationId}`)
-        // TODO Phase 7: inspect accumulated transcript to detect which tool is needed,
-        // then route to solicitar_pagamento / iniciar_coleta_referidos / verificar_referidos.
-        // For now: acknowledge with thinking so the model knows we're working.
-        sendToLive({
-          type: 'session.thinking.append',
-          event_id: `thinking_ack_${Date.now()}`,
-          delegation_id: delegationId,
-          content: 'Processando sua solicitação. Por favor, aguarde um momento.',
-        })
+        console.log(`[ANA LIVE] delegation.created id=${delegationId} metodo=${liveMetodo} waitForYes=${liveWaitForYes} referrals=${liveReferralsWaiting} pago=${livePagamentoConfirmado}`)
+
+        // Route to correct tool based on conversation state
+        if (!livePagamentoConfirmado && liveMetodo) {
+          // ── solicitar_pagamento ───────────────────────────────────────────
+          ;(async () => {
+            try {
+              console.log(`[ANA LIVE PAG] iniciando metodo=${liveMetodo} callSid=${callSid}`)
+
+              // Save nome_lead if known
+              if (liveNomeLead && telefone) {
+                supabase.from('leads').update({ nome: liveNomeLead })
+                  .eq('telefone', telefone).is('nome', null)
+                  .then(({ error }: any) => { if (error) console.error('[ANA LIVE PAG] nome_lead erro:', error.message) })
+              }
+
+              // Send PIX/card link via web API
+              await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ callSid, telefone, metodo: liveMetodo }),
+              }).catch((e: Error) => console.log(`[ANA LIVE PAG] send error: ${e.message}`))
+
+              await saveMemory(callSid, 'forma_pagamento_escolhida', liveMetodo).catch(() => {})
+
+              // Acknowledge delegation — model will wait silently
+              sendToLive({
+                type: 'session.thinking.append',
+                event_id: `pag_thinking_${Date.now()}`,
+                delegation_id: delegationId,
+                content: `solicitar_pagamento chamado — metodo:${liveMetodo} — aguardando confirmação de pagamento no WhatsApp`,
+              })
+
+              // Wait for payment confirmation via Supabase Realtime (up to 5 min)
+              const paid = await new Promise<boolean>((resolve) => {
+                let settled = false
+                const finish = (result: boolean) => {
+                  if (settled) return
+                  settled = true
+                  clearTimeout(timer)
+                  supabase.removeChannel(channel).catch(() => {})
+                  console.log(`[ANA LIVE PAG] ${result ? '✅ confirmado' : '⏰ timeout'} callSid=${callSid}`)
+                  resolve(result)
+                }
+                const timer = setTimeout(() => finish(false), 5 * 60 * 1000)
+                const channel = supabase
+                  .channel(`livepag:${callSid}`)
+                  .on('postgres_changes' as any,
+                    { event: 'UPDATE', schema: 'public', table: 'pagamentos', filter: `call_sid=eq.${callSid}` },
+                    (payload: any) => {
+                      console.log(`[ANA LIVE PAG] realtime status=${payload.new?.status}`)
+                      if (payload.new?.status === 'approved') finish(true)
+                    })
+                  .subscribe(async (status: string) => {
+                    console.log(`[ANA LIVE PAG] realtime subscribe=${status}`)
+                    if (status === 'SUBSCRIBED') {
+                      const { data } = await supabase.from('pagamentos').select('status')
+                        .eq('call_sid', callSid).eq('status', 'approved').maybeSingle()
+                      if (data) { console.log('[ANA LIVE PAG] já aprovado no DB'); finish(true) }
+                    }
+                    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                      const poll = setInterval(async () => {
+                        if (settled) { clearInterval(poll); return }
+                        const { data } = await supabase.from('pagamentos').select('status')
+                          .eq('call_sid', callSid).eq('status', 'approved').maybeSingle()
+                        if (data) { clearInterval(poll); finish(true) }
+                      }, 3000)
+                    }
+                  })
+              })
+
+              if (paid) {
+                livePagamentoConfirmado = true
+                liveWaitForYes = true
+                console.log(`[ANA LIVE PAG] ✅ pago — WAIT_FOR_YES ativado callSid=${callSid}`)
+
+                // Inject paid result + trigger WAIT_FOR_YES phrase
+                sendToLive({
+                  type: 'session.thinking.append',
+                  event_id: `pag_paid_${Date.now()}`,
+                  delegation_id: null,
+                  content: `{"ok":true,"paid":true,"metodo":"${liveMetodo}","estado":"WAIT_FOR_YES"}`,
+                })
+                sendToLive({
+                  type: 'session.commentary.append',
+                  event_id: `pag_waituyes_${Date.now()}`,
+                  delegation_id: null,
+                  content: `${liveNomeLead ?? 'Você'}, você acabou de receber um link no seu WhatsApp. Posso te pedir um favor?`,
+                })
+              } else {
+                sendToLive({
+                  type: 'session.thinking.append',
+                  event_id: `pag_timeout_${Date.now()}`,
+                  delegation_id: null,
+                  content: `{"ok":true,"paid":false,"metodo":"${liveMetodo}","aguardando":true}`,
+                })
+              }
+            } catch (e: any) {
+              console.error('[ANA LIVE PAG] erro:', e.message)
+              sendToLive({
+                type: 'session.thinking.append',
+                event_id: `pag_err_${Date.now()}`,
+                delegation_id: delegationId,
+                content: `{"ok":false,"erro":"${e.message}"}`,
+              })
+            }
+          })()
+
+        } else if (livePagamentoConfirmado && !liveTokenIndicacao) {
+          // ── iniciar_coleta_referidos ──────────────────────────────────────
+          ;(async () => {
+            try {
+              console.log(`[ANA LIVE REF] iniciando coleta referidos telefone=${telefone}`)
+              const result = await iniciarColetaReferidos(telefone)
+              if (result) {
+                liveTokenIndicacao = result.token
+                await saveMemory(callSid, 'token_indicacao', result.token).catch(() => {})
+                console.log(`[ANA LIVE REF] link enviado token=${result.token}`)
+                sendToLive({
+                  type: 'session.thinking.append',
+                  event_id: `ref_sent_${Date.now()}`,
+                  delegation_id: delegationId,
+                  content: `{"ok":true,"link_enviado":true,"token":"${result.token}","estado":"WAIT_LINK_OPEN"}`,
+                })
+              } else {
+                sendToLive({
+                  type: 'session.thinking.append',
+                  event_id: `ref_fail_${Date.now()}`,
+                  delegation_id: delegationId,
+                  content: 'Pagamento não confirmado — não é possível enviar o link ainda.',
+                })
+              }
+            } catch (e: any) {
+              console.error('[ANA LIVE REF] erro:', e.message)
+              sendToLive({
+                type: 'session.thinking.append',
+                event_id: `ref_err_${Date.now()}`,
+                delegation_id: delegationId,
+                content: `{"ok":false,"erro":"${e.message}"}`,
+              })
+            }
+          })()
+
+        } else {
+          // ── verificar_referidos ───────────────────────────────────────────
+          ;(async () => {
+            try {
+              const memories = await getMemories(callSid)
+              const token = liveTokenIndicacao ?? memories.token_indicacao as string | undefined
+              if (!token) {
+                sendToLive({
+                  type: 'session.thinking.append',
+                  event_id: `ver_notoken_${Date.now()}`,
+                  delegation_id: delegationId,
+                  content: '{"erro":"token_nao_encontrado"}',
+                })
+                return
+              }
+              const ref = await checkReferidos(token)
+              console.log(`[ANA LIVE REF] verificar token=${token} total=${ref.total} missaoCompleta=${ref.missaoCompleta}`)
+
+              if (ref.missaoCompleta) {
+                updateLeadsGanho(callSid).catch(() => {})
+                if (telefone) sendWelcome(telefone).catch(() => {})
+                liveReferralsWaiting = false
+              }
+
+              sendToLive({
+                type: 'session.thinking.append',
+                event_id: `ver_result_${Date.now()}`,
+                delegation_id: delegationId,
+                content: JSON.stringify(ref),
+              })
+            } catch (e: any) {
+              console.error('[ANA LIVE REF] verificar erro:', e.message)
+              sendToLive({
+                type: 'session.thinking.append',
+                event_id: `ver_err_${Date.now()}`,
+                delegation_id: delegationId,
+                content: `{"ok":false,"erro":"${e.message}"}`,
+              })
+            }
+          })()
+        }
         break
       }
 
