@@ -2,7 +2,7 @@ import { RealtimeAgent, RealtimeSession } from '@openai/agents/realtime'
 import { TwilioRealtimeTransportLayer } from '@openai/agents-extensions'
 import { OPENAI_API_KEY, REALTIME_DEFAULTS, APP_URL } from './config.js'
 import { buildTools, SessionRef } from './tools/index.js'
-import { upsertCall, appendTranscript, updateCallStage, endCall, supabase } from './supabase.js'
+import { upsertCall, appendTranscript, updateCallStage, endCall, supabase, getVoiceConfig } from './supabase.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
 import { registerSession, unregisterSession } from './session-registry.js'
 
@@ -139,7 +139,10 @@ function makeStageTracker() {
 }
 
 export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { contexto?: string } = {}) {
-  console.log('[ANA MASTER] session starting')
+  const dbConfig = await getVoiceConfig()
+  const voice = dbConfig?.voice ?? REALTIME_DEFAULTS.voice
+  const model = dbConfig?.model ?? REALTIME_DEFAULTS.model
+  console.log('[ANA MASTER] session starting — voice:', voice, 'model:', model)
 
   // Stage tracker with in-memory current stage so auto-PIX knows when to fire
   let currentDetectedStage = 'apresentacao'
@@ -268,13 +271,13 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
   const agent = new RealtimeAgent({
     name: 'ANA',
     instructions,
-    voice: REALTIME_DEFAULTS.voice as any,
+    voice: voice as any,
     tools: tools as any,
   })
 
   const realtimeSession = new RealtimeSession(agent, {
     transport,
-    model: REALTIME_DEFAULTS.model,
+    model: model as any,
   } as any)
 
   realtimeSession.on('error', (err: unknown) => {

@@ -1,8 +1,8 @@
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY!
 
 export const REALTIME_DEFAULTS = {
-  voice: (process.env.REALTIME_VOICE ?? 'marin') as string,
-  model: 'gpt-realtime-2.1' as const,
+  voice: (process.env.REALTIME_VOICE ?? 'bossa') as string,
+  model: (process.env.REALTIME_MODEL ?? 'gpt-realtime-2.1') as string,
 }
 
 export const SUPABASE_URL = process.env.SUPABASE_URL!

@@ -199,3 +199,28 @@ export async function checkReferidos(token: string): Promise<{ total: number; co
 
   return { total: ativos.length, completo, semDados, missaoCompleta }
 }
+
+export interface VoiceConfig {
+  voice: string
+  model: string
+  vad_mode: string
+  vad_threshold: number
+  prefix_padding_ms: number
+  silence_duration_ms: number
+  noise_reduction: string
+  reasoning_effort: string
+  user_transcript_model: string
+}
+
+export async function getVoiceConfig(): Promise<VoiceConfig | null> {
+  try {
+    const { data } = await supabase
+      .from('ana_voice_config')
+      .select('*')
+      .eq('profile', 'gold')
+      .single()
+    return data as VoiceConfig | null
+  } catch {
+    return null
+  }
+}

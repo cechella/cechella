@@ -2810,9 +2810,45 @@ function ScriptTab() {
 
 // ─── REALTIME CONFIG TAB ──────────────────────────────────────────────────────
 
+const VOICE_OPTIONS = [
+  { id: 'bossa',   label: 'Bossa',   desc: 'PT-BR feminina — clara e direta (Nova)', best: true },
+  { id: 'tempo',   label: 'Tempo',   desc: 'PT-BR masculino — firme e sereno (Nova)', best: false },
+  { id: 'marin',   label: 'Marin',   desc: 'Feminina, natural, fluida', best: false },
+  { id: 'shimmer', label: 'Shimmer', desc: 'Feminina, suave, calorosa', best: false },
+  { id: 'coral',   label: 'Coral',   desc: 'Feminina, clara, profissional', best: false },
+  { id: 'sage',    label: 'Sage',    desc: 'Feminina, calma, confiante', best: false },
+  { id: 'nova',    label: 'Nova',    desc: 'Feminina, jovem, energética', best: false },
+  { id: 'alloy',   label: 'Alloy',   desc: 'Neutra, clara, direta', best: false },
+  { id: 'echo',    label: 'Echo',    desc: 'Masculina, grave, confiante', best: false },
+  { id: 'onyx',    label: 'Onyx',    desc: 'Masculina, profunda, autoridade', best: false },
+  { id: 'fable',   label: 'Fable',   desc: 'Neutra, expressiva, calorosa', best: false },
+  { id: 'ash',     label: 'Ash',     desc: 'Neutra, seca, objetiva', best: false },
+  { id: 'verse',   label: 'Verse',   desc: 'Neutra, versátil, adaptável', best: false },
+]
+
+const MODEL_OPTIONS = [
+  { id: 'gpt-realtime-2.1', label: 'gpt-realtime-2.1', badge: 'Estável' },
+  { id: 'gpt-live-1',       label: 'gpt-live-1',       badge: 'Experimental' },
+]
+
+interface VoiceConfig {
+  voice: string; model: string; vad_mode: string; vad_threshold: number
+  prefix_padding_ms: number; silence_duration_ms: number
+  noise_reduction: string; reasoning_effort: string; user_transcript_model: string
+}
+
+const DEFAULT_CONFIG: VoiceConfig = {
+  voice: 'bossa', model: 'gpt-realtime-2.1', vad_mode: 'normal', vad_threshold: 0.5,
+  prefix_padding_ms: 300, silence_duration_ms: 500,
+  noise_reduction: 'far_field', reasoning_effort: 'low', user_transcript_model: 'gpt-4o-transcribe',
+}
+
 function RealtimeConfigTab() {
   const [health, setHealth] = useState<{ ok?: boolean; ts?: string; error?: string } | null>(null)
   const [loading, setLoading] = useState(false)
+  const [config, setConfig] = useState<VoiceConfig>(DEFAULT_CONFIG)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
 
   async function checkHealth() {
     setLoading(true)
@@ -2825,7 +2861,26 @@ function RealtimeConfigTab() {
     } finally { setLoading(false) }
   }
 
-  useEffect(() => { checkHealth() }, [])
+  async function loadConfig() {
+    try {
+      const res = await fetch('/api/admin/voice-config')
+      const { data } = await res.json()
+      if (data) setConfig({ ...DEFAULT_CONFIG, ...data })
+    } catch {}
+  }
+
+  async function saveConfig() {
+    setSaving(true)
+    try {
+      await fetch('/api/admin/voice-config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      })
+      setSaved(true); setTimeout(() => setSaved(false), 3000)
+    } catch {} finally { setSaving(false) }
+  }
+
+  useEffect(() => { checkHealth(); loadConfig() }, [])
 
   const INFRA = [
     { label: 'Modelo IA', value: 'gpt-4o-realtime-preview', badge: 'OpenAI Realtime' },
@@ -2897,8 +2952,42 @@ function RealtimeConfigTab() {
     )
   }
 
+  const sel = (field: keyof VoiceConfig, opts: { id: string; label: string; badge?: string }[], label: string) => (
+    <div style={{ marginBottom: 14 }}>
+      <label style={{ color: '#94A3B8', fontSize: 11, display: 'block', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{label}</label>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {opts.map(o => (
+          <button key={o.id} onClick={() => setConfig(c => ({ ...c, [field]: o.id }))}
+            style={{ padding: '6px 14px', borderRadius: 8, border: `1px solid ${config[field] === o.id ? '#38BDF8' : '#334155'}`, background: config[field] === o.id ? '#0C4A6E' : '#0f1929', color: config[field] === o.id ? '#38BDF8' : '#94A3B8', fontSize: 12, cursor: 'pointer', fontWeight: config[field] === o.id ? 700 : 400 }}>
+            {o.label}{o.badge ? ` · ${o.badge}` : ''}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+
   return (
     <div style={{ maxWidth: 780 }}>
+      {/* Gold Config panel */}
+      <div style={{ background: '#060d1a', border: '1px solid #1D4ED880', borderRadius: 16, padding: '20px 24px', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+          <span style={{ fontSize: 16 }}>✦</span>
+          <span style={{ color: '#F0B429', fontWeight: 700, fontSize: 14 }}>Gold Config — ANA MASTER</span>
+          <span style={{ marginLeft: 'auto', fontSize: 10, color: '#64748B' }}>Salvo no Supabase · lido em cada chamada</span>
+        </div>
+        {sel('voice', VOICE_OPTIONS, 'Voz')}
+        {sel('model', MODEL_OPTIONS, 'Modelo')}
+        <div style={{ display: 'flex', gap: 14, marginTop: 6, flexWrap: 'wrap' }}>
+          {sel('noise_reduction', [{ id: 'far_field', label: 'Far Field' }, { id: 'near_field', label: 'Near Field' }, { id: 'off', label: 'Off' }], 'Noise Reduction')}
+          {sel('reasoning_effort', [{ id: 'low', label: 'Low' }, { id: 'medium', label: 'Medium' }, { id: 'high', label: 'High' }], 'Reasoning Effort')}
+        </div>
+        {sel('user_transcript_model', [{ id: 'gpt-4o-transcribe', label: 'gpt-4o-transcribe' }, { id: 'gpt-4o-mini-transcribe', label: 'gpt-4o-mini-transcribe' }, { id: 'whisper-1', label: 'whisper-1' }], 'Transcrição do Usuário')}
+        <button onClick={saveConfig} disabled={saving}
+          style={{ marginTop: 8, padding: '10px 24px', background: saved ? '#052e16' : 'linear-gradient(135deg,#1D4ED8,#0EA5E9)', color: saved ? '#4ADE80' : '#fff', border: saved ? '1px solid #16a34a' : 'none', borderRadius: 10, cursor: saving ? 'not-allowed' : 'pointer', fontWeight: 700, fontSize: 13 }}>
+          {saved ? '✓ Salvo!' : saving ? '⏳ Salvando...' : 'Salvar configuração'}
+        </button>
+      </div>
+
       {/* Health card */}
       <div style={{ background: health?.ok ? '#052e0a' : health?.error ? '#2d0a0a' : C.surface, border: `1px solid ${health?.ok ? '#16a34a' : health?.error ? '#991b1b' : C.border}`, borderRadius: 16, padding: '16px 20px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 16 }}>
         <div style={{ flex: 1 }}>
@@ -3071,14 +3160,14 @@ function VozTab() {
         </div>
         <div style={{ padding: '16px 20px' }}>
           <div style={{ background: '#0a1628', border: '1px solid #1D4ED850', borderRadius: 10, padding: '10px 14px', marginBottom: 14, fontSize: 12, color: '#38BDF8' }}>
-            ⚙️ Voz atual: <strong>marin</strong> — para trocar, edite <code>REALTIME_VOICE=shimmer</code> no ecosystem.config.cjs e reinicie o PM2
+            ⚙️ Voz padrão: <strong>bossa</strong> — altere via Gold Config acima ou env <code>REALTIME_VOICE</code>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
             {VOZES.map(v => (
-              <div key={v.id} style={{ background: v.id === 'marin' ? '#1D4ED820' : '#ffffff05', border: `1px solid ${v.id === 'marin' ? '#1D4ED860' : C.border}`, borderRadius: 10, padding: '10px 14px' }}>
+              <div key={v.id} style={{ background: v.id === 'bossa' ? '#1D4ED820' : '#ffffff05', border: `1px solid ${v.id === 'bossa' ? '#1D4ED860' : C.border}`, borderRadius: 10, padding: '10px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                  <code style={{ fontSize: 12, fontWeight: 700, color: v.id === 'marin' ? '#38BDF8' : C.text }}>{v.id}</code>
-                  {v.id === 'marin' && <span style={{ fontSize: 9, color: '#38BDF8', background: '#1D4ED820', borderRadius: 99, padding: '1px 6px', border: '1px solid #1D4ED840' }}>ATUAL</span>}
+                  <code style={{ fontSize: 12, fontWeight: 700, color: v.id === 'bossa' ? '#38BDF8' : C.text }}>{v.id}</code>
+                  {v.id === 'bossa' && <span style={{ fontSize: 9, color: '#38BDF8', background: '#1D4ED820', borderRadius: 99, padding: '1px 6px', border: '1px solid #1D4ED840' }}>PADRÃO</span>}
                   {v.best && <span style={{ fontSize: 9, color: '#F59E0B', background: '#78350F20', borderRadius: 99, padding: '1px 6px', border: '1px solid #78350F40' }}>★ RECOMENDADA</span>}
                 </div>
                 <div style={{ fontSize: 11, color: C.textMuted }}>{v.desc}</div>
