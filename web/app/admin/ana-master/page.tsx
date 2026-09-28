@@ -2831,13 +2831,13 @@ const MODEL_OPTIONS = [
 ]
 
 interface VoiceConfig {
-  voice: string; model: string; vad_mode: string; vad_threshold: number
+  voice_stack: string; voice: string; model: string; vad_mode: string; vad_threshold: number
   prefix_padding_ms: number; silence_duration_ms: number
   noise_reduction: string; reasoning_effort: string; user_transcript_model: string
 }
 
 const DEFAULT_CONFIG: VoiceConfig = {
-  voice: 'bossa', model: 'gpt-realtime-2.1', vad_mode: 'normal', vad_threshold: 0.5,
+  voice_stack: 'realtime', voice: 'marin', model: 'gpt-realtime-2.1', vad_mode: 'normal', vad_threshold: 0.5,
   prefix_padding_ms: 300, silence_duration_ms: 500,
   noise_reduction: 'far_field', reasoning_effort: 'low', user_transcript_model: 'gpt-4o-transcribe',
 }
@@ -2974,8 +2974,9 @@ function RealtimeConfigTab() {
           <span style={{ color: '#F0B429', fontWeight: 700, fontSize: 14 }}>Gold Config — ANA MASTER</span>
           <span style={{ marginLeft: 'auto', fontSize: 10, color: '#64748B' }}>Salvo no Supabase · lido em cada chamada</span>
         </div>
+        {sel('voice_stack', [{ id: 'realtime', label: 'Realtime Legacy · gpt-realtime-2.1', badge: 'Estável' }, { id: 'live', label: 'Live · gpt-live-1', badge: 'Experimental' }], 'Stack de Voz')}
         {sel('voice', VOICE_OPTIONS, 'Voz')}
-        {sel('model', MODEL_OPTIONS, 'Modelo')}
+        {sel('model', config.voice_stack === 'live' ? [{ id: 'gpt-live-1', label: 'gpt-live-1', badge: 'Novo' }] : MODEL_OPTIONS, 'Modelo')}
         <div style={{ display: 'flex', gap: 14, marginTop: 6, flexWrap: 'wrap' }}>
           {sel('noise_reduction', [{ id: 'far_field', label: 'Far Field' }, { id: 'near_field', label: 'Near Field' }, { id: 'off', label: 'Off' }], 'Noise Reduction')}
           {sel('reasoning_effort', [{ id: 'low', label: 'Low' }, { id: 'medium', label: 'Medium' }, { id: 'high', label: 'High' }], 'Reasoning Effort')}

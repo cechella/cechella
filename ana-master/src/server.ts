@@ -2,9 +2,11 @@ import Fastify from 'fastify'
 import websocket from '@fastify/websocket'
 import { PORT, PUBLIC_HOST } from './config.js'
 import { createAnaMasterSession } from './realtime.js'
+import { createAnaLiveSession } from './live.js'
 import { registerSseClient } from './sse-registry.js'
-import { supabase, saveMemory } from './supabase.js'
+import { supabase, saveMemory, getVoiceConfig } from './supabase.js'
 import { injectPaymentConfirmed, injectReferralLinkSent, injectPixDataSent, injectReferidosUpdate } from './session-registry.js'
+import { injectLivePaymentConfirmed, injectLiveReferralLinkSent, injectLivePixDataSent, injectLiveReferidosUpdate } from './live-registry.js'
 import { iniciarColetaReferidos } from './tools/whatsapp.js'
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
@@ -34,11 +36,13 @@ supabase
               if (r?.token) {
                 saveMemory(call_sid, 'token_indicacao', r.token).catch(() => {})
                 injectReferralLinkSent(call_sid)
+                injectLiveReferralLinkSent(call_sid)
               }
             })
             .catch(e => console.error(`[SERVER] referidos link erro: ${e.message}`))
         }
         injectPaymentConfirmed(call_sid)
+        injectLivePaymentConfirmed(call_sid)
       }
     },
   )
@@ -58,6 +62,7 @@ supabase
       if (call_sid && metodo) {
         console.log(`[SERVER] 💳 PIX/cartão inserido call_sid=${call_sid} metodo=${metodo} — injetando notificação`)
         injectPixDataSent(call_sid, metodo as 'pix' | 'cartao')
+        injectLivePixDataSent(call_sid, metodo as 'pix' | 'cartao')
       }
     },
   )
@@ -93,6 +98,7 @@ async function processReferidosUpdate(indicadorPhone: string) {
 
   console.log(`[SERVER] 👥 referidos update call_sid=${call.call_sid} total=${total} semDados=${semDados} missaoCompleta=${missaoCompleta}`)
   injectReferidosUpdate(call.call_sid, total, semDados, missaoCompleta)
+  injectLiveReferidosUpdate(call.call_sid, total, semDados, missaoCompleta)
 }
 
 function handleReferidosPayload(payload: any) {
@@ -167,23 +173,34 @@ app.post('/twiml', async (req, reply) => {
 })
 
 // Twilio Media Streams WebSocket handler
-app.get('/media-stream', { websocket: true }, (socket, req) => {
+app.get('/media-stream', { websocket: true }, async (socket, req) => {
   const query = req.query as Record<string, string>
   const contexto = query?.contexto ?? ''
   app.log.info({ contexto }, 'Twilio Media Stream connected')
 
-  // TwilioRealtimeTransportLayer needs the raw ws.WebSocket (has addEventListener).
-  // Fastify gives us a SocketStream wrapper — socket.socket is the actual ws instance.
   const rawWs = (socket as any).socket
 
-  // Create session immediately so the Transport sees all events including 'start'
-  // (it uses 'start' to capture streamSid, required for sending audio back).
-  createAnaMasterSession(rawWs, { contexto })
-    .then(() => { app.log.info({ contexto }, 'ANA MASTER session started') })
-    .catch((err: unknown) => {
-      app.log.error({ err }, 'Failed to start RealtimeSession — closing stream')
-      socket.destroy()
-    })
+  // Feature flag: read voice_stack from Supabase Gold Config (or env fallback)
+  const dbConfig = await getVoiceConfig().catch(() => null)
+  const voiceStack = dbConfig?.voice_stack ?? process.env.ANA_VOICE_STACK ?? 'realtime'
+
+  app.log.info({ voiceStack }, 'ANA voice stack selected')
+
+  if (voiceStack === 'live') {
+    createAnaLiveSession(rawWs, { contexto })
+      .then(() => { app.log.info('ANA LIVE session started') })
+      .catch((err: unknown) => {
+        app.log.error({ err }, 'Failed to start Live session — closing stream')
+        socket.destroy()
+      })
+  } else {
+    createAnaMasterSession(rawWs, { contexto })
+      .then(() => { app.log.info({ contexto }, 'ANA MASTER session started') })
+      .catch((err: unknown) => {
+        app.log.error({ err }, 'Failed to start RealtimeSession — closing stream')
+        socket.destroy()
+      })
+  }
 
   socket.on('close', () => { app.log.info('Media Stream closed') })
   socket.on('error', (err: Error) => { app.log.error({ err }, 'Media Stream error') })

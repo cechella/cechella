@@ -210,6 +210,7 @@ export interface VoiceConfig {
   noise_reduction: string
   reasoning_effort: string
   user_transcript_model: string
+  voice_stack: string
 }
 
 export async function getVoiceConfig(): Promise<VoiceConfig | null> {

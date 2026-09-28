@@ -25,7 +25,8 @@ export async function GET() {
 
   const defaults = {
     profile: 'gold',
-    voice: 'bossa',
+    voice_stack: 'realtime',
+    voice: 'marin',
     model: 'gpt-realtime-2.1',
     vad_mode: 'normal',
     vad_threshold: 0.5,
@@ -45,6 +46,7 @@ export async function POST(req: NextRequest) {
 
   const config = {
     profile: 'gold',
+    voice_stack: body.voice_stack ?? 'realtime',
     voice: body.voice,
     model: body.model,
     vad_mode: body.vad_mode ?? 'normal',
