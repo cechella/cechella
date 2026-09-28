@@ -124,12 +124,12 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
 
       case 'session.started':
         console.log('[ANA LIVE] session.started id=', event.session?.id)
-        // Greeting: ANA speaks first — per docs: send once with instructions.append + delegation_id: null
+        // commentary.append = spoken aloud immediately; instructions.append = silent behavior only
         sendToLive({
-          type: 'session.instructions.append',
+          type: 'session.commentary.append',
           event_id: 'ana_greet',
           delegation_id: null,
-          content: 'Cumprimente a lead agora em português brasileiro. Apresente-se: "Oi! Aqui é a ANA, da Hormone Ecosystem. Estou ligando porque você foi indicada por uma amiga nossa que fez o implante hormonal. Tudo bem com você?" Fale imediatamente. Depois pause e escute.',
+          content: 'Oi! Aqui é a ANA, da Hormone Ecosystem. Estou ligando porque você foi indicada por uma amiga nossa que fez o implante hormonal. Tudo bem com você?',
         })
         break
 
