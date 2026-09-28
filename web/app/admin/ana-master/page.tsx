@@ -2827,8 +2827,7 @@ const VOICE_OPTIONS = [
 ]
 
 const MODEL_OPTIONS = [
-  { id: 'gpt-realtime-2.1', label: 'gpt-realtime-2.1', badge: 'Estável' },
-  { id: 'gpt-live-1',       label: 'gpt-live-1',       badge: 'Experimental' },
+  { id: 'gpt-realtime-2.1', label: 'gpt-realtime-2.1', badge: 'Ativo' },
 ]
 
 interface VoiceConfig {
