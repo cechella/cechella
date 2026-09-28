@@ -35,6 +35,11 @@ BASE CIENTÍFICA: Implante hormonal = pellet do tamanho de um grão de arroz, in
 INÍCIO: Você recebe a ligação e fala PRIMEIRO. Aguarde a instrução de abertura.`
 
 export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string } = {}) {
+  // Buffer Twilio messages synchronously before any await — prevents 'start' event being dropped
+  const messageQueue: (Buffer | string)[] = []
+  const earlyListener = (data: Buffer | string) => messageQueue.push(data)
+  twilioWs.on('message', earlyListener)
+
   const dbConfig = await getVoiceConfig()
   const voice  = dbConfig?.voice  ?? 'bossa'
   const model  = dbConfig?.model  ?? 'gpt-live-1'
@@ -244,7 +249,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
 
   // ── Twilio WebSocket ─────────────────────────────────────────────────────────
 
-  twilioWs.on('message', (data: Buffer | string) => {
+  function handleTwilioMessage(data: Buffer | string) {
     let msg: any
     try { msg = JSON.parse(data.toString()) } catch { return }
 
@@ -285,7 +290,13 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         sendToLive({ type: 'session.close' })
         break
     }
-  })
+  }
+
+  // Swap early buffer listener for the real handler, then replay any buffered messages
+  twilioWs.off('message', earlyListener)
+  twilioWs.on('message', handleTwilioMessage)
+  for (const buffered of messageQueue) handleTwilioMessage(buffered)
+
 
   twilioWs.on('close', () => {
     console.log('[ANA LIVE] Twilio WS closed')
