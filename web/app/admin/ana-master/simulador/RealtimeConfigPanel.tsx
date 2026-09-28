@@ -16,12 +16,19 @@ interface RealtimeConfig {
   max_output_tokens: string
   reasoning_effort: string
   instructions: string
+  delegated_model?: string
+  delegated_reasoning_effort?: string
   _source?: string
 }
 
-const VOICES = ['marin', 'coral', 'ash', 'ballad', 'sage', 'verse', 'alloy', 'echo', 'shimmer']
-const MODELS = ['gpt-realtime-2.1', 'gpt-realtime-2', 'gpt-realtime']
-const TRANSCRIPT_MODELS = ['gpt-realtime-whisper', 'gpt-4o-mini-transcribe', 'whisper-1']
+const VOICES = [
+  'bossa',   // PT-BR feminina (Live)
+  'tempo',   // PT-BR masculino (Live)
+  'marin', 'coral', 'ash', 'ballad', 'sage', 'verse', 'alloy', 'echo', 'shimmer',
+]
+const MODELS = ['gpt-live-1', 'gpt-realtime-2.1', 'gpt-realtime-2', 'gpt-realtime']
+const DELEGATED_MODELS = ['gpt-6-astra', 'gpt-4.1', 'gpt-4o', 'o3']
+const TRANSCRIPT_MODELS = ['gpt-4o-transcribe', 'gpt-4o-mini-transcribe', 'gpt-realtime-whisper', 'whisper-1']
 const NOISE_OPTIONS = ['far_field', 'near_field', 'none']
 const REASONING_OPTIONS = ['low', 'medium', 'high']
 
@@ -282,6 +289,20 @@ export function RealtimeConfigPanel({ profile, isGold }: { profile: 'gold' | 'co
         options={REASONING_OPTIONS.map(o => ({ id: o, label: o.charAt(0).toUpperCase() + o.slice(1) }))}
         onChange={v => set('reasoning_effort', v)}
       />
+
+      {/* Delegated model (gpt-live-1 only) */}
+      {cfg.model === 'gpt-live-1' && (
+        <div style={{ marginTop: 4, marginBottom: 14, padding: '12px 14px', background: '#0f1929', border: '1px solid #1D4ED840', borderRadius: 10 }}>
+          <div style={{ fontSize: 11, color: '#38BDF8', fontWeight: 700, marginBottom: 10, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Delegated Model</div>
+          <Select label="Modelo delegado" value={cfg.delegated_model ?? 'gpt-6-astra'} options={DELEGATED_MODELS} onChange={v => set('delegated_model', v)} />
+          <SegmentedControl
+            label="Reasoning effort (delegado)"
+            value={cfg.delegated_reasoning_effort ?? 'medium'}
+            options={REASONING_OPTIONS.map(o => ({ id: o, label: o.charAt(0).toUpperCase() + o.slice(1) }))}
+            onChange={v => set('delegated_reasoning_effort', v)}
+          />
+        </div>
+      )}
 
       {/* Save button */}
       <button
