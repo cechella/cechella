@@ -304,8 +304,9 @@ app.post('/inject-pix-sent', async (req, reply) => {
   const metodo = (body?.metodo ?? 'pix') as 'pix' | 'cartao'
   if (!callSid) return reply.status(400).send({ error: 'callSid obrigatório' })
   const ok = injectPixDataSent(callSid, metodo)
-  console.log(`[SERVER] /inject-pix-sent callSid=${callSid} metodo=${metodo} ok=${ok}`)
-  return reply.send({ ok })
+  const okLive = injectLivePixDataSent(callSid, metodo)
+  console.log(`[SERVER] /inject-pix-sent callSid=${callSid} metodo=${metodo} ok=${ok} okLive=${okLive}`)
+  return reply.send({ ok: ok || okLive })
 })
 
 // SSE live transcript stream — browser connects here to receive real-time turns

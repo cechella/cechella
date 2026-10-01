@@ -343,6 +343,20 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let liveReferralsWaiting = false
   let livePagamentoConfirmado = false
   let liveTokenIndicacao: string | null = null
+  let liveAnaAskedPayment = false
+  let livePixAutoSent = false
+
+  function dispatchAutoPix(metodo: 'pix' | 'cartao') {
+    if (livePixAutoSent || livePagamentoConfirmado) return
+    livePixAutoSent = true
+    liveMetodo = metodo
+    console.log(`[ANA LIVE] 💳 auto-PIX triggered metodo=${metodo} callSid=${callSid}`)
+    fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callSid, telefone, metodo }),
+    }).catch((e: Error) => console.error('[ANA LIVE] auto-PIX fetch error:', e.message))
+  }
 
   function flushInput() {
     const text = inputBuf.trim()
@@ -353,6 +367,14 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
     const lower = text.toLowerCase()
     if (/\bpix\b/.test(lower)) liveMetodo = 'pix'
     if (/\bcart[aã]o\b/.test(lower)) liveMetodo = 'cartao'
+
+    // Auto-PIX: lead says "pix" or "cartão" after Ana asked about payment → dispatch immediately
+    if (!livePixAutoSent && !livePagamentoConfirmado && liveAnaAskedPayment) {
+      let autoMetodo: 'pix' | 'cartao' | null = null
+      if (/\bpix\b|pix\s*(a|à)\s*vista|avista|à\s*vista/i.test(text)) autoMetodo = 'pix'
+      else if (/cart[aã]o|parcel/i.test(lower)) autoMetodo = 'cartao'
+      if (autoMetodo) dispatchAutoPix(autoMetodo)
+    }
 
     // Detect lead name (e.g. "meu nome é Adriana")
     const nameMatch = text.match(/(?:meu nome [eé]|me chamo|sou a?)\s+([A-ZÀ-Ú][a-zà-ú]+)/i)
@@ -384,10 +406,23 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   function flushOutput() {
     const text = outputBuf.trim()
     outputBuf = ''
-    if (text && callSid !== 'unknown') {
+    if (!text) return
+    if (callSid !== 'unknown') {
       console.log('[ANA LIVE] 📝 assistant:', text)
       appendTranscript(callSid, 'assistant', text).catch(() => {})
       pushTranscriptEvent(callSid, 'assistant', text)
+    }
+    // Ana mentioned payment method → arm auto-PIX watch + 10s fallback
+    if (!liveAnaAskedPayment && /pix|cart[aã]o|pagamento|pagar/i.test(text)) {
+      liveAnaAskedPayment = true
+      console.log('[ANA LIVE] 💬 Ana perguntou sobre pagamento — auto-PIX armado (fallback 10s)')
+      setTimeout(() => {
+        if (!livePixAutoSent && callSid !== 'unknown') {
+          const metodo = liveMetodo ?? 'pix'
+          console.log(`[ANA LIVE] ⏰ timeout auto-PIX fallback metodo=${metodo}`)
+          dispatchAutoPix(metodo)
+        }
+      }, 10000)
     }
   }
 
