@@ -428,7 +428,7 @@ export default function ReferidosPage() {
       const res = await fetch('/api/admin/ana-master-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numero: tel, referidor: ref.indicado_por_nome || '', contexto: 'gold' }),
+        body: JSON.stringify({ numero: tel, referidor: ref.indicado_por_nome || '', nome: ref.nome || '', contexto: 'gold' }),
       })
       if (res.ok) showToast(`ANA PTL iniciada para ${ref.nome || ref.telefone}!`)
       else showToast('Erro ao acionar ANA PTL', 'err')
