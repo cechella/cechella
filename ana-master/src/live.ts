@@ -317,7 +317,7 @@ async function loadGoldenPrompt(): Promise<string> {
   return ANA_LIVE_PROMPT_FALLBACK
 }
 
-export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string; earlyQueue?: (Buffer | string)[] } = {}) {
+export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string; referidor?: string; earlyQueue?: (Buffer | string)[] } = {}) {
   const [dbConfig, instructions] = await Promise.all([getVoiceConfig(), loadGoldenPrompt()])
   const voice  = dbConfig?.voice  ?? 'bossa'
   const model  = dbConfig?.model  ?? 'gpt-live-1'
@@ -482,7 +482,9 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
           type: 'session.commentary.append',
           event_id: 'ana_greet',
           delegation_id: null,
-          content: 'Oi! Aqui é a ANA, da Hormone Ecosystem. Estou ligando porque você foi indicada por uma amiga nossa que fez o implante hormonal. Tudo bem com você?',
+          content: opts.referidor
+            ? `Oi! Aqui é a ANA, consultora executiva do consultório do Dr. Vinícius Cechella, da Hormone Ecosystem. Estou ligando porque a ${opts.referidor} nos indicou você com muito carinho. Tudo bem com você?`
+            : 'Oi! Aqui é a ANA, consultora executiva do consultório do Dr. Vinícius Cechella, da Hormone Ecosystem. Estou ligando porque você foi indicada por uma amiga nossa que fez o implante hormonal. Tudo bem com você?',
         })
         break
 
@@ -785,8 +787,11 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
           ?? msg.start?.customParameters?.callSid
           ?? `stream_${streamSid}`
         telefone  = String(msg.start?.customParameters?.from ?? '').replace(/\D/g, '')
+        // Override opts.referidor with the value passed through TwiML parameters (most reliable source)
+        const paramReferidor = String(msg.start?.customParameters?.referidor ?? '').trim()
+        if (paramReferidor) opts = { ...opts, referidor: paramReferidor }
 
-        console.log(`[ANA LIVE] start callSid=${callSid} telefone=${telefone} streamSid=${streamSid} raw_keys=${Object.keys(msg.start ?? {}).join(',')}`)
+        console.log(`[ANA LIVE] start callSid=${callSid} telefone=${telefone} referidor=${opts.referidor ?? ''} streamSid=${streamSid} raw_keys=${Object.keys(msg.start ?? {}).join(',')}`)
 
         upsertCall(callSid, telefone).catch(() => {})
         saveMemory(callSid, 'telefone', telefone).catch(() => {})

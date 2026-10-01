@@ -155,6 +155,7 @@ app.post('/twiml', async (req, reply) => {
   // body.From = Twilio number; body.To = lead number — but query.numero is unambiguous.
   const from = (query?.numero ?? body?.From ?? '').replace(/\D/g, '')
   const contexto = query?.contexto ?? ''          // passed via URL query from /outbound
+  const referidor = query?.referidor ?? ''        // name of person who referred this lead
   const host = PUBLIC_HOST.replace(/^https?:\/\//, '')
 
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -164,6 +165,7 @@ app.post('/twiml', async (req, reply) => {
       <Parameter name="callSid" value="${callSid}" />
       <Parameter name="from" value="${from}" />
       <Parameter name="contexto" value="${contexto}" />
+      <Parameter name="referidor" value="${referidor}" />
     </Stream>
   </Connect>
 </Response>`

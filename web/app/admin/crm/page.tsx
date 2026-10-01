@@ -989,20 +989,10 @@ export default function CRMPage() {
                                       onClick={() => ligarAnaPtlRef(ref)}
                                       disabled={ligandoAnaPtlRef === ref.id}
                                       className="flex items-center gap-1 text-xs px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 rounded-lg transition-colors disabled:opacity-50"
-                                      title="ANA PTL — ligação automatizada"
+                                      title="Ligar via ANA"
                                     >
                                       <PhoneCall className="w-3 h-3" />
-                                      {ligandoAnaPtlRef === ref.id ? 'Ligando…' : 'ANA ▶'}
-                                    </button>
-                                  )}
-                                  {ref.telefone && (
-                                    <button
-                                      onClick={() => ligarVoz(ref.telefone!, ref.id)}
-                                      disabled={ligandoVoz === ref.id}
-                                      className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors disabled:opacity-50"
-                                      title="Ligar via VAPI"
-                                    >
-                                      <PhoneCall className="w-4 h-4" />
+                                      {ligandoAnaPtlRef === ref.id ? 'Ligando…' : 'Ligar'}
                                     </button>
                                   )}
                                   {ref.telefone && (
