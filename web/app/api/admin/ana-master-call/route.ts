@@ -6,7 +6,7 @@ const ANA_MASTER_URL = process.env.ANA_MASTER_URL || 'https://ana-master.hormone
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
-  const { numero, referidor, contexto } = body
+  const { numero, referidor, contexto, nome, origem } = body
 
   if (!numero) return NextResponse.json({ error: 'numero obrigatório' }, { status: 400 })
 
@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     const res = await fetch(`${ANA_MASTER_URL}/outbound`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ numero, referidor: referidor || '', contexto: contexto || '' }).toString(),
+      body: new URLSearchParams({ numero, referidor: referidor || '', contexto: contexto || '', nome: nome || '', origem: origem || '' }).toString(),
     })
     const data = await res.json()
     return NextResponse.json(data, { status: res.status })

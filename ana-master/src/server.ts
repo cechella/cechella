@@ -154,8 +154,10 @@ app.post('/twiml', async (req, reply) => {
   // For outbound calls: lead's number is in query.numero (set by /outbound).
   // body.From = Twilio number; body.To = lead number — but query.numero is unambiguous.
   const from = (query?.numero ?? body?.From ?? '').replace(/\D/g, '')
-  const contexto = query?.contexto ?? ''          // passed via URL query from /outbound
-  const referidor = query?.referidor ?? ''        // name of person who referred this lead
+  const contexto = query?.contexto ?? ''
+  const referidor = query?.referidor ?? ''
+  const nome = query?.nome ?? ''
+  const origem = query?.origem ?? ''
   const host = PUBLIC_HOST.replace(/^https?:\/\//, '')
 
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -166,6 +168,8 @@ app.post('/twiml', async (req, reply) => {
       <Parameter name="from" value="${from}" />
       <Parameter name="contexto" value="${contexto}" />
       <Parameter name="referidor" value="${referidor}" />
+      <Parameter name="nome" value="${nome}" />
+      <Parameter name="origem" value="${origem}" />
     </Stream>
   </Connect>
 </Response>`
@@ -221,6 +225,8 @@ app.post('/outbound', async (req, reply) => {
   const numero = (body?.numero ?? '').replace(/\D/g, '')
   const referidor = body?.referidor ?? ''
   const contexto = body?.contexto ?? ''
+  const nome = body?.nome ?? ''
+  const origem = body?.origem ?? ''
 
   if (!numero) return reply.status(400).send({ error: 'numero obrigatório' })
 
@@ -230,6 +236,8 @@ app.post('/outbound', async (req, reply) => {
   twimlUrl.searchParams.set('numero', numero)   // lead's number — From/To are swapped in outbound
   if (referidor) twimlUrl.searchParams.set('referidor', referidor)
   if (contexto) twimlUrl.searchParams.set('contexto', contexto)
+  if (nome) twimlUrl.searchParams.set('nome', nome)
+  if (origem) twimlUrl.searchParams.set('origem', origem)
 
   const recordingCallback = `${PUBLIC_HOST}/recording-status`
 

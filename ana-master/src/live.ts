@@ -317,7 +317,7 @@ async function loadGoldenPrompt(): Promise<string> {
   return ANA_LIVE_PROMPT_FALLBACK
 }
 
-export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string; referidor?: string; earlyQueue?: (Buffer | string)[] } = {}) {
+export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string; referidor?: string; nome?: string; origem?: string; earlyQueue?: (Buffer | string)[] } = {}) {
   const [dbConfig, instructions] = await Promise.all([getVoiceConfig(), loadGoldenPrompt()])
   const voice  = dbConfig?.voice  ?? 'bossa'
   const model  = dbConfig?.model  ?? 'gpt-live-1'
@@ -482,9 +482,21 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
           type: 'session.commentary.append',
           event_id: 'ana_greet',
           delegation_id: null,
-          content: opts.referidor
-            ? `Oi! Aqui é a ANA, consultora executiva do consultório do Dr. Vinícius Cechella, da Hormone Ecosystem. Estou ligando porque a ${opts.referidor} nos indicou você com muito carinho. Tudo bem com você?`
-            : 'Oi! Aqui é a ANA, consultora executiva do consultório do Dr. Vinícius Cechella, da Hormone Ecosystem. Estou ligando porque você foi indicada por uma amiga nossa que fez o implante hormonal. Tudo bem com você?',
+          content: (() => {
+            const oi = opts.nome ? `Oi, ${opts.nome.split(' ')[0]}!` : 'Oi!'
+            const base = `${oi} Aqui é a ANA, consultora executiva do consultório do Dr. Vinícius Cechella, da Hormone Ecosystem.`
+            if (opts.referidor) return `${base} Estou ligando porque a ${opts.referidor} nos indicou você com muito carinho. Tudo bem com você?`
+            const origemMap: Record<string, string> = {
+              instagram: 'vi que você nos encontrou pelo Instagram',
+              landing_page: 'vi que você veio pelo nosso site',
+              site: 'vi que você veio pelo nosso site',
+              whatsapp: 'você entrou em contato pelo nosso WhatsApp',
+              google: 'vi que você nos encontrou pelo Google',
+            }
+            const origemFrase = opts.origem ? origemMap[opts.origem.toLowerCase()] : undefined
+            if (origemFrase) return `${base} Estou ligando porque ${origemFrase} e demostrou interesse no implante hormonal. Tudo bem com você?`
+            return `${base} Estou ligando porque você demonstrou interesse no implante hormonal. Tudo bem com você?`
+          })(),
         })
         break
 
@@ -789,7 +801,14 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         telefone  = String(msg.start?.customParameters?.from ?? '').replace(/\D/g, '')
         // Override opts.referidor with the value passed through TwiML parameters (most reliable source)
         const paramReferidor = String(msg.start?.customParameters?.referidor ?? '').trim()
-        if (paramReferidor) opts = { ...opts, referidor: paramReferidor }
+        const paramNome = String(msg.start?.customParameters?.nome ?? '').trim()
+        const paramOrigem = String(msg.start?.customParameters?.origem ?? '').trim()
+        opts = {
+          ...opts,
+          ...(paramReferidor ? { referidor: paramReferidor } : {}),
+          ...(paramNome ? { nome: paramNome } : {}),
+          ...(paramOrigem ? { origem: paramOrigem } : {}),
+        }
 
         console.log(`[ANA LIVE] start callSid=${callSid} telefone=${telefone} referidor=${opts.referidor ?? ''} streamSid=${streamSid} raw_keys=${Object.keys(msg.start ?? {}).join(',')}`)
 
