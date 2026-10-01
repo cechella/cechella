@@ -14,6 +14,33 @@ const supabase = createClient(
 const ZAPI_SEND = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text'
 const ZAPI_CLIENT_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
 
+const ATLAS_OWNER_PHONE = '5548988416899'
+const ATLAS_URL = 'https://atlas-whatsapp-gateway.vercel.app/api/webhooks/zapi'
+
+function comandoAgente(text = ''): 'gustavo' | 'ana' | null {
+  const s = text.toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').replace(/[^a-z0-9 ]+/g, ' ').replace(/\\s+/g, ' ').trim()
+  if (/^gustavo\\s+assumir\\b/.test(s)) return 'gustavo'
+  if (/^ana\\s+(assumir|modo\\s+teste)\\b/.test(s)) return 'ana'
+  return null
+}
+
+async function routeOwnerToAtlas(body: Record<string, unknown>, phone: string) {
+  if (phone !== ATLAS_OWNER_PHONE || body.fromMe === true) return false
+  const text = String((body.text as { message?: string } | undefined)?.message || '')
+  const command = comandoAgente(text)
+  if (command) {
+    await supabase.from('atlas_channel_state').upsert({ phone, mode: command, updated_at: new Date().toISOString() }, { onConflict: 'phone' })
+  }
+  const { data } = await supabase.from('atlas_channel_state').select('mode').eq('phone', phone).maybeSingle()
+  const mode = command || data?.mode || 'ana'
+  if (mode !== 'gustavo') return false
+  const secret = process.env.ATLAS_WEBHOOK_SECRET
+  if (!secret) throw new Error('ATLAS_WEBHOOK_SECRET_NOT_CONFIGURED')
+  const response = await fetch(ATLAS_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${secret}` }, body: JSON.stringify({ ...body, phone }) })
+  if (!response.ok) throw new Error(`ATLAS_BRIDGE_${response.status}`)
+  return true
+}
+
 async function zapiSend(phone: string, message: string) {
   await fetch(ZAPI_SEND, {
     method: 'POST',
@@ -126,6 +153,11 @@ export async function POST(req: NextRequest) {
     if (!phoneRaw) return NextResponse.json({ ok: true })
     // Normalize for Supabase lookups (Z-API omits 9th digit for some carriers)
     const phone = normalizarTelefone(phoneRaw)
+
+    // Owner command router: Gustavo assumir / Ana assumir. Everyone else remains on Ana.
+    if (await routeOwnerToAtlas(body, phone)) {
+      return NextResponse.json({ ok: true, routed: 'gustavo' })
+    }
 
     // Block ANA from responding when human attendance is active
     const fromMe = body.fromMe === true
