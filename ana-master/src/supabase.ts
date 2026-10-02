@@ -184,11 +184,16 @@ export async function checkReferidos(token: string): Promise<{ total: number; co
   if (!lead?.telefone) return { total: 0, completo: false, semDados: 20, semMensagem: 0, missaoCompleta: false }
 
   const phone = String(lead.telefone).replace(/\D/g, '')
+  // Build all plausible formats: exact, with 55 prefix, without 55 prefix, and without double 55
+  const bare = phone.replace(/^55/, '')
+  const with55 = `55${bare}`
+  const variants = [...new Set([phone, with55, bare])]
+  const orClause = variants.map(v => `indicado_por_telefone.eq.${v}`).join(',')
 
   const { data } = await supabase
     .from('contatos_referidos')
     .select('id, profissao, hobby, status, mensagem_enviada')
-    .or(`indicado_por_telefone.eq.${phone},indicado_por_telefone.eq.55${phone},indicado_por_telefone.eq.${phone.replace(/^55/, '')}`)
+    .or(orClause)
 
   if (!data || data.length === 0) return { total: 0, completo: false, semDados: 20, semMensagem: 0, missaoCompleta: false }
 
