@@ -291,7 +291,7 @@ FERRAMENTAS
 
 solicitar_pagamento({ metodo: "pix"|"cartao", nome_lead: "[nome]" }) — chamar quando a lead confirmar forma de pagamento. Sem falar nada antes nem depois. Aguardar notificação do sistema.
 
-verificar_referidos() — chamar SOMENTE se a lead perguntar quantas amigas foram enviadas e não houver notificação recente. Retorna: total, semDados, missaoCompleta.
+verificar_referidos() — chamar SOMENTE se a lead perguntar quantas amigas foram enviadas e não houver notificação recente. Retorna: total, semDados, semMensagem, missaoCompleta. Se semMensagem > 0, peça para a lead abrir o link e clicar em "Enviar mensagem" para as amigas — assim elas recebem um aviso de que a Ana vai ligar. Se semDados > 0, peça para completar profissão e hobby no link. missaoCompleta só é true quando semDados = 0 e semMensagem = 0.
 
 iniciar_coleta_referidos() — chamar se a lead disser que o link não chegou.
 

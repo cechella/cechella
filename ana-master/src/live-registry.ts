@@ -69,11 +69,13 @@ export function injectLiveReferralLinkSent(callSid: string, token?: string): boo
   return true
 }
 
-export function injectLiveReferidosUpdate(callSid: string, total: number, semDados: number, missaoCompleta: boolean): boolean {
-  console.log(`[LIVE_REGISTRY] 👥 referidos update callSid=${callSid} total=${total} semDados=${semDados} missaoCompleta=${missaoCompleta}`)
+export function injectLiveReferidosUpdate(callSid: string, total: number, semDados: number, semMensagem: number, missaoCompleta: boolean): boolean {
+  console.log(`[LIVE_REGISTRY] 👥 referidos update callSid=${callSid} total=${total} semDados=${semDados} semMensagem=${semMensagem} missaoCompleta=${missaoCompleta}`)
   let content: string
   if (missaoCompleta) {
-    content = `A lead completou as 20 indicações com todos os dados preenchidos. Celebre: "Perfeito, missão cumprida! Você indicou 20 amigas — nossa equipe vai entrar em contato com cada uma. Foi um prazer enorme falar com você!" e encerre a ligação com carinho.`
+    content = `A lead completou as 20 indicações, todos os dados preenchidos e todas as mensagens enviadas. Celebre: "Perfeito, missão cumprida! Você indicou 20 amigas — nossa equipe vai entrar em contato com cada uma. Foi um prazer enorme falar com você!" e encerre a ligação com carinho.`
+  } else if (total >= 20 && semDados === 0 && semMensagem > 0) {
+    content = `A lead já enviou ${total} amigas e completou os dados. Mas ${semMensagem} amigas ainda não receberam a mensagem de aviso. Peça para ela abrir o link e clicar em "Enviar mensagem" para cada amiga — assim elas ficam sabendo que a Ana vai ligar.`
   } else if (total >= 20 && semDados > 0) {
     content = `A lead já enviou ${total} amigas — meta de 20 atingida! Mas ${semDados} ainda estão sem profissão e hobby. Incentive-a a preencher os dados no link — é rápido.`
   } else {

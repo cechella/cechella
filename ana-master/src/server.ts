@@ -87,18 +87,19 @@ async function processReferidosUpdate(indicadorPhone: string) {
 
   const { data: refs } = await supabase
     .from('contatos_referidos')
-    .select('profissao, hobby, status')
+    .select('profissao, hobby, status, mensagem_enviada')
     .or(`indicado_por_telefone.eq.${digits},indicado_por_telefone.eq.55${digits},indicado_por_telefone.eq.${bare}`)
 
   if (!refs) return
   const ativos = refs.filter((r: any) => r.status !== 'recusou')
   const semDados = ativos.filter((r: any) => !r.profissao || !r.hobby).length
+  const semMensagem = ativos.filter((r: any) => !r.mensagem_enviada && r.status !== 'mensagem_enviada').length
   const total = ativos.length
-  const missaoCompleta = total >= 20 && semDados === 0
+  const missaoCompleta = total >= 20 && semDados === 0 && semMensagem === 0
 
-  console.log(`[SERVER] 👥 referidos update call_sid=${call.call_sid} total=${total} semDados=${semDados} missaoCompleta=${missaoCompleta}`)
+  console.log(`[SERVER] 👥 referidos update call_sid=${call.call_sid} total=${total} semDados=${semDados} semMensagem=${semMensagem} missaoCompleta=${missaoCompleta}`)
   injectReferidosUpdate(call.call_sid, total, semDados, missaoCompleta)
-  injectLiveReferidosUpdate(call.call_sid, total, semDados, missaoCompleta)
+  injectLiveReferidosUpdate(call.call_sid, total, semDados, semMensagem, missaoCompleta)
 }
 
 function handleReferidosPayload(payload: any) {

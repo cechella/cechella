@@ -173,7 +173,7 @@ export async function verifyPaymentByCallSid(callSid: string): Promise<boolean> 
   return !!data
 }
 
-export async function checkReferidos(token: string): Promise<{ total: number; completo: boolean; semDados: number; missaoCompleta: boolean }> {
+export async function checkReferidos(token: string): Promise<{ total: number; completo: boolean; semDados: number; semMensagem: number; missaoCompleta: boolean }> {
   // Resolve phone from leads via token
   const { data: lead } = await supabase
     .from('leads')
@@ -187,17 +187,18 @@ export async function checkReferidos(token: string): Promise<{ total: number; co
 
   const { data } = await supabase
     .from('contatos_referidos')
-    .select('id, profissao, hobby, status')
+    .select('id, profissao, hobby, status, mensagem_enviada')
     .or(`indicado_por_telefone.eq.${phone},indicado_por_telefone.eq.55${phone},indicado_por_telefone.eq.${phone.replace(/^55/, '')}`)
 
-  if (!data || data.length === 0) return { total: 0, completo: false, semDados: 20, missaoCompleta: false }
+  if (!data || data.length === 0) return { total: 0, completo: false, semDados: 20, semMensagem: 0, missaoCompleta: false }
 
   const ativos = data.filter((r: any) => r.status !== 'recusou')
   const semDados = ativos.filter((r: any) => !r.profissao || !r.hobby).length
+  const semMensagem = ativos.filter((r: any) => !r.mensagem_enviada && r.status !== 'mensagem_enviada').length
   const completo = ativos.length >= 20
-  const missaoCompleta = completo && semDados === 0
+  const missaoCompleta = completo && semDados === 0 && semMensagem === 0
 
-  return { total: ativos.length, completo, semDados, missaoCompleta }
+  return { total: ativos.length, completo, semDados, semMensagem, missaoCompleta }
 }
 
 export interface VoiceConfig {
