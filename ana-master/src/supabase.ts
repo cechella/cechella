@@ -181,7 +181,7 @@ export async function checkReferidos(token: string): Promise<{ total: number; co
     .eq('token_indicacao', token)
     .maybeSingle()
 
-  if (!lead?.telefone) return { total: 0, completo: false, semDados: 20, missaoCompleta: false }
+  if (!lead?.telefone) return { total: 0, completo: false, semDados: 20, semMensagem: 0, missaoCompleta: false }
 
   const phone = String(lead.telefone).replace(/\D/g, '')
 
