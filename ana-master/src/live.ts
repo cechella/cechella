@@ -821,7 +821,10 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         saveMemory(callSid, 'telefone', telefone).catch(() => {})
         saveMemory(callSid, 'voice_stack', 'live').catch(() => {})
 
-        registerLiveSession(callSid, { sendToLive })
+        registerLiveSession(callSid, {
+          sendToLive,
+          setTokenIndicacao: (token: string) => { liveTokenIndicacao = token },
+        })
         break
 
       case 'media':

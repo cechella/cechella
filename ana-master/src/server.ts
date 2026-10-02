@@ -36,7 +36,7 @@ supabase
               if (r?.token) {
                 saveMemory(call_sid, 'token_indicacao', r.token).catch(() => {})
                 injectReferralLinkSent(call_sid)
-                injectLiveReferralLinkSent(call_sid)
+                injectLiveReferralLinkSent(call_sid, r.token)
               }
             })
             .catch(e => console.error(`[SERVER] referidos link erro: ${e.message}`))
