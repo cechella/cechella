@@ -231,3 +231,81 @@ export async function getVoiceConfig(): Promise<VoiceConfig | null> {
     return null
   }
 }
+
+export type PrevCallState = 'fresh' | 'resume' | 'completed'
+
+export interface SessionContext {
+  prevState: PrevCallState
+  contextBlock: string
+  metodoEscolhido?: 'pix' | 'cartao'
+  nomeLead?: string
+  tokenIndicacao?: string
+  pagamentoConfirmado?: boolean
+}
+
+export async function buildSessionContext(telefone: string, callSid: string): Promise<SessionContext> {
+  try {
+    const norm = telefone.startsWith('55') ? telefone : `55${telefone}`
+    const bare = norm.replace(/^55/, '')
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+    const { data: prevCall } = await supabase
+      .from('ana_calls')
+      .select('call_sid, status, memories, created_at')
+      .or(`telefone.eq.${norm},telefone.eq.${bare}`)
+      .neq('call_sid', callSid)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!prevCall) return { prevState: 'fresh', contextBlock: '' }
+
+    const memories: Record<string, any> = prevCall.memories ?? {}
+    const isGanho = prevCall.status === 'ganho'
+
+    const { data: pagamento } = await supabase
+      .from('pagamentos')
+      .select('status, metodo')
+      .eq('call_sid', prevCall.call_sid)
+      .eq('status', 'approved')
+      .maybeSingle()
+
+    const pagamentoConfirmado = !!pagamento
+    const metodoEscolhido = (memories.forma_pagamento_escolhida ?? pagamento?.metodo) as 'pix' | 'cartao' | undefined
+    const nomeLead = memories.nome_lead as string | undefined
+    const tokenIndicacao = memories.token_indicacao as string | undefined
+
+    if (isGanho) {
+      const contextBlock = `
+
+--- HISTÓRICO DA LEAD ---
+Esta lead já completou o processo anteriormente (pagamento confirmado + 20 referidos coletados).
+Status: GANHO. Seja calorosa e trate como cliente confirmada.
+${nomeLead ? `Nome: ${nomeLead}` : ''}
+${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
+--- FIM HISTÓRICO ---`
+      return { prevState: 'completed', contextBlock, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }
+    }
+
+    const etapas: string[] = []
+    if (pagamentoConfirmado) etapas.push(`- Pagamento já confirmado via ${metodoEscolhido ?? 'método anterior'}`)
+    else if (metodoEscolhido) etapas.push(`- Lead escolheu ${metodoEscolhido} mas pagamento não foi confirmado`)
+    if (tokenIndicacao) etapas.push('- Link de indicações já foi enviado')
+    if (nomeLead) etapas.push(`- Nome da lead: ${nomeLead}`)
+
+    const contextBlock = `
+
+--- RETOMADA DE LIGAÇÃO ANTERIOR ---
+Esta lead já foi contactada anteriormente mas a ligação caiu antes de concluir.
+Retome de forma natural, sem repetir etapas já concluídas.
+${etapas.join('\n')}
+Contexto: ${pagamentoConfirmado ? 'Pague confirmado — avance para referidos' : metodoEscolhido ? 'Retome o pagamento' : 'Retome desde a apresentação do produto'}
+--- FIM RETOMADA ---`
+
+    return { prevState: 'resume', contextBlock, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }
+  } catch (e: any) {
+    console.error('[CTX] buildSessionContext erro:', e.message)
+    return { prevState: 'fresh', contextBlock: '' }
+  }
+}

@@ -4,10 +4,11 @@
 
 import WebSocket from 'ws'
 import { OPENAI_API_KEY, APP_URL } from './config.js'
-import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, getMemories, checkReferidos, updateLeadsGanho, supabase } from './supabase.js'
+import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, getMemories, checkReferidos, updateLeadsGanho, supabase, buildSessionContext, endCall } from './supabase.js'
 import { iniciarColetaReferidos, sendWelcome } from './tools/whatsapp.js'
 import { registerLiveSession, unregisterLiveSession } from './live-registry.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
+import { scheduleCallback } from './redial.js'
 
 const LIVE_ENDPOINT = 'wss://api.openai.com/v1/live/sessions'
 
@@ -506,7 +507,9 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         flushOutput()
         if (callSid !== 'unknown') {
           pushCallEndedEvent(callSid)
+          endCall(callSid).catch(() => {})
           unregisterLiveSession(callSid)
+          scheduleCallback(callSid).catch((e: Error) => console.error('[ANA LIVE] scheduleCallback erro:', e.message))
         }
         break
 
@@ -825,6 +828,18 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
           sendToLive,
           setTokenIndicacao: (token: string) => { liveTokenIndicacao = token },
         })
+
+        // Inject history context and restore in-memory flags if this is a resumed call
+        buildSessionContext(telefone, callSid).then(({ contextBlock, prevState, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }) => {
+          if (contextBlock) {
+            sendToLive({ type: 'session.update', session: { instructions_append: contextBlock } })
+            console.log(`[ANA LIVE] 📚 contexto injetado prevState=${prevState} callSid=${callSid}`)
+          }
+          if (metodoEscolhido) liveMetodo = metodoEscolhido
+          if (nomeLead) liveNomeLead = nomeLead
+          if (tokenIndicacao) liveTokenIndicacao = tokenIndicacao
+          if (pagamentoConfirmado) { livePagamentoConfirmado = true; livePixAutoSent = true }
+        }).catch(() => {})
         break
 
       case 'media':
