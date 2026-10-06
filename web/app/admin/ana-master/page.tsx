@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react'
-import { SimuladorContent } from './simulador/SimuladorContent'
 import { SimuladorGoldContent } from './simulador/SimuladorGoldContent'
 import { RealtimeConfigPanel } from './simulador/RealtimeConfigPanel'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -3640,7 +3639,7 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode; color: string }[] =
 
 export default function AnaMasterPage() {
   const [tab, setTab] = useState<Tab>('simulador')
-  const [simMode, setSimMode] = useState<'controller' | 'gold'>('controller')
+  const simMode = 'gold' as const
   const [simConfigOpen, setSimConfigOpen] = useState(true)
   const [sims, setSims] = useState<Simulacao[]>([])
   const [gold, setGold] = useState<GoldItem[]>([])
@@ -3727,12 +3726,6 @@ export default function AnaMasterPage() {
                   {/* toolbar */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderBottom: '1px solid #27272A', background: '#09090B', flexShrink: 0 }}>
                     <button
-                      onClick={() => setSimMode('controller')}
-                      style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: simMode === 'controller' ? '1px solid #3B82F660' : '1px solid transparent', background: simMode === 'controller' ? '#3B82F618' : 'transparent', color: simMode === 'controller' ? '#3B82F6' : '#52525B', transition: 'all 0.15s' }}
-                    >
-                      ⚙ Controller
-                    </button>
-                    <button
                       onClick={() => setSimMode('gold')}
                       style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: simMode === 'gold' ? '1px solid #F59E0B60' : '1px solid transparent', background: simMode === 'gold' ? '#F59E0B18' : 'transparent', color: simMode === 'gold' ? '#F59E0B' : '#52525B', transition: 'all 0.15s' }}
                     >
@@ -3750,7 +3743,7 @@ export default function AnaMasterPage() {
                   {/* body — simulator + optional config panel */}
                   <div style={{ flex: 1, display: 'flex', overflow: 'hidden', border: '1px solid #27272A', borderTop: 'none', borderRadius: '0 0 12px 12px' }}>
                     <div style={{ flex: 1, overflow: 'hidden' }}>
-                      {simMode === 'controller' ? <SimuladorContent /> : <SimuladorGoldContent />}
+                      <SimuladorGoldContent />
                     </div>
                     {simConfigOpen && (
                       <div style={{ width: 280, borderLeft: '1px solid #27272A', background: '#09090B', flexShrink: 0, overflowY: 'auto' }}>
