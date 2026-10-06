@@ -331,6 +331,12 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let streamSid   = ''
   let dbInitialized = false
 
+  // Context-ready gate: greeting waits for buildSessionContext before speaking
+  let resolveContextReady!: (ctx: string) => void
+  const contextReadyPromise = new Promise<string>(resolve => { resolveContextReady = resolve })
+  // Safety: if Twilio start never arrives, unblock after 3s
+  setTimeout(() => resolveContextReady(''), 3000)
+
   // Transcript accumulators — no turn-done event in Live, group by silence timer
   let inputBuf  = ''
   let outputBuf = ''
@@ -478,26 +484,37 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
 
       case 'session.started':
         console.log('[ANA LIVE] session.started id=', event.session?.id)
-        // commentary.append = spoken aloud immediately; instructions.append = silent behavior only
-        sendToLive({
-          type: 'session.commentary.append',
-          event_id: 'ana_greet',
-          delegation_id: null,
-          content: (() => {
-            const oi = opts.nome ? `Oi, ${opts.nome.split(' ')[0]}!` : 'Oi!'
-            const base = `${oi} Aqui é a ANA, consultora executiva do consultório do Dr. Vinícius Cechella, da Hormone Ecosystem.`
-            if (opts.referidor) return `${base} Estou ligando porque a ${opts.referidor} nos indicou você com muito carinho. Tudo bem com você?`
-            const origemMap: Record<string, string> = {
-              instagram: 'vi que você nos encontrou pelo Instagram',
-              landing_page: 'vi que você veio pelo nosso site',
-              site: 'vi que você veio pelo nosso site',
-              whatsapp: 'você entrou em contato pelo nosso WhatsApp',
-              google: 'vi que você nos encontrou pelo Google',
-            }
-            const origemFrase = opts.origem ? origemMap[opts.origem.toLowerCase()] : undefined
-            if (origemFrase) return `${base} Estou ligando porque ${origemFrase} e demostrou interesse no implante hormonal. Tudo bem com você?`
-            return `${base} Estou ligando porque você demonstrou interesse no implante hormonal. Tudo bem com você?`
-          })(),
+        // Wait for buildSessionContext before greeting — ensures context is injected first
+        contextReadyPromise.then(contextBlock => {
+          if (contextBlock) {
+            sendToLive({
+              type: 'session.instructions.append',
+              event_id: `ctx_${Date.now()}`,
+              delegation_id: null,
+              content: contextBlock,
+            })
+            console.log('[ANA LIVE] 📚 contexto injetado via instructions.append')
+          }
+          sendToLive({
+            type: 'session.commentary.append',
+            event_id: 'ana_greet',
+            delegation_id: null,
+            content: (() => {
+              const oi = opts.nome ? `Oi, ${opts.nome.split(' ')[0]}!` : 'Oi!'
+              const base = `${oi} Aqui é a ANA, consultora executiva do consultório do Dr. Vinícius Cechella, da Hormone Ecosystem.`
+              if (opts.referidor) return `${base} Estou ligando porque a ${opts.referidor} nos indicou você com muito carinho. Tudo bem com você?`
+              const origemMap: Record<string, string> = {
+                instagram: 'vi que você nos encontrou pelo Instagram',
+                landing_page: 'vi que você veio pelo nosso site',
+                site: 'vi que você veio pelo nosso site',
+                whatsapp: 'você entrou em contato pelo nosso WhatsApp',
+                google: 'vi que você nos encontrou pelo Google',
+              }
+              const origemFrase = opts.origem ? origemMap[opts.origem.toLowerCase()] : undefined
+              if (origemFrase) return `${base} Estou ligando porque ${origemFrase} e demostrou interesse no implante hormonal. Tudo bem com você?`
+              return `${base} Estou ligando porque você demonstrou interesse no implante hormonal. Tudo bem com você?`
+            })(),
+          })
         })
         break
 
@@ -831,15 +848,13 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
 
         // Inject history context and restore in-memory flags if this is a resumed call
         buildSessionContext(telefone, callSid).then(({ contextBlock, prevState, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }) => {
-          if (contextBlock) {
-            sendToLive({ type: 'session.update', session: { instructions_append: contextBlock } })
-            console.log(`[ANA LIVE] 📚 contexto injetado prevState=${prevState} callSid=${callSid}`)
-          }
+          console.log(`[ANA LIVE] 📚 buildSessionContext prevState=${prevState} hasContext=${!!contextBlock} callSid=${callSid}`)
           if (metodoEscolhido) liveMetodo = metodoEscolhido
           if (nomeLead) liveNomeLead = nomeLead
           if (tokenIndicacao) liveTokenIndicacao = tokenIndicacao
           if (pagamentoConfirmado) { livePagamentoConfirmado = true; livePixAutoSent = true }
-        }).catch(() => {})
+          resolveContextReady(contextBlock)
+        }).catch(() => { resolveContextReady('') })
         break
 
       case 'media':
