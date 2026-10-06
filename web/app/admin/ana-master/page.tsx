@@ -3748,7 +3748,7 @@ export default function AnaMasterPage() {
                       <div style={{ width: 280, borderLeft: '1px solid #27272A', background: '#09090B', flexShrink: 0, overflowY: 'auto' }}>
                         <div style={{ padding: '10px 14px', borderBottom: '1px solid #27272A', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: 12, fontWeight: 700, color: simMode === 'gold' ? '#F59E0B' : '#3B82F6' }}>
-                            {simMode === 'gold' ? '✦ Gold Config' : '⚙ Controller Config'}
+                            ✦ Gold Config
                           </span>
                           <button onClick={() => setSimConfigOpen(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: '#52525B', fontSize: 18, lineHeight: 1 }}>×</button>
                         </div>
