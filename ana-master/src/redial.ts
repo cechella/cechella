@@ -1,7 +1,7 @@
 import { supabase, saveMemory } from './supabase.js'
 
-const MAX_RETRIES = 5
-const RETRY_DELAYS_MS = [30_000, 120_000, 300_000, 600_000, 600_000]
+const MAX_RETRIES = 3
+const RETRY_DELAYS_MS = [30_000, 120_000, 300_000]
 
 export async function scheduleCallback(callSid: string): Promise<void> {
   try {
