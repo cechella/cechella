@@ -16,7 +16,7 @@ export default function SimuladorVozPage() {
               'bg-amber-500 text-black'
             }`}
           >
-            <span>✦</span> Gold
+            <span>✦</span> Ana Gold
           </button>
         </div>
         <div className="flex-1 overflow-hidden">
