@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "hormone-agent": {
+      "command": "bash",
+      "args": ["-c", "ssh -i ~/.ssh/claude_gcp -o StrictHostKeyChecking=no -o BatchMode=yes vcechella@35.255.229.131 'npx -y @modelcontextprotocol/server-everything 2>/dev/null || cat'"]
+    }
+  }
+}
