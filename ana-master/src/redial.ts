@@ -68,7 +68,7 @@ export async function scheduleCallback(callSid: string): Promise<void> {
           return
         }
 
-        const twimlUrl = `https://${PUBLIC_HOST}/twiml?contexto=retomada&from=${call.telefone}`
+        const twimlUrl = `${PUBLIC_HOST.replace(/^https?:\/\//, 'https://')}/twiml?contexto=retomada&from=${call.telefone}`
         const body = new URLSearchParams({
           To: call.telefone.startsWith('+') ? call.telefone : `+${call.telefone}`,
           From: TWILIO_PHONE_NUMBER!,

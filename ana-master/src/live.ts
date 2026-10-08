@@ -487,13 +487,15 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         // Wait for buildSessionContext before greeting — ensures context is injected first
         contextReadyPromise.then(contextBlock => {
           if (contextBlock) {
+            // session.instructions.append não existe na Live API — usamos session.update
             sendToLive({
-              type: 'session.instructions.append',
+              type: 'session.update',
               event_id: `ctx_${Date.now()}`,
-              delegation_id: null,
-              content: contextBlock,
+              session: {
+                instructions: instructions + `\n\n${contextBlock}`,
+              },
             })
-            console.log('[ANA LIVE] 📚 contexto injetado via instructions.append')
+            console.log('[ANA LIVE] 📚 contexto injetado via session.update')
           }
           sendToLive({
             type: 'session.commentary.append',
@@ -609,16 +611,17 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
               // Wait for payment confirmation via Supabase Realtime (up to 5 min)
               const paid = await new Promise<boolean>((resolve) => {
                 let settled = false
+                let channel: any
                 const finish = (result: boolean) => {
                   if (settled) return
                   settled = true
                   clearTimeout(timer)
-                  supabase.removeChannel(channel).catch(() => {})
+                  if (channel) supabase.removeChannel(channel).catch(() => {})
                   console.log(`[ANA LIVE PAG] ${result ? '✅ confirmado' : '⏰ timeout'} callSid=${callSid}`)
                   resolve(result)
                 }
                 const timer = setTimeout(() => finish(false), 5 * 60 * 1000)
-                const channel = supabase
+                channel = supabase
                   .channel(`livepag:${callSid}`)
                   .on('postgres_changes' as any,
                     { event: 'UPDATE', schema: 'public', table: 'pagamentos', filter: `call_sid=eq.${callSid}` },
