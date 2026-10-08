@@ -3728,7 +3728,7 @@ export default function AnaMasterPage() {
                     <button
                       style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', borderRadius: 7, fontSize: 12, fontWeight: 700, cursor: 'pointer', border: simMode === 'gold' ? '1px solid #F59E0B60' : '1px solid transparent', background: simMode === 'gold' ? '#F59E0B18' : 'transparent', color: simMode === 'gold' ? '#F59E0B' : '#52525B', transition: 'all 0.15s' }}
                     >
-                      ✦ Ana Gold
+                      ✦ ANA MASTER
                     </button>
                     <div style={{ flex: 1 }} />
                     <button
