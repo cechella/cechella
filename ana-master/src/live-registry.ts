@@ -3,6 +3,7 @@
 
 type LiveRef = {
   sendToLive: (event: object) => void
+  setTokenIndicacao: (token: string) => void
 }
 
 const registry = new Map<string, LiveRef>()
@@ -50,22 +51,31 @@ export function injectLivePixDataSent(callSid: string, metodo: 'pix' | 'cartao')
   })
 }
 
-export function injectLiveReferralLinkSent(callSid: string): boolean {
-  console.log(`[LIVE_REGISTRY] 🔗 referral link sent callSid=${callSid}`)
-  // Use instructions.append so ANA follows the exact sequence (ask first, then reveal link)
-  return send(callSid, {
+export function injectLiveReferralLinkSent(callSid: string, token?: string): boolean {
+  console.log(`[LIVE_REGISTRY] 🔗 referral link sent callSid=${callSid} token=${token}`)
+  const ref = registry.get(callSid)
+  if (!ref) {
+    console.log(`[LIVE_REGISTRY] callSid=${callSid} not in registry`)
+    return false
+  }
+  // Mark token in session state so delegation handler won't send the link again
+  if (token) ref.setTokenIndicacao(token)
+  ref.sendToLive({
     type: 'session.instructions.append',
     event_id: `referral_link_${Date.now()}`,
     delegation_id: null,
     content: 'O link de indicações foi enviado no WhatsApp da lead. Primeiro pergunte se ela conhece amigas que também podem se beneficiar do tratamento. Aguarde a confirmação positiva dela. Somente após ela confirmar, diga que o link já chegou no WhatsApp dela. Explique: abrir o link, tocar em Importar amigas pelo WhatsApp, selecionar as amigas e enviar. Meta: 20 indicações.',
   })
+  return true
 }
 
-export function injectLiveReferidosUpdate(callSid: string, total: number, semDados: number, missaoCompleta: boolean): boolean {
-  console.log(`[LIVE_REGISTRY] 👥 referidos update callSid=${callSid} total=${total} semDados=${semDados} missaoCompleta=${missaoCompleta}`)
+export function injectLiveReferidosUpdate(callSid: string, total: number, semDados: number, semMensagem: number, missaoCompleta: boolean): boolean {
+  console.log(`[LIVE_REGISTRY] 👥 referidos update callSid=${callSid} total=${total} semDados=${semDados} semMensagem=${semMensagem} missaoCompleta=${missaoCompleta}`)
   let content: string
   if (missaoCompleta) {
-    content = `A lead completou as 20 indicações com todos os dados preenchidos. Celebre: "Perfeito, missão cumprida! Você indicou 20 amigas — nossa equipe vai entrar em contato com cada uma. Foi um prazer enorme falar com você!" e encerre a ligação com carinho.`
+    content = `A lead completou as 20 indicações, todos os dados preenchidos e todas as mensagens enviadas. Celebre: "Perfeito, missão cumprida! Você indicou 20 amigas — nossa equipe vai entrar em contato com cada uma. Foi um prazer enorme falar com você!" e encerre a ligação com carinho.`
+  } else if (total >= 20 && semDados === 0 && semMensagem > 0) {
+    content = `A lead já enviou ${total} amigas e completou os dados. Mas ${semMensagem} amigas ainda não receberam a mensagem de aviso. Peça para ela abrir o link e clicar em "Enviar mensagem" para cada amiga — assim elas ficam sabendo que a Ana vai ligar.`
   } else if (total >= 20 && semDados > 0) {
     content = `A lead já enviou ${total} amigas — meta de 20 atingida! Mas ${semDados} ainda estão sem profissão e hobby. Incentive-a a preencher os dados no link — é rápido.`
   } else {
