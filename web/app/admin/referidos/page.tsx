@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { createBrowserClient } from '@supabase/ssr'
-import { Flame, Circle, Phone, RefreshCw, Search, CheckCircle, Clock, PhoneCall, Copy, Check, CreditCard, Users, TrendingUp, Pencil, X, Bot, UserCheck, ToggleLeft, ToggleRight, Link } from 'lucide-react'
+import { Flame, Circle, Phone, RefreshCw, Search, CheckCircle, Clock, PhoneCall, Copy, Check, CreditCard, Users, TrendingUp, Pencil, X, Bot, UserCheck, ToggleLeft, ToggleRight, Link, MessageCircle } from 'lucide-react'
 
 type StatusReferido = 'aguardando' | 'mensagem_enviada' | 'contatado' | 'fechado'
 type FiltroPrioridade = 'todas' | '1' | '2'
@@ -428,7 +428,7 @@ export default function ReferidosPage() {
       const res = await fetch('/api/admin/ana-master-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numero: tel, referidor: ref.indicado_por_nome || '', contexto: 'gold' }),
+        body: JSON.stringify({ numero: tel, referidor: ref.indicado_por_nome || '', nome: ref.nome || '', contexto: 'gold' }),
       })
       if (res.ok) showToast(`ANA PTL iniciada para ${ref.nome || ref.telefone}!`)
       else showToast('Erro ao acionar ANA PTL', 'err')
@@ -1143,34 +1143,22 @@ export default function ReferidosPage() {
                                       onClick={() => acionarAna(ref)}
                                       disabled={acionandoAna === ref.id}
                                       className="flex items-center gap-1 text-xs px-2 py-1.5 bg-[#7B3FE4]/20 hover:bg-[#7B3FE4]/30 text-[#A78BFA] border border-[#7B3FE4]/30 rounded-lg transition-colors disabled:opacity-50"
-                                      title="Contatar por Mensagem"
+                                      title="Enviar mensagem via WhatsApp"
                                     >
-                                      <Bot className="w-3 h-3" />
+                                      <MessageCircle className="w-3 h-3" />
                                       {acionandoAna === ref.id ? '...' : 'Mensagem'}
                                     </button>
                                   )}
-                                  {/* ANA PTL */}
+                                  {/* Ligar — ANA PTL */}
                                   {ref.telefone && (
                                     <button
                                       onClick={() => ligarAnaPtl(ref)}
                                       disabled={ligandoAnaPtl === ref.id}
                                       className="flex items-center gap-1 text-xs px-2 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 rounded-lg transition-colors disabled:opacity-50"
-                                      title="ANA PTL — Ligação de voz automatizada"
+                                      title="Ligar via ANA"
                                     >
                                       <PhoneCall className="w-3 h-3" />
-                                      {ligandoAnaPtl === ref.id ? 'Ligando…' : 'ANA ▶'}
-                                    </button>
-                                  )}
-                                  {/* Ligar Voz (VAPI) */}
-                                  {ref.telefone && (
-                                    <button
-                                      onClick={() => ligarVoz(ref.telefone!, ref.id)}
-                                      disabled={ligandoVoz === ref.id}
-                                      className="flex items-center gap-1 text-xs px-2 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
-                                      title="Ligar via VAPI"
-                                    >
-                                      <PhoneCall className="w-3 h-3" />
-                                      {ligandoVoz === ref.id ? '...' : 'Ligar Voz'}
+                                      {ligandoAnaPtl === ref.id ? 'Ligando…' : 'Ligar'}
                                     </button>
                                   )}
                                   {/* Editar */}

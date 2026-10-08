@@ -384,6 +384,25 @@ export default function CRMPage() {
     })
   }, [carregarLeads, carregarReferidos])
 
+  const [ligandoAnaPtlLead, setLigandoAnaPtlLead] = useState<string | null>(null)
+  const ligarAnaPtlLead = async (lead: Lead) => {
+    if (!lead.telefone) return showToast('Sem telefone', false)
+    setLigandoAnaPtlLead(lead.id)
+    const tel = lead.telefone.replace(/\D/g, '')
+    try {
+      const res = await fetch('/api/admin/ana-master-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numero: tel, nome: lead.nome || '', origem: lead.origem || '', referidor: '', contexto: 'gold' }),
+      })
+      if (res.ok) showToast(`ANA iniciando ligação para ${lead.nome || lead.telefone}!`)
+      else showToast('Erro ao iniciar ligação', false)
+    } catch {
+      showToast('Erro de conexão', false)
+    }
+    setLigandoAnaPtlLead(null)
+  }
+
   const ligarAnaPtlRef = async (ref: ContatoReferido) => {
     if (!ref.telefone) return showToast('Sem telefone', false)
     setLigandoAnaPtlRef(ref.id)
@@ -392,7 +411,7 @@ export default function CRMPage() {
       const res = await fetch('/api/admin/ana-master-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numero: tel, referidor: ref.indicado_por_nome || '', contexto: 'gold' }),
+        body: JSON.stringify({ numero: tel, referidor: ref.indicado_por_nome || '', nome: ref.nome || '', contexto: 'gold' }),
       })
       if (res.ok) showToast(`ANA PTL iniciada para ${ref.nome || ref.telefone}!`)
       else showToast('Erro ao acionar ANA PTL', false)
@@ -828,12 +847,13 @@ export default function CRMPage() {
                                 )}
                                 {lead.telefone && (
                                   <button
-                                    onClick={() => ligarVoz(lead.telefone!, lead.id)}
-                                    disabled={ligandoVoz === lead.id}
-                                    className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors disabled:opacity-50"
-                                    title="Ligar via Ana Voz"
+                                    onClick={() => ligarAnaPtlLead(lead)}
+                                    disabled={ligandoAnaPtlLead === lead.id}
+                                    className="flex items-center gap-1 text-xs px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 rounded-lg transition-colors disabled:opacity-50"
+                                    title="Ligar via ANA"
                                   >
-                                    <PhoneCall className="w-4 h-4" />
+                                    <PhoneCall className="w-3 h-3" />
+                                    {ligandoAnaPtlLead === lead.id ? 'Ligando…' : 'Ligar'}
                                   </button>
                                 )}
                                 <button
@@ -989,20 +1009,10 @@ export default function CRMPage() {
                                       onClick={() => ligarAnaPtlRef(ref)}
                                       disabled={ligandoAnaPtlRef === ref.id}
                                       className="flex items-center gap-1 text-xs px-2 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 rounded-lg transition-colors disabled:opacity-50"
-                                      title="ANA PTL — ligação automatizada"
+                                      title="Ligar via ANA"
                                     >
                                       <PhoneCall className="w-3 h-3" />
-                                      {ligandoAnaPtlRef === ref.id ? 'Ligando…' : 'ANA ▶'}
-                                    </button>
-                                  )}
-                                  {ref.telefone && (
-                                    <button
-                                      onClick={() => ligarVoz(ref.telefone!, ref.id)}
-                                      disabled={ligandoVoz === ref.id}
-                                      className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors disabled:opacity-50"
-                                      title="Ligar via VAPI"
-                                    >
-                                      <PhoneCall className="w-4 h-4" />
+                                      {ligandoAnaPtlRef === ref.id ? 'Ligando…' : 'Ligar'}
                                     </button>
                                   )}
                                   {ref.telefone && (

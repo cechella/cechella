@@ -2,9 +2,10 @@ import { RealtimeAgent, RealtimeSession } from '@openai/agents/realtime'
 import { TwilioRealtimeTransportLayer } from '@openai/agents-extensions'
 import { OPENAI_API_KEY, REALTIME_DEFAULTS, APP_URL } from './config.js'
 import { buildTools, SessionRef } from './tools/index.js'
-import { upsertCall, appendTranscript, updateCallStage, endCall, supabase, getVoiceConfig } from './supabase.js'
+import { upsertCall, appendTranscript, updateCallStage, endCall, supabase, getVoiceConfig, buildSessionContext } from './supabase.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
 import { registerSession, unregisterSession } from './session-registry.js'
+import { scheduleCallback } from './redial.js'
 
 async function loadGoldenPrompt(): Promise<string> {
   try {
@@ -160,6 +161,8 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
     }
   }
 
+  let sessionBaseInstructions = ''
+
   // Ana asks about payment method → set flag so auto-PIX knows to watch for "pix"/"cartão"
   let anaAskedPayment = false
   let pixAutoSent = false
@@ -250,6 +253,20 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
       registerSession(callSid, {
         sendEvent: (ev: object) => (transport as any).sendEvent?.(ev)?.catch?.(() => {}),
       })
+
+      // Inject history context and restore in-memory flags if this is a resumed call
+      buildSessionContext(telefone, callSid).then(({ contextBlock, prevState, metodoEscolhido, nomeLead, pagamentoConfirmado }) => {
+        if (contextBlock && sessionBaseInstructions) {
+          ;(transport as any).sendEvent?.({
+            type: 'session.update',
+            session: { instructions: sessionBaseInstructions + contextBlock },
+          })?.catch?.(() => {})
+          console.log(`[ANA MASTER] 📚 contexto injetado prevState=${prevState} callSid=${callSid}`)
+        }
+        if (metodoEscolhido) sessionRef.metodoEscolhido = metodoEscolhido
+        if (nomeLead) sessionRef.nomeLead = nomeLead
+        if (pagamentoConfirmado) pixAutoSent = true
+      }).catch(() => {})
     }
 
     if (msg?.event === 'stop') {
@@ -258,11 +275,13 @@ export async function createAnaMasterSession(twilioWebSocket: unknown, opts: { c
         pushCallEndedEvent(sessionRef.callSid)
         endCall(sessionRef.callSid).catch(() => {})
         unregisterSession(sessionRef.callSid)
+        scheduleCallback(sessionRef.callSid).catch((e: Error) => console.error('[ANA MASTER] scheduleCallback erro:', e.message))
       }
     }
   })
 
   const instructions = await loadGoldenPrompt()
+  sessionBaseInstructions = instructions
   console.log('[ANA MASTER] GOLDEN_PROMPT loaded — length:', instructions.length)
 
   const tools = buildTools(sessionRef)

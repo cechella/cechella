@@ -36,7 +36,7 @@ supabase
               if (r?.token) {
                 saveMemory(call_sid, 'token_indicacao', r.token).catch(() => {})
                 injectReferralLinkSent(call_sid)
-                injectLiveReferralLinkSent(call_sid)
+                injectLiveReferralLinkSent(call_sid, r.token)
               }
             })
             .catch(e => console.error(`[SERVER] referidos link erro: ${e.message}`))
@@ -87,18 +87,19 @@ async function processReferidosUpdate(indicadorPhone: string) {
 
   const { data: refs } = await supabase
     .from('contatos_referidos')
-    .select('profissao, hobby, status')
+    .select('profissao, hobby, status, mensagem_enviada')
     .or(`indicado_por_telefone.eq.${digits},indicado_por_telefone.eq.55${digits},indicado_por_telefone.eq.${bare}`)
 
   if (!refs) return
   const ativos = refs.filter((r: any) => r.status !== 'recusou')
   const semDados = ativos.filter((r: any) => !r.profissao || !r.hobby).length
+  const semMensagem = ativos.filter((r: any) => !r.mensagem_enviada && r.status !== 'mensagem_enviada').length
   const total = ativos.length
-  const missaoCompleta = total >= 20 && semDados === 0
+  const missaoCompleta = total >= 20 && semDados === 0 && semMensagem === 0
 
-  console.log(`[SERVER] 👥 referidos update call_sid=${call.call_sid} total=${total} semDados=${semDados} missaoCompleta=${missaoCompleta}`)
+  console.log(`[SERVER] 👥 referidos update call_sid=${call.call_sid} total=${total} semDados=${semDados} semMensagem=${semMensagem} missaoCompleta=${missaoCompleta}`)
   injectReferidosUpdate(call.call_sid, total, semDados, missaoCompleta)
-  injectLiveReferidosUpdate(call.call_sid, total, semDados, missaoCompleta)
+  injectLiveReferidosUpdate(call.call_sid, total, semDados, semMensagem, missaoCompleta)
 }
 
 function handleReferidosPayload(payload: any) {
@@ -154,7 +155,10 @@ app.post('/twiml', async (req, reply) => {
   // For outbound calls: lead's number is in query.numero (set by /outbound).
   // body.From = Twilio number; body.To = lead number — but query.numero is unambiguous.
   const from = (query?.numero ?? body?.From ?? '').replace(/\D/g, '')
-  const contexto = query?.contexto ?? ''          // passed via URL query from /outbound
+  const contexto = query?.contexto ?? ''
+  const referidor = query?.referidor ?? ''
+  const nome = query?.nome ?? ''
+  const origem = query?.origem ?? ''
   const host = PUBLIC_HOST.replace(/^https?:\/\//, '')
 
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -164,6 +168,9 @@ app.post('/twiml', async (req, reply) => {
       <Parameter name="callSid" value="${callSid}" />
       <Parameter name="from" value="${from}" />
       <Parameter name="contexto" value="${contexto}" />
+      <Parameter name="referidor" value="${referidor}" />
+      <Parameter name="nome" value="${nome}" />
+      <Parameter name="origem" value="${origem}" />
     </Stream>
   </Connect>
 </Response>`
@@ -219,6 +226,8 @@ app.post('/outbound', async (req, reply) => {
   const numero = (body?.numero ?? '').replace(/\D/g, '')
   const referidor = body?.referidor ?? ''
   const contexto = body?.contexto ?? ''
+  const nome = body?.nome ?? ''
+  const origem = body?.origem ?? ''
 
   if (!numero) return reply.status(400).send({ error: 'numero obrigatório' })
 
@@ -228,6 +237,8 @@ app.post('/outbound', async (req, reply) => {
   twimlUrl.searchParams.set('numero', numero)   // lead's number — From/To are swapped in outbound
   if (referidor) twimlUrl.searchParams.set('referidor', referidor)
   if (contexto) twimlUrl.searchParams.set('contexto', contexto)
+  if (nome) twimlUrl.searchParams.set('nome', nome)
+  if (origem) twimlUrl.searchParams.set('origem', origem)
 
   const recordingCallback = `${PUBLIC_HOST}/recording-status`
 
@@ -304,8 +315,9 @@ app.post('/inject-pix-sent', async (req, reply) => {
   const metodo = (body?.metodo ?? 'pix') as 'pix' | 'cartao'
   if (!callSid) return reply.status(400).send({ error: 'callSid obrigatório' })
   const ok = injectPixDataSent(callSid, metodo)
-  console.log(`[SERVER] /inject-pix-sent callSid=${callSid} metodo=${metodo} ok=${ok}`)
-  return reply.send({ ok })
+  const okLive = injectLivePixDataSent(callSid, metodo)
+  console.log(`[SERVER] /inject-pix-sent callSid=${callSid} metodo=${metodo} ok=${ok} okLive=${okLive}`)
+  return reply.send({ ok: ok || okLive })
 })
 
 // SSE live transcript stream — browser connects here to receive real-time turns

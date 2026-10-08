@@ -173,7 +173,7 @@ export async function verifyPaymentByCallSid(callSid: string): Promise<boolean> 
   return !!data
 }
 
-export async function checkReferidos(token: string): Promise<{ total: number; completo: boolean; semDados: number; missaoCompleta: boolean }> {
+export async function checkReferidos(token: string): Promise<{ total: number; completo: boolean; semDados: number; semMensagem: number; missaoCompleta: boolean }> {
   // Resolve phone from leads via token
   const { data: lead } = await supabase
     .from('leads')
@@ -181,23 +181,29 @@ export async function checkReferidos(token: string): Promise<{ total: number; co
     .eq('token_indicacao', token)
     .maybeSingle()
 
-  if (!lead?.telefone) return { total: 0, completo: false, semDados: 20, missaoCompleta: false }
+  if (!lead?.telefone) return { total: 0, completo: false, semDados: 20, semMensagem: 0, missaoCompleta: false }
 
   const phone = String(lead.telefone).replace(/\D/g, '')
+  // Build all plausible formats: exact, with 55 prefix, without 55 prefix, and without double 55
+  const bare = phone.replace(/^55/, '')
+  const with55 = `55${bare}`
+  const variants = [...new Set([phone, with55, bare])]
+  const orClause = variants.map(v => `indicado_por_telefone.eq.${v}`).join(',')
 
   const { data } = await supabase
     .from('contatos_referidos')
-    .select('id, profissao, hobby, status')
-    .or(`indicado_por_telefone.eq.${phone},indicado_por_telefone.eq.55${phone},indicado_por_telefone.eq.${phone.replace(/^55/, '')}`)
+    .select('id, profissao, hobby, status, mensagem_enviada')
+    .or(orClause)
 
-  if (!data || data.length === 0) return { total: 0, completo: false, semDados: 20, missaoCompleta: false }
+  if (!data || data.length === 0) return { total: 0, completo: false, semDados: 20, semMensagem: 0, missaoCompleta: false }
 
   const ativos = data.filter((r: any) => r.status !== 'recusou')
   const semDados = ativos.filter((r: any) => !r.profissao || !r.hobby).length
+  const semMensagem = ativos.filter((r: any) => !r.mensagem_enviada && r.status !== 'mensagem_enviada').length
   const completo = ativos.length >= 20
-  const missaoCompleta = completo && semDados === 0
+  const missaoCompleta = completo && semDados === 0 && semMensagem === 0
 
-  return { total: ativos.length, completo, semDados, missaoCompleta }
+  return { total: ativos.length, completo, semDados, semMensagem, missaoCompleta }
 }
 
 export interface VoiceConfig {
@@ -223,5 +229,83 @@ export async function getVoiceConfig(): Promise<VoiceConfig | null> {
     return data as VoiceConfig | null
   } catch {
     return null
+  }
+}
+
+export type PrevCallState = 'fresh' | 'resume' | 'completed'
+
+export interface SessionContext {
+  prevState: PrevCallState
+  contextBlock: string
+  metodoEscolhido?: 'pix' | 'cartao'
+  nomeLead?: string
+  tokenIndicacao?: string
+  pagamentoConfirmado?: boolean
+}
+
+export async function buildSessionContext(telefone: string, callSid: string): Promise<SessionContext> {
+  try {
+    const norm = telefone.startsWith('55') ? telefone : `55${telefone}`
+    const bare = norm.replace(/^55/, '')
+    const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+    const { data: prevCall } = await supabase
+      .from('ana_calls')
+      .select('call_sid, status, memories, created_at')
+      .or(`telefone.eq.${norm},telefone.eq.${bare}`)
+      .neq('call_sid', callSid)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (!prevCall) return { prevState: 'fresh', contextBlock: '' }
+
+    const memories: Record<string, any> = prevCall.memories ?? {}
+    const isGanho = prevCall.status === 'ganho'
+
+    const { data: pagamento } = await supabase
+      .from('pagamentos')
+      .select('status, metodo')
+      .eq('call_sid', prevCall.call_sid)
+      .eq('status', 'approved')
+      .maybeSingle()
+
+    const pagamentoConfirmado = !!pagamento
+    const metodoEscolhido = (memories.forma_pagamento_escolhida ?? pagamento?.metodo) as 'pix' | 'cartao' | undefined
+    const nomeLead = memories.nome_lead as string | undefined
+    const tokenIndicacao = memories.token_indicacao as string | undefined
+
+    if (isGanho) {
+      const contextBlock = `
+
+--- HISTÓRICO DA LEAD ---
+Esta lead já completou o processo anteriormente (pagamento confirmado + 20 referidos coletados).
+Status: GANHO. Seja calorosa e trate como cliente confirmada.
+${nomeLead ? `Nome: ${nomeLead}` : ''}
+${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
+--- FIM HISTÓRICO ---`
+      return { prevState: 'completed', contextBlock, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }
+    }
+
+    const etapas: string[] = []
+    if (pagamentoConfirmado) etapas.push(`- Pagamento já confirmado via ${metodoEscolhido ?? 'método anterior'}`)
+    else if (metodoEscolhido) etapas.push(`- Lead escolheu ${metodoEscolhido} mas pagamento não foi confirmado`)
+    if (tokenIndicacao) etapas.push('- Link de indicações já foi enviado')
+    if (nomeLead) etapas.push(`- Nome da lead: ${nomeLead}`)
+
+    const contextBlock = `
+
+--- RETOMADA DE LIGAÇÃO ANTERIOR ---
+Esta lead já foi contactada anteriormente mas a ligação caiu antes de concluir.
+Retome de forma natural, sem repetir etapas já concluídas.
+${etapas.join('\n')}
+Contexto: ${pagamentoConfirmado ? 'Pague confirmado — avance para referidos' : metodoEscolhido ? 'Retome o pagamento' : 'Retome desde a apresentação do produto'}
+--- FIM RETOMADA ---`
+
+    return { prevState: 'resume', contextBlock, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }
+  } catch (e: any) {
+    console.error('[CTX] buildSessionContext erro:', e.message)
+    return { prevState: 'fresh', contextBlock: '' }
   }
 }

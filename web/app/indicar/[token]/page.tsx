@@ -193,6 +193,97 @@ function WppTutorial({ step, onPrev, onNext, onConfirm }: { step: number, onPrev
   )
 }
 
+function IncompletosEditor({
+  incompletos,
+  token,
+  onSalvo,
+}: {
+  incompletos: Contato[]
+  token: string
+  onSalvo: (tel: string, profissao: string, hobby: string) => void
+}) {
+  const [campos, setCampos] = useState<Record<string, { profissao: string; hobby: string }>>(
+    () => Object.fromEntries(
+      incompletos.map(c => [c.telefone.replace(/\D/g, ''), { profissao: c.profissao || '', hobby: c.hobby || '' }])
+    )
+  )
+  const [salvando, setSalvando] = useState<Record<string, boolean>>({})
+  const [salvos, setSalvos] = useState<Record<string, boolean>>({})
+
+  const salvar = async (c: Contato) => {
+    const tel = c.telefone.replace(/\D/g, '')
+    const { profissao, hobby } = campos[tel] || {}
+    if (!profissao || !hobby) return
+    setSalvando(prev => ({ ...prev, [tel]: true }))
+    try {
+      await fetch('/api/indicar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, contatos: [{ nome: c.nome, telefone: c.telefone, profissao, hobby }] }),
+      })
+      setSalvos(prev => ({ ...prev, [tel]: true }))
+      onSalvo(tel, profissao, hobby)
+    } finally {
+      setSalvando(prev => ({ ...prev, [tel]: false }))
+    }
+  }
+
+  const pendentes = incompletos.filter(c => !salvos[c.telefone.replace(/\D/g, '')])
+  if (pendentes.length === 0) return null
+
+  return (
+    <div className="max-w-lg mx-auto px-4 mb-6">
+      <div className="rounded-2xl overflow-hidden border border-amber-500/30 bg-amber-500/5">
+        <div className="px-4 py-3 bg-amber-500/10 border-b border-amber-500/20 flex items-center gap-2">
+          <span className="text-amber-400 text-base">⚠️</span>
+          <p className="text-amber-300 text-sm font-semibold">
+            {pendentes.length} contato{pendentes.length > 1 ? 's' : ''} sem profissão/hobby — complete para concluir a missão
+          </p>
+        </div>
+        <div className="divide-y divide-amber-500/10">
+          {pendentes.map(c => {
+            const tel = c.telefone.replace(/\D/g, '')
+            const vals = campos[tel] || { profissao: '', hobby: '' }
+            return (
+              <div key={tel} className="px-4 py-4 space-y-3">
+                <p className="text-white font-semibold text-sm">{c.nome}</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide mb-1 block">Profissão</label>
+                    <input
+                      value={vals.profissao}
+                      onChange={e => setCampos(prev => ({ ...prev, [tel]: { ...prev[tel], profissao: e.target.value } }))}
+                      placeholder="Ex: Enfermeira"
+                      className="w-full bg-[#1A1625] border border-[#2D2640] rounded-xl px-3 py-2 text-white text-sm placeholder-[#4B5563] focus:outline-none focus:border-purple-500/50"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[#9CA3AF] uppercase tracking-wide mb-1 block">Hobby</label>
+                    <input
+                      value={vals.hobby}
+                      onChange={e => setCampos(prev => ({ ...prev, [tel]: { ...prev[tel], hobby: e.target.value } }))}
+                      placeholder="Ex: Yoga"
+                      className="w-full bg-[#1A1625] border border-[#2D2640] rounded-xl px-3 py-2 text-white text-sm placeholder-[#4B5563] focus:outline-none focus:border-purple-500/50"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={() => salvar(c)}
+                  disabled={salvando[tel] || !vals.profissao || !vals.hobby}
+                  className="w-full py-2 rounded-xl font-semibold text-sm transition-all active:scale-95 disabled:opacity-40"
+                  style={{ background: vals.profissao && vals.hobby ? 'linear-gradient(135deg,#10B981,#059669)' : '#374151', color: '#fff' }}
+                >
+                  {salvando[tel] ? 'Salvando…' : '✓ Salvar'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function PaginaIndicacao() {
   const { token } = useParams<{ token: string }>()
   const [indicador, setIndicador] = useState<{ nome: string | null } | null>(null)
@@ -708,6 +799,8 @@ export default function PaginaIndicacao() {
   if (sucesso) {
     const contatosMissao = jaEnviados
     const totalEnviados = Object.values(msgEnviada).filter(Boolean).length
+    const incompletos = jaEnviados.filter(c => !c.profissao || !c.hobby)
+
     return (
       <div className="min-h-screen pb-20" style={{ background: 'linear-gradient(135deg, #0D0B14 0%, #120D1F 100%)' }}>
         <div className="relative overflow-hidden">
@@ -733,6 +826,19 @@ export default function PaginaIndicacao() {
             )}
           </div>
         </div>
+
+        {/* Seção de edição inline para contatos sem profissão/hobby */}
+        {incompletos.length > 0 && (
+          <IncompletosEditor
+            incompletos={incompletos}
+            token={token}
+            onSalvo={(tel, profissao, hobby) => {
+              setJaEnviados(prev => prev.map(c =>
+                c.telefone.replace(/\D/g, '') === tel ? { ...c, profissao, hobby } : c
+              ))
+            }}
+          />
+        )}
 
         <div className="max-w-lg mx-auto px-4 pb-2 space-y-2">
           {totalEnviados < contatosMissao.length && (

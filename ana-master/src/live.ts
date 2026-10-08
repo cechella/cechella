@@ -4,10 +4,11 @@
 
 import WebSocket from 'ws'
 import { OPENAI_API_KEY, APP_URL } from './config.js'
-import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, getMemories, checkReferidos, updateLeadsGanho, supabase } from './supabase.js'
+import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, getMemories, checkReferidos, updateLeadsGanho, supabase, buildSessionContext, endCall } from './supabase.js'
 import { iniciarColetaReferidos, sendWelcome } from './tools/whatsapp.js'
 import { registerLiveSession, unregisterLiveSession } from './live-registry.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
+import { scheduleCallback } from './redial.js'
 
 const LIVE_ENDPOINT = 'wss://api.openai.com/v1/live/sessions'
 
@@ -291,7 +292,7 @@ FERRAMENTAS
 
 solicitar_pagamento({ metodo: "pix"|"cartao", nome_lead: "[nome]" }) — chamar quando a lead confirmar forma de pagamento. Sem falar nada antes nem depois. Aguardar notificação do sistema.
 
-verificar_referidos() — chamar SOMENTE se a lead perguntar quantas amigas foram enviadas e não houver notificação recente. Retorna: total, semDados, missaoCompleta.
+verificar_referidos() — chamar SOMENTE se a lead perguntar quantas amigas foram enviadas e não houver notificação recente. Retorna: total, semDados, semMensagem, missaoCompleta. Se semMensagem > 0, peça para a lead abrir o link e clicar em "Enviar mensagem" para as amigas — assim elas recebem um aviso de que a Ana vai ligar. Se semDados > 0, peça para completar profissão e hobby no link. missaoCompleta só é true quando semDados = 0 e semMensagem = 0.
 
 iniciar_coleta_referidos() — chamar se a lead disser que o link não chegou.
 
@@ -317,7 +318,7 @@ async function loadGoldenPrompt(): Promise<string> {
   return ANA_LIVE_PROMPT_FALLBACK
 }
 
-export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string; earlyQueue?: (Buffer | string)[] } = {}) {
+export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string; referidor?: string; nome?: string; origem?: string; earlyQueue?: (Buffer | string)[] } = {}) {
   const [dbConfig, instructions] = await Promise.all([getVoiceConfig(), loadGoldenPrompt()])
   const voice  = dbConfig?.voice  ?? 'bossa'
   const model  = dbConfig?.model  ?? 'gpt-live-1'
@@ -329,6 +330,12 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let telefone    = ''
   let streamSid   = ''
   let dbInitialized = false
+
+  // Context-ready gate: greeting waits for buildSessionContext before speaking
+  let resolveContextReady!: (ctx: string) => void
+  const contextReadyPromise = new Promise<string>(resolve => { resolveContextReady = resolve })
+  // Safety: if Twilio start never arrives, unblock after 3s
+  setTimeout(() => resolveContextReady(''), 3000)
 
   // Transcript accumulators — no turn-done event in Live, group by silence timer
   let inputBuf  = ''
@@ -343,6 +350,20 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let liveReferralsWaiting = false
   let livePagamentoConfirmado = false
   let liveTokenIndicacao: string | null = null
+  let liveAnaAskedPayment = false
+  let livePixAutoSent = false
+
+  function dispatchAutoPix(metodo: 'pix' | 'cartao') {
+    if (livePixAutoSent || livePagamentoConfirmado) return
+    livePixAutoSent = true
+    liveMetodo = metodo
+    console.log(`[ANA LIVE] 💳 auto-PIX triggered metodo=${metodo} callSid=${callSid}`)
+    fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callSid, telefone, metodo }),
+    }).catch((e: Error) => console.error('[ANA LIVE] auto-PIX fetch error:', e.message))
+  }
 
   function flushInput() {
     const text = inputBuf.trim()
@@ -353,6 +374,14 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
     const lower = text.toLowerCase()
     if (/\bpix\b/.test(lower)) liveMetodo = 'pix'
     if (/\bcart[aã]o\b/.test(lower)) liveMetodo = 'cartao'
+
+    // Auto-PIX: lead says "pix" or "cartão" after Ana asked about payment → dispatch immediately
+    if (!livePixAutoSent && !livePagamentoConfirmado && liveAnaAskedPayment) {
+      let autoMetodo: 'pix' | 'cartao' | null = null
+      if (/\bpix\b|pix\s*(a|à)\s*vista|avista|à\s*vista/i.test(text)) autoMetodo = 'pix'
+      else if (/cart[aã]o|parcel/i.test(lower)) autoMetodo = 'cartao'
+      if (autoMetodo) dispatchAutoPix(autoMetodo)
+    }
 
     // Detect lead name (e.g. "meu nome é Adriana")
     const nameMatch = text.match(/(?:meu nome [eé]|me chamo|sou a?)\s+([A-ZÀ-Ú][a-zà-ú]+)/i)
@@ -384,10 +413,23 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   function flushOutput() {
     const text = outputBuf.trim()
     outputBuf = ''
-    if (text && callSid !== 'unknown') {
+    if (!text) return
+    if (callSid !== 'unknown') {
       console.log('[ANA LIVE] 📝 assistant:', text)
       appendTranscript(callSid, 'assistant', text).catch(() => {})
       pushTranscriptEvent(callSid, 'assistant', text)
+    }
+    // Ana mentioned payment method → arm auto-PIX watch + 10s fallback
+    if (!liveAnaAskedPayment && /pix|cart[aã]o|pagamento|pagar/i.test(text)) {
+      liveAnaAskedPayment = true
+      console.log('[ANA LIVE] 💬 Ana perguntou sobre pagamento — auto-PIX armado (fallback 10s)')
+      setTimeout(() => {
+        if (!livePixAutoSent && callSid !== 'unknown') {
+          const metodo = liveMetodo ?? 'pix'
+          console.log(`[ANA LIVE] ⏰ timeout auto-PIX fallback metodo=${metodo}`)
+          dispatchAutoPix(metodo)
+        }
+      }, 10000)
     }
   }
 
@@ -442,12 +484,39 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
 
       case 'session.started':
         console.log('[ANA LIVE] session.started id=', event.session?.id)
-        // commentary.append = spoken aloud immediately; instructions.append = silent behavior only
-        sendToLive({
-          type: 'session.commentary.append',
-          event_id: 'ana_greet',
-          delegation_id: null,
-          content: 'Oi! Aqui é a ANA, da Hormone Ecosystem. Estou ligando porque você foi indicada por uma amiga nossa que fez o implante hormonal. Tudo bem com você?',
+        // Wait for buildSessionContext before greeting — ensures context is injected first
+        contextReadyPromise.then(contextBlock => {
+          if (contextBlock) {
+            // session.instructions.append não existe na Live API — usamos session.update
+            sendToLive({
+              type: 'session.update',
+              event_id: `ctx_${Date.now()}`,
+              session: {
+                instructions: instructions + `\n\n${contextBlock}`,
+              },
+            })
+            console.log('[ANA LIVE] 📚 contexto injetado via session.update')
+          }
+          sendToLive({
+            type: 'session.commentary.append',
+            event_id: 'ana_greet',
+            delegation_id: null,
+            content: (() => {
+              const oi = opts.nome ? `Oi, ${opts.nome.split(' ')[0]}!` : 'Oi!'
+              const base = `${oi} Aqui é a ANA, consultora executiva do consultório do Dr. Vinícius Cechella, da Hormone Ecosystem.`
+              if (opts.referidor) return `${base} Estou ligando porque a ${opts.referidor} nos indicou você com muito carinho. Tudo bem com você?`
+              const origemMap: Record<string, string> = {
+                instagram: 'vi que você nos encontrou pelo Instagram',
+                landing_page: 'vi que você veio pelo nosso site',
+                site: 'vi que você veio pelo nosso site',
+                whatsapp: 'você entrou em contato pelo nosso WhatsApp',
+                google: 'vi que você nos encontrou pelo Google',
+              }
+              const origemFrase = opts.origem ? origemMap[opts.origem.toLowerCase()] : undefined
+              if (origemFrase) return `${base} Estou ligando porque ${origemFrase} e demostrou interesse no implante hormonal. Tudo bem com você?`
+              return `${base} Estou ligando porque você demonstrou interesse no implante hormonal. Tudo bem com você?`
+            })(),
+          })
         })
         break
 
@@ -457,7 +526,9 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         flushOutput()
         if (callSid !== 'unknown') {
           pushCallEndedEvent(callSid)
+          endCall(callSid).catch(() => {})
           unregisterLiveSession(callSid)
+          scheduleCallback(callSid).catch((e: Error) => console.error('[ANA LIVE] scheduleCallback erro:', e.message))
         }
         break
 
@@ -515,12 +586,17 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
                   .then(({ error }: any) => { if (error) console.error('[ANA LIVE PAG] nome_lead erro:', error.message) })
               }
 
-              // Send PIX/card link via web API
-              await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ callSid, telefone, metodo: liveMetodo }),
-              }).catch((e: Error) => console.log(`[ANA LIVE PAG] send error: ${e.message}`))
+              // Send PIX/card link via web API — skip if auto-PIX already dispatched it
+              if (!livePixAutoSent) {
+                await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ callSid, telefone, metodo: liveMetodo }),
+                }).catch((e: Error) => console.log(`[ANA LIVE PAG] send error: ${e.message}`))
+              } else {
+                console.log(`[ANA LIVE PAG] auto-PIX já enviado — ignorando fetch, aguardando confirmação`)
+              }
+              livePixAutoSent = true
 
               await saveMemory(callSid, 'forma_pagamento_escolhida', liveMetodo).catch(() => {})
 
@@ -535,16 +611,17 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
               // Wait for payment confirmation via Supabase Realtime (up to 5 min)
               const paid = await new Promise<boolean>((resolve) => {
                 let settled = false
+                let channel: any
                 const finish = (result: boolean) => {
                   if (settled) return
                   settled = true
                   clearTimeout(timer)
-                  supabase.removeChannel(channel).catch(() => {})
+                  if (channel) supabase.removeChannel(channel).catch(() => {})
                   console.log(`[ANA LIVE PAG] ${result ? '✅ confirmado' : '⏰ timeout'} callSid=${callSid}`)
                   resolve(result)
                 }
                 const timer = setTimeout(() => finish(false), 5 * 60 * 1000)
-                const channel = supabase
+                channel = supabase
                   .channel(`livepag:${callSid}`)
                   .on('postgres_changes' as any,
                     { event: 'UPDATE', schema: 'public', table: 'pagamentos', filter: `call_sid=eq.${callSid}` },
@@ -750,14 +827,37 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
           ?? msg.start?.customParameters?.callSid
           ?? `stream_${streamSid}`
         telefone  = String(msg.start?.customParameters?.from ?? '').replace(/\D/g, '')
+        // Override opts.referidor with the value passed through TwiML parameters (most reliable source)
+        const paramReferidor = String(msg.start?.customParameters?.referidor ?? '').trim()
+        const paramNome = String(msg.start?.customParameters?.nome ?? '').trim()
+        const paramOrigem = String(msg.start?.customParameters?.origem ?? '').trim()
+        opts = {
+          ...opts,
+          ...(paramReferidor ? { referidor: paramReferidor } : {}),
+          ...(paramNome ? { nome: paramNome } : {}),
+          ...(paramOrigem ? { origem: paramOrigem } : {}),
+        }
 
-        console.log(`[ANA LIVE] start callSid=${callSid} telefone=${telefone} streamSid=${streamSid} raw_keys=${Object.keys(msg.start ?? {}).join(',')}`)
+        console.log(`[ANA LIVE] start callSid=${callSid} telefone=${telefone} referidor=${opts.referidor ?? ''} streamSid=${streamSid} raw_keys=${Object.keys(msg.start ?? {}).join(',')}`)
 
         upsertCall(callSid, telefone).catch(() => {})
         saveMemory(callSid, 'telefone', telefone).catch(() => {})
         saveMemory(callSid, 'voice_stack', 'live').catch(() => {})
 
-        registerLiveSession(callSid, { sendToLive })
+        registerLiveSession(callSid, {
+          sendToLive,
+          setTokenIndicacao: (token: string) => { liveTokenIndicacao = token },
+        })
+
+        // Inject history context and restore in-memory flags if this is a resumed call
+        buildSessionContext(telefone, callSid).then(({ contextBlock, prevState, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }) => {
+          console.log(`[ANA LIVE] 📚 buildSessionContext prevState=${prevState} hasContext=${!!contextBlock} callSid=${callSid}`)
+          if (metodoEscolhido) liveMetodo = metodoEscolhido
+          if (nomeLead) liveNomeLead = nomeLead
+          if (tokenIndicacao) liveTokenIndicacao = tokenIndicacao
+          if (pagamentoConfirmado) { livePagamentoConfirmado = true; livePixAutoSent = true }
+          resolveContextReady(contextBlock)
+        }).catch(() => { resolveContextReady('') })
         break
 
       case 'media':

@@ -107,12 +107,6 @@ async function saveReferidos(telefoneLead: string, contacts: Record<string, unkn
         _trigger: 'meta_referidos',
       }),
     }).catch(() => {})
-  } else if (newTotal < meta) {
-    const faltam = meta - newTotal
-    await zapiSend(
-      telefoneLead,
-      `✅ Recebi ${saved} contato${saved > 1 ? 's' : ''}! Você já tem ${newTotal} de ${meta} indicadas.\n💜 Faltam apenas ${faltam} para garantir seu acesso — continue enviando!`
-    )
   }
 }
 
