@@ -432,6 +432,18 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         if (!liveEtapa7SpeechFired) {
           liveEtapa7SpeechFired = true
           console.log('[ANA LIVE] ✅ WAIT_FOR_YES confirmado — disparando speech etapa 7 (uma vez)')
+          // Inject permanent state lock FIRST so model never restarts E7 on future turns
+          sendToLive({
+            type: 'session.thinking.append',
+            event_id: `etapa7_lock_${Date.now()}`,
+            delegation_id: null,
+            content: JSON.stringify({
+              estado_permanente: 'REFERIDOS_EM_ANDAMENTO',
+              fala_melhores_decisoes: 'JA_DITA_AGORA — NUNCA_REPETIR',
+              favor_pedido: 'JA_PEDIDO_E_CONFIRMADO — NUNCA_REPETIR',
+              regra_absoluta: 'Nunca mais diga "você acabou de receber um link" nem "Posso te pedir um favor" nem repita a fala de melhores decisoes. A partir daqui APENAS comente o progresso dos contatos recebidos ou aguarde em silencio.',
+            }),
+          })
           sendToLive({
             type: 'session.commentary.append',
             event_id: `etapa7_speech_${Date.now()}`,
