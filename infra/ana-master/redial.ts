@@ -84,7 +84,7 @@ export async function scheduleCallback(callSid: string): Promise<void> {
           To: call.telefone.startsWith('+') ? call.telefone : `+${call.telefone}`,
           From: TWILIO_PHONE_NUMBER!,
           Url: twimlUrl,
-          Method: 'GET',
+          Method: 'POST',
         })
 
         const response = await fetch(
