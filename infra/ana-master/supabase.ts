@@ -97,6 +97,21 @@ export async function executeGateTransition(
 
 // setCallStatusGanho is now handled inside gate_transition RPC for GATE_VALIDACAO.
 // This function remains only to update the leads table after GATE_VALIDACAO passes.
+const etapaAgente: Record<string, number> = {
+  apresentacao: 1, conexao: 2, di: 3, speech: 4,
+  fechamento: 5, referidos: 6, validacao: 7, ganho: 8,
+}
+
+export async function updateLeadEtapa(telefone: string, etapa: string) {
+  const t = String(telefone).replace(/\D/g, '')
+  const bare = t.replace(/^55/, '')
+  const num = etapaAgente[etapa] ?? 1
+  await supabase
+    .from('leads')
+    .update({ etapa, etapa_agente: num, updated_at: new Date().toISOString() })
+    .or(`telefone.eq.${t},telefone.eq.55${bare},telefone.eq.${bare}`)
+}
+
 export async function updateLeadsGanho(callSid: string) {
   const { data } = await supabase.from('ana_calls').select('telefone').eq('call_sid', callSid).single()
   if (data?.telefone) {

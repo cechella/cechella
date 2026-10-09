@@ -4,7 +4,7 @@
 
 import WebSocket from 'ws'
 import { OPENAI_API_KEY, APP_URL } from './config.js'
-import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, getMemories, checkReferidos, updateLeadsGanho, supabase, buildSessionContext, endCall, getLeadByPhone } from './supabase.js'
+import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, getMemories, checkReferidos, updateLeadsGanho, updateLeadEtapa, supabase, buildSessionContext, endCall, getLeadByPhone } from './supabase.js'
 import { iniciarColetaReferidos, sendWelcome } from './tools/whatsapp.js'
 import { registerLiveSession, unregisterLiveSession } from './live-registry.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
@@ -468,11 +468,9 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         const etapasMap: Record<number, string> = { 2: 'conexao', 3: 'di', 4: 'speech', 5: 'fechamento' }
         const etapaStr = etapasMap[nextEtapa]
         console.log(`[ANA LIVE] 📊 pipeline frase → etapa=${etapaStr} callSid=${callSid}`)
-        fetch(`${APP_URL}/api/vapi/update-etapa`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ telefone, etapa: etapaStr, callSid }),
-        }).catch((e: Error) => console.error('[ANA LIVE] pipeline etapa error:', e.message))
+        if (etapaStr && telefone) {
+          updateLeadEtapa(telefone, etapaStr).catch((e: Error) => console.error('[ANA LIVE] pipeline etapa error:', e.message))
+        }
       }
     }
 
@@ -722,11 +720,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
                 // E6 referidos: avança pipeline apenas na confirmação real do pagamento
                 if (livePipelineEtapa < 6 && telefone) {
                   livePipelineEtapa = 6
-                  fetch(`${APP_URL}/api/vapi/update-etapa`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ telefone, etapa: 'referidos', callSid }),
-                  }).catch((e: Error) => console.error('[ANA LIVE] pipeline referidos error:', e.message))
+                  updateLeadEtapa(telefone, 'referidos').catch((e: Error) => console.error('[ANA LIVE] pipeline referidos error:', e.message))
                 }
 
                 // Inject paid result + trigger WAIT_FOR_YES phrase
@@ -1029,11 +1023,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             // Resume call already past payment — put pipeline at referidos
             if (livePipelineEtapa < 6 && telefone) {
               livePipelineEtapa = 6
-              fetch(`${APP_URL}/api/vapi/update-etapa`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ telefone, etapa: 'referidos', callSid }),
-              }).catch((e: Error) => console.error('[ANA LIVE] pipeline referidos resume error:', e.message))
+              updateLeadEtapa(telefone, 'referidos').catch((e: Error) => console.error('[ANA LIVE] pipeline referidos resume error:', e.message))
             }
           }
           resolveContextReady(contextBlock)
