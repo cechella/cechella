@@ -61,11 +61,14 @@ export function injectLiveReferralLinkSent(callSid: string, token?: string): boo
   }
   // Mark token in session state so delegation handler won't send the link again
   if (token) ref.setTokenIndicacao(token)
+  // NOTE: Do NOT instruct Ana to "ask" or "wait for confirmation" here —
+  // WAIT_FOR_YES is already handled in code. This commentary only tells Ana
+  // the link arrived so she can teach the lead how to import contacts.
   ref.sendToLive({
     type: 'session.commentary.append',
     event_id: `referral_link_${Date.now()}`,
     delegation_id: null,
-    content: 'O link de indicações foi enviado no WhatsApp da lead. Pergunte se ela conhece amigas que também podem se beneficiar do tratamento. Aguarde a confirmação positiva dela. Somente após ela confirmar, diga que o link já chegou no WhatsApp dela. Explique: abrir o link, tocar em Importar amigas pelo WhatsApp, selecionar as amigas e enviar. Meta: 20 indicações.',
+    content: 'O link de indicações chegou no WhatsApp da lead. O favor já foi pedido e confirmado — NÃO repita "Posso te pedir um favor?" nem a fala de melhores decisões. Apenas aguarde a lead abrir o link e ensine: tocar em "Importar amigas pelo WhatsApp", selecionar as amigas e enviar. Meta: 20 indicações.',
   })
   return true
 }
