@@ -1079,9 +1079,11 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             saveMemory(callSid, 'nome_lead', nomeLead).catch(() => {})
           }
           // Only restore token on resumed calls — for fresh calls let iniciar_coleta_referidos create it
+          // Do NOT set liveReferidosNotificados here: lead may not have sent any contacts yet.
+          // Ana will ask the lead first (per contextBlock instruction) and only call verificar_referidos
+          // after the lead confirms they opened the portal. Supabase Realtime will set it when contacts arrive.
           if (tokenIndicacao && !liveTokenIndicacao && prevState === 'resume') {
             liveTokenIndicacao = tokenIndicacao
-            liveReferidosNotificados = true  // resumed call: contacts may already exist, allow verificar
             saveMemory(callSid, 'token_indicacao', tokenIndicacao).catch(() => {})
           }
           if (pagamentoConfirmado) {

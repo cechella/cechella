@@ -306,8 +306,19 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
     const etapas: string[] = []
     if (pagamentoConfirmado) etapas.push(`- Pagamento já confirmado via ${metodoEscolhido ?? 'método anterior'}`)
     else if (metodoEscolhido) etapas.push(`- Lead escolheu ${metodoEscolhido} mas pagamento não foi confirmado`)
-    if (tokenIndicacao) etapas.push('- Link de indicações já foi enviado')
+    if (tokenIndicacao) etapas.push('- Link de indicações já foi enviado no WhatsApp')
     if (nomeLead) etapas.push(`- Nome da lead: ${nomeLead}`)
+
+    let proximoPasso: string
+    if (!pagamentoConfirmado && metodoEscolhido) {
+      proximoPasso = 'Retome o pagamento — pergunte se chegou o PIX/link no WhatsApp.'
+    } else if (pagamentoConfirmado && !tokenIndicacao) {
+      proximoPasso = 'Pagamento confirmado. Peça o favor das indicações (WAIT_FOR_YES) e aguarde o sistema enviar o link.'
+    } else if (pagamentoConfirmado && tokenIndicacao) {
+      proximoPasso = 'Pagamento confirmado e link de indicações enviado. PRIMEIRO pergunte à lead se ela chegou a abrir o link e enviar contatos antes de cair a ligação. NÃO assuma que enviou. NÃO chame verificar_referidos antes de confirmar com ela. Se ela ainda não enviou, oriente passo a passo. Se já enviou, chame verificar_referidos para ver o progresso.'
+    } else {
+      proximoPasso = 'Retome desde a apresentação do produto.'
+    }
 
     const contextBlock = `
 
@@ -315,7 +326,7 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
 Esta lead já foi contactada anteriormente mas a ligação caiu antes de concluir.
 Retome de forma natural, sem repetir etapas já concluídas.
 ${etapas.join('\n')}
-Contexto: ${pagamentoConfirmado ? 'Pague confirmado — avance para referidos' : metodoEscolhido ? 'Retome o pagamento' : 'Retome desde a apresentação do produto'}
+Próximo passo: ${proximoPasso}
 --- FIM RETOMADA ---`
 
     return { prevState: 'resume', contextBlock, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }
