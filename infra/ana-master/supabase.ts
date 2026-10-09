@@ -264,32 +264,45 @@ export async function buildSessionContext(telefone: string, callSid: string): Pr
     const bare = norm.replace(/^55/, '')
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-    const { data: prevCall } = await supabase
+    // Fetch all recent calls for this number — payment/token may be on an older call
+    const { data: prevCalls } = await supabase
       .from('ana_calls')
       .select('call_sid, status, memories, created_at')
       .or(`telefone.eq.${norm},telefone.eq.${bare}`)
       .neq('call_sid', callSid)
       .gte('created_at', since)
       .order('created_at', { ascending: false })
+      .limit(20)
+
+    if (!prevCalls || prevCalls.length === 0) return { prevState: 'fresh', contextBlock: '' }
+
+    const prevCall = prevCalls[0] // most recent for status/memories baseline
+    const allCallSids = prevCalls.map((c: any) => c.call_sid)
+
+    const memories: Record<string, any> = prevCall.memories ?? {}
+    const isGanho = prevCalls.some((c: any) => c.status === 'ganho')
+
+    // Look for approved payment across ALL recent calls
+    const { data: pagamento } = await supabase
+      .from('pagamentos')
+      .select('status, metodo, call_sid')
+      .in('call_sid', allCallSids)
+      .eq('status', 'approved')
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 
-    if (!prevCall) return { prevState: 'fresh', contextBlock: '' }
-
-    const memories: Record<string, any> = prevCall.memories ?? {}
-    const isGanho = prevCall.status === 'ganho'
-
-    const { data: pagamento } = await supabase
-      .from('pagamentos')
-      .select('status, metodo')
-      .eq('call_sid', prevCall.call_sid)
-      .eq('status', 'approved')
-      .maybeSingle()
-
     const pagamentoConfirmado = !!pagamento
-    const metodoEscolhido = (memories.forma_pagamento_escolhida ?? pagamento?.metodo) as 'pix' | 'cartao' | undefined
-    const nomeLead = memories.nome_lead as string | undefined
-    const tokenIndicacao = memories.token_indicacao as string | undefined
+
+    // Merge memories across all calls — most recent wins, but pick up token/nome from any call
+    const mergedMemories: Record<string, any> = {}
+    for (const c of [...prevCalls].reverse()) {
+      Object.assign(mergedMemories, c.memories ?? {})
+    }
+
+    const metodoEscolhido = (mergedMemories.forma_pagamento_escolhida ?? pagamento?.metodo) as 'pix' | 'cartao' | undefined
+    const nomeLead = mergedMemories.nome_lead as string | undefined
+    const tokenIndicacao = mergedMemories.token_indicacao as string | undefined
 
     if (isGanho) {
       const contextBlock = `
