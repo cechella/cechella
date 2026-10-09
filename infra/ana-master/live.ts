@@ -505,13 +505,13 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
     if (callSid !== 'unknown' && telefone) {
       let nextEtapa = 0
       // E2 conexao: Ana explora rotina, sintomas, dia a dia da lead
-      if (livePipelineEtapa < 2 && /me conta|como [eé] (a sua|o seu|tua|teu|o teu|o seu)|como (voc[eê]|tu) (est[aá]|tem se|faz|sente)|o que (te |voc[eê] )?(incomoda|chama aten|percebe|traz)|que sintoma|rotina|dia a dia|dia-a-dia|tem se sentido|no teu corpo|no seu corpo/i.test(text)) nextEtapa = 2
-      // E3 di: Ana propõe o combinado (proposta de escuta mútua)
-      if (livePipelineEtapa < 3 && /vamos fazer um combinado|se fizer sentido pra voc[eê]|se n[aã]o fizer sentido|me d[aá] um sim|e se n[aã]o fizer|voc[eê] me diz um sim|a gente avan[çc]a|continuamos amigas|\bcombinad[oa]\b/i.test(text)) nextEtapa = 3
-      // E4 speech: Ana apresenta o implante (pellet, grão de arroz, debaixo da pele)
-      if (livePipelineEtapa < 4 && /gr[aã]o de arroz|pellet|debaixo da pele|regi[aã]o gl[uú]tea|liber(a|ando) horm[oô]nios (de forma |)cont[ií]nu|implante hormonal.*colocado|colocado.*debaixo|tamanho.*gr[aã]o/i.test(text)) nextEtapa = 4
-      // E5 fechamento: Ana apresenta o investimento e pergunta forma de pagamento
-      if (livePipelineEtapa < 5 && /investimento [eé] de|cinco mil|5[.\s]?000|como voc[eê] prefere|pix ou cart[aã]o|prefer[eê] (fazer|pagar)|vou te enviar os dados|vou te mandar o link/i.test(text)) nextEtapa = 5
+      if (livePipelineEtapa === 1 && /me conta|como [eé] (a sua|o seu|tua|teu|o teu|o seu)|como (voc[eê]|tu) (est[aá]|tem se|faz|sente)|o que (te |voc[eê] )?(incomoda|chama aten|percebe|traz)|que sintoma|rotina|dia a dia|dia-a-dia|tem se sentido|no teu corpo|no seu corpo/i.test(text)) nextEtapa = 2
+      // E3 di: Ana propõe o combinado — só avança se já está em E2
+      if (livePipelineEtapa === 2 && /vamos fazer um combinado|se fizer sentido pra voc[eê]|se n[aã]o fizer sentido|me d[aá] um sim|e se n[aã]o fizer|voc[eê] me diz um sim|a gente avan[çc]a|continuamos amigas|\bcombinad[oa]\b/i.test(text)) nextEtapa = 3
+      // E4 speech: Ana apresenta o implante — só avança se já está em E3
+      if (livePipelineEtapa === 3 && /gr[aã]o de arroz|pellet|debaixo da pele|regi[aã]o gl[uú]tea|liber(a|ando) horm[oô]nios (de forma |)cont[ií]nu|implante hormonal.*colocado|colocado.*debaixo|tamanho.*gr[aã]o/i.test(text)) nextEtapa = 4
+      // E5 fechamento: Ana apresenta o investimento — só avança se já está em E4
+      if (livePipelineEtapa === 4 && /investimento [eé] de|cinco mil|5[.\s]?000|como voc[eê] prefere|pix ou cart[aã]o|prefer[eê] (fazer|pagar)|vou te enviar os dados|vou te mandar o link/i.test(text)) nextEtapa = 5
 
       if (nextEtapa > livePipelineEtapa) {
         livePipelineEtapa = nextEtapa
