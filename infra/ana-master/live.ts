@@ -276,7 +276,7 @@ GUIA PASSO A PASSO (use quando a lead precisar de ajuda, um passo de cada vez):
   Passo 1: "Você viu o vídeo e as instruções que chegaram no WhatsApp? É só seguir ali. Toca no link do portal."
   Passo 2 (no portal): "Você está vendo o botão verde 'Importar amigas pelo WhatsApp'? Toca nele."
   Passo 3 (modal): "Vai aparecer uma pergunta pra abrir no WhatsApp — confirma tocando em Abrir."
-           (Se tiver WA Business): "Pode aparecer 'Abrir no WhatsApp Business' — confirma."
+           (Se tiver WA Business): "Se aparecerem duas opções — WhatsApp Business em cima e WhatsApp embaixo — abre no de baixo, o WhatsApp normal."
   Passo 4 (no WhatsApp): "Agora você está na conversa. Toca no + que fica à esquerda da caixa de texto."
   Passo 5 (menu): "Vai abrir um menu. Escolhe a opção 'Contato'."
   Passo 6 (lista): "Agora busca o nome das suas amigas e vai tocando em cada uma pra marcar. Pode selecionar várias de uma vez!"
