@@ -4,7 +4,7 @@
 
 import WebSocket from 'ws'
 import { OPENAI_API_KEY, APP_URL } from './config.js'
-import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, getMemories, checkReferidos, updateLeadsGanho, supabase, buildSessionContext, endCall } from './supabase.js'
+import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, getMemories, checkReferidos, updateLeadsGanho, supabase, buildSessionContext, endCall, getLeadByPhone } from './supabase.js'
 import { iniciarColetaReferidos, sendWelcome } from './tools/whatsapp.js'
 import { registerLiveSession, unregisterLiveSession } from './live-registry.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
@@ -914,6 +914,20 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         saveMemory(callSid, 'telefone', telefone).catch(() => {})
         saveMemory(callSid, 'voice_stack', 'live').catch(() => {})
 
+        // Pre-load lead name and token from DB immediately — don't wait for regex capture
+        getLeadByPhone(telefone).then(lead => {
+          if (lead?.nome && !liveNomeLead) {
+            liveNomeLead = lead.nome
+            saveMemory(callSid, 'nome_lead', lead.nome).catch(() => {})
+            console.log(`[ANA LIVE] 👤 nome_lead carregado do banco: ${lead.nome}`)
+          }
+          if (lead?.token_indicacao && !liveTokenIndicacao) {
+            liveTokenIndicacao = lead.token_indicacao
+            saveMemory(callSid, 'token_indicacao', lead.token_indicacao).catch(() => {})
+            console.log(`[ANA LIVE] 🔑 token_indicacao carregado do banco: ${lead.token_indicacao}`)
+          }
+        }).catch(() => {})
+
         registerLiveSession(callSid, {
           sendToLive,
           setTokenIndicacao: (token: string) => { liveTokenIndicacao = token },
@@ -923,8 +937,14 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         buildSessionContext(telefone, callSid).then(({ contextBlock, prevState, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }) => {
           console.log(`[ANA LIVE] 📚 buildSessionContext prevState=${prevState} hasContext=${!!contextBlock} callSid=${callSid}`)
           if (metodoEscolhido) liveMetodo = metodoEscolhido
-          if (nomeLead) liveNomeLead = nomeLead
-          if (tokenIndicacao) liveTokenIndicacao = tokenIndicacao
+          if (nomeLead && !liveNomeLead) {
+            liveNomeLead = nomeLead
+            saveMemory(callSid, 'nome_lead', nomeLead).catch(() => {})
+          }
+          if (tokenIndicacao && !liveTokenIndicacao) {
+            liveTokenIndicacao = tokenIndicacao
+            saveMemory(callSid, 'token_indicacao', tokenIndicacao).catch(() => {})
+          }
           if (pagamentoConfirmado) { livePagamentoConfirmado = true; livePixAutoSent = true }
           resolveContextReady(contextBlock)
         }).catch(() => { resolveContextReady('') })
