@@ -353,6 +353,8 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let liveAnaAskedPayment = false
   let livePixAutoSent = false
   let liveRecusaDefinitiva = false
+  let liveEtapa7SpeechFired = false
+  let liveLastSemDados = -1
 
   function dispatchAutoPix(metodo: 'pix' | 'cartao') {
     if (livePixAutoSent || livePagamentoConfirmado) return
@@ -403,13 +405,18 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
       if (isYes) {
         liveWaitForYes = false
         liveReferralsWaiting = true
-        console.log('[ANA LIVE] ✅ WAIT_FOR_YES confirmado — disparando speech etapa 7')
-        sendToLive({
-          type: 'session.commentary.append',
-          event_id: `etapa7_speech_${Date.now()}`,
-          delegation_id: null,
-          content: 'Você acabou de tomar uma das melhores decisões da sua saúde. Tenho certeza que você conhece outras mulheres passando pelo mesmo que você passou — ondas de calor, cansaço, sono ruim, falta de energia... Vou te ensinar agora como me mandar os contatos direto pelo WhatsApp. É super fácil. Pode abrir o link que chegou aí?',
-        })
+        if (!liveEtapa7SpeechFired) {
+          liveEtapa7SpeechFired = true
+          console.log('[ANA LIVE] ✅ WAIT_FOR_YES confirmado — disparando speech etapa 7 (uma vez)')
+          sendToLive({
+            type: 'session.commentary.append',
+            event_id: `etapa7_speech_${Date.now()}`,
+            delegation_id: null,
+            content: 'Você acabou de tomar uma das melhores decisões da sua saúde. Tenho certeza que você conhece outras mulheres passando pelo mesmo que você passou — ondas de calor, cansaço, sono ruim, falta de energia... Vou te ensinar agora como me mandar os contatos direto pelo WhatsApp. É super fácil. Pode abrir o link que chegou aí?',
+          })
+        } else {
+          console.log('[ANA LIVE] ⚠️ WAIT_FOR_YES confirmado novamente — speech já disparado, ignorando')
+        }
       }
     }
 
@@ -787,7 +794,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
                 : JSON.stringify({
                     ...ref,
                     instrucao: ref.semDados > 0
-                      ? `NÃO reinicie a ETAPA 7. NÃO reenvie o link. Apenas diga: "Ficou ótimo! Mas tem ${ref.semDados} amiga${ref.semDados > 1 ? 's' : ''} sem profissão preenchida — consegue completar no link? É rapidinho." Depois aguarde a resposta.`
+                      ? `NÃO reinicie a ETAPA 7. NÃO reenvie o link. Apenas diga a frase abaixo e aguarde.`
                       : ref.semMensagem > 0
                         ? `NÃO reinicie a ETAPA 7. Peça para a lead abrir o link e clicar em "Enviar mensagem" para as amigas.`
                         : undefined,
@@ -798,6 +805,20 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
                 delegation_id: delegationId,
                 content: resultPayload,
               })
+
+              // When semDados > 0, inject exact scripted commentary so model cannot drift back to Etapa 7
+              if (!ref.missaoCompleta && ref.semDados > 0) {
+                const alreadySaid = liveLastSemDados === ref.semDados
+                liveLastSemDados = ref.semDados
+                sendToLive({
+                  type: 'session.commentary.append',
+                  event_id: `ver_semdados_${Date.now()}`,
+                  delegation_id: null,
+                  content: alreadySaid
+                    ? `Aguardando você completar a profissão das ${ref.semDados} amiga${ref.semDados > 1 ? 's' : ''} no link. Consegue fazer isso agora?`
+                    : `Ficou ótimo! Mas tem ${ref.semDados} amiga${ref.semDados > 1 ? 's' : ''} sem profissão preenchida — consegue completar no link? É rapidinho.`,
+                })
+              }
             } catch (e: any) {
               console.error('[ANA LIVE REF] verificar erro:', e.message)
               sendToLive({
