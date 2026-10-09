@@ -352,6 +352,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let liveTokenIndicacao: string | null = null
   let liveAnaAskedPayment = false
   let livePixAutoSent = false
+  let liveRecusaDefinitiva = false
 
   function dispatchAutoPix(metodo: 'pix' | 'cartao') {
     if (livePixAutoSent || livePagamentoConfirmado) return
@@ -386,6 +387,15 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
     // Detect lead name (e.g. "meu nome é Adriana")
     const nameMatch = text.match(/(?:meu nome [eé]|me chamo|sou a?)\s+([A-ZÀ-Ú][a-zà-ú]+)/i)
     if (nameMatch) liveNomeLead = nameMatch[1]
+
+    // Detect definitive refusal
+    if (!liveRecusaDefinitiva && !livePagamentoConfirmado) {
+      const frasesRecusa = ['não tenho interesse','nao tenho interesse','não vou fazer','nao vou fazer','já decidi que não','ja decidi que nao','desisto','deixa pra lá','deixa pra la','não quero mais','nao quero mais','para de insistir','chega','não me interessa','nao me interessa','não é pra mim','nao e pra mim']
+      if (frasesRecusa.some(fr => lower.includes(fr))) {
+        liveRecusaDefinitiva = true
+        console.log('[ANA LIVE] 🚫 recusa definitiva detectada')
+      }
+    }
 
     // WAIT_FOR_YES: detect confirmation after "Posso te pedir um favor?"
     if (liveWaitForYes) {
@@ -713,6 +723,34 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
               sendToLive({
                 type: 'session.thinking.append',
                 event_id: `ref_err_${Date.now()}`,
+                delegation_id: delegationId,
+                content: `{"ok":false,"erro":"${e.message}"}`,
+              })
+            }
+          })()
+
+        } else if (liveRecusaDefinitiva && !livePagamentoConfirmado) {
+          // ── registrar_recusa ──────────────────────────────────────────────
+          ;(async () => {
+            try {
+              console.log(`[ANA LIVE RECUSA] registrando recusa telefone=${telefone}`)
+              const telClean = telefone.replace(/\D/g, '')
+              await fetch(`${APP_URL}/api/admin/ana-master/recusa-referidos`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ callSid, telefone: telClean, nome: liveNomeLead ?? '' }),
+              }).catch((e: Error) => console.log(`[ANA LIVE RECUSA] send error: ${e.message}`))
+              sendToLive({
+                type: 'session.thinking.append',
+                event_id: `recusa_${Date.now()}`,
+                delegation_id: delegationId,
+                content: JSON.stringify({ ok: true, recusa: true, mensagem_whatsapp_enviada: true }),
+              })
+            } catch (e: any) {
+              console.error('[ANA LIVE RECUSA] erro:', e.message)
+              sendToLive({
+                type: 'session.thinking.append',
+                event_id: `recusa_err_${Date.now()}`,
                 delegation_id: delegationId,
                 content: `{"ok":false,"erro":"${e.message}"}`,
               })
