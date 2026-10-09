@@ -82,16 +82,20 @@ export function injectLiveReferidosUpdate(callSid: string, total: number, semDad
 
   // When total >= 20, semDados = 0 and only messages remain: stay silent.
   // The lead is sending messages from the web — injecting commentary on every send creates a loop.
-  // Only speak when missaoCompleta or when contacts/data are still missing.
-  if (total >= 20 && semDados === 0 && !missaoCompleta) {
+  // Only speak when missaoCompleta or when contacts/data/messages are still missing.
+  if (total >= 20 && semDados === 0 && semMensagem === 0 && !missaoCompleta) {
     return true
   }
 
   let content: string
   if (missaoCompleta) {
     content = `Perfeito, missão cumprida! Você indicou 20 amigas — nossa equipe vai entrar em contato com cada uma. Foi um prazer enorme falar com você!`
+  } else if (total >= 20 && semDados > 0 && semMensagem > 0) {
+    content = `Ficou ótimo! Você enviou ${total} amigas — meta batida! Mas ${semDados} ainda estão sem profissão preenchida e ${semMensagem} ainda não receberam a mensagem. Consegue completar no link? É rapidinho.`
   } else if (total >= 20 && semDados > 0) {
     content = `Ficou ótimo! Você enviou ${total} amigas — meta batida! Mas ${semDados} ainda estão sem profissão preenchida. Consegue completar no link? É rapidinho.`
+  } else if (total >= 20 && semMensagem > 0) {
+    content = `Ótimo, você enviou ${total} amigas! Mas ${semMensagem} ainda não receberam a mensagem de convite. Abre o link e toca em "Enviar mensagem" pra elas — assim nossa equipe vai poder ligar.`
   } else if (total < 20) {
     content = `Você enviou ${total} de 20 amigas. Faltam ${20 - total}. Consegue selecionar mais?`
   } else {
