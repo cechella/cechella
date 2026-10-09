@@ -89,8 +89,10 @@ export function injectLiveReferidosUpdate(callSid: string, total: number, semDad
     content = `Perfeito, missão cumprida! Você indicou 20 amigas — nossa equipe vai entrar em contato com cada uma. Foi um prazer enorme falar com você!`
   } else if (total >= 20 && semDados > 0) {
     content = `Ficou ótimo! Você enviou ${total} amigas — meta batida! Mas ${semDados} ainda estão sem profissão preenchida. Consegue completar no link? É rapidinho.`
-  } else {
+  } else if (total < 20) {
     content = `Você enviou ${total} de 20 amigas. Faltam ${20 - total}. Consegue selecionar mais?`
+  } else {
+    return true
   }
   // commentary.append: Ana speaks this immediately when contacts arrive (no delegation needed)
   return send(callSid, {
