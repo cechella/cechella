@@ -353,6 +353,8 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let liveAnaAskedPayment = false
   let livePixAutoSent = false
   let liveRecusaDefinitiva = false
+  let liveRecusaFavorAceito = false
+  let liveRecusaRegistrada = false
   let liveEtapa7SpeechFired = false
   let liveLastSemDados = -1
   let liveReferidosNotificados = false  // true only after Supabase Realtime fires (contacts actually arrived)
@@ -397,6 +399,15 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
       if (frasesRecusa.some(fr => lower.includes(fr))) {
         liveRecusaDefinitiva = true
         console.log('[ANA LIVE] 🚫 recusa definitiva detectada')
+      }
+    }
+
+    // RECUSA FAVOR: detect "sim" after Ana asks "posso te pedir um favor especial?" on refusal path
+    if (liveRecusaDefinitiva && !liveRecusaFavorAceito && !liveRecusaRegistrada) {
+      const isYesFavor = /\b(sim|claro|pode|ok|com certeza|lógico|logico|vai|certo|topo|toparia|por que não|por que nao|claro que sim|pode sim)\b/.test(lower)
+      if (isYesFavor) {
+        liveRecusaFavorAceito = true
+        console.log('[ANA LIVE] 🤝 lead aceitou favor pós-recusa — registrar_recusa desbloqueado')
       }
     }
 
@@ -737,8 +748,9 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             }
           })()
 
-        } else if (liveRecusaDefinitiva && !livePagamentoConfirmado) {
+        } else if (liveRecusaFavorAceito && !livePagamentoConfirmado && !liveRecusaRegistrada) {
           // ── registrar_recusa ──────────────────────────────────────────────
+          liveRecusaRegistrada = true
           ;(async () => {
             try {
               console.log(`[ANA LIVE RECUSA] registrando recusa telefone=${telefone}`)
