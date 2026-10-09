@@ -657,6 +657,21 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
           if (isRetomada && livePagamentoConfirmado && !liveTokenIndicacao) {
             liveWaitForYes = true
           }
+
+          // Retomada with token already sent: lock model to prevent repeating E7 sales speech
+          if (isRetomada && livePagamentoConfirmado && liveTokenIndicacao) {
+            sendToLive({
+              type: 'session.thinking.append',
+              event_id: `retomada_lock_${Date.now()}`,
+              delegation_id: null,
+              content: JSON.stringify({
+                estado: 'RETOMADA_REFERIDOS',
+                favor_ja_pedido_e_confirmado: true,
+                link_ja_enviado: true,
+                instrucao: 'NAO diga "voce acabou de tomar uma das melhores decisoes" — isso ja foi dito. NAO repita o discurso de vendas. Apenas pergunte se ela abriu o link e ensine o passo a passo: tocar em Importar amigas pelo WhatsApp, selecionar amigas, enviar. Meta: 20 indicacoes.',
+              }),
+            })
+          }
         })
         break
 
