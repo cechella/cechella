@@ -244,7 +244,7 @@ Gatilho: receber paid:true.
 Fala obrigatória (1 única frase): "[Nome], você acabou de receber um link no seu WhatsApp. Posso te pedir um favor?"
 Depois: WAIT_FOR_YES — permaneça em silêncio até a lead responder claramente.
 
-Após confirmação: "Você acabou de tomar uma das melhores decisões da sua saúde. Tenho certeza que você conhece outras mulheres passando pelo mesmo que você passou — ondas de calor, cansaço, sono ruim, falta de energia... Vou te ensinar agora como me mandar os contatos direto pelo WhatsApp. É super fácil. Pode abrir o link que chegou aí?"
+Após confirmação: o sistema enviará automaticamente o texto desta fala via notificação. Permaneça em SILÊNCIO TOTAL até a notificação chegar — não antecipe, não improvise, não repita. Esta fala só é dita UMA vez, quando a notificação chegar.
 Depois: WAIT_LINK_OPEN — aguardar em silêncio até a lead confirmar que abriu o link.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -393,7 +393,11 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
 
     // Detect lead name (e.g. "meu nome é Adriana")
     const nameMatch = text.match(/(?:meu nome [eé]|me chamo|sou a?)\s+([A-ZÀ-Ú][a-zà-ú]+)/i)
-    if (nameMatch) liveNomeLead = nameMatch[1]
+    if (nameMatch && !liveNomeLead) {
+      liveNomeLead = nameMatch[1]
+      if (callSid !== 'unknown') saveMemory(callSid, 'nome_lead', liveNomeLead).catch(() => {})
+      console.log(`[ANA LIVE] 👤 nome capturado da fala: ${liveNomeLead}`)
+    }
 
     // Detect definitive refusal
     if (!liveRecusaDefinitiva && !livePagamentoConfirmado) {
@@ -716,10 +720,11 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
               if (paid) {
                 livePagamentoConfirmado = true
                 liveWaitForYes = true
-                console.log(`[ANA LIVE PAG] ✅ pago — WAIT_FOR_YES ativado callSid=${callSid}`)
+                console.log(`[ANA LIVE PAG] ✅ pago — WAIT_FOR_YES ativado callSid=${callSid} telefone=${telefone}`)
                 // E6 referidos: avança pipeline apenas na confirmação real do pagamento
                 if (livePipelineEtapa < 6 && telefone) {
                   livePipelineEtapa = 6
+                  console.log(`[ANA LIVE PAG] 📊 atualizando pipeline E6 referidos telefone=${telefone}`)
                   updateLeadEtapa(telefone, 'referidos').catch((e: Error) => console.error('[ANA LIVE] pipeline referidos error:', e.message))
                 }
 
@@ -968,12 +973,16 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         const paramReferidor = String(msg.start?.customParameters?.referidor ?? '').trim()
         const paramNome = String(msg.start?.customParameters?.nome ?? '').trim()
         const paramOrigem = String(msg.start?.customParameters?.origem ?? '').trim()
+        const paramContexto = String(msg.start?.customParameters?.contexto ?? '').trim()
         opts = {
           ...opts,
           ...(paramReferidor ? { referidor: paramReferidor } : {}),
           ...(paramNome ? { nome: paramNome } : {}),
           ...(paramOrigem ? { origem: paramOrigem } : {}),
+          ...(paramContexto ? { contexto: paramContexto } : {}),
         }
+        // Also pre-seed nome from TwiML param if not yet set
+        if (paramNome && !liveNomeLead) liveNomeLead = paramNome
 
         console.log(`[ANA LIVE] start callSid=${callSid} telefone=${telefone} referidor=${opts.referidor ?? ''} streamSid=${streamSid} raw_keys=${Object.keys(msg.start ?? {}).join(',')}`)
 
