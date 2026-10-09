@@ -534,7 +534,8 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
     }
 
     // Ana mentioned payment method → arm auto-PIX watch + 10s fallback
-    if (!liveAnaAskedPayment && /pix|cart[aã]o|pagamento|pagar/i.test(text)) {
+    // Skip if token already sent (retomada from referidos — link was already delivered)
+    if (!liveAnaAskedPayment && !liveTokenIndicacao && /pix|cart[aã]o|pagamento|pagar/i.test(text)) {
       liveAnaAskedPayment = true
       console.log('[ANA LIVE] 💬 Ana perguntou sobre pagamento — auto-PIX armado (fallback 10s)')
       setTimeout(() => {
