@@ -4,7 +4,7 @@
 
 import WebSocket from 'ws'
 import { OPENAI_API_KEY, APP_URL } from './config.js'
-import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, getMemories, checkReferidos, updateLeadsGanho, updateLeadEtapa, supabase, buildSessionContext, endCall, getLeadByPhone } from './supabase.js'
+import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, getMemories, checkReferidos, updateLeadsGanho, updateLeadEtapa, updateCallStage, supabase, buildSessionContext, endCall, getLeadByPhone } from './supabase.js'
 import { iniciarColetaReferidos, sendWelcome } from './tools/whatsapp.js'
 import { registerLiveSession, unregisterLiveSession } from './live-registry.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
@@ -474,6 +474,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         console.log(`[ANA LIVE] 📊 pipeline frase → etapa=${etapaStr} callSid=${callSid}`)
         if (etapaStr && telefone) {
           updateLeadEtapa(telefone, etapaStr).catch((e: Error) => console.error('[ANA LIVE] pipeline etapa error:', e.message))
+          updateCallStage(callSid, etapaStr).catch((e: Error) => console.error('[ANA LIVE] pipeline call stage error:', e.message))
         }
       }
     }
@@ -726,6 +727,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
                   livePipelineEtapa = 6
                   console.log(`[ANA LIVE PAG] 📊 atualizando pipeline E6 referidos telefone=${telefone}`)
                   updateLeadEtapa(telefone, 'referidos').catch((e: Error) => console.error('[ANA LIVE] pipeline referidos error:', e.message))
+                  updateCallStage(callSid, 'referidos').catch((e: Error) => console.error('[ANA LIVE] pipeline referidos call stage error:', e.message))
                 }
 
                 // Inject paid result + trigger WAIT_FOR_YES phrase
@@ -1033,6 +1035,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             if (livePipelineEtapa < 6 && telefone) {
               livePipelineEtapa = 6
               updateLeadEtapa(telefone, 'referidos').catch((e: Error) => console.error('[ANA LIVE] pipeline referidos resume error:', e.message))
+              updateCallStage(callSid, 'referidos').catch((e: Error) => console.error('[ANA LIVE] pipeline referidos resume call stage error:', e.message))
             }
           }
           resolveContextReady(contextBlock)
