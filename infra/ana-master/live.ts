@@ -611,20 +611,19 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             })
             console.log('[ANA LIVE] 📚 contexto injetado via session.update')
           }
+          const nomeReal = liveNomeLead ?? opts.nome ?? ''
+          const primeiro = nomeReal ? nomeReal.split(' ')[0] : ''
+          const oi = primeiro ? `Oi, ${primeiro}!` : 'Oi!'
+          const base = `${oi} Aqui é a ANA, consultora executiva do consultório do Dr. Vinícius Cechella, da Hormone Ecosystem.`
+          const isRetomada = opts.contexto === 'retomada' || liveIsRetomada
+
           sendToLive({
             type: 'session.commentary.append',
             event_id: 'ana_greet',
             delegation_id: null,
             content: (() => {
-              // Use nome_lead from DB/context if available, fallback to TwiML param
-              const nomeReal = liveNomeLead ?? opts.nome ?? ''
-              const primeiro = nomeReal ? nomeReal.split(' ')[0] : ''
-              const oi = primeiro ? `Oi, ${primeiro}!` : 'Oi!'
-              const base = `${oi} Aqui é a ANA, consultora executiva do consultório do Dr. Vinícius Cechella, da Hormone Ecosystem.`
-
               // Retomada: ligação anterior caiu — greeting de retorno
-              // Fires for explicit retomada param OR when buildSessionContext detected history (prevState set via closure)
-              if (opts.contexto === 'retomada' || liveIsRetomada) {
+              if (isRetomada) {
                 return primeiro
                   ? `${oi} Aqui é a ANA, do consultório do Dr. Vinícius Cechella. A nossa ligação caiu antes de terminar — tudo bem com você?`
                   : `Oi! Aqui é a ANA, do consultório do Dr. Vinícius Cechella. A nossa ligação caiu antes de terminar — tudo bem com você?`
@@ -643,6 +642,26 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
               return `${base} Estou ligando porque você demonstrou interesse no implante hormonal. Tudo bem com você?`
             })(),
           })
+
+          // Retomada with payment confirmed + link sent: inject scripted follow-up after greeting
+          // so Ana resumes exactly at E7 instead of drifting back to E2 (rotina/sintomas)
+          if (isRetomada && livePagamentoConfirmado && liveTokenIndicacao) {
+            sendToLive({
+              type: 'session.commentary.append',
+              event_id: `retomada_e7_${Date.now()}`,
+              delegation_id: null,
+              content: `Que bom! Então continuando de onde a gente parou — ${primeiro ? primeiro + ', você' : 'você'} acabou de tomar uma das melhores decisões da sua saúde. Tenho certeza que você conhece outras mulheres que também merecem se sentir assim. Você chegou a abrir o link que te mandei no WhatsApp?`,
+            })
+          } else if (isRetomada && livePagamentoConfirmado && !liveTokenIndicacao) {
+            // Payment confirmed but link not yet sent — go back to WAIT_FOR_YES
+            liveWaitForYes = true
+            sendToLive({
+              type: 'session.commentary.append',
+              event_id: `retomada_e6_${Date.now()}`,
+              delegation_id: null,
+              content: `Que bom! Então, confirmei aqui o seu pagamento — tudo certo! Posso te pedir um favor?`,
+            })
+          }
         })
         break
 
