@@ -345,7 +345,8 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
 
   // Tool state — tracks conversation progress for delegation routing
   let liveMetodo: 'pix' | 'cartao' | null = null
-  let liveNomeLead: string | null = null
+  // Pre-seed nome from TwiML param so greeting uses it even before buildSessionContext resolves
+  let liveNomeLead: string | null = opts.nome?.trim() || null
   let liveWaitForYes = false
   let liveReferralsWaiting = false
   let livePagamentoConfirmado = false
@@ -358,6 +359,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let liveEtapa7SpeechFired = false
   let liveLastSemDados = -1
   let liveReferidosNotificados = false  // true only after Supabase Realtime fires (contacts actually arrived)
+  let livePipelineEtapa = 1  // tracks last etapa pushed to leads table (1=apresentacao)
 
   function dispatchAutoPix(metodo: 'pix' | 'cartao') {
     if (livePixAutoSent || livePagamentoConfirmado) return
@@ -448,6 +450,34 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
       appendTranscript(callSid, 'assistant', text).catch(() => {})
       pushTranscriptEvent(callSid, 'assistant', text)
     }
+    // Pipeline keyword detection — advance leads.etapa based on what Ana says
+    if (callSid !== 'unknown' && telefone) {
+      const lower2 = text.toLowerCase()
+      let nextEtapa = 0
+      // E2 conexao: Ana pergunta sobre rotina/profissão
+      if (livePipelineEtapa < 2 && /rotina|como[eé] o seu dia|como[eé] a sua rotina|o que voc[eê] faz da vida|me conta sobre voc[eê]/i.test(text)) nextEtapa = 2
+      // E3 di: Ana propõe combinado
+      if (livePipelineEtapa < 3 && /combinado|se fizer sentido|se n[aã]o fizer sentido|me d[aá] um sim/i.test(text)) nextEtapa = 3
+      // E4 speech: Ana fala do pellet/implante
+      if (livePipelineEtapa < 4 && /gr[aã]o de arroz|pellet|debaixo da pele|libera horm[oô]nios/i.test(text)) nextEtapa = 4
+      // E5 fechamento: Ana pergunta forma de pagamento
+      if (livePipelineEtapa < 5 && /pix ou cart[aã]o|prefer[eê] fazer|como voc[eê] prefere pagar|forma de pagamento/i.test(text)) nextEtapa = 5
+      // E6 referidos: Ana pede indicações
+      if (livePipelineEtapa < 6 && /conhece alguma amiga|indica[çc][aã]o|indicar amigas|posso te pedir um favor/i.test(text)) nextEtapa = 6
+
+      if (nextEtapa > livePipelineEtapa) {
+        livePipelineEtapa = nextEtapa
+        const etapasMap: Record<number, string> = { 2: 'conexao', 3: 'di', 4: 'speech', 5: 'fechamento', 6: 'referidos' }
+        const etapaStr = etapasMap[nextEtapa]
+        console.log(`[ANA LIVE] 📊 pipeline keyword → etapa=${etapaStr} callSid=${callSid}`)
+        fetch(`${APP_URL}/api/vapi/update-etapa`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ telefone, etapa: etapaStr, callSid }),
+        }).catch((e: Error) => console.error('[ANA LIVE] pipeline etapa error:', e.message))
+      }
+    }
+
     // Ana mentioned payment method → arm auto-PIX watch + 10s fallback
     if (!liveAnaAskedPayment && /pix|cart[aã]o|pagamento|pagar/i.test(text)) {
       liveAnaAskedPayment = true
