@@ -622,8 +622,17 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             event_id: 'ana_greet',
             delegation_id: null,
             content: (() => {
-              // Retomada: ligação anterior caiu — greeting de retorno
+              // Retomada: ligação anterior caiu — greeting varia conforme estado
               if (isRetomada) {
+                // Pagamento confirmado + link enviado: retomar direto em E7
+                if (livePagamentoConfirmado && liveTokenIndicacao) {
+                  return `${oi} Aqui é a ANA, do consultório do Dr. Vinícius Cechella. A nossa ligação caiu, mas ${primeiro ? primeiro + ', ' : ''}seu pagamento foi confirmado — parabéns! Te enviei o link de indicações no WhatsApp. Você chegou a abrir ele?`
+                }
+                // Pagamento confirmado mas link ainda não enviado: retomar em WAIT_FOR_YES
+                if (livePagamentoConfirmado) {
+                  return `${oi} Aqui é a ANA, do consultório do Dr. Vinícius Cechella. A nossa ligação caiu, mas ${primeiro ? primeiro + ', ' : ''}seu pagamento foi confirmado — parabéns! Posso te pedir um favor?`
+                }
+                // Ligação caiu antes do pagamento
                 return primeiro
                   ? `${oi} Aqui é a ANA, do consultório do Dr. Vinícius Cechella. A nossa ligação caiu antes de terminar — tudo bem com você?`
                   : `Oi! Aqui é a ANA, do consultório do Dr. Vinícius Cechella. A nossa ligação caiu antes de terminar — tudo bem com você?`
@@ -643,24 +652,9 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             })(),
           })
 
-          // Retomada with payment confirmed + link sent: inject scripted follow-up after greeting
-          // so Ana resumes exactly at E7 instead of drifting back to E2 (rotina/sintomas)
-          if (isRetomada && livePagamentoConfirmado && liveTokenIndicacao) {
-            sendToLive({
-              type: 'session.commentary.append',
-              event_id: `retomada_e7_${Date.now()}`,
-              delegation_id: null,
-              content: `Que bom! Então continuando de onde a gente parou — ${primeiro ? primeiro + ', você' : 'você'} acabou de tomar uma das melhores decisões da sua saúde. Tenho certeza que você conhece outras mulheres que também merecem se sentir assim. Você chegou a abrir o link que te mandei no WhatsApp?`,
-            })
-          } else if (isRetomada && livePagamentoConfirmado && !liveTokenIndicacao) {
-            // Payment confirmed but link not yet sent — go back to WAIT_FOR_YES
+          // Retomada with payment confirmed but no link yet: activate WAIT_FOR_YES
+          if (isRetomada && livePagamentoConfirmado && !liveTokenIndicacao) {
             liveWaitForYes = true
-            sendToLive({
-              type: 'session.commentary.append',
-              event_id: `retomada_e6_${Date.now()}`,
-              delegation_id: null,
-              content: `Que bom! Então, confirmei aqui o seu pagamento — tudo certo! Posso te pedir um favor?`,
-            })
           }
         })
         break
