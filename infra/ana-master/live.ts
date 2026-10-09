@@ -247,6 +247,12 @@ Depois: WAIT_FOR_YES — permaneça em silêncio até a lead responder clarament
 Após confirmação: o sistema enviará automaticamente o texto desta fala via notificação. Permaneça em SILÊNCIO TOTAL até a notificação chegar — não antecipe, não improvise, não repita. Esta fala só é dita UMA vez, quando a notificação chegar.
 Depois: WAIT_LINK_OPEN — aguardar em silêncio até a lead confirmar que abriu o link.
 
+ESTADO REFERIDOS_EM_ANDAMENTO: ativado após a lead confirmar o favor. Neste estado:
+- NUNCA repita "Posso te pedir um favor?" — isso já foi dito e confirmado.
+- NUNCA repita a fala de "melhores decisões" — já foi dita UMA vez.
+- Quando chegar notificação de contatos recebidos, comente apenas o progresso (ex: "Ótimo! Você enviou X amigas, faltam Y. Consegue selecionar mais?").
+- Permaneça neste estado até missaoCompleta = true.
+
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ETAPA 8 — ENCERRAMENTO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

@@ -94,6 +94,18 @@ export function injectLiveReferidosUpdate(callSid: string, total: number, semDad
   } else {
     return true
   }
+  // Lock state before commentary: prevent Ana from restarting "Posso te pedir um favor?" flow
+  send(callSid, {
+    type: 'session.thinking.append',
+    event_id: `ref_lock_${Date.now()}`,
+    delegation_id: null,
+    content: JSON.stringify({
+      estado: 'REFERIDOS_EM_ANDAMENTO',
+      link_enviado: true,
+      favor_ja_pedido_e_confirmado: true,
+      instrucao: 'NAO repita "Posso te pedir um favor?" nem a fala de melhores decisoes. Voce ja disse isso. Apenas comente o progresso dos contatos recebidos.',
+    }),
+  })
   // commentary.append: Ana speaks this immediately when contacts arrive (no delegation needed)
   return send(callSid, {
     type: 'session.commentary.append',
