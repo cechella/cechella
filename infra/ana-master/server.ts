@@ -1,0 +1,387 @@
+import Fastify from 'fastify'
+import websocket from '@fastify/websocket'
+import { PORT, PUBLIC_HOST } from './config.js'
+import { createAnaMasterSession } from './realtime.js'
+import { createAnaLiveSession } from './live.js'
+import { registerSseClient } from './sse-registry.js'
+import { supabase, saveMemory, getVoiceConfig } from './supabase.js'
+import { injectPaymentConfirmed, injectReferralLinkSent, injectPixDataSent, injectReferidosUpdate } from './session-registry.js'
+import { injectLivePaymentConfirmed, injectLiveReferralLinkSent, injectLivePixDataSent, injectLiveReferidosUpdate } from './live-registry.js'
+import { iniciarColetaReferidos } from './tools/whatsapp.js'
+
+const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
+const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN!
+const TWILIO_PHONE_NUMBER = process.env.TWILIO_PHONE_NUMBER!
+
+const app = Fastify({ logger: true })
+
+await app.register(websocket)
+
+// Global payment confirmation listener — fires as soon as MercadoPago webhook updates pagamentos.status=approved.
+// Injects a context message into the active Realtime session so Ana reacts naturally without any blocking.
+supabase
+  .channel('payment-confirmations')
+  .on(
+    'postgres_changes' as any,
+    { event: 'UPDATE', schema: 'public', table: 'pagamentos' },
+    (payload: any) => {
+      const { call_sid, status, lead_telefone } = payload.new ?? {}
+      if (status === 'approved' && call_sid) {
+        console.log(`[SERVER] 💰 pagamento aprovado call_sid=${call_sid} — enviando link referidos + injetando confirmação`)
+        // Auto-send referral link via WhatsApp before injecting into session
+        if (lead_telefone) {
+          iniciarColetaReferidos(lead_telefone)
+            .then(r => {
+              console.log(`[SERVER] referidos link enviado token=${r?.token ?? 'null'}`)
+              if (r?.token) {
+                saveMemory(call_sid, 'token_indicacao', r.token).catch(() => {})
+                injectReferralLinkSent(call_sid)
+                injectLiveReferralLinkSent(call_sid, r.token)
+              }
+            })
+            .catch(e => console.error(`[SERVER] referidos link erro: ${e.message}`))
+        }
+        injectPaymentConfirmed(call_sid)
+        injectLivePaymentConfirmed(call_sid)
+      }
+    },
+  )
+  .subscribe((status: string) => {
+    console.log(`[SERVER] payment listener status=${status}`)
+  })
+
+// PIX/cartão data sent listener — fires as soon as a new payment row is inserted in pagamentos.
+// Same pattern as payment-confirmations: Supabase Realtime → inject into active session, no HTTP dependency.
+supabase
+  .channel('pix-data-sent')
+  .on(
+    'postgres_changes' as any,
+    { event: 'INSERT', schema: 'public', table: 'pagamentos' },
+    (payload: any) => {
+      const { call_sid, metodo } = payload.new ?? {}
+      if (call_sid && metodo) {
+        console.log(`[SERVER] 💳 PIX/cartão inserido call_sid=${call_sid} metodo=${metodo} — injetando notificação`)
+        injectPixDataSent(call_sid, metodo as 'pix' | 'cartao')
+        injectLivePixDataSent(call_sid, metodo as 'pix' | 'cartao')
+      }
+    },
+  )
+  .subscribe((status: string) => {
+    console.log(`[SERVER] pix-data-sent listener status=${status}`)
+  })
+
+// Debounce map: phone → timer. Accumulates rapid INSERTs into a single injection after 4 s.
+const referidosDebounce = new Map<string, ReturnType<typeof setTimeout>>()
+
+async function processReferidosUpdate(indicadorPhone: string) {
+  const digits = String(indicadorPhone).replace(/\D/g, '')
+  const bare = digits.replace(/^55/, '')
+  const { data: call } = await supabase
+    .from('ana_calls')
+    .select('call_sid')
+    .eq('em_ligacao', true)
+    .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${bare}`)
+    .maybeSingle()
+
+  if (!call?.call_sid) return
+
+  const { data: refs } = await supabase
+    .from('contatos_referidos')
+    .select('profissao, hobby, status, mensagem_enviada')
+    .or(`indicado_por_telefone.eq.${digits},indicado_por_telefone.eq.55${digits},indicado_por_telefone.eq.${bare}`)
+
+  if (!refs) return
+  const ativos = refs.filter((r: any) => r.status !== 'recusou')
+  const semDados = ativos.filter((r: any) => !r.profissao || !r.hobby).length
+  const semMensagem = ativos.filter((r: any) => !r.mensagem_enviada && r.status !== 'mensagem_enviada').length
+  const total = ativos.length
+  const missaoCompleta = total >= 20 && semDados === 0 && semMensagem === 0
+
+  console.log(`[SERVER] 👥 referidos update call_sid=${call.call_sid} total=${total} semDados=${semDados} semMensagem=${semMensagem} missaoCompleta=${missaoCompleta}`)
+  injectReferidosUpdate(call.call_sid, total, semDados, missaoCompleta)
+  injectLiveReferidosUpdate(call.call_sid, total, semDados, semMensagem, missaoCompleta)
+}
+
+function handleReferidosPayload(payload: any) {
+  const indicadorPhone = (payload.new?.indicado_por_telefone ?? payload.old?.indicado_por_telefone) as string | undefined
+  if (!indicadorPhone) return
+  const key = String(indicadorPhone).replace(/\D/g, '')
+  const existing = referidosDebounce.get(key)
+  if (existing) clearTimeout(existing)
+  const timer = setTimeout(() => {
+    referidosDebounce.delete(key)
+    processReferidosUpdate(indicadorPhone).catch(e =>
+      console.error(`[SERVER] referidos update error: ${e.message}`)
+    )
+  }, 4000)
+  referidosDebounce.set(key, timer)
+}
+
+// Referidos real-time listener — INSERT (new contact) + UPDATE (profissao/hobby filled in).
+// Debounced: rapid events accumulate for 4 s and trigger a single injection.
+supabase
+  .channel('referidos-inserts')
+  .on('postgres_changes' as any, { event: 'INSERT', schema: 'public', table: 'contatos_referidos' }, handleReferidosPayload)
+  .on('postgres_changes' as any, { event: 'UPDATE', schema: 'public', table: 'contatos_referidos' }, handleReferidosPayload)
+  .subscribe((status: string) => {
+    console.log(`[SERVER] referidos listener status=${status}`)
+  })
+
+// Parse Twilio's application/x-www-form-urlencoded webhook bodies
+// Must be registered BEFORE any routes that consume this content type
+app.addContentTypeParser(
+  'application/x-www-form-urlencoded',
+  { parseAs: 'string' },
+  (_req, body, done) => {
+    try {
+      done(null, Object.fromEntries(new URLSearchParams(body as string)))
+    } catch (err: any) {
+      done(err)
+    }
+  },
+)
+
+app.get('/health', async () => ({
+  ok: true,
+  service: 'ana-master',
+  ts: new Date().toISOString(),
+}))
+
+// Twilio webhook — returns TwiML connecting call to Media Stream WebSocket
+app.post('/twiml', async (req, reply) => {
+  const body = req.body as Record<string, string>
+  const query = req.query as Record<string, string>
+  const callSid = body?.CallSid ?? 'unknown'
+  // For outbound calls: lead's number is in query.numero (set by /outbound).
+  // body.From = Twilio number; body.To = lead number — but query.numero is unambiguous.
+  const from = (query?.numero ?? body?.From ?? '').replace(/\D/g, '')
+  const contexto = query?.contexto ?? ''
+  const referidor = query?.referidor ?? ''
+  const nome = query?.nome ?? ''
+  const origem = query?.origem ?? ''
+  const host = PUBLIC_HOST.replace(/^https?:\/\//, '')
+
+  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Connect>
+    <Stream url="wss://${host}/media-stream">
+      <Parameter name="callSid" value="${callSid}" />
+      <Parameter name="from" value="${from}" />
+      <Parameter name="contexto" value="${contexto}" />
+      <Parameter name="referidor" value="${referidor}" />
+      <Parameter name="nome" value="${nome}" />
+      <Parameter name="origem" value="${origem}" />
+    </Stream>
+  </Connect>
+</Response>`
+
+  reply.header('Content-Type', 'text/xml')
+  return reply.send(twiml)
+})
+
+// Twilio Media Streams WebSocket handler
+app.get('/media-stream', { websocket: true }, async (socket, req) => {
+  const query = req.query as Record<string, string>
+  const contexto = query?.contexto ?? ''
+  app.log.info({ contexto }, 'Twilio Media Stream connected')
+
+  const rawWs = (socket as any).socket
+
+  // Buffer Twilio messages synchronously before any await — prevents 'start' event being dropped
+  const earlyQueue: (Buffer | string)[] = []
+  const earlyListener = (data: Buffer | string) => earlyQueue.push(data)
+  rawWs.on('message', earlyListener)
+
+  // Feature flag: read voice_stack from Supabase Gold Config (or env fallback)
+  const dbConfig = await getVoiceConfig().catch(() => null)
+  const voiceStack = dbConfig?.voice_stack ?? process.env.ANA_VOICE_STACK ?? 'realtime'
+
+  app.log.info({ voiceStack }, 'ANA voice stack selected')
+
+  rawWs.off('message', earlyListener)
+
+  if (voiceStack === 'live') {
+    createAnaLiveSession(rawWs, { contexto, earlyQueue })
+      .then(() => { app.log.info('ANA LIVE session started') })
+      .catch((err: unknown) => {
+        app.log.error({ err }, 'Failed to start Live session — closing stream')
+        socket.destroy()
+      })
+  } else {
+    createAnaMasterSession(rawWs, { contexto, earlyQueue })
+      .then(() => { app.log.info({ contexto }, 'ANA MASTER session started') })
+      .catch((err: unknown) => {
+        app.log.error({ err }, 'Failed to start RealtimeSession — closing stream')
+        socket.destroy()
+      })
+  }
+
+  socket.on('close', () => { app.log.info('Media Stream closed') })
+  socket.on('error', (err: Error) => { app.log.error({ err }, 'Media Stream error') })
+})
+
+// Outbound call — Admin dispara ligação para lead
+app.post('/outbound', async (req, reply) => {
+  const body = req.body as Record<string, string>
+  const numero = (body?.numero ?? '').replace(/\D/g, '')
+  const referidor = body?.referidor ?? ''
+  const contexto = body?.contexto ?? ''
+  const nome = body?.nome ?? ''
+  const origem = body?.origem ?? ''
+
+  if (!numero) return reply.status(400).send({ error: 'numero obrigatório' })
+
+  const to = numero.startsWith('+') ? numero : `+${numero}`
+
+  const twimlUrl = new URL(`${PUBLIC_HOST}/twiml`)
+  twimlUrl.searchParams.set('numero', numero)   // lead's number — From/To are swapped in outbound
+  if (referidor) twimlUrl.searchParams.set('referidor', referidor)
+  if (contexto) twimlUrl.searchParams.set('contexto', contexto)
+  if (nome) twimlUrl.searchParams.set('nome', nome)
+  if (origem) twimlUrl.searchParams.set('origem', origem)
+
+  const recordingCallback = `${PUBLIC_HOST}/recording-status`
+
+  const params = new URLSearchParams({
+    To: to,
+    From: TWILIO_PHONE_NUMBER,
+    Url: twimlUrl.toString(),
+    Method: 'POST',
+    Record: 'true',
+    RecordingChannels: 'dual',
+    RecordingStatusCallback: recordingCallback,
+    RecordingStatusCallbackMethod: 'POST',
+  })
+
+  const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Calls.json`
+  const auth = Buffer.from(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`).toString('base64')
+
+  const res = await fetch(twilioUrl, {
+    method: 'POST',
+    headers: { Authorization: `Basic ${auth}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  })
+
+  const data = await res.json() as any
+  if (!res.ok) return reply.status(res.status).send({ error: data?.message ?? 'Twilio error' })
+
+  app.log.info({ sid: data.sid, to }, 'Outbound call initiated')
+
+  // Garante que o lead existe na tabela leads antes da ligação começar
+  // Sem isso, o CRM fica vazio quando o banco está zerado
+  // telefone não tem UNIQUE constraint — não podemos usar upsert, usamos insert condicional
+  const phone = numero.startsWith('55') ? numero : `55${numero}`
+  const bare = phone.replace(/^55/, '')
+  const { supabase: sb } = await import('./supabase.js')
+  const { data: existingLead } = await sb.from('leads').select('id')
+    .or(`telefone.eq.${phone},telefone.eq.${bare}`)
+    .maybeSingle()
+  if (!existingLead) {
+    await sb.from('leads').insert({
+      telefone: phone, etapa: 'apresentacao', etapa_agente: 1, origem: 'ptl',
+    })
+  }
+
+  return reply.send({ ok: true, sid: data.sid, status: data.status })
+})
+
+
+// Twilio recording status callback — saves audio URL to Supabase when recording is ready
+app.post('/recording-status', async (req, reply) => {
+  const body = req.body as Record<string, string>
+  const callSid = body?.CallSid
+  const status = body?.RecordingStatus
+  const url = body?.RecordingUrl
+
+  app.log.info({ callSid, status, url }, 'Recording status callback')
+
+  if (status === 'completed' && callSid && url) {
+    const audioUrl = `${url}.mp3`
+    const { saveMemory } = await import('./supabase.js')
+    await saveMemory(callSid, 'audio_url', audioUrl).catch((e: unknown) =>
+      app.log.error({ e }, 'Failed to save recording URL')
+    )
+    app.log.info({ callSid, audioUrl }, 'Recording URL saved')
+  }
+
+  return reply.status(204).send()
+})
+
+// Internal endpoint — called by web/Vercel route after sending PIX/cartão data to lead's WhatsApp
+// Injects a natural notification into Ana's active Realtime session
+app.post('/inject-pix-sent', async (req, reply) => {
+  const body = req.body as Record<string, string>
+  const callSid = body?.callSid
+  const metodo = (body?.metodo ?? 'pix') as 'pix' | 'cartao'
+  if (!callSid) return reply.status(400).send({ error: 'callSid obrigatório' })
+  const ok = injectPixDataSent(callSid, metodo)
+  const okLive = injectLivePixDataSent(callSid, metodo)
+  console.log(`[SERVER] /inject-pix-sent callSid=${callSid} metodo=${metodo} ok=${ok} okLive=${okLive}`)
+  return reply.send({ ok: ok || okLive })
+})
+
+// SSE live transcript stream — browser connects here to receive real-time turns
+app.get('/transcript-stream/:callSid', (req, reply) => {
+  const { callSid } = req.params as { callSid: string }
+
+  reply.raw.setHeader('Content-Type', 'text/event-stream')
+  reply.raw.setHeader('Cache-Control', 'no-cache')
+  reply.raw.setHeader('Connection', 'keep-alive')
+  reply.raw.setHeader('Access-Control-Allow-Origin', '*')
+  reply.raw.flushHeaders()
+
+  // Heartbeat every 15s to keep the connection alive through proxies
+  const heartbeat = setInterval(() => {
+    try { reply.raw.write(': ping\n\n') } catch { clearInterval(heartbeat) }
+  }, 15000)
+
+  const unregister = registerSseClient(callSid, {
+    write: (data: string) => reply.raw.write(data),
+    close: () => reply.raw.end(),
+  })
+
+  req.raw.on('close', () => {
+    clearInterval(heartbeat)
+    unregister()
+  })
+})
+
+// Endpoint called by registrar_recusa tool in live.ts when lead refuses after 3+ attempts
+// Flags lead in leads_m4_flag and sends WhatsApp message asking for 4 referrals
+app.post('/api/admin/ana-master/recusa-referidos', async (req, reply) => {
+  const body = req.body as { callSid?: string; telefone?: string; nome?: string }
+  const { callSid, telefone, nome } = body
+  if (!telefone) return reply.status(400).send({ error: 'telefone obrigatório' })
+
+  const digits = String(telefone).replace(/\D/g, '')
+  const tel55 = digits.startsWith('55') ? digits : `55${digits}`
+
+  console.log(`[SERVER] /recusa-referidos callSid=${callSid} telefone=${digits} nome=${nome}`)
+
+  try {
+    // Flag lead as M4 (definitive no)
+    await supabase.from('leads_m4_flag')
+      .upsert({ telefone: digits }, { onConflict: 'telefone' })
+
+    // Send WhatsApp message asking for referrals
+    const { sendWhatsApp } = await import('./tools/whatsapp.js')
+    const nomePrimeiro = (nome ?? '').split(' ')[0] || 'oi'
+    await sendWhatsApp(tel55,
+      `Entendido, respeito completamente sua decisão 🙏\n\n` +
+      `Antes de encerrar, posso te pedir um favor especial?\n\n` +
+      `Você conhece *4 pessoas* que poderiam se beneficiar do que conversamos?\n\n` +
+      `É bem simples — *encaminhe os contatos direto aqui pelo WhatsApp* 📲\n\n` +
+      `*iPhone:* Toque no nome do contato → Compartilhar Contato → aqui no chat\n` +
+      `*Android:* Abra o contato → Menu (⋮) → Compartilhar → aqui no chat\n\n` +
+      `Envie os 4 contatos e cuido do resto! 😊`
+    )
+
+    console.log(`[SERVER] /recusa-referidos enviado para ${digits}`)
+    return reply.send({ ok: true })
+  } catch (e: any) {
+    console.error('[SERVER] /recusa-referidos erro:', e.message)
+    return reply.status(500).send({ error: e.message })
+  }
+})
+
+await app.listen({ port: PORT, host: '0.0.0.0' })
