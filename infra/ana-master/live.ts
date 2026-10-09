@@ -432,17 +432,12 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         if (!liveEtapa7SpeechFired) {
           liveEtapa7SpeechFired = true
           console.log('[ANA LIVE] ✅ WAIT_FOR_YES confirmado — disparando speech etapa 7 (uma vez)')
-          // Inject permanent state lock FIRST so model never restarts E7 on future turns
+          // Inject PERMANENT instruction override — appends to session instructions (not just context),
+          // persists for the entire session and cannot be overridden by per-turn thinking/commentary.
           sendToLive({
-            type: 'session.thinking.append',
-            event_id: `etapa7_lock_${Date.now()}`,
-            delegation_id: null,
-            content: JSON.stringify({
-              estado_permanente: 'REFERIDOS_EM_ANDAMENTO',
-              fala_melhores_decisoes: 'JA_DITA_AGORA — NUNCA_REPETIR',
-              favor_pedido: 'JA_PEDIDO_E_CONFIRMADO — NUNCA_REPETIR',
-              regra_absoluta: 'Nunca mais diga "você acabou de receber um link" nem "Posso te pedir um favor" nem repita a fala de melhores decisoes. A partir daqui APENAS comente o progresso dos contatos recebidos ou aguarde em silencio.',
-            }),
+            type: 'session.instructions.append',
+            event_id: `etapa7_instr_lock_${Date.now()}`,
+            instructions: '\n\n⛔ REGRA PERMANENTE — REFERIDOS_EM_ANDAMENTO: A fala "Você acabou de tomar uma das melhores decisões" já foi dita. A frase "Posso te pedir um favor?" já foi dita e confirmada. JAMAIS repita qualquer uma delas. A partir deste momento, quando chegar notificação sobre contatos, apenas comente o número (ex: "Ótimo, você enviou X amigas, faltam Y"). Não reinicie o fluxo de referidos.',
           })
           sendToLive({
             type: 'session.commentary.append',
