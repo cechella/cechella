@@ -1,0 +1,28 @@
+name: Deploy Ana Master
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/ana-master/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy Ana Master via IAP
+        run: |
+          gcloud compute ssh vcechella@hormone-agent \
+            --zone=us-central1-f \
+            --project=pelagic-hope-342518 \
+            --tunnel-through-iap \
+            --command="/home/vcechella/deploy-ana.sh" \
+            --quiet

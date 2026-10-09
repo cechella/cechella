@@ -387,4 +387,17 @@ app.post('/api/admin/ana-master/recusa-referidos', async (req, reply) => {
   }
 })
 
+// GitHub webhook — auto-deploy on push to main
+import { exec } from 'child_process'
+const DEPLOY_SECRET = process.env.DEPLOY_WEBHOOK_SECRET ?? ''
+app.post('/deploy-webhook', async (req: any, reply: any) => {
+  const secret = (req.headers['x-deploy-secret'] ?? '') as string
+  if (DEPLOY_SECRET && secret !== DEPLOY_SECRET) return reply.status(401).send({ error: 'unauthorized' })
+  exec('/home/vcechella/deploy-ana.sh', (err, stdout, stderr) => {
+    if (err) console.error('[DEPLOY] erro:', stderr)
+    else console.log('[DEPLOY] ✅ sucesso:', stdout.slice(-200))
+  })
+  return { ok: true, message: 'deploy iniciado' }
+})
+
 await app.listen({ port: PORT, host: '0.0.0.0' })
