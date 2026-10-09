@@ -399,6 +399,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let liveIsRetomada = false
   let liveLastSemDados = -1
   let liveReferidosNotificados = false  // true only after Supabase Realtime fires (contacts actually arrived)
+  let liveReferidosRealtimeTotal = 0   // highest total reported by Realtime — verificar skips stale results
   let livePipelineEtapa = 1  // tracks last etapa pushed to leads table (1=apresentacao)
 
   function dispatchAutoPix(metodo: 'pix' | 'cartao') {
@@ -965,7 +966,8 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
               })
 
               // When semDados > 0, inject exact scripted commentary so model cannot drift back to Etapa 7
-              if (!ref.missaoCompleta && ref.semDados > 0) {
+              // Skip if Realtime already reported a HIGHER total — that update will announce the real state
+              if (!ref.missaoCompleta && ref.semDados > 0 && ref.total >= liveReferidosRealtimeTotal) {
                 const alreadySaid = liveLastSemDados === ref.semDados
                 liveLastSemDados = ref.semDados
                 sendToLive({
@@ -1090,10 +1092,13 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         registerLiveSession(callSid, {
           sendToLive,
           setTokenIndicacao: (token: string) => { liveTokenIndicacao = token },
-          setReferidosNotificados: () => {
+          setReferidosNotificados: (total?: number) => {
             if (!liveReferidosNotificados) {
               liveReferidosNotificados = true
               console.log(`[ANA LIVE] 📲 referidos notificados via Realtime — verificar_referidos desbloqueado`)
+            }
+            if (total !== undefined && total > liveReferidosRealtimeTotal) {
+              liveReferidosRealtimeTotal = total
             }
           },
         })

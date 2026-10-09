@@ -4,7 +4,7 @@
 type LiveRef = {
   sendToLive: (event: object) => void
   setTokenIndicacao: (token: string) => void
-  setReferidosNotificados: () => void
+  setReferidosNotificados: (total?: number) => void
 }
 
 const registry = new Map<string, LiveRef>()
@@ -78,7 +78,7 @@ export function injectLiveReferidosUpdate(callSid: string, total: number, semDad
 
   // Mark that real contacts arrived — unblocks verificar_referidos for this session
   const ref = registry.get(callSid)
-  if (ref) ref.setReferidosNotificados()
+  if (ref) ref.setReferidosNotificados(total)
 
   // When total >= 20, semDados = 0 and only messages remain: stay silent.
   // The lead is sending messages from the web — injecting commentary on every send creates a loop.
