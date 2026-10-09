@@ -455,7 +455,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
     if (callSid !== 'unknown' && telefone) {
       let nextEtapa = 0
       // E2 conexao: Ana explora rotina, sintomas, dia a dia da lead
-      if (livePipelineEtapa < 2 && /me conta (um pouco |mais )?(de |sobre |como [eé] )?(a sua |o seu |tua |teu |o )?(rotina|dia a dia|dia-a-dia|vida|trabalho|ocupa[çc][aã]o)|como [eé] (a sua |o seu |tua |teu )?(rotina|dia a dia|dia-a-dia)|o que (voc[eê] faz|tu faz)|que sintoma|o que (te |voc[eê] )?(incomoda|chama aten[çc][aã]o|percebe)|como (voc[eê] est[aá]|est[aá] sendo|tem se sentido)/i.test(text)) nextEtapa = 2
+      if (livePipelineEtapa < 2 && /me conta|como [eé] (a sua|o seu|tua|teu|o teu|o seu)|como (voc[eê]|tu) (est[aá]|tem se|faz|sente)|o que (te |voc[eê] )?(incomoda|chama aten|percebe|traz)|que sintoma|rotina|dia a dia|dia-a-dia|tem se sentido|no teu corpo|no seu corpo/i.test(text)) nextEtapa = 2
       // E3 di: Ana propõe o combinado (proposta de escuta mútua)
       if (livePipelineEtapa < 3 && /vamos fazer um combinado|se fizer sentido pra voc[eê]|se n[aã]o fizer sentido|me d[aá] um sim|e se n[aã]o fizer|voc[eê] me diz um sim|a gente avan[çc]a|continuamos amigas/i.test(text)) nextEtapa = 3
       // E4 speech: Ana apresenta o implante (pellet, grão de arroz, debaixo da pele)
