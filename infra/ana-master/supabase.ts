@@ -316,19 +316,47 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       return { prevState: 'completed', contextBlock, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }
     }
 
+    // Check referidos state if token exists — gives Ana exact knowledge of where the lead stopped
+    let referidosInfo: { total: number; semDados: number; semMensagem: number; missaoCompleta: boolean } | null = null
+    if (tokenIndicacao) {
+      try {
+        referidosInfo = await checkReferidos(tokenIndicacao)
+      } catch { /* ignore */ }
+    }
+
     const etapas: string[] = []
     if (pagamentoConfirmado) etapas.push(`- Pagamento já confirmado via ${metodoEscolhido ?? 'método anterior'}`)
     else if (metodoEscolhido) etapas.push(`- Lead escolheu ${metodoEscolhido} mas pagamento não foi confirmado`)
     if (tokenIndicacao) etapas.push('- Link de indicações já foi enviado no WhatsApp')
     if (nomeLead) etapas.push(`- Nome da lead: ${nomeLead}`)
+    if (referidosInfo && referidosInfo.total > 0) {
+      etapas.push(`- Referidos já enviados: ${referidosInfo.total}`)
+      if (referidosInfo.semDados > 0) etapas.push(`- Faltam dados (profissão/hobby) em ${referidosInfo.semDados} contato(s)`)
+      if (referidosInfo.semMensagem > 0) etapas.push(`- ${referidosInfo.semMensagem} contato(s) ainda não receberam mensagem`)
+      if (referidosInfo.missaoCompleta) etapas.push('- Missão completa: 20 referidos com dados e mensagens enviadas')
+    }
 
     let proximoPasso: string
     if (!pagamentoConfirmado && metodoEscolhido) {
       proximoPasso = 'Retome o pagamento — pergunte se chegou o PIX/link no WhatsApp.'
     } else if (pagamentoConfirmado && !tokenIndicacao) {
       proximoPasso = 'Pagamento confirmado. Peça o favor das indicações (WAIT_FOR_YES) e aguarde o sistema enviar o link.'
+    } else if (pagamentoConfirmado && tokenIndicacao && referidosInfo && referidosInfo.total > 0) {
+      if (referidosInfo.missaoCompleta) {
+        proximoPasso = 'Missão completa! Parabenize a lead e encerre com a mensagem de boas-vindas.'
+      } else if (referidosInfo.semDados > 0 && referidosInfo.semMensagem > 0) {
+        proximoPasso = `Lead já enviou ${referidosInfo.total} contatos. Diga que você viu e que faltam profissão/hobby em ${referidosInfo.semDados} e mensagens em ${referidosInfo.semMensagem}. Peça para completar no link.`
+      } else if (referidosInfo.semDados > 0) {
+        proximoPasso = `Lead já enviou ${referidosInfo.total} contatos. Diga que viu e que faltam profissão/hobby em ${referidosInfo.semDados}. Peça para completar no link.`
+      } else if (referidosInfo.semMensagem > 0) {
+        proximoPasso = `Lead já enviou ${referidosInfo.total} contatos com dados completos. Faltam mensagens para ${referidosInfo.semMensagem}. Peça para abrir o link e tocar em "Enviar mensagem".`
+      } else if (referidosInfo.total < 20) {
+        proximoPasso = `Lead já enviou ${referidosInfo.total} contatos. Faltam ${20 - referidosInfo.total} para completar a meta de 20.`
+      } else {
+        proximoPasso = 'Pagamento confirmado e link enviado. Verifique o progresso com verificar_referidos.'
+      }
     } else if (pagamentoConfirmado && tokenIndicacao) {
-      proximoPasso = 'Pagamento confirmado e link de indicações enviado. PRIMEIRO pergunte à lead se ela chegou a abrir o link e enviar contatos antes de cair a ligação. NÃO assuma que enviou. NÃO chame verificar_referidos antes de confirmar com ela. Se ela ainda não enviou, oriente passo a passo. Se já enviou, chame verificar_referidos para ver o progresso.'
+      proximoPasso = 'Pagamento confirmado e link enviado. Pergunte se a lead chegou a abrir o link e enviar contatos. Se sim, oriente o passo a passo.'
     } else {
       proximoPasso = 'Retome desde a apresentação do produto.'
     }
