@@ -183,6 +183,9 @@ app.post('/twiml', async (req, reply) => {
 app.get('/media-stream', { websocket: true }, async (socket, req) => {
   const query = req.query as Record<string, string>
   const contexto = query?.contexto ?? ''
+  const referidor = query?.referidor ?? ''
+  const nome = query?.nome ?? ''
+  const origem = query?.origem ?? ''
   app.log.info({ contexto }, 'Twilio Media Stream connected')
 
   const rawWs = (socket as any).socket
@@ -201,7 +204,7 @@ app.get('/media-stream', { websocket: true }, async (socket, req) => {
   rawWs.off('message', earlyListener)
 
   if (voiceStack === 'live') {
-    createAnaLiveSession(rawWs, { contexto, earlyQueue })
+    createAnaLiveSession(rawWs, { contexto, referidor, nome, origem, earlyQueue })
       .then(() => { app.log.info('ANA LIVE session started') })
       .catch((err: unknown) => {
         app.log.error({ err }, 'Failed to start Live session — closing stream')
