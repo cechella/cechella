@@ -396,6 +396,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let liveRecusaFavorAceito = false
   let liveRecusaRegistrada = false
   let liveEtapa7SpeechFired = false
+  let liveIsRetomada = false
   let liveLastSemDados = -1
   let liveReferidosNotificados = false  // true only after Supabase Realtime fires (contacts actually arrived)
   let livePipelineEtapa = 1  // tracks last etapa pushed to leads table (1=apresentacao)
@@ -435,6 +436,13 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
     if (nameMatch && !liveNomeLead) {
       liveNomeLead = nameMatch[1]
       if (callSid !== 'unknown') saveMemory(callSid, 'nome_lead', liveNomeLead).catch(() => {})
+      // Save to leads table immediately so CRM shows name and retomada picks it up
+      if (telefone) {
+        supabase.from('leads').update({ nome: liveNomeLead })
+          .or(`telefone.eq.${telefone},telefone.eq.55${telefone.replace(/^55/,'')},telefone.eq.${telefone.replace(/^55/,'')}`)
+          .is('nome', null)
+          .then(({ error }: any) => { if (error) console.error('[ANA LIVE] nome_lead leads update erro:', error.message) })
+      }
       console.log(`[ANA LIVE] 👤 nome capturado da fala: ${liveNomeLead}`)
     }
 
@@ -615,7 +623,8 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
               const base = `${oi} Aqui é a ANA, consultora executiva do consultório do Dr. Vinícius Cechella, da Hormone Ecosystem.`
 
               // Retomada: ligação anterior caiu — greeting de retorno
-              if (opts.contexto === 'retomada') {
+              // Fires for explicit retomada param OR when buildSessionContext detected history (prevState set via closure)
+              if (opts.contexto === 'retomada' || liveIsRetomada) {
                 return primeiro
                   ? `${oi} Aqui é a ANA, do consultório do Dr. Vinícius Cechella. A nossa ligação caiu antes de terminar — tudo bem com você?`
                   : `Oi! Aqui é a ANA, do consultório do Dr. Vinícius Cechella. A nossa ligação caiu antes de terminar — tudo bem com você?`
@@ -1063,6 +1072,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         // Inject history context and restore in-memory flags if this is a resumed call
         buildSessionContext(telefone, callSid).then(({ contextBlock, prevState, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }) => {
           console.log(`[ANA LIVE] 📚 buildSessionContext prevState=${prevState} hasContext=${!!contextBlock} callSid=${callSid}`)
+          if (prevState === 'resume' || prevState === 'completed') liveIsRetomada = true
           if (metodoEscolhido) liveMetodo = metodoEscolhido
           if (nomeLead && !liveNomeLead) {
             liveNomeLead = nomeLead
