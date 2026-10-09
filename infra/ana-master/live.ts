@@ -450,26 +450,24 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
       appendTranscript(callSid, 'assistant', text).catch(() => {})
       pushTranscriptEvent(callSid, 'assistant', text)
     }
-    // Pipeline keyword detection — advance leads.etapa based on what Ana says
+    // Pipeline phrase detection — advance leads.etapa based on what Ana says
+    // E6 (referidos) is intentionally excluded here — it's triggered only on payment confirmation
     if (callSid !== 'unknown' && telefone) {
-      const lower2 = text.toLowerCase()
       let nextEtapa = 0
-      // E2 conexao: Ana pergunta sobre rotina/profissão
-      if (livePipelineEtapa < 2 && /rotina|como[eé] o seu dia|como[eé] a sua rotina|o que voc[eê] faz da vida|me conta sobre voc[eê]/i.test(text)) nextEtapa = 2
-      // E3 di: Ana propõe combinado
-      if (livePipelineEtapa < 3 && /combinado|se fizer sentido|se n[aã]o fizer sentido|me d[aá] um sim/i.test(text)) nextEtapa = 3
-      // E4 speech: Ana fala do pellet/implante
-      if (livePipelineEtapa < 4 && /gr[aã]o de arroz|pellet|debaixo da pele|libera horm[oô]nios/i.test(text)) nextEtapa = 4
-      // E5 fechamento: Ana pergunta forma de pagamento
-      if (livePipelineEtapa < 5 && /pix ou cart[aã]o|prefer[eê] fazer|como voc[eê] prefere pagar|forma de pagamento/i.test(text)) nextEtapa = 5
-      // E6 referidos: Ana pede indicações
-      if (livePipelineEtapa < 6 && /conhece alguma amiga|indica[çc][aã]o|indicar amigas|posso te pedir um favor/i.test(text)) nextEtapa = 6
+      // E2 conexao: Ana explora rotina, sintomas, dia a dia da lead
+      if (livePipelineEtapa < 2 && /me conta (um pouco |como[eé] |sobre )?(a sua |o seu |tua |teu )?(rotina|dia a dia|dia-a-dia|vida|dia|trabalho|ocupa[çc][aã]o)|o que (voc[eê] faz|tu faz)|como (voc[eê] est[aá]|voc[eê] tem|est[aá] sendo)|que sintoma|o que (te |voc[eê] )?(incomoda|chama aten[çc][aã]o|percebe)/i.test(text)) nextEtapa = 2
+      // E3 di: Ana propõe o combinado (proposta de escuta mútua)
+      if (livePipelineEtapa < 3 && /vamos fazer um combinado|se fizer sentido pra voc[eê]|se n[aã]o fizer sentido|me d[aá] um sim|e se n[aã]o fizer|voc[eê] me diz um sim|a gente avan[çc]a|continuamos amigas/i.test(text)) nextEtapa = 3
+      // E4 speech: Ana apresenta o implante (pellet, grão de arroz, debaixo da pele)
+      if (livePipelineEtapa < 4 && /gr[aã]o de arroz|pellet|debaixo da pele|regi[aã]o gl[uú]tea|libera horm[oô]nios de forma cont[ií]nua|implante hormonal.*colocado|colocado.*debaixo|tamanho.*gr[aã]o/i.test(text)) nextEtapa = 4
+      // E5 fechamento: Ana apresenta o investimento e pergunta forma de pagamento
+      if (livePipelineEtapa < 5 && /investimento [eé] de|cinco mil|5[.\s]?000|como voc[eê] prefere|pix ou cart[aã]o|prefer[eê] (fazer|pagar)|vou te enviar os dados|vou te mandar o link/i.test(text)) nextEtapa = 5
 
       if (nextEtapa > livePipelineEtapa) {
         livePipelineEtapa = nextEtapa
-        const etapasMap: Record<number, string> = { 2: 'conexao', 3: 'di', 4: 'speech', 5: 'fechamento', 6: 'referidos' }
+        const etapasMap: Record<number, string> = { 2: 'conexao', 3: 'di', 4: 'speech', 5: 'fechamento' }
         const etapaStr = etapasMap[nextEtapa]
-        console.log(`[ANA LIVE] 📊 pipeline keyword → etapa=${etapaStr} callSid=${callSid}`)
+        console.log(`[ANA LIVE] 📊 pipeline frase → etapa=${etapaStr} callSid=${callSid}`)
         fetch(`${APP_URL}/api/vapi/update-etapa`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -721,6 +719,15 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
                 livePagamentoConfirmado = true
                 liveWaitForYes = true
                 console.log(`[ANA LIVE PAG] ✅ pago — WAIT_FOR_YES ativado callSid=${callSid}`)
+                // E6 referidos: avança pipeline apenas na confirmação real do pagamento
+                if (livePipelineEtapa < 6 && telefone) {
+                  livePipelineEtapa = 6
+                  fetch(`${APP_URL}/api/vapi/update-etapa`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ telefone, etapa: 'referidos', callSid }),
+                  }).catch((e: Error) => console.error('[ANA LIVE] pipeline referidos error:', e.message))
+                }
 
                 // Inject paid result + trigger WAIT_FOR_YES phrase
                 sendToLive({
@@ -1016,7 +1023,19 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             liveReferidosNotificados = true  // resumed call: contacts may already exist, allow verificar
             saveMemory(callSid, 'token_indicacao', tokenIndicacao).catch(() => {})
           }
-          if (pagamentoConfirmado) { livePagamentoConfirmado = true; livePixAutoSent = true }
+          if (pagamentoConfirmado) {
+            livePagamentoConfirmado = true
+            livePixAutoSent = true
+            // Resume call already past payment — put pipeline at referidos
+            if (livePipelineEtapa < 6 && telefone) {
+              livePipelineEtapa = 6
+              fetch(`${APP_URL}/api/vapi/update-etapa`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ telefone, etapa: 'referidos', callSid }),
+              }).catch((e: Error) => console.error('[ANA LIVE] pipeline referidos resume error:', e.message))
+            }
+          }
           resolveContextReady(contextBlock)
         }).catch(() => { resolveContextReady('') })
         break
