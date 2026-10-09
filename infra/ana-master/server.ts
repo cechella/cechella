@@ -76,12 +76,28 @@ const referidosDebounce = new Map<string, ReturnType<typeof setTimeout>>()
 async function processReferidosUpdate(indicadorPhone: string) {
   const digits = String(indicadorPhone).replace(/\D/g, '')
   const bare = digits.replace(/^55/, '')
-  const { data: call } = await supabase
+
+  // Primary: call marcada como em_ligacao=true
+  let { data: call } = await supabase
     .from('ana_calls')
     .select('call_sid')
     .eq('em_ligacao', true)
     .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${bare}`)
     .maybeSingle()
+
+  // Fallback: call mais recente nos últimos 30 min (em_ligacao pode não estar setado)
+  if (!call?.call_sid) {
+    const since30m = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    const { data: recent } = await supabase
+      .from('ana_calls')
+      .select('call_sid')
+      .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${bare}`)
+      .gte('created_at', since30m)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    call = recent
+  }
 
   if (!call?.call_sid) return
 
