@@ -4,6 +4,7 @@
 type LiveRef = {
   sendToLive: (event: object) => void
   setTokenIndicacao: (token: string) => void
+  setReferidosNotificados: () => void
 }
 
 const registry = new Map<string, LiveRef>()
@@ -71,19 +72,29 @@ export function injectLiveReferralLinkSent(callSid: string, token?: string): boo
 
 export function injectLiveReferidosUpdate(callSid: string, total: number, semDados: number, semMensagem: number, missaoCompleta: boolean): boolean {
   console.log(`[LIVE_REGISTRY] 👥 referidos update callSid=${callSid} total=${total} semDados=${semDados} semMensagem=${semMensagem} missaoCompleta=${missaoCompleta}`)
+
+  // Mark that real contacts arrived — unblocks verificar_referidos for this session
+  const ref = registry.get(callSid)
+  if (ref) ref.setReferidosNotificados()
+
+  // When total >= 20, semDados = 0 and only messages remain: stay silent.
+  // The lead is sending messages from the web — injecting commentary on every send creates a loop.
+  // Only speak when missaoCompleta or when contacts/data are still missing.
+  if (total >= 20 && semDados === 0 && !missaoCompleta) {
+    return true
+  }
+
   let content: string
   if (missaoCompleta) {
-    content = `A lead completou as 20 indicações, todos os dados preenchidos e todas as mensagens enviadas. Celebre: "Perfeito, missão cumprida! Você indicou 20 amigas — nossa equipe vai entrar em contato com cada uma. Foi um prazer enorme falar com você!" e encerre a ligação com carinho.`
-  } else if (total >= 20 && semDados === 0 && semMensagem > 0) {
-    content = `A lead já enviou ${total} amigas e completou os dados. Mas ${semMensagem} amigas ainda não receberam a mensagem de aviso. Peça para ela abrir o link e clicar em "Enviar mensagem" para cada amiga — assim elas ficam sabendo que a Ana vai ligar.`
+    content = `Perfeito, missão cumprida! Você indicou 20 amigas — nossa equipe vai entrar em contato com cada uma. Foi um prazer enorme falar com você!`
   } else if (total >= 20 && semDados > 0) {
-    content = `A lead já enviou ${total} amigas — meta de 20 atingida! Mas ${semDados} ainda estão sem profissão e hobby. Incentive-a a preencher os dados no link — é rápido.`
+    content = `Ficou ótimo! Você enviou ${total} amigas — meta batida! Mas ${semDados} ainda estão sem profissão preenchida. Consegue completar no link? É rapidinho.`
   } else {
-    content = `A lead enviou ${total} de 20 indicações. Faltam ${20 - total}. Incentive-a a continuar selecionando amigas no link.`
+    content = `Você enviou ${total} de 20 amigas. Faltam ${20 - total}. Consegue selecionar mais?`
   }
-  // thinking.append: factual update ANA can use when she speaks next, without forcing immediate speech
+  // commentary.append: Ana speaks this immediately when contacts arrive (no delegation needed)
   return send(callSid, {
-    type: 'session.thinking.append',
+    type: 'session.commentary.append',
     event_id: `referidos_${Date.now()}`,
     delegation_id: null,
     content,
