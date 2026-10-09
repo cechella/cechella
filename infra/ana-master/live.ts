@@ -531,8 +531,19 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             event_id: 'ana_greet',
             delegation_id: null,
             content: (() => {
-              const oi = opts.nome ? `Oi, ${opts.nome.split(' ')[0]}!` : 'Oi!'
+              // Use nome_lead from DB/context if available, fallback to TwiML param
+              const nomeReal = liveNomeLead ?? opts.nome ?? ''
+              const primeiro = nomeReal ? nomeReal.split(' ')[0] : ''
+              const oi = primeiro ? `Oi, ${primeiro}!` : 'Oi!'
               const base = `${oi} Aqui é a ANA, consultora executiva do consultório do Dr. Vinícius Cechella, da Hormone Ecosystem.`
+
+              // Retomada: ligação anterior caiu — greeting de retorno
+              if (opts.contexto === 'retomada') {
+                return primeiro
+                  ? `${oi} Aqui é a ANA, do consultório do Dr. Vinícius Cechella. A nossa ligação caiu antes de terminar — tudo bem com você?`
+                  : `Oi! Aqui é a ANA, do consultório do Dr. Vinícius Cechella. A nossa ligação caiu antes de terminar — tudo bem com você?`
+              }
+
               if (opts.referidor) return `${base} Estou ligando porque a ${opts.referidor} nos indicou você com muito carinho. Tudo bem com você?`
               const origemMap: Record<string, string> = {
                 instagram: 'vi que você nos encontrou pelo Instagram',
