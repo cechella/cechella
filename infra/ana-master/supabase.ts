@@ -256,6 +256,7 @@ export interface SessionContext {
   nomeLead?: string
   tokenIndicacao?: string
   pagamentoConfirmado?: boolean
+  referidosInfo?: { total: number; semDados: number; semMensagem: number; missaoCompleta: boolean }
 }
 
 export async function buildSessionContext(telefone: string, callSid: string): Promise<SessionContext> {
@@ -370,7 +371,7 @@ ${etapas.join('\n')}
 Próximo passo: ${proximoPasso}
 --- FIM RETOMADA ---`
 
-    return { prevState: 'resume', contextBlock, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }
+    return { prevState: 'resume', contextBlock, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado, referidosInfo: referidosInfo ?? undefined }
   } catch (e: any) {
     console.error('[CTX] buildSessionContext erro:', e.message)
     return { prevState: 'fresh', contextBlock: '' }

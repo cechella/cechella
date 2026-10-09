@@ -401,6 +401,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let liveLastSemDados = -1
   let liveReferidosNotificados = false  // true only after Supabase Realtime fires (contacts actually arrived)
   let liveReferidosRealtimeTotal = 0   // highest total reported by Realtime — verificar skips stale results
+  let liveReferidosInfo: { total: number; semDados: number; semMensagem: number; missaoCompleta: boolean } | null = null
   let livePipelineEtapa = 1  // tracks last etapa pushed to leads table (1=apresentacao)
 
   function dispatchAutoPix(metodo: 'pix' | 'cartao') {
@@ -627,7 +628,20 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             content: (() => {
               // Retomada: ligação anterior caiu — greeting varia conforme estado
               if (isRetomada) {
-                // Pagamento confirmado + link enviado: retomar direto em E7
+                // Pagamento confirmado + contatos já enviados: diz o estado real sem perguntar sobre o link
+                if (livePagamentoConfirmado && liveTokenIndicacao && liveReferidosInfo && liveReferidosInfo.total > 0) {
+                  const nome = primeiro ? `${primeiro}, ` : ''
+                  if (liveReferidosInfo.missaoCompleta) {
+                    return `${oi} Aqui é a ANA, do consultório do Dr. Vinícius Cechella. Nossa ligação caiu, mas ${nome}vi aqui que você completou tudo — 20 indicações com todos os dados! Incrível!`
+                  }
+                  if (liveReferidosInfo.semDados > 0) {
+                    return `${oi} Aqui é a ANA, do consultório do Dr. Vinícius Cechella. Nossa ligação caiu, mas ${nome}vi que você já enviou ${liveReferidosInfo.total} contatos — ótimo! Falta preencher a profissão e hobby de ${liveReferidosInfo.semDados === liveReferidosInfo.total ? 'todas elas' : `${liveReferidosInfo.semDados}`} no link. Consegue fazer isso agora?`
+                  }
+                  if (liveReferidosInfo.semMensagem > 0) {
+                    return `${oi} Aqui é a ANA, do consultório do Dr. Vinícius Cechella. Nossa ligação caiu, mas ${nome}vi que você já enviou ${liveReferidosInfo.total} contatos com os dados completos — ótimo! Falta só enviar a mensagem para ${liveReferidosInfo.semMensagem === liveReferidosInfo.total ? 'todas elas' : `${liveReferidosInfo.semMensagem}`} no link. Consegue fazer isso agora?`
+                  }
+                }
+                // Pagamento confirmado + link enviado mas sem contatos ainda
                 if (livePagamentoConfirmado && liveTokenIndicacao) {
                   return `${oi} Aqui é a ANA, do consultório do Dr. Vinícius Cechella. A nossa ligação caiu, mas ${primeiro ? primeiro + ', ' : ''}seu pagamento foi confirmado — parabéns! Te enviei o link de indicações no WhatsApp. Você chegou a abrir ele?`
                 }
@@ -1105,7 +1119,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         })
 
         // Inject history context and restore in-memory flags if this is a resumed call
-        buildSessionContext(telefone, callSid).then(({ contextBlock, prevState, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }) => {
+        buildSessionContext(telefone, callSid).then(({ contextBlock, prevState, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado, referidosInfo }) => {
           console.log(`[ANA LIVE] 📚 buildSessionContext prevState=${prevState} hasContext=${!!contextBlock} callSid=${callSid}`)
           if (prevState === 'resume' || prevState === 'completed') liveIsRetomada = true
           if (metodoEscolhido) liveMetodo = metodoEscolhido
@@ -1130,6 +1144,12 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
               updateLeadEtapa(telefone, 'referidos').catch((e: Error) => console.error('[ANA LIVE] pipeline referidos resume error:', e.message))
               updateCallStage(callSid, 'referidos').catch((e: Error) => console.error('[ANA LIVE] pipeline referidos resume call stage error:', e.message))
             }
+          }
+          if (referidosInfo && referidosInfo.total > 0) {
+            liveReferidosInfo = referidosInfo
+            liveReferidosRealtimeTotal = referidosInfo.total
+            liveReferidosNotificados = true
+            console.log(`[ANA LIVE] 📊 referidos from context: total=${referidosInfo.total} semDados=${referidosInfo.semDados} semMensagem=${referidosInfo.semMensagem}`)
           }
           resolveContextReady(contextBlock)
         }).catch(() => { resolveContextReady('') })
