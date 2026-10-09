@@ -355,6 +355,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let liveRecusaDefinitiva = false
   let liveEtapa7SpeechFired = false
   let liveLastSemDados = -1
+  let liveReferidosNotificados = false  // true only after Supabase Realtime fires (contacts actually arrived)
 
   function dispatchAutoPix(metodo: 'pix' | 'cartao') {
     if (livePixAutoSent || livePagamentoConfirmado) return
@@ -768,6 +769,18 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
           // ── verificar_referidos ───────────────────────────────────────────
           ;(async () => {
             try {
+              // Block verificar_referidos until Supabase Realtime has confirmed contacts arrived
+              // (prevents querying stale/old contacts from previous sessions)
+              if (!liveReferidosNotificados) {
+                sendToLive({
+                  type: 'session.commentary.append',
+                  event_id: `ver_aguard_${Date.now()}`,
+                  delegation_id: null,
+                  content: 'Aguardando você enviar os contatos no link. Pode selecionar as amigas agora?',
+                })
+                return
+              }
+
               const memories = await getMemories(callSid)
               const token = liveTokenIndicacao ?? memories.token_indicacao as string | undefined
               if (token && !liveTokenIndicacao) liveTokenIndicacao = token
@@ -914,23 +927,26 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         saveMemory(callSid, 'telefone', telefone).catch(() => {})
         saveMemory(callSid, 'voice_stack', 'live').catch(() => {})
 
-        // Pre-load lead name and token from DB immediately — don't wait for regex capture
+        // Pre-load lead name from DB immediately — don't wait for regex capture
+        // NOTE: token_indicacao is intentionally NOT loaded here — loading it blocks iniciar_coleta_referidos
+        // (which requires !liveTokenIndicacao). Token is restored only for resumed calls via buildSessionContext.
         getLeadByPhone(telefone).then(lead => {
           if (lead?.nome && !liveNomeLead) {
             liveNomeLead = lead.nome
             saveMemory(callSid, 'nome_lead', lead.nome).catch(() => {})
             console.log(`[ANA LIVE] 👤 nome_lead carregado do banco: ${lead.nome}`)
           }
-          if (lead?.token_indicacao && !liveTokenIndicacao) {
-            liveTokenIndicacao = lead.token_indicacao
-            saveMemory(callSid, 'token_indicacao', lead.token_indicacao).catch(() => {})
-            console.log(`[ANA LIVE] 🔑 token_indicacao carregado do banco: ${lead.token_indicacao}`)
-          }
         }).catch(() => {})
 
         registerLiveSession(callSid, {
           sendToLive,
           setTokenIndicacao: (token: string) => { liveTokenIndicacao = token },
+          setReferidosNotificados: () => {
+            if (!liveReferidosNotificados) {
+              liveReferidosNotificados = true
+              console.log(`[ANA LIVE] 📲 referidos notificados via Realtime — verificar_referidos desbloqueado`)
+            }
+          },
         })
 
         // Inject history context and restore in-memory flags if this is a resumed call
@@ -941,8 +957,10 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             liveNomeLead = nomeLead
             saveMemory(callSid, 'nome_lead', nomeLead).catch(() => {})
           }
-          if (tokenIndicacao && !liveTokenIndicacao) {
+          // Only restore token on resumed calls — for fresh calls let iniciar_coleta_referidos create it
+          if (tokenIndicacao && !liveTokenIndicacao && prevState === 'resume') {
             liveTokenIndicacao = tokenIndicacao
+            liveReferidosNotificados = true  // resumed call: contacts may already exist, allow verificar
             saveMemory(callSid, 'token_indicacao', tokenIndicacao).catch(() => {})
           }
           if (pagamentoConfirmado) { livePagamentoConfirmado = true; livePixAutoSent = true }
