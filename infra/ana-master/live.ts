@@ -674,8 +674,25 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             liveWaitForYes = true
           }
 
-          // Retomada with token already sent: lock model to prevent repeating E7 sales speech
+          // Retomada with token already sent: lock model with exact state so it doesn't revert to wrong step
           if (isRetomada && livePagamentoConfirmado && liveTokenIndicacao) {
+            const ref = liveReferidosInfo
+            let instrucao: string
+            if (ref && ref.total > 0) {
+              if (ref.missaoCompleta) {
+                instrucao = 'Missao completa. Parabenize a lead e encerre com a mensagem de boas-vindas.'
+              } else if (ref.semDados > 0 && ref.semMensagem > 0) {
+                instrucao = `Lead ja enviou ${ref.total} contatos. NAO pergunte sobre o link nem repita o tutorial de importar. Foco em: pedir para completar profissao e hobby no link (${ref.semDados} faltando). Depois de completar, pedir para enviar mensagem para as amigas (${ref.semMensagem} faltando).`
+              } else if (ref.semDados > 0) {
+                instrucao = `Lead ja enviou ${ref.total} contatos. NAO pergunte sobre o link nem repita o tutorial de importar. Foco em: pedir para completar profissao e hobby no link (${ref.semDados} faltando).`
+              } else if (ref.semMensagem > 0) {
+                instrucao = `Lead ja enviou ${ref.total} contatos com dados completos. NAO pergunte sobre o link nem repita o tutorial de importar. Foco em: pedir para enviar mensagem para as amigas no link (${ref.semMensagem} faltando).`
+              } else {
+                instrucao = `Lead ja enviou ${ref.total} contatos. Verifique o progresso com verificar_referidos.`
+              }
+            } else {
+              instrucao = 'NAO diga "voce acabou de tomar uma das melhores decisoes" — isso ja foi dito. NAO repita o discurso de vendas. Apenas pergunte se ela abriu o link e ensine o passo a passo: tocar em Importar amigas pelo WhatsApp, selecionar amigas, enviar. Meta: 20 indicacoes.'
+            }
             sendToLive({
               type: 'session.thinking.append',
               event_id: `retomada_lock_${Date.now()}`,
@@ -684,7 +701,8 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
                 estado: 'RETOMADA_REFERIDOS',
                 favor_ja_pedido_e_confirmado: true,
                 link_ja_enviado: true,
-                instrucao: 'NAO diga "voce acabou de tomar uma das melhores decisoes" — isso ja foi dito. NAO repita o discurso de vendas. Apenas pergunte se ela abriu o link e ensine o passo a passo: tocar em Importar amigas pelo WhatsApp, selecionar amigas, enviar. Meta: 20 indicacoes.',
+                contatos_ja_enviados: ref ? ref.total : 0,
+                instrucao,
               }),
             })
           }
