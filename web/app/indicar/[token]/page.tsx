@@ -844,7 +844,6 @@ export default function PaginaIndicacao() {
                     <span className="text-lg">{etapa2 ? '✅' : '⏳'}</span>
                     <span className="text-lg">{etapa3 ? '✅' : '⏳'}</span>
                   </div>
-                  <p className="text-[#9CA3AF] text-xs text-center mt-1">{Math.round(progresso)}% concluído</p>
                 </div>
               )
             })()}
