@@ -462,13 +462,18 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       if (nomeResolvido) fatos.push(`nome=${nomeResolvido}`)
       if (profissaoExtraida) fatos.push(`profissão=${profissaoExtraida}`)
       proximoPasso = `Ligação caiu durante a Etapa 4 (speech do pellet). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}Veja as últimas falas abaixo e retome o speech exatamente de onde parou, sem repetir o que já foi dito.`
+    } else if (etapaNum === 5) {
+      proximoPasso = `Ligação caiu durante a Etapa 5 (fechamento — pagamento). ${nomeResolvido ? `Nome: ${nomeResolvido}. ` : ''}Veja as últimas falas abaixo e retome exatamente de onde parou — não repita o pitch do método de pagamento se já foi apresentado.`
+    } else if (etapaNum === 6) {
+      proximoPasso = `Ligação caiu durante a Etapa 6 (referidos). ${nomeResolvido ? `Nome: ${nomeResolvido}. ` : ''}Veja as últimas falas abaixo e continue o processo de referidos de onde parou, sem repetir a explicação da missão se já foi feita.`
+    } else if (etapaNum === 7) {
+      proximoPasso = `Ligação caiu durante a Etapa 7 (validação). ${nomeResolvido ? `Nome: ${nomeResolvido}. ` : ''}Veja as últimas falas abaixo e retome a validação de onde parou.`
     } else {
-      proximoPasso = `Retome a conversa${nomeResolvido ? ` com ${nomeResolvido}` : ''} de forma natural, sem repetir etapas já concluídas.`
+      proximoPasso = `Retome a conversa${nomeResolvido ? ` com ${nomeResolvido}` : ''} de forma natural, sem repetir etapas já concluídas. Veja as últimas falas abaixo.`
     }
 
-    // Last 10 turns of the merged transcript for stages 2-4
+    // Last 10 turns of the merged transcript — injected for ALL stages
     const lastTurnsBlock = (() => {
-      if (etapaNum < 2 || etapaNum > 4) return ''
       const lastTurns = allTranscripts.slice(-10)
       if (!lastTurns.length) return ''
       const lines = lastTurns.map((t: any) => {
