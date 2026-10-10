@@ -473,7 +473,7 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       if (quemIndicouExtraido) fatos.push(`indicada por=${quemIndicouExtraido}`)
       if (sintomasExtraidos) fatos.push(`sintomas=${sintomasExtraidos}`)
       if (combinadoJaAceito) {
-        proximoPasso = `${fatos.length ? fatos.join(', ') + '. ' : ''}COMBINADO JÁ ACEITO. Não pergunte "Vamos fazer um combinado?" — já foi feito. Continue pelo speech do pellet.`
+        proximoPasso = `${fatos.length ? fatos.join(', ') + '. ' : ''}COMBINADO JÁ ACEITO — não repita. Veja as falas abaixo e continue EXATAMENTE de onde parou. Se a última fala foi da Ana sem resposta da lead, aguarde/continue aquela pergunta. Não pule para o speech antes de terminar o DI.`
       } else {
         proximoPasso = `${fatos.length ? fatos.join(', ') + '. ' : ''}Etapa 3 (DI/combinado). NÃO recomece do zero. Continue de onde parou.`
       }
