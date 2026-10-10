@@ -406,6 +406,17 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
     const stageMap: Record<string, number> = { apresentacao: 1, conexao: 2, di: 3, combinado: 3, speech: 4, fechamento: 5, referidos: 6, validacao: 7, ganho: 8 }
     const etapaNum = stageMap[stagePrevCall ?? ''] ?? 1
 
+    // Detect if combinado was already accepted in ANY previous call
+    const combinadoJaAceito = prevCalls.some(c => {
+      const s = (c as any).stage as string | undefined
+      return s && ['combinado', 'speech', 'fechamento', 'referidos', 'validacao', 'ganho'].includes(s)
+    })
+    // Detect highest stage reached across ALL previous calls
+    const highestStageNum = prevCalls.reduce((max, c) => {
+      const s = (c as any).stage as string | undefined
+      return Math.max(max, stageMap[s ?? ''] ?? 1)
+    }, 1)
+
     const etapas: string[] = []
     if (stagePrevCall && stagePrevCall !== 'apresentacao') etapas.push(`- Etapa em que a ligação caiu: ${stagePrevCall} (${etapaNum})`)
     if (pagamentoConfirmado) etapas.push(`- Pagamento já confirmado via ${metodoEscolhido ?? 'método anterior'}`)
@@ -456,7 +467,11 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       if (profissaoExtraida) fatos.push(`profissão=${profissaoExtraida}`)
       if (quemIndicouExtraido) fatos.push(`indicada por=${quemIndicouExtraido}`)
       if (sintomasExtraidos) fatos.push(`sintomas=${sintomasExtraidos}`)
-      proximoPasso = `Ligação caiu durante a Etapa 3 (DI — combinado). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}NÃO recomece o combinado do zero. Veja as últimas falas abaixo e continue EXATAMENTE de onde parou.`
+      if (combinadoJaAceito) {
+        proximoPasso = `Ligação caiu durante/após a Etapa 3. ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}⚠️ ATENÇÃO: O combinado JÁ FOI ACEITO pela lead em ligação anterior. NÃO pergunte "Vamos fazer um combinado?" de novo. Isso já foi feito. Veja as últimas falas abaixo e continue para o PRÓXIMO PASSO após o combinado (speech do pellet ou fechamento), sem repetir nada que já foi dito.`
+      } else {
+        proximoPasso = `Ligação caiu durante a Etapa 3 (DI — combinado). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}NÃO recomece o combinado do zero. Veja as últimas falas abaixo e continue EXATAMENTE de onde parou.`
+      }
     } else if (etapaNum === 4) {
       const fatos: string[] = []
       if (nomeResolvido) fatos.push(`nome=${nomeResolvido}`)
@@ -469,7 +484,8 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
     } else if (etapaNum === 7) {
       proximoPasso = `Ligação caiu durante a Etapa 7 (validação). ${nomeResolvido ? `Nome: ${nomeResolvido}. ` : ''}Veja as últimas falas abaixo e retome a validação de onde parou.`
     } else {
-      proximoPasso = `Retome a conversa${nomeResolvido ? ` com ${nomeResolvido}` : ''} de forma natural, sem repetir etapas já concluídas. Veja as últimas falas abaixo.`
+      const aviso = highestStageNum > etapaNum ? ` A lead já chegou até a Etapa ${highestStageNum} em ligações anteriores — não regride.` : ''
+      proximoPasso = `Retome a conversa${nomeResolvido ? ` com ${nomeResolvido}` : ''} de forma natural, sem repetir etapas já concluídas.${aviso} Veja as últimas falas abaixo.`
     }
 
     // Last 10 turns of the merged transcript — injected for ALL stages
