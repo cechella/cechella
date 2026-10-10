@@ -95,7 +95,7 @@ export function injectLiveReferidosUpdate(callSid: string, total: number, semDad
   } else if (total >= 20 && semDados > 0) {
     content = `Ficou ótimo! Você enviou ${total} amigas — meta batida! Mas ${semDados} ainda estão sem profissão preenchida. Consegue completar no link? É rapidinho.`
   } else if (total >= 20 && semMensagem > 0) {
-    content = `Ótimo, você enviou ${total} amigas! Mas ${semMensagem} ainda não receberam a mensagem de convite. Abre o link e toca em "Enviar mensagem" pra elas — assim nossa equipe vai poder ligar.`
+    content = `Você lembra como foi quando recebeu uma mensagem dizendo que eu ia te ligar? Você ficou tranquila, já sabia quem era, me recebeu bem. É exatamente isso que a gente quer fazer pelas suas amigas. Quando elas receberem uma mensagem sua avisando que a Ana vai entrar em contato, elas vão estar preparadas e me receber bem também. Consegue abrir o link agora e tocar em "Enviar mensagem" para as ${semMensagem} que ainda não receberam?`
   } else if (total < 20) {
     content = `Você enviou ${total} de 20 amigas. Faltam ${20 - total}. Consegue selecionar mais?`
   } else {
