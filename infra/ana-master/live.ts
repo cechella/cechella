@@ -1111,8 +1111,8 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
       }
     }
 
-    // WAIT_FOR_YES: detect confirmation after "Posso te pedir um favor?"
-    if (liveWaitForYes) {
+    // WAIT_FOR_YES: detect confirmation after "Posso te pedir um favor?" — only valid after payment confirmed
+    if (liveWaitForYes && livePagamentoConfirmado) {
       const isYes = /\b(sim|claro|pode|ok|com certeza|lógico|logico|vai|certo|fechado|obvio|obviamente|pode sim|claro que sim)\b/.test(lower)
       if (isYes) {
         liveWaitForYes = false
