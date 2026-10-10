@@ -473,7 +473,7 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       if (quemIndicouExtraido) fatos.push(`indicada por=${quemIndicouExtraido}`)
       if (sintomasExtraidos) fatos.push(`sintomas=${sintomasExtraidos}`)
       if (combinadoJaAceito) {
-        proximoPasso = `${fatos.length ? fatos.join(', ') + '. ' : ''}COMBINADO JÁ ACEITO — não repita. Veja as falas abaixo e continue EXATAMENTE de onde parou. Se a última fala foi da Ana sem resposta da lead, aguarde/continue aquela pergunta. Não pule para o speech antes de terminar o DI.`
+        proximoPasso = `${fatos.length ? fatos.join(', ') + '. ' : ''}COMBINADO JÁ ACEITO — não repita. Veja as falas abaixo. Continue apenas da PRÓXIMA PERGUNTA indicada, sem repetir perguntas que já têm resposta. Não pule para o speech antes de terminar o DI.`
       } else {
         proximoPasso = `${fatos.length ? fatos.join(', ') + '. ' : ''}Etapa 3 (DI/combinado). NÃO recomece do zero. Continue de onde parou.`
       }
@@ -490,15 +490,34 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
     }
 
     // Last 5 turns of the most advanced call — fully autonomous for all stages (500-token limit on thinking.append)
+    const advTranscriptForBlock: Array<{role: string; text: string}> = (mostAdvancedCall as any).memories?.transcript ?? []
+
+    // Autonomous for ALL stages: find the last ANA turn with no LEAD response after it
+    const lastUnansweredAna = (() => {
+      for (let i = advTranscriptForBlock.length - 1; i >= 0; i--) {
+        const t = advTranscriptForBlock[i]
+        if (t.role === 'assistant' || t.role === 'ana') {
+          const hasLeadAfter = advTranscriptForBlock.slice(i + 1).some(
+            (x: any) => x.role === 'user' || x.role === 'lead'
+          )
+          if (!hasLeadAfter) return (t.text || '').trim()
+          break
+        }
+      }
+      return null
+    })()
+
     const lastTurnsBlock = (() => {
-      const advTranscript: Array<{role: string; text: string}> = (mostAdvancedCall as any).memories?.transcript ?? []
-      const lastTurns = advTranscript.slice(-5)
+      const lastTurns = advTranscriptForBlock.slice(-5)
       if (!lastTurns.length) return ''
       const lines = lastTurns.map((t: any) => {
         const role = (t.role === 'assistant' || t.role === 'ana') ? 'ANA' : 'LEAD'
         return `${role}: ${(t.text || '').trim()}`
       }).join('\n')
-      return `\n\n--- FALAS DA ETAPA MAIS AVANÇADA ---\n${lines}\n--- CONTINUE A PARTIR DAQUI ---`
+      const unansweredLine = lastUnansweredAna
+        ? `\nPRÓXIMA PERGUNTA (sem resposta ainda): "${lastUnansweredAna}" — faça só essa, sem repetir as que já têm resposta acima.`
+        : ''
+      return `\n\n--- FALAS DA ETAPA MAIS AVANÇADA ---\n${lines}\n--- CONTINUE A PARTIR DAQUI ---${unansweredLine}`
     })()
 
     const contextBlock = `
