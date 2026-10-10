@@ -818,14 +818,38 @@ export default function PaginaIndicacao() {
               </div>
             </div>
             <h1 className="text-white text-2xl font-bold tracking-tight mb-2">Missão completa! 🎉</h1>
-            <p className="text-[#9CA3AF] text-sm leading-relaxed max-w-xs mx-auto">
+            <p className="text-[#9CA3AF] text-sm leading-relaxed max-w-xs mx-auto mb-5">
               Envie para todas de uma vez ou individualmente — 1 clique por amiga!
             </p>
-            {totalEnviados > 0 && (
-              <p className="text-emerald-400 text-sm font-semibold mt-2">
-                ✅ {totalEnviados} de {contatosMissao.length} enviadas
-              </p>
-            )}
+
+            {/* Barra de progresso 3 etapas */}
+            {(() => {
+              const etapa1 = contatosMissao.length >= 20
+              const etapa2 = contatosMissao.filter(c => c.profissao && c.hobby).length >= 20
+              const etapa3 = totalEnviados >= 20
+              const progresso = (etapa1 ? 33.33 : 0) + (etapa2 ? 33.33 : 0) + (etapa3 ? 33.34 : 0)
+              return (
+                <div className="w-full max-w-xs mx-auto mb-2">
+                  <div className="flex justify-between text-xs text-[#9CA3AF] mb-1.5">
+                    <span className={etapa1 ? 'text-emerald-400 font-semibold' : ''}>Contatos</span>
+                    <span className={etapa2 ? 'text-emerald-400 font-semibold' : ''}>Dados</span>
+                    <span className={etapa3 ? 'text-emerald-400 font-semibold' : ''}>Mensagens</span>
+                  </div>
+                  <div className="w-full h-2.5 rounded-full bg-[#2D2040] overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${progresso}%`, background: progresso >= 100 ? 'linear-gradient(90deg, #10B981, #34D399)' : 'linear-gradient(90deg, #7C3AED, #A855F7)' }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-1.5">
+                    <span className="text-lg">{etapa1 ? '✅' : '⏳'}</span>
+                    <span className="text-lg">{etapa2 ? '✅' : '⏳'}</span>
+                    <span className="text-lg">{etapa3 ? '✅' : '⏳'}</span>
+                  </div>
+                  <p className="text-[#9CA3AF] text-xs text-center mt-1">{Math.round(progresso)}% concluído</p>
+                </div>
+              )
+            })()}
           </div>
         </div>
 
