@@ -127,16 +127,19 @@ export async function POST(req: NextRequest) {
       await supabase.from('mensagens_whatsapp').delete().like('phone', `%${suffix}%`)
       await supabase.from('leads_m4_flag').delete().like('telefone', `%${suffix}%`)
       await supabase.from('contatos_referidos').delete().like('indicado_por_telefone', `%${suffix}%`)
+      await supabase.from('historico_voz').delete().like('telefone', `%${suffix}%`)
+      await supabase.from('sessao_wpp').delete().like('phone', `%${suffix}%`)
       return NextResponse.json({ data, rows: data?.length ?? 0, m4_limpo: true })
     }
 
     if (action === 'resetar_referidos') {
       if (!telefone) return NextResponse.json({ error: 'Telefone obrigatório' }, { status: 400 })
+      const suffix = telefone.replace(/\D/g, '').slice(-9)
       const { data, error } = await supabase
         .from('contatos_referidos')
-        .update({ status: 'aguardando' })
-        .like('telefone', `%${telefone.replace(/\D/g, '').slice(-9)}%`)
-        .select('id, nome, telefone, status')
+        .update({ status: 'aguardando', mensagem_enviada: false })
+        .like('indicado_por_telefone', `%${suffix}%`)
+        .select('id, nome, telefone, status, mensagem_enviada')
       if (error) throw error
       return NextResponse.json({ data, rows: data?.length ?? 0 })
     }
@@ -149,6 +152,10 @@ export async function POST(req: NextRequest) {
         .select('id')
       if (error) throw error
       await supabase.from('mensagens_whatsapp').delete().gte('ts', '2000-01-01')
+      await supabase.from('leads_m4_flag').delete().gte('created_at', '2000-01-01')
+      await supabase.from('historico_voz').delete().gte('created_at', '2000-01-01')
+      await supabase.from('sessao_wpp').delete().gte('created_at', '2000-01-01')
+      await supabase.from('contatos_referidos').delete().gte('created_at', '2000-01-01')
       return NextResponse.json({ data, rows: data?.length ?? 0 })
     }
 
