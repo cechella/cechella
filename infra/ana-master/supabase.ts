@@ -460,7 +460,7 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       if (profissaoExtraida) fatos.push(`profissão=${profissaoExtraida}`)
       if (quemIndicouExtraido) fatos.push(`indicada por=${quemIndicouExtraido}`)
       if (sintomasExtraidos) fatos.push(`sintomas=${sintomasExtraidos}`)
-      proximoPasso = `Ligação caiu durante a Etapa 2 (conexão). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}NÃO pergunte o que já sabe. Demonstre que lembra: use o nome, mencione a profissão/rotina que ela já contou. Continue a conexão aprofundando a dor/sintomas para avançar ao DI.`
+      proximoPasso = `${fatos.length ? fatos.join(', ') + '. ' : ''}Etapa 2 (conexão). Não repita o que já sabe. Use nome/profissão/sintomas e avance ao DI.`
     } else if (etapaNum === 3) {
       const fatos: string[] = []
       if (nomeResolvido) fatos.push(`nome=${nomeResolvido}`)
@@ -468,29 +468,26 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       if (quemIndicouExtraido) fatos.push(`indicada por=${quemIndicouExtraido}`)
       if (sintomasExtraidos) fatos.push(`sintomas=${sintomasExtraidos}`)
       if (combinadoJaAceito) {
-        proximoPasso = `Ligação caiu durante/após a Etapa 3. ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}⚠️ ATENÇÃO: O combinado JÁ FOI ACEITO pela lead em ligação anterior. NÃO pergunte "Vamos fazer um combinado?" de novo. Isso já foi feito. Veja as últimas falas abaixo e continue para o PRÓXIMO PASSO após o combinado (speech do pellet ou fechamento), sem repetir nada que já foi dito.`
+        proximoPasso = `${fatos.length ? fatos.join(', ') + '. ' : ''}COMBINADO JÁ ACEITO. Não pergunte "Vamos fazer um combinado?" — já foi feito. Continue pelo speech do pellet.`
       } else {
-        proximoPasso = `Ligação caiu durante a Etapa 3 (DI — combinado). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}NÃO recomece o combinado do zero. Veja as últimas falas abaixo e continue EXATAMENTE de onde parou.`
+        proximoPasso = `${fatos.length ? fatos.join(', ') + '. ' : ''}Etapa 3 (DI/combinado). NÃO recomece do zero. Continue de onde parou.`
       }
     } else if (etapaNum === 4) {
-      const fatos: string[] = []
-      if (nomeResolvido) fatos.push(`nome=${nomeResolvido}`)
-      if (profissaoExtraida) fatos.push(`profissão=${profissaoExtraida}`)
-      proximoPasso = `Ligação caiu durante a Etapa 4 (speech do pellet). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}Veja as últimas falas abaixo e retome o speech exatamente de onde parou, sem repetir o que já foi dito.`
+      proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Etapa 4 (speech). Retome o speech de onde parou, sem repetir.`
     } else if (etapaNum === 5) {
-      proximoPasso = `Ligação caiu durante a Etapa 5 (fechamento — pagamento). ${nomeResolvido ? `Nome: ${nomeResolvido}. ` : ''}Veja as últimas falas abaixo e retome exatamente de onde parou — não repita o pitch do método de pagamento se já foi apresentado.`
+      proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Etapa 5 (fechamento). Retome o pagamento de onde parou.`
     } else if (etapaNum === 6) {
-      proximoPasso = `Ligação caiu durante a Etapa 6 (referidos). ${nomeResolvido ? `Nome: ${nomeResolvido}. ` : ''}Veja as últimas falas abaixo e continue o processo de referidos de onde parou, sem repetir a explicação da missão se já foi feita.`
+      proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Etapa 6 (referidos). Continue o processo de onde parou.`
     } else if (etapaNum === 7) {
-      proximoPasso = `Ligação caiu durante a Etapa 7 (validação). ${nomeResolvido ? `Nome: ${nomeResolvido}. ` : ''}Veja as últimas falas abaixo e retome a validação de onde parou.`
+      proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Etapa 7 (validação). Retome de onde parou.`
     } else {
-      const aviso = highestStageNum > etapaNum ? ` A lead já chegou até a Etapa ${highestStageNum} em ligações anteriores — não regride.` : ''
-      proximoPasso = `Retome a conversa${nomeResolvido ? ` com ${nomeResolvido}` : ''} de forma natural, sem repetir etapas já concluídas.${aviso} Veja as últimas falas abaixo.`
+      const aviso = highestStageNum > etapaNum ? ` Etapa máxima atingida: ${highestStageNum}. Não regride.` : ''
+      proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Retome sem repetir etapas já concluídas.${aviso}`
     }
 
-    // Last 10 turns of the merged transcript — injected for ALL stages
+    // Last 5 turns of the merged transcript — injected for ALL stages (500-token limit on thinking.append)
     const lastTurnsBlock = (() => {
-      const lastTurns = allTranscripts.slice(-10)
+      const lastTurns = allTranscripts.slice(-5)
       if (!lastTurns.length) return ''
       const lines = lastTurns.map((t: any) => {
         const role = (t.role === 'assistant' || t.role === 'ana') ? 'ANA' : 'LEAD'
@@ -500,13 +497,9 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
     })()
 
     const contextBlock = `
-
---- RETOMADA DE LIGAÇÃO ANTERIOR ---
-Esta lead já foi contactada anteriormente mas a ligação caiu antes de concluir.
-Retome de forma natural, sem repetir etapas já concluídas.
+[RETOMADA] Ligação caiu. Retome sem repetir o já dito.
 ${etapas.join('\n')}
-Próximo passo: ${proximoPasso}${lastTurnsBlock}
---- FIM RETOMADA ---`
+Próximo: ${proximoPasso}${lastTurnsBlock}`
 
     return { prevState: 'resume', contextBlock, metodoEscolhido, nomeLead: nomeResolvido ?? nomeLead, tokenIndicacao, pagamentoConfirmado, referidosInfo: referidosInfo ?? undefined }
   } catch (e: any) {
