@@ -1589,7 +1589,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             }
           })()
 
-        } else {
+        } else if (livePagamentoConfirmado || liveReferralsWaiting) {
           // ── verificar_referidos ───────────────────────────────────────────
           ;(async () => {
             try {
