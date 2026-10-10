@@ -396,7 +396,7 @@ export default function PaginaIndicacao() {
             .map((v: Contato) => ({ ...v, telefone: v.telefone.replace(/\D/g, '') }))
           const resultado = [...prev, ...novos].slice(0, 20)
           const todosCompletos = resultado.filter(c => c.profissao && c.hobby)
-          if (resultado.length >= 20 && todosCompletos.length >= 20 && Object.values(msgEnviada).filter(Boolean).length >= 20) setSucesso(true)
+          if (resultado.length >= 20 && todosCompletos.length >= 20) setSucesso(true)
           return resultado
         })
       }
@@ -512,8 +512,7 @@ export default function PaginaIndicacao() {
       setMsgEnviada(jaEnviadosMap)
 
       const completos = mappedEnviados.filter(c => c.profissao && c.hobby)
-      const todasMensagensEnviadas = enviados.length >= 20 && enviados.every((c: any) => c.mensagem_enviada === true)
-      if (mappedEnviados.length >= 20 && completos.length >= 20 && todasMensagensEnviadas) {
+      if (mappedEnviados.length >= 20 && completos.length >= 20) {
         setSucesso(true)
         return
       }
@@ -639,8 +638,7 @@ export default function PaginaIndicacao() {
         })
 
         const completosNovos = novoJaEnviados.filter(c => c.profissao && c.hobby)
-        const todasMsgEnviadas = novoJaEnviados.every((c: any) => c.mensagem_enviada === true)
-        if (novoJaEnviados.length >= 20 && completosNovos.length >= 20 && todasMsgEnviadas) {
+        if (novoJaEnviados.length >= 20 && completosNovos.length >= 20) {
           setSucesso(true)
           return
         }
@@ -817,7 +815,7 @@ export default function PaginaIndicacao() {
                 <CheckCircle className="w-9 h-9 text-emerald-400" />
               </div>
             </div>
-            <h1 className="text-white text-2xl font-bold tracking-tight mb-2">Missão completa! 🎉</h1>
+            <h1 className="text-white text-2xl font-bold tracking-tight mb-2">{totalEnviados >= contatosMissao.length ? 'Missão completa! 🎉' : 'Quase lá! 💜'}</h1>
             <p className="text-[#9CA3AF] text-sm leading-relaxed max-w-xs mx-auto mb-5">
               Envie para todas de uma vez ou individualmente — 1 clique por amiga!
             </p>
