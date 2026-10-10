@@ -403,7 +403,7 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
 
     // Get stage from most recent call
     const stagePrevCall = (prevCall as any).stage as string | undefined
-    const stageMap: Record<string, number> = { apresentacao: 1, conexao: 2, di: 3, speech: 4, fechamento: 5, referidos: 6, validacao: 7, ganho: 8 }
+    const stageMap: Record<string, number> = { apresentacao: 1, conexao: 2, di: 3, combinado: 3, speech: 4, fechamento: 5, referidos: 6, validacao: 7, ganho: 8 }
     const etapaNum = stageMap[stagePrevCall ?? ''] ?? 1
 
     const etapas: string[] = []
