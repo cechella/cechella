@@ -829,7 +829,7 @@ export default function PaginaIndicacao() {
               return (
                 <div className="w-full max-w-xs mx-auto mb-2">
                   <div className="flex justify-between text-xs text-[#9CA3AF] mb-1.5">
-                    <span className={etapa1 ? 'text-emerald-400 font-semibold' : ''}>Referidos</span>
+                    <span className={etapa1 ? 'text-emerald-400 font-semibold' : ''}>Contatos</span>
                     <span className={etapa2 ? 'text-emerald-400 font-semibold' : ''}>Prof. e Hobby</span>
                     <span className={etapa3 ? 'text-emerald-400 font-semibold' : ''}>Msgs enviadas</span>
                   </div>
