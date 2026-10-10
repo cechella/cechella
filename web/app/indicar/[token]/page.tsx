@@ -944,7 +944,7 @@ export default function PaginaIndicacao() {
           <div className="bg-[#1A1528] border border-[#2D2040] rounded-2xl px-4 py-3.5 mt-2">
             <p className="text-[#9CA3AF] text-xs leading-relaxed text-center">
               Avisa suas amigas que vão receber uma ligação do número{' '}
-              <strong className="text-white">{process.env.ANA_PHONE_NUMBER ?? '+55 17 2786-2778'}</strong>
+              <strong className="text-white">{process.env.ANA_PHONE_NUMBER ?? '+55 47 2398-0061'}</strong>
               {' '}— pode atender com tranquilidade! 📞
             </p>
           </div>

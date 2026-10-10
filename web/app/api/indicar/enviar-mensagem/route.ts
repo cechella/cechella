@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     const mensagem =
       `Oi! Tudo bem? 😊\n` +
       `Acabei de fazer uma coisa incrível pela minha saúde e pensei em você! Uma consultora chamada Ana do Hormone Ecosystem vai entrar em contato com você — vale muito a pena ouvir! 🌸\n` +
-      `Ela vai te ligar do número ${process.env.ANA_PHONE_NUMBER ?? '+55 17 2786-2778'} — pode atender com tranquilidade! 📞\n\n` +
+      `Ela vai te ligar do número ${process.env.ANA_PHONE_NUMBER ?? '+55 47 2398-0061'} — pode atender com tranquilidade! 📞\n\n` +
       `essa mensagem foi enviada a meu pedido`
 
     await zapiText(telReferido, mensagem)
