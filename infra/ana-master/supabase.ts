@@ -401,9 +401,9 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       return null
     })()
 
-    // Score every stage with sub-stage granularity so combinado > di within etapa 3
-    const stageScore: Record<string, number> = { apresentacao: 1, conexao: 2, di: 3, combinado: 3.5, speech: 4, fechamento: 5, referidos: 6, validacao: 7, ganho: 8 }
-    const stageMap: Record<string, number> = { apresentacao: 1, conexao: 2, di: 3, combinado: 3, speech: 4, fechamento: 5, referidos: 6, validacao: 7, ganho: 8 }
+    // Linear stage scores — di_qualificacao (post-combinado DI questions) sits above combinado
+    const stageScore: Record<string, number> = { apresentacao: 1, conexao: 2, di: 3, combinado: 3.5, di_qualificacao: 3.7, speech: 4, fechamento: 5, referidos: 6, validacao: 7, ganho: 8 }
+    const stageMap: Record<string, number> = { apresentacao: 1, conexao: 2, di: 3, combinado: 3, di_qualificacao: 3, speech: 4, fechamento: 5, referidos: 6, validacao: 7, ganho: 8 }
 
     // Find the most advanced call (highest stage score; ties broken by transcript length)
     const mostAdvancedCall = prevCalls.reduce((best: any, c: any) => {
@@ -420,7 +420,7 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
 
     const stageMostAdv = (mostAdvancedCall as any).stage as string | undefined
     const etapaNum = stageMap[stageMostAdv ?? ''] ?? 1
-    const combinadoJaAceito = (stageScore[stageMostAdv ?? ''] ?? 1) >= 3.5
+    const combinadoJaAceito = (stageScore[stageMostAdv ?? ''] ?? 1) >= 3.5  // combinado(3.5), di_qualificacao(3.7), speech(4)+
 
     const etapas: string[] = []
     if (stageMostAdv && stageMostAdv !== 'apresentacao') etapas.push(`- Etapa mais avançada: ${stageMostAdv} (${etapaNum})`)
@@ -489,29 +489,12 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Retome sem repetir etapas já concluídas.`
     }
 
-    // Last 5 turns anchored at the most advanced point in allTranscripts (500-token limit on thinking.append)
-    // For etapa 3: anchor at the last DI qualifier (viagem/decisões) since those come AFTER combinado acceptance
-    // For other etapas: use last 5 turns of mostAdvancedCall
+    // Last 5 turns of the most advanced call — fully autonomous for all stages (500-token limit on thinking.append)
     const lastTurnsBlock = (() => {
-      let sourceTurns: Array<{role: string; text: string}>
-      if (etapaNum === 3) {
-        // Find last occurrence of DI qualifier keywords in allTranscripts (content-based, not stage-based)
-        const diQualifiers = /viagem|compromisso|decisões|decisao|sozinha|sozinho|alinhar/i
-        let anchorIdx = -1
-        for (let i = allTranscripts.length - 1; i >= 0; i--) {
-          if (diQualifiers.test(allTranscripts[i].text || '')) { anchorIdx = i; break }
-        }
-        if (anchorIdx >= 0) {
-          // Take 5 turns ending at anchor (context leading into the most advanced DI point)
-          sourceTurns = allTranscripts.slice(Math.max(0, anchorIdx - 4), anchorIdx + 1)
-        } else {
-          sourceTurns = ((mostAdvancedCall as any).memories?.transcript ?? []).slice(-5)
-        }
-      } else {
-        sourceTurns = ((mostAdvancedCall as any).memories?.transcript ?? []).slice(-5)
-      }
-      if (!sourceTurns.length) return ''
-      const lines = sourceTurns.map((t: any) => {
+      const advTranscript: Array<{role: string; text: string}> = (mostAdvancedCall as any).memories?.transcript ?? []
+      const lastTurns = advTranscript.slice(-5)
+      if (!lastTurns.length) return ''
+      const lines = lastTurns.map((t: any) => {
         const role = (t.role === 'assistant' || t.role === 'ana') ? 'ANA' : 'LEAD'
         return `${role}: ${(t.text || '').trim()}`
       }).join('\n')
