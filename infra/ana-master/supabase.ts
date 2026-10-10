@@ -401,24 +401,29 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       return null
     })()
 
-    // Get stage from most recent call
-    const stagePrevCall = (prevCall as any).stage as string | undefined
+    // Score every stage with sub-stage granularity so combinado > di within etapa 3
+    const stageScore: Record<string, number> = { apresentacao: 1, conexao: 2, di: 3, combinado: 3.5, speech: 4, fechamento: 5, referidos: 6, validacao: 7, ganho: 8 }
     const stageMap: Record<string, number> = { apresentacao: 1, conexao: 2, di: 3, combinado: 3, speech: 4, fechamento: 5, referidos: 6, validacao: 7, ganho: 8 }
-    const etapaNum = stageMap[stagePrevCall ?? ''] ?? 1
 
-    // Detect if combinado was already accepted in ANY previous call
-    const combinadoJaAceito = prevCalls.some(c => {
-      const s = (c as any).stage as string | undefined
-      return s && ['combinado', 'speech', 'fechamento', 'referidos', 'validacao', 'ganho'].includes(s)
-    })
-    // Detect highest stage reached across ALL previous calls
-    const highestStageNum = prevCalls.reduce((max, c) => {
-      const s = (c as any).stage as string | undefined
-      return Math.max(max, stageMap[s ?? ''] ?? 1)
-    }, 1)
+    // Find the most advanced call (highest stage score; ties broken by transcript length)
+    const mostAdvancedCall = prevCalls.reduce((best: any, c: any) => {
+      const cScore = stageScore[c.stage ?? ''] ?? 1
+      const bestScore = stageScore[best.stage ?? ''] ?? 1
+      if (cScore > bestScore) return c
+      if (cScore === bestScore) {
+        const cLen = (c.memories?.transcript ?? []).length
+        const bestLen = (best.memories?.transcript ?? []).length
+        return cLen > bestLen ? c : best
+      }
+      return best
+    }, prevCalls[0])
+
+    const stageMostAdv = (mostAdvancedCall as any).stage as string | undefined
+    const etapaNum = stageMap[stageMostAdv ?? ''] ?? 1
+    const combinadoJaAceito = (stageScore[stageMostAdv ?? ''] ?? 1) >= 3.5
 
     const etapas: string[] = []
-    if (stagePrevCall && stagePrevCall !== 'apresentacao') etapas.push(`- Etapa em que a ligação caiu: ${stagePrevCall} (${etapaNum})`)
+    if (stageMostAdv && stageMostAdv !== 'apresentacao') etapas.push(`- Etapa mais avançada: ${stageMostAdv} (${etapaNum})`)
     if (pagamentoConfirmado) etapas.push(`- Pagamento já confirmado via ${metodoEscolhido ?? 'método anterior'}`)
     else if (metodoEscolhido) etapas.push(`- Lead escolheu ${metodoEscolhido} mas pagamento não foi confirmado`)
     if (tokenIndicacao) etapas.push('- Link de indicações já foi enviado no WhatsApp')
@@ -481,19 +486,20 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
     } else if (etapaNum === 7) {
       proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Etapa 7 (validação). Retome de onde parou.`
     } else {
-      const aviso = highestStageNum > etapaNum ? ` Etapa máxima atingida: ${highestStageNum}. Não regride.` : ''
-      proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Retome sem repetir etapas já concluídas.${aviso}`
+      proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Retome sem repetir etapas já concluídas.`
     }
 
-    // Last 5 turns of the merged transcript — injected for ALL stages (500-token limit on thinking.append)
+    // Last 5 turns of the MOST ADVANCED call (500-token limit on thinking.append)
+    // Using mostAdvancedCall ensures Ana sees the furthest point reached, not the most recent (which may have dropped early)
     const lastTurnsBlock = (() => {
-      const lastTurns = allTranscripts.slice(-5)
+      const advTranscript: Array<{role: string; text: string}> = (mostAdvancedCall as any).memories?.transcript ?? []
+      const lastTurns = advTranscript.slice(-5)
       if (!lastTurns.length) return ''
       const lines = lastTurns.map((t: any) => {
         const role = (t.role === 'assistant' || t.role === 'ana') ? 'ANA' : 'LEAD'
         return `${role}: ${(t.text || '').trim()}`
       }).join('\n')
-      return `\n\n--- ÚLTIMAS FALAS ANTES DA LIGAÇÃO CAIR ---\n${lines}\n--- CONTINUE A PARTIR DAQUI ---`
+      return `\n\n--- FALAS DA ETAPA MAIS AVANÇADA ---\n${lines}\n--- CONTINUE A PARTIR DAQUI ---`
     })()
 
     const contextBlock = `
