@@ -268,7 +268,7 @@ export async function buildSessionContext(telefone: string, callSid: string): Pr
     // Fetch all recent calls for this number — payment/token may be on an older call
     const { data: prevCalls } = await supabase
       .from('ana_calls')
-      .select('call_sid, status, memories, created_at')
+      .select('call_sid, status, stage, memories, created_at')
       .or(`telefone.eq.${norm},telefone.eq.${bare}`)
       .neq('call_sid', callSid)
       .gte('created_at', since)
@@ -325,11 +325,29 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       } catch { /* ignore */ }
     }
 
+    // Extract key facts from transcript of most recent call
+    const transcript: Array<{ role: string; text: string }> = mergedMemories.transcript ?? []
+    const transcriptText = transcript.map((t: any) => `${t.role === 'assistant' ? 'ANA' : 'LEAD'}: ${t.text}`).join('\n')
+
+    // Extract profissão/hobby from transcript using simple heuristics
+    const profissaoMatch = transcriptText.match(/(?:sou|trabalho como|sou\s+)([^,.\n]{3,40}(?:contadora?|enfermeira|médica|professora|advogada|administradora|nutricionista|fisioterapeuta|psicóloga|dentista|arquiteta|engenheira|vendedora|gerente|diretora|empresária|autônoma|do lar|aposentada)[^,.\n]{0,30})/i)
+    const profissaoExtraida = profissaoMatch ? profissaoMatch[1].trim() : null
+    const quemIndicouMatch = transcriptText.match(/(?:foi a?|me indicou|indicação da?|mandou mensagem)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][a-záéíóúâêîôûàãõç]+)/i)
+    const quemIndicouExtraido = quemIndicouMatch ? quemIndicouMatch[1].trim() : null
+
+    // Get stage from most recent call
+    const stagePrevCall = (prevCall as any).stage as string | undefined
+    const stageMap: Record<string, number> = { apresentacao: 1, conexao: 2, di: 3, speech: 4, fechamento: 5, referidos: 6, validacao: 7, ganho: 8 }
+    const etapaNum = stageMap[stagePrevCall ?? ''] ?? 1
+
     const etapas: string[] = []
+    if (stagePrevCall && stagePrevCall !== 'apresentacao') etapas.push(`- Etapa em que a ligação caiu: ${stagePrevCall} (${etapaNum})`)
     if (pagamentoConfirmado) etapas.push(`- Pagamento já confirmado via ${metodoEscolhido ?? 'método anterior'}`)
     else if (metodoEscolhido) etapas.push(`- Lead escolheu ${metodoEscolhido} mas pagamento não foi confirmado`)
     if (tokenIndicacao) etapas.push('- Link de indicações já foi enviado no WhatsApp')
     if (nomeLead) etapas.push(`- Nome da lead: ${nomeLead}`)
+    if (profissaoExtraida && !nomeLead?.includes(profissaoExtraida)) etapas.push(`- Profissão mencionada: ${profissaoExtraida}`)
+    if (quemIndicouExtraido) etapas.push(`- Quem indicou: ${quemIndicouExtraido}`)
     if (referidosInfo && referidosInfo.total > 0) {
       etapas.push(`- Referidos já enviados: ${referidosInfo.total}`)
       if (referidosInfo.semDados > 0) etapas.push(`- Faltam dados (profissão/hobby) em ${referidosInfo.semDados} contato(s)`)
@@ -358,8 +376,19 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       }
     } else if (pagamentoConfirmado && tokenIndicacao) {
       proximoPasso = 'Pagamento confirmado e link enviado. Pergunte se a lead chegou a abrir o link e enviar contatos. Se sim, oriente o passo a passo.'
+    } else if (etapaNum === 2) {
+      // Dropped during conexao — resume from where conversation left off
+      const fatos: string[] = []
+      if (nomeLead) fatos.push(`nome=${nomeLead}`)
+      if (profissaoExtraida) fatos.push(`profissão=${profissaoExtraida}`)
+      if (quemIndicouExtraido) fatos.push(`indicada por=${quemIndicouExtraido}`)
+      proximoPasso = `Ligação caiu durante a Etapa 2 (conexão). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}Retome a conexão — continue conhecendo a rotina e a dor da lead. NÃO repita perguntas já respondidas.`
+    } else if (etapaNum === 3) {
+      proximoPasso = `Ligação caiu durante a Etapa 3 (DI — combinado). ${nomeLead ? `Nome: ${nomeLead}. ` : ''}Retome o combinado de forma natural, sem repetir a conexão.`
+    } else if (etapaNum === 4) {
+      proximoPasso = `Ligação caiu durante a Etapa 4 (speech do pellet). ${nomeLead ? `Nome: ${nomeLead}. ` : ''}Retome o speech — pode resumir brevemente o que já falou e continuar para o fechamento.`
     } else {
-      proximoPasso = 'Retome desde a apresentação do produto.'
+      proximoPasso = `Retome a conversa${nomeLead ? ` com ${nomeLead}` : ''} de forma natural, sem repetir etapas já concluídas.`
     }
 
     const contextBlock = `
