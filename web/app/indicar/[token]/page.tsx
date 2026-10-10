@@ -505,7 +505,7 @@ export default function PaginaIndicacao() {
       // Restaura quais contatos já tiveram mensagem enviada
       const jaEnviadosMap: Record<string, boolean> = {}
       enviados.forEach((c: any) => {
-        if (c.status === 'mensagem_enviada') {
+        if (c.status === 'mensagem_enviada' || c.mensagem_enviada === true) {
           jaEnviadosMap[String(c.telefone).replace(/\D/g, '')] = true
         }
       })

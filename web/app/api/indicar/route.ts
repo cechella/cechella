@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   // Busca contatos já enviados por este lead (qualquer tipo_envio)
   const { data: jaEnviados } = await supabase
     .from('contatos_referidos')
-    .select('nome, telefone, profissao, hobby, status, tipo_envio')
+    .select('nome, telefone, profissao, hobby, status, tipo_envio, mensagem_enviada')
     .eq('indicado_por_telefone', lead.telefone)
     .in('tipo_envio', ['link_indicacao', 'contato_whatsapp'])
 
