@@ -325,8 +325,13 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       } catch { /* ignore */ }
     }
 
-    // Extract key facts from transcript — more reliable than memories (no race condition)
-    const transcript: Array<{ role: string; text: string }> = mergedMemories.transcript ?? []
+    // Merge transcripts from ALL calls (concatenate, not overwrite — Object.assign loses older turns)
+    const allTranscripts: Array<{ role: string; text: string; ts?: any }> = []
+    for (const c of [...prevCalls].reverse()) {
+      const tr = (c.memories as any)?.transcript
+      if (Array.isArray(tr)) allTranscripts.push(...tr)
+    }
+    const transcript: Array<{ role: string; text: string }> = allTranscripts.length ? allTranscripts : (mergedMemories.transcript ?? [])
     const leadLines = transcript
       .filter((t: any) => t.role === 'user' || t.role === 'lead')
       .map((t: any) => t.text || '')
@@ -341,23 +346,49 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
     // Extract nome from lead speech (fallback to memories.nome_lead)
     const nomeFromTranscript = (() => {
       for (const line of leadLines) {
-        const m = line.match(/(?:meu nome [eé]|me chamo|sou a?\s+)([A-ZÀ-Úa-zà-ú]{2,}(?:\s+[A-ZÀ-Úa-zà-ú]{2,})?)/i)
+        const m = line.match(/(?:meu nome [eéEÉ]\s+|me chamo\s+|sou a\s+)([A-ZÀ-Úa-zà-ú]{2,}(?:\s+[A-ZÀ-Úa-zà-ú]{2,})?)/i)
         if (m) return m[1].trim()
       }
-      // Also check if Ana repeated the name back ("Ah, Maria!")
+      // Also check if Ana repeated the name back ("Ah, Maria!" or "Maria, que bom")
+      const skip = new Set(['Oi', 'Olá', 'Tudo', 'Que', 'Sim', 'Não', 'Ok', 'Certo', 'Claro', 'Nossa', 'Ah', 'Pois', 'Ótimo', 'Perfeito'])
       for (const line of anaLines) {
         const m = line.match(/^(?:Ah[,!]?\s+|Oi[,!]?\s+|Olá[,!]?\s+)?([A-ZÀ-Ú][a-zà-ú]{2,})(?:[,!]|\s+que\s+(?:bom|legal|prazer))/i)
-        if (m && !['Oi', 'Olá', 'Tudo', 'Que', 'Sim', 'Não', 'Ok', 'Certo', 'Claro', 'Nossa'].includes(m[1])) return m[1].trim()
+        if (m && !skip.has(m[1])) return m[1].trim()
       }
       return null
     })()
     const nomeResolvido = (mergedMemories.nome_lead as string | undefined) || nomeFromTranscript || null
 
-    // Extract profissão from lead speech
-    const profissaoMatch = leadText.match(/(?:sou |trabalho como |faço\s+)([^,.\n]{3,50}(?:contadora?|enfermeira|médica|professora|advogada|administradora|nutricionista|fisioterapeuta|psicóloga|dentista|arquiteta|engenheira|vendedora|gerente|diretora|empresária|autônoma|do lar|aposentada|contabilidade|contábil)[^,.\n]{0,30})/i)
-    const profissaoExtraida = profissaoMatch ? profissaoMatch[1].trim() : null
-    const quemIndicouMatch = transcriptText.match(/(?:foi a?|me indicou|indicação da?|mandou mensagem|foi\s+)([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][a-záéíóúâêîôûàãõç]{2,})/i)
-    const quemIndicouExtraido = quemIndicouMatch ? quemIndicouMatch[1].trim() : null
+    // Extract profissão — search lead lines for profession keywords directly
+    const profissaoExtraida = (() => {
+      const profKeywords = /\b(contadora?|enfermeira|médica|professora|advogada|administradora|nutricionista|fisioterapeuta|psicóloga|dentista|arquiteta|engenheira|vendedora|gerente|diretora|empresária|autônoma|aposentada|contabilidade|contábil|pedagoga|farmacêutica|veterinária|esteticista|cabeleireira|recepcionista|secretária|assistente)\b/i
+      // First: look for "sou [profissão]" or "trabalho como [profissão]"
+      for (const line of leadLines) {
+        const m = line.match(/(?:sou\s+|trabalho como\s+|trabalho de\s+)([a-záéíóúàâêôûãõç\s]{2,40})/i)
+        if (m && profKeywords.test(m[1])) return m[1].replace(/,.*/, '').trim()
+        // Or line itself starts with / contains the keyword
+        const k = line.match(profKeywords)
+        if (k) return k[1].trim()
+      }
+      return null
+    })()
+    // Search quem indicou in lead lines only (no LEAD:/ANA: prefix confusion)
+    const quemIndicouExtraido = (() => {
+      for (const line of leadLines) {
+        // "foi a Adriana", "foi o João", "Adriana. Uma mensagem" after previous line ended with "foi a"
+        const m = line.match(/(?:foi\s+(?:a|o)\s+|me indicou\s+|indicação de\s+)([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][a-záéíóúâêîôûàãõç]{2,})/i)
+        if (m) return m[1].trim()
+        // Line starts directly with a name (e.g. "Adriana. Uma mensagem...")
+        const mStart = line.match(/^([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][a-záéíóúâêîôûàãõç]{2,})\.\s+(?:Uma|um|Ela|ele|Foi|Fez)/i)
+        if (mStart) return mStart[1].trim()
+      }
+      // Also check "Não, foi Adriana" pattern
+      for (const line of leadLines) {
+        const m = line.match(/foi\s+([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][a-záéíóúâêîôûàãõç]{2,})/i)
+        if (m && !['a','o','um','uma'].includes(m[1].toLowerCase())) return m[1].trim()
+      }
+      return null
+    })()
 
     // Get stage from most recent call
     const stagePrevCall = (prevCall as any).stage as string | undefined
