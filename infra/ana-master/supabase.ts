@@ -493,4 +493,3 @@ Próximo passo: ${proximoPasso}${lastTurnsBlock}
     return { prevState: 'fresh', contextBlock: '' }
   }
 }
-// Sat Oct 10 19:36:30 UTC 2026
