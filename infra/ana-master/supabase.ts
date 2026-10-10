@@ -455,15 +455,28 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       if (nomeResolvido) fatos.push(`nome=${nomeResolvido}`)
       if (profissaoExtraida) fatos.push(`profissão=${profissaoExtraida}`)
       if (quemIndicouExtraido) fatos.push(`indicada por=${quemIndicouExtraido}`)
-      proximoPasso = `Ligação caiu durante a Etapa 3 (DI — combinado). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}Retome o combinado de forma natural, sem repetir a conexão.`
+      if (sintomasExtraidos) fatos.push(`sintomas=${sintomasExtraidos}`)
+      proximoPasso = `Ligação caiu durante a Etapa 3 (DI — combinado). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}NÃO recomece o combinado do zero. Veja as últimas falas abaixo e continue EXATAMENTE de onde parou.`
     } else if (etapaNum === 4) {
       const fatos: string[] = []
       if (nomeResolvido) fatos.push(`nome=${nomeResolvido}`)
       if (profissaoExtraida) fatos.push(`profissão=${profissaoExtraida}`)
-      proximoPasso = `Ligação caiu durante a Etapa 4 (speech do pellet). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}Retome o speech — pode resumir brevemente o que já falou e continuar para o fechamento.`
+      proximoPasso = `Ligação caiu durante a Etapa 4 (speech do pellet). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}Veja as últimas falas abaixo e retome o speech exatamente de onde parou, sem repetir o que já foi dito.`
     } else {
       proximoPasso = `Retome a conversa${nomeResolvido ? ` com ${nomeResolvido}` : ''} de forma natural, sem repetir etapas já concluídas.`
     }
+
+    // Last 10 turns of the merged transcript for stages 2-4
+    const lastTurnsBlock = (() => {
+      if (etapaNum < 2 || etapaNum > 4) return ''
+      const lastTurns = allTranscripts.slice(-10)
+      if (!lastTurns.length) return ''
+      const lines = lastTurns.map((t: any) => {
+        const role = (t.role === 'assistant' || t.role === 'ana') ? 'ANA' : 'LEAD'
+        return `${role}: ${(t.text || '').trim()}`
+      }).join('\n')
+      return `\n\n--- ÚLTIMAS FALAS ANTES DA LIGAÇÃO CAIR ---\n${lines}\n--- CONTINUE A PARTIR DAQUI ---`
+    })()
 
     const contextBlock = `
 
@@ -471,7 +484,7 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
 Esta lead já foi contactada anteriormente mas a ligação caiu antes de concluir.
 Retome de forma natural, sem repetir etapas já concluídas.
 ${etapas.join('\n')}
-Próximo passo: ${proximoPasso}
+Próximo passo: ${proximoPasso}${lastTurnsBlock}
 --- FIM RETOMADA ---`
 
     return { prevState: 'resume', contextBlock, metodoEscolhido, nomeLead: nomeResolvido ?? nomeLead, tokenIndicacao, pagamentoConfirmado, referidosInfo: referidosInfo ?? undefined }
