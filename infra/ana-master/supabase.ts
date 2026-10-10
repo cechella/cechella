@@ -372,6 +372,17 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       }
       return null
     })()
+    // Extract symptoms/dores from lead speech
+    const sintomasExtraidos = (() => {
+      const sintomasKeywords = /\b(falta de energia|baixa de libido|libido baixa|irritabilidade|insônia|cansaço|fadiga|ganho de peso|perda de peso|queda de cabelo|fogacho|calor|ansiedade|depressão|falta de foco|falta de concentração|dor|humor|bem.estar|disposição|memória)\b/gi
+      const found = new Set<string>()
+      for (const line of leadLines) {
+        const matches = line.match(sintomasKeywords)
+        if (matches) matches.forEach((m: string) => found.add(m.toLowerCase()))
+      }
+      return found.size > 0 ? Array.from(found).join(', ') : null
+    })()
+
     // Search quem indicou in lead lines only (no LEAD:/ANA: prefix confusion)
     const quemIndicouExtraido = (() => {
       for (const line of leadLines) {
@@ -403,6 +414,7 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
     if (nomeResolvido) etapas.push(`- Nome da lead: ${nomeResolvido}`)
     if (profissaoExtraida) etapas.push(`- Profissão mencionada: ${profissaoExtraida}`)
     if (quemIndicouExtraido) etapas.push(`- Quem indicou: ${quemIndicouExtraido}`)
+    if (sintomasExtraidos) etapas.push(`- Sintomas relatados: ${sintomasExtraidos}`)
     if (referidosInfo && referidosInfo.total > 0) {
       etapas.push(`- Referidos já enviados: ${referidosInfo.total}`)
       if (referidosInfo.semDados > 0) etapas.push(`- Faltam dados (profissão/hobby) em ${referidosInfo.semDados} contato(s)`)
@@ -436,7 +448,8 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       if (nomeResolvido) fatos.push(`nome=${nomeResolvido}`)
       if (profissaoExtraida) fatos.push(`profissão=${profissaoExtraida}`)
       if (quemIndicouExtraido) fatos.push(`indicada por=${quemIndicouExtraido}`)
-      proximoPasso = `Ligação caiu durante a Etapa 2 (conexão). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}Retome a conexão — continue conhecendo a rotina e a dor da lead. NÃO repita perguntas já respondidas.`
+      if (sintomasExtraidos) fatos.push(`sintomas=${sintomasExtraidos}`)
+      proximoPasso = `Ligação caiu durante a Etapa 2 (conexão). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}NÃO pergunte o que já sabe. Demonstre que lembra: use o nome, mencione a profissão/rotina que ela já contou. Continue a conexão aprofundando a dor/sintomas para avançar ao DI.`
     } else if (etapaNum === 3) {
       const fatos: string[] = []
       if (nomeResolvido) fatos.push(`nome=${nomeResolvido}`)
