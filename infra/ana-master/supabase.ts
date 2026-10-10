@@ -325,14 +325,38 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       } catch { /* ignore */ }
     }
 
-    // Extract key facts from transcript of most recent call
+    // Extract key facts from transcript — more reliable than memories (no race condition)
     const transcript: Array<{ role: string; text: string }> = mergedMemories.transcript ?? []
-    const transcriptText = transcript.map((t: any) => `${t.role === 'assistant' ? 'ANA' : 'LEAD'}: ${t.text}`).join('\n')
+    const leadLines = transcript
+      .filter((t: any) => t.role === 'user' || t.role === 'lead')
+      .map((t: any) => t.text || '')
+    const anaLines = transcript
+      .filter((t: any) => t.role === 'assistant' || t.role === 'ana')
+      .map((t: any) => t.text || '')
+    const leadText = leadLines.join(' ')
+    const transcriptText = transcript.map((t: any) =>
+      `${(t.role === 'assistant' || t.role === 'ana') ? 'ANA' : 'LEAD'}: ${t.text}`
+    ).join('\n')
 
-    // Extract profissão/hobby from transcript using simple heuristics
-    const profissaoMatch = transcriptText.match(/(?:sou|trabalho como|sou\s+)([^,.\n]{3,40}(?:contadora?|enfermeira|médica|professora|advogada|administradora|nutricionista|fisioterapeuta|psicóloga|dentista|arquiteta|engenheira|vendedora|gerente|diretora|empresária|autônoma|do lar|aposentada)[^,.\n]{0,30})/i)
+    // Extract nome from lead speech (fallback to memories.nome_lead)
+    const nomeFromTranscript = (() => {
+      for (const line of leadLines) {
+        const m = line.match(/(?:meu nome [eé]|me chamo|sou a?\s+)([A-ZÀ-Úa-zà-ú]{2,}(?:\s+[A-ZÀ-Úa-zà-ú]{2,})?)/i)
+        if (m) return m[1].trim()
+      }
+      // Also check if Ana repeated the name back ("Ah, Maria!")
+      for (const line of anaLines) {
+        const m = line.match(/^(?:Ah[,!]?\s+|Oi[,!]?\s+|Olá[,!]?\s+)?([A-ZÀ-Ú][a-zà-ú]{2,})(?:[,!]|\s+que\s+(?:bom|legal|prazer))/i)
+        if (m && !['Oi', 'Olá', 'Tudo', 'Que', 'Sim', 'Não', 'Ok', 'Certo', 'Claro', 'Nossa'].includes(m[1])) return m[1].trim()
+      }
+      return null
+    })()
+    const nomeResolvido = (mergedMemories.nome_lead as string | undefined) || nomeFromTranscript || null
+
+    // Extract profissão from lead speech
+    const profissaoMatch = leadText.match(/(?:sou |trabalho como |faço\s+)([^,.\n]{3,50}(?:contadora?|enfermeira|médica|professora|advogada|administradora|nutricionista|fisioterapeuta|psicóloga|dentista|arquiteta|engenheira|vendedora|gerente|diretora|empresária|autônoma|do lar|aposentada|contabilidade|contábil)[^,.\n]{0,30})/i)
     const profissaoExtraida = profissaoMatch ? profissaoMatch[1].trim() : null
-    const quemIndicouMatch = transcriptText.match(/(?:foi a?|me indicou|indicação da?|mandou mensagem)\s+([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][a-záéíóúâêîôûàãõç]+)/i)
+    const quemIndicouMatch = transcriptText.match(/(?:foi a?|me indicou|indicação da?|mandou mensagem|foi\s+)([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][a-záéíóúâêîôûàãõç]{2,})/i)
     const quemIndicouExtraido = quemIndicouMatch ? quemIndicouMatch[1].trim() : null
 
     // Get stage from most recent call
@@ -345,8 +369,8 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
     if (pagamentoConfirmado) etapas.push(`- Pagamento já confirmado via ${metodoEscolhido ?? 'método anterior'}`)
     else if (metodoEscolhido) etapas.push(`- Lead escolheu ${metodoEscolhido} mas pagamento não foi confirmado`)
     if (tokenIndicacao) etapas.push('- Link de indicações já foi enviado no WhatsApp')
-    if (nomeLead) etapas.push(`- Nome da lead: ${nomeLead}`)
-    if (profissaoExtraida && !nomeLead?.includes(profissaoExtraida)) etapas.push(`- Profissão mencionada: ${profissaoExtraida}`)
+    if (nomeResolvido) etapas.push(`- Nome da lead: ${nomeResolvido}`)
+    if (profissaoExtraida) etapas.push(`- Profissão mencionada: ${profissaoExtraida}`)
     if (quemIndicouExtraido) etapas.push(`- Quem indicou: ${quemIndicouExtraido}`)
     if (referidosInfo && referidosInfo.total > 0) {
       etapas.push(`- Referidos já enviados: ${referidosInfo.total}`)
@@ -377,18 +401,24 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
     } else if (pagamentoConfirmado && tokenIndicacao) {
       proximoPasso = 'Pagamento confirmado e link enviado. Pergunte se a lead chegou a abrir o link e enviar contatos. Se sim, oriente o passo a passo.'
     } else if (etapaNum === 2) {
-      // Dropped during conexao — resume from where conversation left off
       const fatos: string[] = []
-      if (nomeLead) fatos.push(`nome=${nomeLead}`)
+      if (nomeResolvido) fatos.push(`nome=${nomeResolvido}`)
       if (profissaoExtraida) fatos.push(`profissão=${profissaoExtraida}`)
       if (quemIndicouExtraido) fatos.push(`indicada por=${quemIndicouExtraido}`)
       proximoPasso = `Ligação caiu durante a Etapa 2 (conexão). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}Retome a conexão — continue conhecendo a rotina e a dor da lead. NÃO repita perguntas já respondidas.`
     } else if (etapaNum === 3) {
-      proximoPasso = `Ligação caiu durante a Etapa 3 (DI — combinado). ${nomeLead ? `Nome: ${nomeLead}. ` : ''}Retome o combinado de forma natural, sem repetir a conexão.`
+      const fatos: string[] = []
+      if (nomeResolvido) fatos.push(`nome=${nomeResolvido}`)
+      if (profissaoExtraida) fatos.push(`profissão=${profissaoExtraida}`)
+      if (quemIndicouExtraido) fatos.push(`indicada por=${quemIndicouExtraido}`)
+      proximoPasso = `Ligação caiu durante a Etapa 3 (DI — combinado). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}Retome o combinado de forma natural, sem repetir a conexão.`
     } else if (etapaNum === 4) {
-      proximoPasso = `Ligação caiu durante a Etapa 4 (speech do pellet). ${nomeLead ? `Nome: ${nomeLead}. ` : ''}Retome o speech — pode resumir brevemente o que já falou e continuar para o fechamento.`
+      const fatos: string[] = []
+      if (nomeResolvido) fatos.push(`nome=${nomeResolvido}`)
+      if (profissaoExtraida) fatos.push(`profissão=${profissaoExtraida}`)
+      proximoPasso = `Ligação caiu durante a Etapa 4 (speech do pellet). ${fatos.length ? `Você já sabe: ${fatos.join(', ')}. ` : ''}Retome o speech — pode resumir brevemente o que já falou e continuar para o fechamento.`
     } else {
-      proximoPasso = `Retome a conversa${nomeLead ? ` com ${nomeLead}` : ''} de forma natural, sem repetir etapas já concluídas.`
+      proximoPasso = `Retome a conversa${nomeResolvido ? ` com ${nomeResolvido}` : ''} de forma natural, sem repetir etapas já concluídas.`
     }
 
     const contextBlock = `
@@ -400,7 +430,7 @@ ${etapas.join('\n')}
 Próximo passo: ${proximoPasso}
 --- FIM RETOMADA ---`
 
-    return { prevState: 'resume', contextBlock, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado, referidosInfo: referidosInfo ?? undefined }
+    return { prevState: 'resume', contextBlock, metodoEscolhido, nomeLead: nomeResolvido ?? nomeLead, tokenIndicacao, pagamentoConfirmado, referidosInfo: referidosInfo ?? undefined }
   } catch (e: any) {
     console.error('[CTX] buildSessionContext erro:', e.message)
     return { prevState: 'fresh', contextBlock: '' }
