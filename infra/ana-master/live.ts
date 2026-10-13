@@ -6,7 +6,7 @@ import WebSocket from 'ws'
 import { OPENAI_API_KEY, APP_URL } from './config.js'
 import { upsertCall, saveMemory, appendTranscript, getVoiceConfig, getMemories, checkReferidos, updateLeadsGanho, updateLeadEtapa, updateCallStage, supabase, buildSessionContext, endCall, getLeadByPhone } from './supabase.js'
 import { iniciarColetaReferidos, sendWelcome } from './tools/whatsapp.js'
-import { registerLiveSession, unregisterLiveSession } from './live-registry.js'
+import { registerLiveSession, unregisterLiveSession, injectLiveReferidosUpdate } from './live-registry.js'
 import { pushTranscriptEvent, pushCallEndedEvent } from './sse-registry.js'
 import { scheduleCallback } from './redial.js'
 
@@ -1813,6 +1813,13 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
             liveReferidosRealtimeTotal = referidosInfo.total
             liveReferidosNotificados = true
             console.log(`[ANA LIVE] 📊 referidos from context: total=${referidosInfo.total} semDados=${referidosInfo.semDados} semMensagem=${referidosInfo.semMensagem}`)
+            // Se há mensagens pendentes (todos dados ok mas msgs não enviadas), injeta contexto
+            // para Ana saber desde o início o estado e responder corretamente "pra que enviar?"
+            if (referidosInfo.semMensagem > 0 || referidosInfo.missaoCompleta) {
+              setTimeout(() => {
+                injectLiveReferidosUpdate(callSid, referidosInfo.total, referidosInfo.semDados, referidosInfo.semMensagem, referidosInfo.missaoCompleta)
+              }, 2000)
+            }
           }
           resolveContextReady(contextBlock)
         }).catch(() => { resolveContextReady('') })
