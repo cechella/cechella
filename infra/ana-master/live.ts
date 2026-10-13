@@ -1507,7 +1507,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
                   type: 'session.commentary.append',
                   event_id: `pag_waituyes_${Date.now()}`,
                   delegation_id: null,
-                  content: `${liveNomeLead ?? 'Você'}, você acabou de receber um link no seu WhatsApp. Posso te pedir um favor?`,
+                  content: `O pagamento foi confirmado agora. Celebre com a lead de forma genuína e entusiasmada (ex: "Que incrível, ${liveNomeLead ?? 'você'}! Parabéns, você acabou de tomar uma das melhores decisões da sua saúde!"). Depois diga naturalmente que um link chegou no WhatsApp dela e faça o pedido do favor.`,
                 })
               } else {
                 sendToLive({
