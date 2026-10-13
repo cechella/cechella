@@ -50,7 +50,12 @@ export async function POST(req: NextRequest) {
         await zapiSend(phone, `✅ Seu PIX ainda está ativo!\n\n⏳ Expira em ${min} minutos\n\nCopia e Cola PIX abaixo 👇`)
         await zapiSend(phone, existing.pix_code)
       }
-      // Para cartão no mesmo callSid: não reenvia WhatsApp (link já chegou nesta ligação)
+      if (metodo === 'cartao') {
+        // Reenvia o mesmo link (mesmo token — não invalida nada)
+        const link = `${APP_URL}/pagar/${existing.payment_id}`
+        await zapiSend(phone, `💳 Gerando seu link de pagamento, aguarde um momento! 💜`)
+        await zapiSend(phone, `Seu acesso está quase liberado! 🎉\n\nClique aqui para finalizar com segurança 👇\n${link}\n\n🔒 Ambiente 100% seguro — Mercado Pago`)
+      }
       const ANA_MASTER_URL_DEDUP = process.env.ANA_MASTER_URL ?? 'http://localhost:3001'
       fetch(`${ANA_MASTER_URL_DEDUP}/inject-pix-sent`, {
         method: 'POST',
