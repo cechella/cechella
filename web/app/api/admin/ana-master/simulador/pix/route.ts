@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     const digits = String(telefone).replace(/\D/g, '')
     const phone = digits.startsWith('55') ? digits : `55${digits}`
 
-    // Dedup — se já gerou PIX para este callSid, reenvia o existente
+    // Dedup nível 1 — mesmo callSid (mesma ligação), não reenvia WhatsApp
     const { data: existing } = await supabase
       .from('pagamentos')
       .select('*')
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
         await zapiSend(phone, `✅ Seu PIX ainda está ativo!\n\n⏳ Expira em ${min} minutos\n\nCopia e Cola PIX abaixo 👇`)
         await zapiSend(phone, existing.pix_code)
       }
-      // Notify Ana even on dedup — PIX data just arrived on lead's WhatsApp
+      // Para cartão no mesmo callSid: não reenvia WhatsApp (link já chegou nesta ligação)
       const ANA_MASTER_URL_DEDUP = process.env.ANA_MASTER_URL ?? 'http://localhost:3001'
       fetch(`${ANA_MASTER_URL_DEDUP}/inject-pix-sent`, {
         method: 'POST',
@@ -58,6 +58,39 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({ callSid, metodo }),
       }).catch(() => {})
       return NextResponse.json({ ok: true, payment_id: existing.payment_id, reused: true })
+    }
+
+    // Dedup nível 2 (cartão) — mesmo telefone, ligação diferente (retomada)
+    // Reutiliza o token existente para não invalidar link que já chegou no WhatsApp
+    if (metodo === 'cartao') {
+      const { data: existingByPhone } = await supabase
+        .from('pagamentos')
+        .select('*')
+        .eq('lead_telefone', phone)
+        .eq('metodo', 'cartao')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (existingByPhone) {
+        const existingToken = existingByPhone.payment_id
+        const link = `${APP_URL}/pagar/${existingToken}`
+        // Garante que leads.payment_token aponta para este token (pode ter sido sobrescrito)
+        await supabase.from('leads')
+          .update({ payment_token: existingToken })
+          .or(`telefone.eq.${phone},telefone.eq.${phone.replace(/^55/, '')}`)
+        // Reenvia o mesmo link no WhatsApp
+        await zapiSend(phone, `💳 Gerando seu link de pagamento, aguarde um momento! 💜`)
+        await zapiSend(phone, `Seu acesso está quase liberado! 🎉\n\nClique aqui para finalizar com segurança 👇\n${link}\n\n🔒 Ambiente 100% seguro — Mercado Pago`)
+        const ANA_MASTER_URL_CARTAO_DEDUP = process.env.ANA_MASTER_URL ?? 'http://localhost:3001'
+        fetch(`${ANA_MASTER_URL_CARTAO_DEDUP}/inject-pix-sent`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ callSid, metodo: 'cartao' }),
+        }).catch(() => {})
+        return NextResponse.json({ ok: true, payment_id: existingToken, metodo: 'cartao', link, valor: existingByPhone.valor, reused: true })
+      }
     }
 
     // Lê valor_pix da tabela configuracoes (permite teste com R$1)
