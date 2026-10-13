@@ -446,12 +446,18 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       if (referidosInfo.missaoCompleta) etapas.push('- Missão completa: 20 referidos com dados e mensagens enviadas')
     }
 
-    // Detect if lead raised a price/money objection in transcript (unpaid calls only)
+    // Detect transcript states for payment context (unpaid calls only)
     const transcriptTexto = allTranscripts.map(t => t.text?.toLowerCase() ?? '').join(' ')
-    const temObjecaoPreco = !pagamentoConfirmado && /não tenho dinheiro|nao tenho dinheiro|tá caro|ta caro|muito caro|parcel|não tenho|nao tenho|caro|sem dinheiro/.test(transcriptTexto)
+    // Link was already sent if Ana said she'd send the link/PIX to WhatsApp
+    const linkJaEnviado = !pagamentoConfirmado && /vou te mandar o link|vou te enviar os dados|chegou o link|chegou o pix|dados do pix chegaram|link no whatsapp/i.test(transcriptTexto)
+    // Objection only relevant if link was NOT yet sent
+    const temObjecaoPreco = !pagamentoConfirmado && !linkJaEnviado && /não tenho dinheiro|nao tenho dinheiro|tá caro|ta caro|muito caro|parcel|não tenho|nao tenho|caro|sem dinheiro/.test(transcriptTexto)
 
     let proximoPasso: string
-    if (!pagamentoConfirmado && metodoEscolhido && temObjecaoPreco) {
+    if (!pagamentoConfirmado && metodoEscolhido && linkJaEnviado) {
+      const metodoLabel = metodoEscolhido === 'cartao' ? 'link de cartão' : 'dados do PIX'
+      proximoPasso = `O ${metodoLabel} já foi enviado no WhatsApp da lead. Pergunte se chegou e se conseguiu finalizar o pagamento. NÃO reenvie sem perguntar antes.`
+    } else if (!pagamentoConfirmado && metodoEscolhido && temObjecaoPreco) {
       proximoPasso = 'A lead mencionou que estava caro ou perguntou sobre parcelamento. NÃO reenvie o PIX diretamente. Primeiro reconheça a objeção, apresente a opção de cartão parcelado em até 6x, e só então pergunte como ela prefere pagar.'
     } else if (!pagamentoConfirmado && metodoEscolhido) {
       proximoPasso = 'Retome o pagamento — pergunte se chegou o PIX/link no WhatsApp.'

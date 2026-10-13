@@ -1053,6 +1053,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
     livePixAutoSent = true
     liveMetodo = metodo
     console.log(`[ANA LIVE] 💳 auto-PIX triggered metodo=${metodo} callSid=${callSid}`)
+    saveMemory(callSid, 'forma_pagamento_escolhida', metodo).catch(() => {})
     fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
