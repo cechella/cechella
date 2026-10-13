@@ -305,7 +305,11 @@ export async function buildSessionContext(telefone: string, callSid: string): Pr
     // Merge memories across all calls — most recent wins, but pick up token/nome from any call
     const mergedMemories: Record<string, any> = {}
     for (const c of [...prevCalls].reverse()) {
-      Object.assign(mergedMemories, c.memories ?? {})
+      const mem = c.memories ?? {}
+      for (const [k, v] of Object.entries(mem)) {
+        // Never overwrite a non-null value with null — preserves e.g. forma_pagamento_escolhida across retomadas
+        if (v !== null && v !== undefined) mergedMemories[k] = v
+      }
     }
 
     const metodoEscolhido = (mergedMemories.forma_pagamento_escolhida ?? pagamento?.metodo) as 'pix' | 'cartao' | undefined
