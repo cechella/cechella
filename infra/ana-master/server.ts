@@ -163,6 +163,42 @@ app.get('/health', async () => ({
   ts: new Date().toISOString(),
 }))
 
+const PROMPT_VERSION_MARKER = 'PROTOCOLO UNIVERSAL — VALE PARA QUALQUER OBJEÇÃO'
+
+// Endpoint de verificação e migração do prompt — garante que Supabase está na versão atual
+app.post('/sync-prompt', async (req, reply) => {
+  try {
+    const { data, error } = await supabase
+      .from('ana_realtime_profiles')
+      .select('instructions')
+      .eq('profile', 'gold')
+      .single()
+
+    if (error) return reply.status(500).send({ ok: false, error: error.message })
+
+    const jaAtualizado = !!data?.instructions?.includes(PROMPT_VERSION_MARKER)
+    if (jaAtualizado) {
+      return reply.send({ ok: true, migrado: false, msg: 'prompt já está na versão atual', tamanho: data.instructions.length })
+    }
+
+    // Importa o fallback atualizado do live.ts e escreve no Supabase
+    const { ANA_LIVE_PROMPT_FALLBACK } = await import('./live.js') as any
+    if (!ANA_LIVE_PROMPT_FALLBACK) return reply.status(500).send({ ok: false, error: 'fallback não encontrado no live.js' })
+
+    const { error: updateError } = await supabase
+      .from('ana_realtime_profiles')
+      .update({ instructions: ANA_LIVE_PROMPT_FALLBACK })
+      .eq('profile', 'gold')
+
+    if (updateError) return reply.status(500).send({ ok: false, error: updateError.message })
+
+    console.log('[SERVER] ✅ /sync-prompt — prompt migrado com sucesso')
+    return reply.send({ ok: true, migrado: true, msg: 'prompt atualizado no Supabase', tamanho: ANA_LIVE_PROMPT_FALLBACK.length })
+  } catch (e: any) {
+    return reply.status(500).send({ ok: false, error: e.message })
+  }
+})
+
 // Twilio webhook — returns TwiML connecting call to Media Stream WebSocket
 app.post('/twiml', async (req, reply) => {
   const body = req.body as Record<string, string>

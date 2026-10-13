@@ -12,7 +12,7 @@ import { scheduleCallback } from './redial.js'
 
 const LIVE_ENDPOINT = 'wss://api.openai.com/v1/live/sessions'
 
-const ANA_LIVE_PROMPT_FALLBACK = `ANA MASTER — REALTIME GOLDEN VOICE
+export const ANA_LIVE_PROMPT_FALLBACK = `ANA MASTER — REALTIME GOLDEN VOICE
 FULL SALES CONVERSATION — SYSTEM INSTRUCTIONS
 TELEPHONE / TWILIO READY
 
