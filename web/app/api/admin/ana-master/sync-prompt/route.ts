@@ -26,29 +26,17 @@ export async function GET(_req: NextRequest) {
   return NextResponse.json({ ok: true, atualizado, tamanho: data.instructions.length })
 }
 
-// POST — força a atualização do prompt com o fallback atual do código
-export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => ({}))
-  if (body?.secret !== process.env.ADMIN_SECRET && body?.secret !== 'hormone-sync-2026') {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+// POST — proxy para o VM que força a migração do prompt no Supabase
+export async function POST(_req: NextRequest) {
+  const ANA_MASTER_URL = process.env.ANA_MASTER_URL ?? 'http://localhost:3001'
+  try {
+    const vmRes = await fetch(`${ANA_MASTER_URL}/sync-prompt`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const vmData = await vmRes.json()
+    return NextResponse.json(vmData, { status: vmRes.status })
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: `VM inacessível: ${e.message}` }, { status: 502 })
   }
-
-  // Busca o prompt do ana-master via env — usa o fallback inline
-  const { data: current } = await supabase
-    .from('ana_realtime_profiles')
-    .select('instructions')
-    .eq('profile', 'gold')
-    .single()
-
-  const jaAtualizado = current?.instructions?.includes(PROMPT_VERSION_MARKER)
-  if (jaAtualizado) {
-    return NextResponse.json({ ok: true, migrado: false, msg: 'prompt já está na versão atual' })
-  }
-
-  return NextResponse.json({
-    ok: false,
-    migrado: false,
-    msg: 'prompt desatualizado — a migração automática ocorrerá na primeira ligação (loadGoldenPrompt no VM)',
-    tamanho_atual: current?.instructions?.length ?? 0,
-  })
 }
