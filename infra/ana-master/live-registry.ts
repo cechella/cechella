@@ -8,6 +8,9 @@ type LiveRef = {
 }
 
 const registry = new Map<string, LiveRef>()
+// Tracks the highest referidos total already processed per callSid.
+// Events with total <= lastTotal are stale (out-of-order or duplicate) and must be discarded.
+const referidosLastTotal = new Map<string, number>()
 
 export function registerLiveSession(callSid: string, ref: LiveRef) {
   registry.set(callSid, ref)
@@ -16,6 +19,7 @@ export function registerLiveSession(callSid: string, ref: LiveRef) {
 
 export function unregisterLiveSession(callSid: string) {
   registry.delete(callSid)
+  referidosLastTotal.delete(callSid)
   console.log(`[LIVE_REGISTRY] unregistered callSid=${callSid}`)
 }
 
@@ -79,6 +83,15 @@ export function injectLiveReferidosUpdate(callSid: string, total: number, semDad
   // Mark that real contacts arrived — unblocks verificar_referidos for this session
   const ref = registry.get(callSid)
   if (ref) ref.setReferidosNotificados(total)
+
+  // Discard stale/out-of-order events: only process if total is strictly greater than last processed.
+  // This prevents Ana from speaking an old "13 contacts" update after a "20 contacts" update already arrived.
+  const lastTotal = referidosLastTotal.get(callSid) ?? 0
+  if (total <= lastTotal && !missaoCompleta) {
+    console.log(`[LIVE_REGISTRY] 👥 referidos update DESCARTADO (stale) total=${total} lastTotal=${lastTotal}`)
+    return true
+  }
+  referidosLastTotal.set(callSid, total)
 
   // When total >= 20, semDados = 0 and only messages remain: stay silent.
   // The lead is sending messages from the web — injecting commentary on every send creates a loop.
