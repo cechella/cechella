@@ -311,6 +311,7 @@ export default function PaginaIndicacao() {
     Array.from({ length: 20 }, (_, i) => ({ id: i + 1, nome: '', telefone: '', profissao: '', hobby: '' }))
   )
   const primeiroVazioRef = useRef<HTMLInputElement>(null)
+  const primeiroSemMsgRef = useRef<HTMLDivElement>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [scrollToIncompleto, setScrollToIncompleto] = useState(false)
 
@@ -423,6 +424,16 @@ export default function PaginaIndicacao() {
       primeiroVazioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }, 600)
   }, [loading])
+
+  // Ao carregar a tela de missão (mensagens), rola para o primeiro contato sem mensagem enviada
+  useEffect(() => {
+    if (loading) return
+    const temPendente = jaEnviados.some(c => !msgEnviada[c.telefone.replace(/\D/g, '')])
+    if (!temPendente) return
+    setTimeout(() => {
+      primeiroSemMsgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 600)
+  }, [loading, jaEnviados.length])
 
   // Polling ativo quando importandoWpp=true (clicou botão verde)
   useEffect(() => {
@@ -931,8 +942,9 @@ export default function PaginaIndicacao() {
             const tel = contato.telefone.replace(/\D/g, '')
             const enviando = enviandoMsg[tel]
             const enviado = msgEnviada[tel]
+            const isPrimeiroSemMsg = !enviado && !contatosMissao.slice(0, idx).some(c => !msgEnviada[c.telefone.replace(/\D/g, '')])
             return (
-            <div key={contato.id} className={`rounded-2xl border overflow-hidden transition-all ${enviado ? 'border-emerald-500/40' : selecionadas.has(tel) ? 'border-[#7C3AED]/60' : 'border-[#1F1935]'}`}
+            <div key={contato.id} ref={isPrimeiroSemMsg ? primeiroSemMsgRef : undefined} className={`rounded-2xl border overflow-hidden transition-all ${enviado ? 'border-emerald-500/40' : selecionadas.has(tel) ? 'border-[#7C3AED]/60' : 'border-[#1F1935]'}`}
               style={{ background: enviado ? 'linear-gradient(160deg, #0D1F16 0%, #0a1a12 100%)' : selecionadas.has(tel) ? 'linear-gradient(160deg, #1a1035 0%, #130d28 100%)' : 'linear-gradient(160deg, #131020 0%, #0F0D1A 100%)' }}>
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3">
