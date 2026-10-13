@@ -446,8 +446,14 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       if (referidosInfo.missaoCompleta) etapas.push('- Missão completa: 20 referidos com dados e mensagens enviadas')
     }
 
+    // Detect if lead raised a price/money objection in transcript (unpaid calls only)
+    const transcriptTexto = allTranscripts.map(t => t.text?.toLowerCase() ?? '').join(' ')
+    const temObjecaoPreco = !pagamentoConfirmado && /não tenho dinheiro|nao tenho dinheiro|tá caro|ta caro|muito caro|parcel|não tenho|nao tenho|caro|sem dinheiro/.test(transcriptTexto)
+
     let proximoPasso: string
-    if (!pagamentoConfirmado && metodoEscolhido) {
+    if (!pagamentoConfirmado && metodoEscolhido && temObjecaoPreco) {
+      proximoPasso = 'A lead mencionou que estava caro ou perguntou sobre parcelamento. NÃO reenvie o PIX diretamente. Primeiro reconheça a objeção, apresente a opção de cartão parcelado em até 6x, e só então pergunte como ela prefere pagar.'
+    } else if (!pagamentoConfirmado && metodoEscolhido) {
       proximoPasso = 'Retome o pagamento — pergunte se chegou o PIX/link no WhatsApp.'
     } else if (pagamentoConfirmado && !tokenIndicacao) {
       proximoPasso = 'Pagamento confirmado. Peça o favor das indicações (WAIT_FOR_YES) e aguarde o sistema enviar o link.'
