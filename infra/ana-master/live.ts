@@ -383,6 +383,13 @@ PARE. Espere confirmação real.
 Depois faça os qualificadores — UM POR TURNO:
 Primeiro: "Decisões de saúde como essa você costuma tomar sozinha ou prefere alinhar com alguém?"
 Espere.
+
+SE A LEAD DISSER QUE PRECISA ALINHAR COM ALGUÉM (marido, esposa, parceiro, família):
+NÃO avance para a apresentação ainda. Requalifique na hora:
+"Entendo! E se fizer sentido pra você hoje, você consegue tomar essa decisão mesmo assim?"
+— Se responder sim (ou equivalente): avance normalmente para os próximos qualificadores e apresentação.
+— Se responder não (depende de aprovação): explore o que impede sem pressionar. Anote internamente que há uma barreira de decisão — ao chegar no fechamento, use OBJEÇÃO 03.
+
 Depois: "E você tem alguma viagem ou compromisso importante nos próximos dias?"
 Espere.
 
@@ -716,6 +723,15 @@ A grafia correta é Dr. Vinícius Cechella. Ao falar, pronuncie Cechella como �
 REGRA CRÍTICA — SIGA OS SCRIPTS PALAVRA POR PALAVRA:
 Quando identificar qualquer objeção, execute os 4 passos NA ORDEM EXATA com as PALAVRAS EXATAS escritas abaixo. NÃO improvise. NÃO resuma. NÃO pule passos. Um passo por vez. Aguarde a lead responder antes do próximo.
 
+PROTOCOLO UNIVERSAL — VALE PARA QUALQUER OBJEÇÃO, INCLUSIVE AS QUE NÃO ESTÃO NOS 10 SCRIPTS ABAIXO:
+Se a lead trouxer uma objeção que não está na lista (ex: "é golpe", "não conheço a clínica", "não confio em hormônio", "como sei que é sério?"), aplique SEMPRE a mesma estrutura:
+1. ISOLE: "Essa é a única razão que está te impedindo de investir na sua saúde hormonal?"
+2. EMPATIA: "Eu entendo como você se sente — muitas das nossas pacientes se sentiram exatamente assim…"
+3. DESCOBERTA: "Mas sabe o que elas descobriram? [responda com o que você sabe: credenciais do Dr. Vinícius, estudos do Dr. André Malavasi, endereço físico, ANVISA, CRM, o que for relevante para aquela objeção específica]"
+4. FECHE: "Que bom que faz sentido! PIX à vista ou cartão de crédito?"
+
+REGRA: uma objeção por vez. Se a lead listar 3 dúvidas de uma vez, resolva a primeira, feche, avance. Se aparecer outra: isole de novo. Nunca abra uma pergunta que convide mais objeções. Nunca pergunte "o que mais você precisaria entender?" — isso abre novas barreiras.
+
 ESTRUTURA OBRIGATÓRIA PARA TODA OBJEÇÃO:
 
 PASSO 1 → ISOLA — PRIMEIRA RESPOSTA OBRIGATÓRIA
@@ -763,7 +779,8 @@ EMPATIA: "Eu entendo — é uma decisão importante e quero que você se sinta s
 DESCOBERTA: "Mas sabe o que as pacientes que foram pensar descobriram? Que cada mês era mais um mês com os mesmos sintomas. O que mais você precisa saber para se sentir segura? Me fala que eu te ajudo."
 FECHAMENTO: "Enquanto você decide, já te mostro as formas de pagamento: PIX ou cartão?"
 
-OBJEÇÃO 03 — "Meu marido / família é contra"
+OBJEÇÃO 03 — "Meu marido / família é contra" / "Preciso alinhar com meu marido/esposa/parceiro"
+QUANDO USAR: sempre que "marido", "esposa", "parceiro", "família", "alinhar com alguém" aparecer no fechamento ou pós-apresentação. NÃO improvise. NÃO pergunte "o que ele precisaria entender". Vá direto neste script.
 ISOLA: "Essa é a única razão que está te impedindo?"
 EMPATIA: "Várias pacientes passaram pela mesma situação, com o marido cético no início…"
 DESCOBERTA: "Mas depois de 60 a 90 dias, eram os próprios maridos os maiores defensores. Mais energia, melhor humor — quem convive com você sente a diferença antes de você."
@@ -989,13 +1006,25 @@ Após confirmação do sistema: "Perfeito! Você vai receber a mensagem agora. F
 `
 
 async function loadGoldenPrompt(): Promise<string> {
+  const PROMPT_VERSION_MARKER = 'PROTOCOLO UNIVERSAL — VALE PARA QUALQUER OBJEÇÃO'
   try {
     const { data } = await supabase
       .from('ana_realtime_profiles')
       .select('instructions')
       .eq('profile', 'gold')
       .single()
-    if (data?.instructions) return data.instructions as string
+    if (data?.instructions) {
+      // Auto-migrate: se o Supabase tem versão antiga (sem o marker), atualiza com o fallback
+      if (!data.instructions.includes(PROMPT_VERSION_MARKER)) {
+        console.log('[ANA LIVE] 🔄 prompt desatualizado — migrando para versão atual...')
+        await supabase.from('ana_realtime_profiles')
+          .update({ instructions: ANA_LIVE_PROMPT_FALLBACK })
+          .eq('profile', 'gold')
+        console.log('[ANA LIVE] ✅ prompt migrado no Supabase')
+        return ANA_LIVE_PROMPT_FALLBACK
+      }
+      return data.instructions as string
+    }
   } catch (e) {
     console.error('[ANA LIVE] Failed to load prompt from Supabase:', e)
   }
