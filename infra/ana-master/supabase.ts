@@ -265,6 +265,14 @@ export async function buildSessionContext(telefone: string, callSid: string): Pr
     const bare = norm.replace(/^55/, '')
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
+    // Read authoritative lead name from leads table (pre-stored for referidos leads; prevents capturing Ana's own speech as name)
+    const { data: leadRow } = await supabase
+      .from('leads')
+      .select('nome')
+      .or(`telefone.eq.${norm},telefone.eq.${bare}`)
+      .maybeSingle()
+    const nomeFromLeads = leadRow?.nome || null
+
     // Fetch all recent calls for this number — payment/token may be on an older call
     const { data: prevCalls } = await supabase
       .from('ana_calls')
@@ -302,7 +310,7 @@ export async function buildSessionContext(telefone: string, callSid: string): Pr
     }
 
     const metodoEscolhido = (mergedMemories.forma_pagamento_escolhida ?? pagamento?.metodo) as 'pix' | 'cartao' | undefined
-    const nomeLead = mergedMemories.nome_lead as string | undefined
+    const nomeLead = (nomeFromLeads || mergedMemories.nome_lead) as string | undefined
     const tokenIndicacao = mergedMemories.token_indicacao as string | undefined
 
     if (isGanho) {
