@@ -291,17 +291,16 @@ export async function buildSessionContext(telefone: string, callSid: string): Pr
     const memories: Record<string, any> = prevCall.memories ?? {}
     const isGanho = prevCalls.some((c: any) => c.status === 'ganho')
 
-    // Look for approved payment across ALL recent calls
+    // Look for most recent payment (approved or pending) — pending still tells us which method was chosen
     const { data: pagamento } = await supabase
       .from('pagamentos')
       .select('status, metodo, call_sid')
       .in('call_sid', allCallSids)
-      .eq('status', 'approved')
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 
-    const pagamentoConfirmado = !!pagamento
+    const pagamentoConfirmado = pagamento?.status === 'approved'
 
     // Merge memories across all calls — most recent wins, but pick up token/nome from any call
     const mergedMemories: Record<string, any> = {}
