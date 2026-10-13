@@ -95,6 +95,11 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: `DB insert error: ${cartaoInsertErr.message}` }, { status: 500 })
       }
 
+      // Save payment_token in leads so /pagar/[token] can find the lead
+      await supabase.from('leads')
+        .update({ payment_token: token })
+        .or(`telefone.eq.${phone},telefone.eq.${phone.replace(/^55/, '')}`)
+
       await zapiSend(phone, `💳 Gerando seu link de pagamento, aguarde um momento! 💜`)
       await zapiSend(phone, `Seu acesso está quase liberado! 🎉\n\nClique aqui para finalizar com segurança 👇\n${link}\n\n🔒 Ambiente 100% seguro — Mercado Pago`)
 
