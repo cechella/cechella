@@ -414,6 +414,16 @@ export default function PaginaIndicacao() {
     }, 400)
   }, [scrollToIncompleto])
 
+  // Ao carregar a página, rola automaticamente para o primeiro contato sem profissão/hobby
+  useEffect(() => {
+    if (loading) return
+    const temIncompleto = contatos.some(c => !!c.telefone && (!c.profissao || !c.hobby))
+    if (!temIncompleto) return
+    setTimeout(() => {
+      primeiroVazioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 600)
+  }, [loading])
+
   // Polling ativo quando importandoWpp=true (clicou botão verde)
   useEffect(() => {
     if (!importandoWpp) return
