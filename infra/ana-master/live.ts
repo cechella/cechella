@@ -1421,16 +1421,18 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
                   .then(({ error }: any) => { if (error) console.error('[ANA LIVE PAG] nome_lead erro:', error.message) })
               }
 
-              // Send PIX/card link via web API — skip if auto-PIX already dispatched it
-              if (!livePixAutoSent) {
-                await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ callSid, telefone, metodo: liveMetodo }),
-                }).catch((e: Error) => console.log(`[ANA LIVE PAG] send error: ${e.message}`))
-              } else {
-                console.log(`[ANA LIVE PAG] auto-PIX já enviado — ignorando fetch, aguardando confirmação`)
+              // Send PIX/card link via web API.
+              // If auto-PIX was already sent but Ana is explicitly calling solicitar_pagamento
+              // (e.g. lead asked for resend), allow it — reset the lock and send again.
+              if (livePixAutoSent) {
+                console.log(`[ANA LIVE PAG] reenvio explícito via delegation — resetando livePixAutoSent`)
+                livePixAutoSent = false
               }
+              await fetch(`${APP_URL}/api/admin/ana-master/simulador/pix`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ callSid, telefone, metodo: liveMetodo }),
+              }).catch((e: Error) => console.log(`[ANA LIVE PAG] send error: ${e.message}`))
               livePixAutoSent = true
 
               await saveMemory(callSid, 'forma_pagamento_escolhida', liveMetodo).catch(() => {})
