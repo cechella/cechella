@@ -558,6 +558,8 @@ Ação: permanecer em silêncio até a lead confirmar que abriu o link.
 Exceções:
 — Se a lead fizer pergunta direta: responder e voltar para WAIT_LINK_OPEN.
 — Se a lead disser que o link não chegou: acionar iniciar_coleta_referidos (se aplicável) e voltar para WAIT_LINK_OPEN.
+— Se a lead disser que o link não carrega, não abre, trava ou não consegue finalizar: diga "Tudo bem, vou te enviar o link de novo agora no WhatsApp. Só um segundo." — aguarde o sistema reenviar. NUNCA chame solicitar_pagamento nessa situação. O pagamento já foi confirmado. Seu único trabalho agora é ajudar a lead a abrir o portal de referidos.
+— REGRA CRÍTICA DE REFERIDOS: após [PAGAMENTO CONFIRMADO], você JAMAIS chama solicitar_pagamento novamente, não importa o que a lead diga. Se ela perguntar sobre pagamento, diga "Pagamento confirmado, pode ficar tranquila!" e volte para a coleta de referidos.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ETAPA 8 — VALIDAÇÃO E ENCERRAMENTO:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1462,6 +1464,19 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
           ;(async () => {
             try {
               console.log(`[ANA LIVE PAG] iniciando metodo=${liveMetodo} callSid=${callSid}`)
+
+              // Guard: if payment already confirmed, inject confirmation and short-circuit.
+              // This prevents Ana from re-requesting payment during referidos or on resumed calls.
+              if (livePagamentoConfirmado) {
+                console.log(`[ANA LIVE PAG] ⚠️ pagamento já confirmado — bloqueando re-chamada callSid=${callSid}`)
+                sendToLive({
+                  type: 'session.thinking.append',
+                  event_id: `pag_guard_${Date.now()}`,
+                  delegation_id: delegationId,
+                  content: `[PAGAMENTO CONFIRMADO] pagamento já havia sido aprovado anteriormente. Não reenviar PIX. Continuar com coleta de referidos.`,
+                })
+                return
+              }
 
               // Save nome_lead if known
               if (liveNomeLead && telefone) {

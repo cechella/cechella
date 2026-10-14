@@ -300,7 +300,23 @@ export async function buildSessionContext(telefone: string, callSid: string): Pr
       .limit(1)
       .maybeSingle()
 
-    const pagamentoConfirmado = pagamento?.status === 'approved'
+    // Fallback: search by lead_telefone in case the payment call_sid doesn't match any prev call
+    // (happens on resumed/callback calls where the original call chain is broken)
+    let pagamentoPorTelefone: { status: string; metodo: string } | null = null
+    if (pagamento?.status !== 'approved') {
+      const { data: pt } = await supabase
+        .from('pagamentos')
+        .select('status, metodo')
+        .or(`lead_telefone.eq.${norm},lead_telefone.eq.${bare}`)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      pagamentoPorTelefone = pt ?? null
+    }
+
+    const pagamentoConfirmado = pagamento?.status === 'approved' || !!pagamentoPorTelefone
+    const metodoFromPagamento = pagamento?.metodo ?? pagamentoPorTelefone?.metodo
 
     // Merge memories across all calls — most recent wins, but pick up token/nome from any call
     const mergedMemories: Record<string, any> = {}
@@ -312,7 +328,7 @@ export async function buildSessionContext(telefone: string, callSid: string): Pr
       }
     }
 
-    const metodoEscolhido = (mergedMemories.forma_pagamento_escolhida ?? pagamento?.metodo) as 'pix' | 'cartao' | undefined
+    const metodoEscolhido = (mergedMemories.forma_pagamento_escolhida ?? metodoFromPagamento) as 'pix' | 'cartao' | undefined
     const nomeLead = (nomeFromLeads || mergedMemories.nome_lead) as string | undefined
     const tokenIndicacao = mergedMemories.token_indicacao as string | undefined
 
