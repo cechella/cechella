@@ -41,6 +41,18 @@ supabase
             })
             .catch(e => console.error(`[SERVER] referidos link erro: ${e.message}`))
         }
+        // Avança etapa_agente para 7 (fechado/pago) — alimenta o faturamento do dashboard
+        if (lead_telefone) {
+          const digits = String(lead_telefone).replace(/\D/g, '')
+          const bare = digits.replace(/^55/, '')
+          supabase.from('leads')
+            .update({ etapa_agente: 7 })
+            .or(`telefone.eq.${digits},telefone.eq.${bare}`)
+            .then(({ error }: { error: any }) => {
+              if (error) console.error(`[SERVER] etapa_agente update erro: ${error.message}`)
+              else console.log(`[SERVER] ✅ etapa_agente=7 atualizado para ${digits}`)
+            })
+        }
         injectPaymentConfirmed(call_sid)
         injectLivePaymentConfirmed(call_sid)
       }
