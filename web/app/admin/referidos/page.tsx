@@ -895,17 +895,6 @@ export default function ReferidosPage() {
                                   {acionandoAna === lead.id ? '...' : 'Ana'}
                                 </button>
                                 {lead.telefone && (
-                                  <button
-                                    onClick={() => ligarVoz(lead.telefone!, lead.id)}
-                                    disabled={ligandoVoz === lead.id}
-                                    className="flex items-center gap-1 text-xs px-2 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
-                                    title="Ligar via Ana Voz"
-                                  >
-                                    <PhoneCall className="w-3 h-3" />
-                                    {ligandoVoz === lead.id ? '...' : 'Voz'}
-                                  </button>
-                                )}
-                                {lead.telefone && (
                                   <a
                                     href={`https://wa.me/${lead.telefone.replace(/\D/g, '')}`}
                                     target="_blank"
