@@ -238,6 +238,11 @@ app.post('/twiml', async (req, reply) => {
     <Stream url="${wsUrl.toString().replace(/&/g, '&amp;')}">
       <Parameter name="callSid" value="${callSid}" />
       <Parameter name="from" value="${from}" />
+      ${profile ? `<Parameter name="profile" value="${profile}" />` : ''}
+      ${contexto ? `<Parameter name="contexto" value="${contexto}" />` : ''}
+      ${nome ? `<Parameter name="nome" value="${nome}" />` : ''}
+      ${referidor ? `<Parameter name="referidor" value="${referidor}" />` : ''}
+      ${origem ? `<Parameter name="origem" value="${origem}" />` : ''}
     </Stream>
   </Connect>
 </Response>`

@@ -1054,7 +1054,20 @@ async function loadGoldenPrompt(profile = 'gold'): Promise<string> {
 }
 
 export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string; referidor?: string; nome?: string; origem?: string; profile?: string; earlyQueue?: (Buffer | string)[] } = {}) {
-  const profileName = opts.profile || 'gold'
+  // Peek earlyQueue for 'start' event to get profile before loading voice config.
+  // Twilio sends 'start' as first WS message — it's already in earlyQueue when we're called.
+  let resolvedProfile = opts.profile || ''
+  for (const raw of opts.earlyQueue ?? []) {
+    try {
+      const msg = JSON.parse(raw.toString())
+      if (msg.event === 'start') {
+        const p = String(msg.start?.customParameters?.profile ?? '').trim()
+        if (p) resolvedProfile = p
+        break
+      }
+    } catch {}
+  }
+  const profileName = resolvedProfile || 'gold'
   const [dbConfig, instructions] = await Promise.all([getVoiceConfig(profileName), loadGoldenPrompt(profileName)])
   const voice  = dbConfig?.voice  ?? 'bossa'
   const model  = dbConfig?.model  ?? 'gpt-live-1'
