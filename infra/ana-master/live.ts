@@ -1329,6 +1329,21 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
           const nomeReal = liveNomeLead ?? opts.nome ?? ''
           const primeiro = nomeReal ? nomeReal.split(' ')[0] : ''
           const oi = primeiro ? `Oi, ${primeiro}!` : 'Oi!'
+
+          // André (post-sales): use his own greeting, not Ana's
+          if (profileName === 'andre') {
+            const andreGreeting = primeiro
+              ? `Oi, ${primeiro}! Aqui é o André, assistente executivo do Dr. Vinícius Cechella. Tudo bem com você?`
+              : `Oi! Aqui é o André, assistente executivo do Dr. Vinícius Cechella. Tudo bem com você?`
+            sendToLive({
+              type: 'session.commentary.append',
+              event_id: 'andre_greet',
+              delegation_id: null,
+              content: andreGreeting,
+            })
+            return
+          }
+
           const base = `${oi} Aqui é a ANA, consultora executiva do consultório do Dr. Vinícius Cechella, da Hormone Ecosystem.`
           const isRetomada = opts.contexto === 'retomada' || liveIsRetomada
 
