@@ -268,57 +268,87 @@ export default function PosVendasPage() {
               <p className="text-xs text-[#2C2C2E] mt-1">Os pacientes aparecem aqui quando fecham na Etapa 7</p>
             </div>
           ) : (
-            <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl overflow-hidden">
-              <div className="px-6 py-4 border-b border-[#1C1C1E] flex items-center justify-between">
-                <p className="text-sm font-semibold text-white">{pacientes.length} paciente{pacientes.length !== 1 ? 's' : ''}</p>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr className="border-b border-[#1C1C1E]">
-                      {['Nome', 'Telefone', 'Fechou', 'Status Onboarding', 'Ações'].map(h => (
-                        <th key={h} className="px-4 py-3 text-left text-[10px] font-bold tracking-widest text-[#3F3F46] uppercase">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pacientes.map(p => {
-                      const status = (p.onboarding_status ?? 'aguardando_contato') as OnboardingStatus
-                      const cfg = STATUS_CONFIG[status]
-                      return (
-                        <tr key={p.id} className="border-b border-[#1C1C1E] hover:bg-[#111115] transition-colors">
-                          <td className="px-4 py-4 text-sm font-medium text-white">{p.nome || '—'}</td>
-                          <td className="px-4 py-4 text-xs font-mono text-[#71717A]">{p.telefone}</td>
-                          <td className="px-4 py-4 text-xs text-[#71717A]">{tempoRelativo(p.updated_at)}</td>
-                          <td className="px-4 py-4">
-                            <select
-                              value={status}
-                              onChange={e => atualizarStatus(p.id, e.target.value as OnboardingStatus)}
-                              className="text-xs px-2 py-1.5 rounded-lg border bg-[#18181A] text-white cursor-pointer"
-                              style={{ borderColor: `${cfg.color}40`, color: cfg.color }}
-                            >
-                              {ETAPAS.map(e => (
-                                <option key={e.key} value={e.key}>{STATUS_CONFIG[e.key].label}</option>
-                              ))}
-                            </select>
-                          </td>
-                          <td className="px-4 py-4">
+            <div className="flex flex-col gap-3">
+              {pacientes.map(p => {
+                const status = (p.onboarding_status ?? 'aguardando_contato') as OnboardingStatus
+                const statusIdx = ETAPAS.findIndex(e => e.key === status)
+                const cfg = STATUS_CONFIG[status]
+                return (
+                  <div key={p.id} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl px-5 py-4">
+                    {/* Top row: name + phone + time + call button */}
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-[#1C1C1E] flex items-center justify-center flex-shrink-0">
+                          <UserCheck className="w-4 h-4 text-[#f59e0b]" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{p.nome || 'Paciente'}</p>
+                          <p className="text-xs font-mono text-[#52525B]">{p.telefone} · fechou {tempoRelativo(p.updated_at)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {/* Status badge */}
+                        <span className="hidden sm:flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full" style={{ backgroundColor: `${cfg.color}18`, color: cfg.color }}>
+                          {cfg.icon}
+                          {cfg.label}
+                        </span>
+                        <button
+                          onClick={() => ligarAndre(p)}
+                          disabled={ligando === p.id}
+                          className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-[#f59e0b]/15 hover:bg-[#f59e0b]/25 text-[#f59e0b] border border-[#f59e0b]/30 rounded-xl transition-colors disabled:opacity-50 font-semibold"
+                        >
+                          <PhoneCall className="w-3 h-3" />
+                          {ligando === p.id ? 'Ligando...' : 'André'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Progress track */}
+                    <div className="flex items-center gap-0">
+                      {ETAPAS.map((e, i) => {
+                        const done = i < statusIdx
+                        const current = i === statusIdx
+                        const eCfg = STATUS_CONFIG[e.key]
+                        return (
+                          <div key={e.key} className="flex items-center flex-1">
                             <button
-                              onClick={() => ligarAndre(p)}
-                              disabled={ligando === p.id}
-                              className="flex items-center gap-1 text-xs px-2 py-1.5 bg-[#f59e0b]/20 hover:bg-[#f59e0b]/30 text-[#f59e0b] border border-[#f59e0b]/30 rounded-lg transition-colors disabled:opacity-50"
-                              title="André ligar"
+                              onClick={() => atualizarStatus(p.id, e.key)}
+                              title={`Marcar como: ${eCfg.label}`}
+                              className="flex flex-col items-center gap-1 group w-full"
                             >
-                              <PhoneCall className="w-3 h-3" />
-                              {ligando === p.id ? '...' : 'André'}
+                              <div
+                                className={`w-6 h-6 rounded-full flex items-center justify-center transition-all border-2 ${
+                                  done    ? 'border-transparent'
+                                  : current ? 'border-current scale-110'
+                                  : 'border-[#2C2C2E] opacity-30'
+                                }`}
+                                style={done || current ? { backgroundColor: done ? `${eCfg.color}30` : 'transparent', color: eCfg.color, borderColor: done ? 'transparent' : eCfg.color } : {}}
+                              >
+                                {done ? (
+                                  <CheckCircle2 className="w-3.5 h-3.5" style={{ color: eCfg.color }} />
+                                ) : (
+                                  <span style={current ? { color: eCfg.color } : { color: '#3F3F46' }}>
+                                    {e.icon}
+                                  </span>
+                                )}
+                              </div>
+                              <span
+                                className={`text-[9px] font-semibold tracking-wide ${current ? 'opacity-100' : done ? 'opacity-60' : 'opacity-25'}`}
+                                style={{ color: current ? eCfg.color : done ? eCfg.color : '#71717A' }}
+                              >
+                                {e.label}
+                              </span>
                             </button>
-                          </td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
+                            {i < ETAPAS.length - 1 && (
+                              <div className={`h-px flex-1 mx-1 mb-4 transition-colors ${done ? 'bg-[#2C2C2E]' : 'bg-[#1C1C1E]'}`} />
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           )}
 
