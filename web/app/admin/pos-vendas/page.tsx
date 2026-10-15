@@ -69,12 +69,13 @@ export default function PosVendasPage() {
   useEffect(() => {
     async function carregar() {
       setLoading(true)
-      const [{ data: leads }, { data: profile }] = await Promise.all([
+      const [{ data: leads }, cfgRes] = await Promise.all([
         supabase.from('leads').select('id, nome, telefone, etapa_agente, updated_at, onboarding_status, data_implante').gte('etapa_agente', 7).order('updated_at', { ascending: false }),
-        supabase.from('ana_realtime_profiles').select('instructions').eq('profile', 'andre').maybeSingle(),
+        fetch('/api/admin/andre-config'),
       ])
       setPacientes((leads as PacientePos[]) ?? [])
-      if (profile?.instructions) setAndrePrompt(profile.instructions)
+      const cfg = await cfgRes.json()
+      if (cfg?.instructions) setAndrePrompt(cfg.instructions)
       setLoading(false)
     }
     carregar()
@@ -82,7 +83,11 @@ export default function PosVendasPage() {
 
   async function salvarPrompt() {
     setSavingPrompt(true)
-    await supabase.from('ana_realtime_profiles').upsert({ profile: 'andre', instructions: andrePrompt }, { onConflict: 'profile' })
+    await fetch('/api/admin/andre-config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instructions: andrePrompt }),
+    })
     setSavingPrompt(false)
     showToast('Prompt do André salvo ✅')
   }
