@@ -222,17 +222,22 @@ app.post('/twiml', async (req, reply) => {
   const profile = query?.profile ?? ''
   const host = PUBLIC_HOST.replace(/^https?:\/\//, '')
 
+  // Build WSS URL with all params as query string — Twilio <Parameter> elements are read
+  // from the WebSocket 'start' event body, but the /media-stream handler reads req.query.
+  // Passing them in the URL ensures they are available immediately on connection.
+  const wsUrl = new URL(`wss://${host}/media-stream`)
+  if (contexto) wsUrl.searchParams.set('contexto', contexto)
+  if (referidor) wsUrl.searchParams.set('referidor', referidor)
+  if (nome) wsUrl.searchParams.set('nome', nome)
+  if (origem) wsUrl.searchParams.set('origem', origem)
+  if (profile) wsUrl.searchParams.set('profile', profile)
+
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
-    <Stream url="wss://${host}/media-stream">
+    <Stream url="${wsUrl.toString()}">
       <Parameter name="callSid" value="${callSid}" />
       <Parameter name="from" value="${from}" />
-      <Parameter name="contexto" value="${contexto}" />
-      <Parameter name="referidor" value="${referidor}" />
-      <Parameter name="nome" value="${nome}" />
-      <Parameter name="origem" value="${origem}" />
-      <Parameter name="profile" value="${profile}" />
     </Stream>
   </Connect>
 </Response>`

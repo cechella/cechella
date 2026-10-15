@@ -110,6 +110,7 @@ export async function updateLeadEtapa(telefone: string, etapa: string) {
     .from('leads')
     .update({ etapa, etapa_agente: num, updated_at: new Date().toISOString() })
     .or(`telefone.eq.${t},telefone.eq.55${bare},telefone.eq.${bare}`)
+    .lt('etapa_agente', num)
 }
 
 export async function updateLeadsGanho(callSid: string) {
