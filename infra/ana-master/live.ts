@@ -1871,6 +1871,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
           if (pagamentoConfirmado) {
             livePagamentoConfirmado = true
             livePixAutoSent = true
+            liveEtapa7SpeechFired = true  // prevent re-firing the etapa 7 celebration on resumed calls
             // Resume call already past payment — put pipeline at referidos
             if (livePipelineEtapa < 6 && telefone) {
               livePipelineEtapa = 6
