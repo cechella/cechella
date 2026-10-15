@@ -1027,17 +1027,17 @@ Permaneça em silêncio até o sistema confirmar envio ou a lead fazer uma pergu
 Após confirmação do sistema: "Perfeito! Você vai receber a mensagem agora. Foi muito bom conversar contigo. Cuida-se!"
 `
 
-async function loadGoldenPrompt(): Promise<string> {
+async function loadGoldenPrompt(profile = 'gold'): Promise<string> {
   const PROMPT_VERSION_MARKER = 'PROTOCOLO UNIVERSAL — VALE PARA QUALQUER OBJEÇÃO'
   try {
     const { data } = await supabase
       .from('ana_realtime_profiles')
       .select('instructions')
-      .eq('profile', 'gold')
+      .eq('profile', profile)
       .single()
     if (data?.instructions) {
-      // Auto-migrate: se o Supabase tem versão antiga (sem o marker), atualiza com o fallback
-      if (!data.instructions.includes(PROMPT_VERSION_MARKER)) {
+      // Auto-migrate only for gold profile
+      if (profile === 'gold' && !data.instructions.includes(PROMPT_VERSION_MARKER)) {
         console.log('[ANA LIVE] 🔄 prompt desatualizado — migrando para versão atual...')
         await supabase.from('ana_realtime_profiles')
           .update({ instructions: ANA_LIVE_PROMPT_FALLBACK })
@@ -1048,13 +1048,14 @@ async function loadGoldenPrompt(): Promise<string> {
       return data.instructions as string
     }
   } catch (e) {
-    console.error('[ANA LIVE] Failed to load prompt from Supabase:', e)
+    console.error(`[ANA LIVE] Failed to load prompt profile=${profile}:`, e)
   }
   return ANA_LIVE_PROMPT_FALLBACK
 }
 
-export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string; referidor?: string; nome?: string; origem?: string; earlyQueue?: (Buffer | string)[] } = {}) {
-  const [dbConfig, instructions] = await Promise.all([getVoiceConfig(), loadGoldenPrompt()])
+export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string; referidor?: string; nome?: string; origem?: string; profile?: string; earlyQueue?: (Buffer | string)[] } = {}) {
+  const profileName = opts.profile || 'gold'
+  const [dbConfig, instructions] = await Promise.all([getVoiceConfig(profileName), loadGoldenPrompt(profileName)])
   const voice  = dbConfig?.voice  ?? 'bossa'
   const model  = dbConfig?.model  ?? 'gpt-live-1'
 
@@ -1807,12 +1808,14 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         const paramNome = String(msg.start?.customParameters?.nome ?? '').trim()
         const paramOrigem = String(msg.start?.customParameters?.origem ?? '').trim()
         const paramContexto = String(msg.start?.customParameters?.contexto ?? '').trim()
+        const paramProfile = String(msg.start?.customParameters?.profile ?? '').trim()
         opts = {
           ...opts,
           ...(paramReferidor ? { referidor: paramReferidor } : {}),
           ...(paramNome ? { nome: paramNome } : {}),
           ...(paramOrigem ? { origem: paramOrigem } : {}),
           ...(paramContexto ? { contexto: paramContexto } : {}),
+          ...(paramProfile ? { profile: paramProfile } : {}),
         }
         // Also pre-seed nome from TwiML param if not yet set
         if (paramNome && !liveNomeLead) liveNomeLead = paramNome

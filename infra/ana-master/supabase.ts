@@ -234,14 +234,22 @@ export interface VoiceConfig {
   voice_stack: string
 }
 
-export async function getVoiceConfig(): Promise<VoiceConfig | null> {
+export async function getVoiceConfig(profile = 'gold'): Promise<VoiceConfig | null> {
   try {
+    // Try profile-specific config first, fall back to gold
     const { data } = await supabase
+      .from('ana_realtime_profiles')
+      .select('voice,model,vad_threshold,vad_prefix_padding_ms,vad_silence_duration_ms,transcription_model,noise_reduction,max_output_tokens,reasoning_effort')
+      .eq('profile', profile)
+      .single()
+    if (data) return data as unknown as VoiceConfig
+    // Fallback: legacy ana_voice_config table
+    const { data: legacy } = await supabase
       .from('ana_voice_config')
       .select('*')
       .eq('profile', 'gold')
       .single()
-    return data as VoiceConfig | null
+    return legacy as VoiceConfig | null
   } catch {
     return null
   }

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { createClient } from '@supabase/supabase-js'
-import { PhoneCall, UserCheck, Clock, CheckCircle2, Calendar, FileText, Package, Bot } from 'lucide-react'
+import { PhoneCall, UserCheck, Clock, CheckCircle2, Calendar, FileText, Package, Bot, Settings, Save, ChevronDown, ChevronUp } from 'lucide-react'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -57,6 +57,9 @@ export default function PosVendasPage() {
   const [loading, setLoading] = useState(true)
   const [ligando, setLigando] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [configOpen, setConfigOpen] = useState(false)
+  const [andrePrompt, setAndrePrompt] = useState('')
+  const [savingPrompt, setSavingPrompt] = useState(false)
 
   function showToast(msg: string) {
     setToast(msg)
@@ -66,16 +69,23 @@ export default function PosVendasPage() {
   useEffect(() => {
     async function carregar() {
       setLoading(true)
-      const { data } = await supabase
-        .from('leads')
-        .select('id, nome, telefone, etapa_agente, updated_at, onboarding_status, data_implante')
-        .gte('etapa_agente', 7)
-        .order('updated_at', { ascending: false })
-      setPacientes((data as PacientePos[]) ?? [])
+      const [{ data: leads }, { data: profile }] = await Promise.all([
+        supabase.from('leads').select('id, nome, telefone, etapa_agente, updated_at, onboarding_status, data_implante').gte('etapa_agente', 7).order('updated_at', { ascending: false }),
+        supabase.from('ana_realtime_profiles').select('instructions').eq('profile', 'andre').maybeSingle(),
+      ])
+      setPacientes((leads as PacientePos[]) ?? [])
+      if (profile?.instructions) setAndrePrompt(profile.instructions)
       setLoading(false)
     }
     carregar()
   }, [])
+
+  async function salvarPrompt() {
+    setSavingPrompt(true)
+    await supabase.from('ana_realtime_profiles').upsert({ profile: 'andre', instructions: andrePrompt }, { onConflict: 'profile' })
+    setSavingPrompt(false)
+    showToast('Prompt do André salvo ✅')
+  }
 
   async function ligarAndre(p: PacientePos) {
     setLigando(p.id)
@@ -162,6 +172,43 @@ export default function PosVendasPage() {
                 )
               })}
             </div>
+          </div>
+
+          {/* Config André */}
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl mb-6 overflow-hidden">
+            <button
+              onClick={() => setConfigOpen(o => !o)}
+              className="w-full flex items-center justify-between px-6 py-4 hover:bg-[#111115] transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Settings className="w-4 h-4 text-[#f59e0b]" />
+                <span className="text-sm font-semibold text-white">Config André</span>
+                <span className="text-[10px] text-[#3F3F46] bg-[#18181A] px-2 py-0.5 rounded font-mono">profile=andre · voz Tempo</span>
+              </div>
+              {configOpen ? <ChevronUp className="w-4 h-4 text-[#52525B]" /> : <ChevronDown className="w-4 h-4 text-[#52525B]" />}
+            </button>
+            {configOpen && (
+              <div className="px-6 pb-5 border-t border-[#1C1C1E]">
+                <p className="text-xs text-[#52525B] mt-4 mb-2">System Instructions — editadas aqui e salvas diretamente no Supabase</p>
+                <textarea
+                  value={andrePrompt}
+                  onChange={e => setAndrePrompt(e.target.value)}
+                  rows={16}
+                  className="w-full bg-[#0A0A0B] border border-[#1C1C1E] rounded-xl px-4 py-3 text-xs text-white font-mono resize-y focus:outline-none focus:border-[#f59e0b]/50"
+                  placeholder="Prompt do André..."
+                />
+                <div className="flex justify-end mt-3">
+                  <button
+                    onClick={salvarPrompt}
+                    disabled={savingPrompt}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-black text-sm font-semibold transition-colors disabled:opacity-50"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {savingPrompt ? 'Salvando...' : 'Salvar prompt'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Lista de pacientes */}
