@@ -21,9 +21,25 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const { ativo } = await req.json()
-  const { error } = await supabase
+  // Try update first, then insert if not found
+  const { data: existing } = await supabase
     .from('configuracoes')
-    .upsert({ chave: 'andre_auto', valor: { ativo: !!ativo } }, { onConflict: 'chave' })
+    .select('id')
+    .eq('chave', 'andre_auto')
+    .maybeSingle()
+
+  let error
+  if (existing?.id) {
+    ;({ error } = await supabase
+      .from('configuracoes')
+      .update({ valor: { ativo: !!ativo } })
+      .eq('chave', 'andre_auto'))
+  } else {
+    ;({ error } = await supabase
+      .from('configuracoes')
+      .insert({ chave: 'andre_auto', valor: { ativo: !!ativo } }))
+  }
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true, ativo: !!ativo })
 }
