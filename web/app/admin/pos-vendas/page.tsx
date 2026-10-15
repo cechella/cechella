@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { createClient } from '@supabase/supabase-js'
-import { PhoneCall, UserCheck, Clock, CheckCircle2, Calendar, FileText, Package, Bot, Settings, Save, ChevronDown, ChevronUp } from 'lucide-react'
+import { PhoneCall, UserCheck, Clock, CheckCircle2, Calendar, FileText, Package, Bot, Settings, Save, ChevronDown, ChevronUp, Zap } from 'lucide-react'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -60,6 +60,8 @@ export default function PosVendasPage() {
   const [configOpen, setConfigOpen] = useState(false)
   const [andrePrompt, setAndrePrompt] = useState('')
   const [savingPrompt, setSavingPrompt] = useState(false)
+  const [andreAuto, setAndreAuto] = useState(false)
+  const [savingAuto, setSavingAuto] = useState(false)
 
   function showToast(msg: string) {
     setToast(msg)
@@ -69,13 +71,16 @@ export default function PosVendasPage() {
   useEffect(() => {
     async function carregar() {
       setLoading(true)
-      const [{ data: leads }, cfgRes] = await Promise.all([
+      const [{ data: leads }, cfgRes, autoRes] = await Promise.all([
         supabase.from('leads').select('id, nome, telefone, etapa_agente, updated_at, onboarding_status, data_implante').gte('etapa_agente', 7).order('updated_at', { ascending: false }),
         fetch('/api/admin/andre-config'),
+        fetch('/api/admin/andre-auto'),
       ])
       setPacientes((leads as PacientePos[]) ?? [])
       const cfg = await cfgRes.json()
       if (cfg?.instructions) setAndrePrompt(cfg.instructions)
+      const autoCfg = await autoRes.json().catch(() => ({}))
+      setAndreAuto(autoCfg?.ativo === true)
       setLoading(false)
     }
     carregar()
@@ -90,6 +95,18 @@ export default function PosVendasPage() {
     })
     setSavingPrompt(false)
     showToast('Prompt do André salvo ✅')
+  }
+
+  async function toggleAndreAuto(val: boolean) {
+    setSavingAuto(true)
+    await fetch('/api/admin/andre-auto', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ativo: val }),
+    })
+    setAndreAuto(val)
+    setSavingAuto(false)
+    showToast(val ? 'André automático ATIVADO ✅' : 'André automático desativado')
   }
 
   async function ligarAndre(p: PacientePos) {
@@ -137,6 +154,31 @@ export default function PosVendasPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-[#f59e0b] animate-pulse" />
               André — voz Tempo
             </div>
+          </div>
+
+          {/* André Auto Toggle */}
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl px-5 py-4 mb-6 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Zap className={`w-5 h-5 ${andreAuto ? 'text-[#f59e0b]' : 'text-[#3F3F46]'}`} />
+              <div>
+                <p className="text-sm font-semibold text-white">André Automático</p>
+                <p className="text-xs text-[#52525B]">
+                  {andreAuto
+                    ? 'Ligação automática ao fechar venda (etapa 7)'
+                    : 'Desativado — André só liga quando acionado manualmente'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => toggleAndreAuto(!andreAuto)}
+              disabled={savingAuto}
+              className={`relative w-12 h-6 rounded-full transition-colors duration-200 disabled:opacity-50 ${andreAuto ? 'bg-[#f59e0b]' : 'bg-[#27272A]'}`}
+              title={andreAuto ? 'Desativar André automático' : 'Ativar André automático'}
+            >
+              <span
+                className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${andreAuto ? 'translate-x-6' : 'translate-x-0.5'}`}
+              />
+            </button>
           </div>
 
           {/* KPIs */}

@@ -155,6 +155,38 @@ supabase
     console.log(`[SERVER] referidos listener status=${status}`)
   })
 
+// André auto-call listener — when leads.etapa_agente = 7, auto-dispatch André if toggle enabled
+supabase
+  .channel('andre-auto-call')
+  .on('postgres_changes' as any, { event: 'UPDATE', schema: 'public', table: 'leads' }, async (payload: any) => {
+    const { etapa_agente, telefone, nome, onboarding_status } = payload.new ?? {}
+    if (etapa_agente !== 7) return
+    if (onboarding_status && onboarding_status !== 'aguardando_contato') return // já iniciado
+
+    // Check toggle
+    const { data: cfg } = await supabase
+      .from('configuracoes')
+      .select('valor')
+      .eq('chave', 'andre_auto')
+      .maybeSingle()
+    if (!cfg?.valor?.ativo) return
+
+    const digits = String(telefone ?? '').replace(/\D/g, '')
+    if (!digits) return
+    const numero = digits.startsWith('55') ? digits : `55${digits}`
+    console.log(`[ANDRE AUTO] 📞 disparando ligação automática para ${numero}`)
+
+    const ANA_MASTER_URL = process.env.ANA_MASTER_URL ?? 'http://localhost:3001'
+    fetch(`${ANA_MASTER_URL}/outbound`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ numero, nome: nome ?? '', contexto: 'pos_vendas', origem: 'pos_vendas', profile: 'andre' }).toString(),
+    }).catch((e: any) => console.error('[ANDRE AUTO] fetch error:', e.message))
+  })
+  .subscribe((status: string) => {
+    console.log(`[SERVER] andre-auto listener status=${status}`)
+  })
+
 // Parse Twilio's application/x-www-form-urlencoded webhook bodies
 // Must be registered BEFORE any routes that consume this content type
 app.addContentTypeParser(
