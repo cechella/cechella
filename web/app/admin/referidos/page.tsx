@@ -345,18 +345,19 @@ export default function ReferidosPage() {
     setTimeout(() => setCopiandoLink(null), 2000)
   }
 
-  const ligarVoz = async (telefone: string, id: string, nome?: string | null, referidor?: string | null) => {
+  const ligarVoz = async (telefone: string, id: string) => {
     if (!telefone) return showToast('Sem telefone', 'err')
     setLigandoVoz(id)
     const tel = telefone.replace(/\D/g, '')
+    const number = `+55${tel}`
     try {
-      const res = await fetch('/api/admin/ana-master-call', {
+      const res = await fetch('/api/admin/vapi-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numero: tel, referidor: referidor || '', nome: nome || '', contexto: 'gold' }),
+        body: JSON.stringify({ number }),
       })
       if (res.ok) {
-        showToast(`ANA PTL iniciada para ${nome || tel}!`)
+        showToast(`Ligando para ${number}...`)
       } else {
         showToast('Erro ao iniciar ligação', 'err')
       }
@@ -473,10 +474,10 @@ export default function ReferidosPage() {
       await Promise.all(lote.map(async (ref) => {
         const tel = ref.telefone!.replace(/\D/g, '')
         try {
-          const res = await fetch('/api/admin/ana-master-call', {
+          const res = await fetch('/api/admin/vapi-call', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ numero: tel, referidor: ref.indicado_por_nome || '', nome: ref.nome || '', contexto: 'gold' }),
+            body: JSON.stringify({ number: `+55${tel}` }),
           })
           if (res.ok) ok++
         } catch {}
@@ -895,7 +896,7 @@ export default function ReferidosPage() {
                                 </button>
                                 {lead.telefone && (
                                   <button
-                                    onClick={() => ligarVoz(lead.telefone!, lead.id, lead.nome)}
+                                    onClick={() => ligarVoz(lead.telefone!, lead.id)}
                                     disabled={ligandoVoz === lead.id}
                                     className="flex items-center gap-1 text-xs px-2 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
                                     title="Ligar via Ana Voz"
