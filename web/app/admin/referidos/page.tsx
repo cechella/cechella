@@ -345,19 +345,19 @@ export default function ReferidosPage() {
     setTimeout(() => setCopiandoLink(null), 2000)
   }
 
-  const ligarVoz = async (telefone: string, id: string) => {
+  const ligarVoz = async (telefone: string, id: string, nome?: string | null) => {
     if (!telefone) return showToast('Sem telefone', 'err')
     setLigandoVoz(id)
     const tel = telefone.replace(/\D/g, '')
-    const number = `+55${tel}`
+    const numero = tel.startsWith('55') ? tel : `55${tel}`
     try {
-      const res = await fetch('/api/admin/vapi-call', {
+      const res = await fetch('/api/admin/ana-master-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number }),
+        body: JSON.stringify({ numero, nome: nome || '', contexto: 'gold' }),
       })
       if (res.ok) {
-        showToast(`Ligando para ${number}...`)
+        showToast(`Ligando para ${numero}...`)
       } else {
         showToast('Erro ao iniciar ligação', 'err')
       }
@@ -895,15 +895,15 @@ export default function ReferidosPage() {
                                   {acionandoAna === lead.id ? '...' : 'Ana'}
                                 </button>
                                 {lead.telefone && (
-                                  <a
-                                    href={`https://wa.me/${lead.telefone.replace(/\D/g, '')}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors"
-                                    title="Abrir WhatsApp"
+                                  <button
+                                    onClick={() => ligarVoz(lead.telefone!, lead.id, lead.nome)}
+                                    disabled={ligandoVoz === lead.id}
+                                    className="flex items-center gap-1 text-xs px-2 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
+                                    title="Ligar via Ana Master"
                                   >
-                                    <Phone className="w-3.5 h-3.5" />
-                                  </a>
+                                    <PhoneCall className="w-3 h-3" />
+                                    {ligandoVoz === lead.id ? '...' : 'Voz'}
+                                  </button>
                                 )}
                               </div>
                             </td>
