@@ -2,7 +2,7 @@
 
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
-import { Bot, PhoneCall, Share2, Settings, ExternalLink, Activity, MessageSquare, Zap } from 'lucide-react'
+import { Bot, PhoneCall, Share2, Settings, ExternalLink, Activity, MessageSquare, Zap, UserCheck } from 'lucide-react'
 
 interface AgentCard {
   icon: string
@@ -53,12 +53,30 @@ const agents: AgentCard[] = [
       { label: 'Logs Z-API', href: 'https://app.z-api.io' },
     ],
   },
+  {
+    icon: '🧑‍💼',
+    name: 'André',
+    role: 'Agente Pós-Vendas — gpt-live-1 · Voz Tempo',
+    status: 'online',
+    color: '#f59e0b',
+    description: 'Liga para novos pacientes após o fechamento. Coleta dados cadastrais (CPF, e-mail, nascimento), solicita exames, agenda o implante e acompanha insumos até o dia do procedimento.',
+    metrics: [
+      { label: 'Ligações hoje', value: '—', color: '#f59e0b' },
+      { label: 'Onboardings', value: '—', color: '#22c55e' },
+      { label: 'Agendados', value: '—' },
+    ],
+    tools: ['gpt-live-1', 'Twilio', 'Supabase', 'Z-API'],
+    links: [
+      { label: 'Pós-Vendas', href: '/admin/pos-vendas' },
+      { label: 'Prompt André', href: '/admin/ana-master' },
+    ],
+  },
 ]
 
 const coming: { icon: string; name: string; desc: string }[] = [
-  { icon: '🏥', name: 'Administrativo', desc: 'Agendamentos, confirmações e lembretes automatizados' },
   { icon: '💰', name: 'Financeiro', desc: 'Cobranças, inadimplência e renovações' },
   { icon: '🩺', name: 'Clínico', desc: 'Orientações pós-implante e acompanhamento de resultados' },
+  { icon: '🏥', name: 'Agenda', desc: 'Agendamentos, confirmações e lembretes automatizados' },
 ]
 
 export default function AgentesPage() {
@@ -76,7 +94,7 @@ export default function AgentesPage() {
             </div>
             <div className="flex items-center gap-2 bg-[#131720] border border-[#252d42] rounded-full px-3 py-1.5 text-xs font-semibold text-[#22c55e]">
               <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
-              2 agentes online
+              3 agentes online
             </div>
           </div>
 

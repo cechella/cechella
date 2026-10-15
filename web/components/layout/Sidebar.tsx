@@ -37,6 +37,7 @@ import {
   Brain,
   Briefcase,
   Globe,
+  UserCheck,
 } from 'lucide-react'
 
 type UserRole = 'patient' | 'medical' | 'sales' | 'admin'
@@ -95,6 +96,7 @@ const adminNav: NavSection[] = [
       { label: 'Financeiro',    href: '/admin/financeiro',     icon: <DollarSign className="w-5 h-5" /> },
       { label: 'CRM',           href: '/admin/crm',            icon: <Kanban className="w-5 h-5" /> },
       { label: 'Referidos',     href: '/admin/referidos',      icon: <Share2 className="w-5 h-5" /> },
+      { label: 'Pós-Vendas',    href: '/admin/pos-vendas',     icon: <UserCheck className="w-5 h-5" /> },
       { label: 'Agente IA',     href: '/admin/agente',         icon: <Bot className="w-5 h-5" /> },
       { label: 'Analytics',     href: '/admin/analytics',      icon: <BarChart3 className="w-5 h-5" /> },
       { label: 'Rede',          href: '/admin/rede',           icon: <Network className="w-5 h-5" /> },
