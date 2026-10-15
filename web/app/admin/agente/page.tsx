@@ -337,115 +337,68 @@ function CommandPalette({ leads, onClose, onSelectLead, onToggleHumano, selected
   )
 }
 
-/* ─── VAPI constants ─────────────────────────────────────────────────────── */
-const VAPI_API_KEY = 'e3bc519a-7466-4450-bcfc-2ae9566d9e2f'
-const ASSISTANT_ID = 'f2ab9277-dcf3-4fe5-9ac4-5cd0c45229c5'
-
-/* ─── VozView ─────────────────────────────────────────────────────────────── */
-interface VozCall {
-  id: string
+/* ─── VozView — ANA MASTER (ana_calls) ───────────────────────────────────── */
+interface AnaCall {
+  call_sid: string
   telefone: string
-  call_id: string | null
-  created_at: string
+  stage: string | null
   status: string | null
-  duracao: number | null
-  summary: string | null
-  ended_reason: string | null
-}
-
-interface VapiMsg {
-  role: string
-  message?: string
-  content?: string | any[]
-  result?: string
-  name?: string
-  duration?: number
-}
-
-function vapiMsgText(msg: VapiMsg): string {
-  if (msg.message) return msg.message
-  if (typeof msg.content === 'string') return msg.content
-  if (Array.isArray(msg.content)) return msg.content.map((c: any) => c.text || c.content || '').join(' ')
-  if (msg.result) return msg.result
-  return ''
+  em_ligacao: boolean | null
+  created_at: string
+  memories: {
+    transcript?: Array<{ role: string; text: string }>
+    audio_url?: string
+    nome_lead?: string
+    forma_pagamento_escolhida?: string
+    [key: string]: any
+  } | null
 }
 
 function VozView() {
-  const [calls, setCalls] = useState<VozCall[]>([])
+  const [calls, setCalls] = useState<AnaCall[]>([])
   const [loadingCalls, setLoadingCalls] = useState(true)
-  const [selected, setSelected] = useState<VozCall | null>(null)
-  const [vapiData, setVapiData] = useState<any>(null)
-  const [vapiLoading, setVapiLoading] = useState(false)
+  const [selected, setSelected] = useState<AnaCall | null>(null)
   const [showTranscript, setShowTranscript] = useState(true)
-  const [leadNames, setLeadNames] = useState<Record<string, string>>({})
   const [ligando, setLigando] = useState<string | null>(null)
 
   useEffect(() => {
     const supabase = getSupabase()
     supabase
-      .from('historico_voz')
-      .select('*')
+      .from('ana_calls')
+      .select('call_sid, telefone, stage, status, em_ligacao, created_at, memories')
       .order('created_at', { ascending: false })
       .limit(50)
-      .then(async ({ data }: { data: VozCall[] | null }) => {
-        const rows = data || []
-        setCalls(rows)
+      .then(({ data }: { data: AnaCall[] | null }) => {
+        setCalls(data || [])
         setLoadingCalls(false)
-        if (rows.length > 0) {
-          const phones = Array.from(new Set(rows.map(r => r.telefone)))
-          const { data: lData } = await supabase
-            .from('leads')
-            .select('telefone, nome')
-            .in('telefone', phones)
-          if (lData) {
-            const map: Record<string, string> = {}
-            for (const l of lData as { telefone: string; nome: string | null }[]) {
-              if (l.nome) map[l.telefone] = l.nome
-            }
-            setLeadNames(map)
-          }
-        }
       })
   }, [])
 
-  const ligarVoz = async (e: React.MouseEvent, telefone: string) => {
+  const ligarVoz = async (e: React.MouseEvent, call: AnaCall) => {
     e.stopPropagation()
     if (ligando) return
-    setLigando(telefone)
+    setLigando(call.call_sid)
+    const digits = call.telefone.replace(/\D/g, '')
+    const tel = digits.startsWith('55') ? digits : `55${digits}`
+    const nome = call.memories?.nome_lead || ''
     try {
-      const digits = telefone.replace(/\D/g, '')
-      const number = digits.startsWith('55') ? `+${digits}` : `+55${digits}`
-      await fetch('/api/admin/vapi-call', {
+      await fetch('/api/admin/ana-master-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number }),
+        body: JSON.stringify({ numero: tel, nome, contexto: 'gold' }),
       })
     } finally {
       setTimeout(() => setLigando(null), 3000)
     }
   }
 
-  const fetchVapi = async (call: VozCall) => {
-    setSelected(call)
-    setVapiData(null)
-    if (!call.call_id) return
-    setVapiLoading(true)
-    try {
-      const res = await fetch(`https://api.vapi.ai/call/${call.call_id}`, {
-        headers: { 'Authorization': `Bearer ${VAPI_API_KEY}` },
-      })
-      const data = await res.json()
-      if (res.ok) setVapiData(data)
-    } catch {}
-    setVapiLoading(false)
-  }
+  const transcript: Array<{ role: string; text: string }> = selected?.memories?.transcript || []
+  const audioUrl: string | undefined = selected?.memories?.audio_url
 
-  const durStr = (s: number | null) => {
-    if (!s) return '—'
-    return `${Math.floor(s / 60)}m ${s % 60}s`
+  const stageColor = (stage: string | null) => {
+    const map: Record<string, string> = { ganho: '#22c55e', referidos: '#7B3FE4', validacao: '#A78BFA', fechamento: '#F59E0B', speech: '#06B6D4', di: '#3B82F6', conexao: '#10B981' }
+    return map[stage ?? ''] ?? '#555'
   }
-
-  const messages: VapiMsg[] = vapiData?.messages || []
 
   return (
     <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
@@ -468,12 +421,12 @@ function VozView() {
               <p style={{ fontSize: 10, marginTop: 4, color: '#333' }}>As ligações aparecem após a Ana Voz atender</p>
             </div>
           ) : calls.map(call => {
-            const isActive = selected?.id === call.id
-            const leadName = leadNames[call.telefone]
-            const isCallingThis = ligando === call.telefone
+            const isActive = selected?.call_sid === call.call_sid
+            const nome = call.memories?.nome_lead || null
+            const isCallingThis = ligando === call.call_sid
             return (
               <div
-                key={call.id}
+                key={call.call_sid}
                 style={{
                   borderBottom: '1px solid #18181E',
                   borderLeft: isActive ? '3px solid #7B3FE4' : '3px solid transparent',
@@ -484,38 +437,37 @@ function VozView() {
                 onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLDivElement).style.background = 'transparent' }}
               >
                 <button
-                  onClick={() => fetchVapi(call)}
+                  onClick={() => setSelected(call)}
                   style={{ width: '100%', textAlign: 'left', padding: '12px 14px 12px 14px', background: 'transparent', border: 'none', cursor: 'pointer', paddingRight: 44 }}
                 >
-                  {leadName && (
+                  {nome && (
                     <div style={{ fontSize: 13, fontWeight: 700, color: '#F0F0F5', marginBottom: 2, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                      {leadName}
+                      {nome}
                     </div>
                   )}
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <span style={{ fontSize: leadName ? 10 : 13, fontWeight: leadName ? 400 : 700, color: leadName ? '#555' : '#F0F0F5', fontFamily: 'monospace' }}>
+                    <span style={{ fontSize: nome ? 10 : 13, fontWeight: nome ? 400 : 700, color: nome ? '#555' : '#F0F0F5', fontFamily: 'monospace' }}>
                       {call.telefone.replace(/^55/, '+55 ')}
                     </span>
-                    <span style={{ fontSize: 9, color: call.status === 'ended' ? '#22c55e' : '#F5A623', background: call.status === 'ended' ? '#14532d30' : '#78350f30', padding: '2px 6px', borderRadius: 4, border: `1px solid ${call.status === 'ended' ? '#166534' : '#92400e'}` }}>
-                      {call.status || 'desconhecido'}
-                    </span>
+                    {call.stage && (
+                      <span style={{ fontSize: 9, color: stageColor(call.stage), background: stageColor(call.stage) + '20', padding: '2px 6px', borderRadius: 4, border: `1px solid ${stageColor(call.stage)}40` }}>
+                        {call.stage}
+                      </span>
+                    )}
                   </div>
-                  <div style={{ display: 'flex', gap: 8, fontSize: 10, color: '#555', marginBottom: 3 }}>
-                    <span>⏱ {durStr(call.duracao)}</span>
-                    {call.ended_reason && <span>· {call.ended_reason}</span>}
-                  </div>
-                  {call.summary && (
-                    <p style={{ fontSize: 10, color: '#4A4A58', margin: 0, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-                      {call.summary}
-                    </p>
+                  {call.em_ligacao && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9, color: '#22c55e', marginBottom: 3 }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', animation: 'pulse 1.5s infinite' }} />
+                      Em ligação
+                    </div>
                   )}
                   <div style={{ fontSize: 9, color: '#333', marginTop: 3 }}>
                     {new Date(call.created_at).toLocaleString('pt-BR')}
                   </div>
                 </button>
                 <button
-                  onClick={e => ligarVoz(e, call.telefone)}
-                  title="Ligar agora"
+                  onClick={e => ligarVoz(e, call)}
+                  title="Ligar novamente via ANA MASTER"
                   disabled={!!ligando}
                   style={{
                     position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
@@ -546,161 +498,106 @@ function VozView() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <h2 style={{ fontSize: 16, fontWeight: 700, color: '#F0F0F5', margin: 0 }}>
-                  {leadNames[selected.telefone] || selected.telefone.replace(/^55/, '+55 ')}
+                  {selected.memories?.nome_lead || selected.telefone.replace(/^55/, '+55 ')}
                 </h2>
                 <div style={{ fontSize: 10, color: '#555', fontFamily: 'monospace', marginTop: 2 }}>
-                  {leadNames[selected.telefone] ? selected.telefone.replace(/^55/, '+55 ') + ' · ' : ''}{selected.call_id || 'sem call ID'}
+                  {selected.telefone.replace(/^55/, '+55 ')} · {selected.call_sid}
+                  {selected.stage && <span style={{ marginLeft: 6, color: stageColor(selected.stage) }}>· {selected.stage}</span>}
                 </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <button
-                  onClick={e => ligarVoz(e, selected.telefone)}
-                  disabled={!!ligando}
-                  title="Religar este número"
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
-                    background: ligando === selected.telefone ? '#22c55e20' : '#16532d20',
-                    border: `1px solid ${ligando === selected.telefone ? '#22c55e40' : '#16532d40'}`,
-                    borderRadius: 8, cursor: ligando ? 'not-allowed' : 'pointer',
-                    color: '#4ade80', fontSize: 11, fontWeight: 600,
-                    opacity: ligando && ligando !== selected.telefone ? 0.4 : 1,
-                  }}
-                >
-                  {ligando === selected.telefone
-                    ? <><div style={{ width: 10, height: 10, borderRadius: '50%', border: '2px solid #22c55e', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} /> Ligando...</>
-                    : <><PhoneCall style={{ width: 12, height: 12 }} /> Ligar</>
-                  }
-                </button>
-                {vapiData?.durationSeconds && (
-                  <span style={{ fontSize: 11, color: '#A1A1AA', background: '#1C1C1E', padding: '4px 10px', borderRadius: 7 }}>
-                    ⏱ {Math.floor(vapiData.durationSeconds / 60)}m {Math.round(vapiData.durationSeconds % 60)}s
-                  </span>
-                )}
-                {vapiData?.endedReason && (
-                  <span style={{ fontSize: 11, color: '#F5A623', background: '#78350f20', border: '1px solid #92400e', padding: '4px 10px', borderRadius: 7 }}>
-                    {vapiData.endedReason}
-                  </span>
-                )}
-                {vapiData?.costBreakdown?.total !== undefined && (
-                  <span style={{ fontSize: 10, color: '#555', background: '#1C1C1E', padding: '4px 8px', borderRadius: 6 }}>
-                    ${vapiData.costBreakdown.total.toFixed(3)}
-                  </span>
-                )}
-              </div>
+              <button
+                onClick={e => ligarVoz(e, selected)}
+                disabled={!!ligando}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+                  background: ligando === selected.call_sid ? '#22c55e20' : '#16532d20',
+                  border: `1px solid ${ligando === selected.call_sid ? '#22c55e40' : '#16532d40'}`,
+                  borderRadius: 8, cursor: ligando ? 'not-allowed' : 'pointer',
+                  color: '#4ade80', fontSize: 11, fontWeight: 600,
+                }}
+              >
+                {ligando === selected.call_sid
+                  ? <><div style={{ width: 10, height: 10, borderRadius: '50%', border: '2px solid #22c55e', borderTopColor: 'transparent', animation: 'spin 0.8s linear infinite' }} /> Ligando...</>
+                  : <><PhoneCall style={{ width: 12, height: 12 }} /> Ligar</>
+                }
+              </button>
             </div>
           </div>
 
-          {vapiLoading ? (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <div className="w-6 h-6 border-2 border-[#7B3FE4] border-t-transparent rounded-full animate-spin" />
-            </div>
-          ) : (
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
+            {/* Audio */}
+            {audioUrl && (
+              <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
+                <p style={{ fontSize: 10, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Volume2 style={{ width: 12, height: 12 }} /> Gravação
+                </p>
+                <audio controls src={audioUrl} style={{ width: '100%' }} />
+              </div>
+            )}
 
-              {/* Summary */}
-              {vapiData?.analysis?.summary && (
-                <div style={{ background: '#7B3FE410', border: '1px solid #7B3FE430', borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
-                  <p style={{ fontSize: 10, color: '#7B3FE4', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>Resumo VAPI</p>
-                  <p style={{ fontSize: 13, color: '#A1A1AA', lineHeight: 1.6, margin: 0 }}>{vapiData.analysis.summary}</p>
+            {/* Transcript */}
+            {transcript.length > 0 ? (
+              <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
+                <div style={{ display: 'flex', alignItems: 'center', borderBottom: showTranscript ? '1px solid #1C1C1E' : 'none' }}>
+                  <button
+                    onClick={() => setShowTranscript(v => !v)}
+                    style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#555', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
+                  >
+                    <span>Conversa — {transcript.length} turnos</span>
+                    {showTranscript ? <ChevronUp style={{ width: 14, height: 14 }} /> : <ChevronDown style={{ width: 14, height: 14 }} />}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const text = transcript.map(t => `${t.role === 'assistant' || t.role === 'ana' ? 'ANA' : 'VOCÊ'}: ${t.text}`).join('\n')
+                      navigator.clipboard.writeText(text)
+                    }}
+                    title="Copiar transcrição"
+                    style={{ padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#555', flexShrink: 0 }}
+                  >
+                    <Copy style={{ width: 14, height: 14 }} />
+                  </button>
                 </div>
-              )}
-
-              {/* Audio */}
-              {(vapiData?.recordingUrl || vapiData?.stereoRecordingUrl) && (
-                <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
-                  <p style={{ fontSize: 10, color: '#555', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Volume2 style={{ width: 12, height: 12 }} /> Gravação
-                  </p>
-                  <audio controls src={vapiData.stereoRecordingUrl || vapiData.recordingUrl} style={{ width: '100%' }} />
-                </div>
-              )}
-
-              {/* Transcript messages */}
-              {messages.length > 0 && (
-                <div style={{ background: '#111113', border: '1px solid #1C1C1E', borderRadius: 12, overflow: 'hidden', marginBottom: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', borderBottom: showTranscript ? '1px solid #1C1C1E' : 'none' }}>
-                    <button
-                      onClick={() => setShowTranscript(v => !v)}
-                      style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#555', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}
-                    >
-                      <span>Conversa — {messages.length} mensagens</span>
-                      {showTranscript ? <ChevronUp style={{ width: 14, height: 14 }} /> : <ChevronDown style={{ width: 14, height: 14 }} />}
-                    </button>
-                    <button
-                      onClick={() => {
-                        const text = messages.map(m => {
-                          const t = vapiMsgText(m)
-                          if (!t) return null
-                          const role = m.role === 'assistant' ? 'AI' : m.role === 'user' ? 'User' : m.role
-                          return `${role}: ${t}`
-                        }).filter(Boolean).join('\n')
-                        navigator.clipboard.writeText(text)
-                      }}
-                      title="Copiar transcrição"
-                      style={{ padding: '8px 12px', background: 'transparent', border: 'none', cursor: 'pointer', color: '#555', flexShrink: 0 }}
-                    >
-                      <Copy style={{ width: 14, height: 14 }} />
-                    </button>
-                  </div>
-                  {showTranscript && (
-                    <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 600, overflowY: 'auto' }}>
-                      {messages.map((msg, i) => {
-                        const text = vapiMsgText(msg)
-                        if (!text && msg.role !== 'tool_call') return null
-                        const isAna = msg.role === 'assistant'
-                        const isUser = msg.role === 'user'
-                        const isTool = msg.role === 'tool_call' || msg.role === 'tool_result'
-                        return (
-                          <div key={i} style={{ display: 'flex', gap: 8, justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
-                            {isAna && (
-                              <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#7B3FE420', border: '1px solid #7B3FE430', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                                <Mic style={{ width: 12, height: 12, color: '#A78BFA' }} />
-                              </div>
-                            )}
-                            <div style={{ maxWidth: isTool ? '90%' : '72%', display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
-                              {isTool && (
-                                <span style={{ fontSize: 9, color: '#F5A623', marginBottom: 2 }}>{msg.role === 'tool_call' ? `Tool: ${msg.name}` : 'Resultado'}</span>
-                              )}
-                              <div style={{
-                                padding: '8px 12px', borderRadius: 14, fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-                                background: isAna ? '#1C1C1E' : isUser ? '#14532d40' : '#78350f20',
-                                color: isAna ? '#E4E4E7' : isUser ? '#bbf7d0' : '#F5A623',
-                                border: `1px solid ${isAna ? '#2a2a2a' : isUser ? '#166534' : '#92400e'}`,
-                                borderBottomRightRadius: isUser ? 4 : 14,
-                                borderBottomLeftRadius: isAna ? 4 : 14,
-                              }}>
-                                {text || '—'}
-                              </div>
-                              {msg.duration !== undefined && (
-                                <span style={{ fontSize: 9, color: '#444', marginTop: 2 }}>{msg.duration.toFixed(1)}s</span>
-                              )}
+                {showTranscript && (
+                  <div style={{ padding: '0 16px 16px', display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 600, overflowY: 'auto' }}>
+                    {transcript.map((t, i) => {
+                      const isAna = t.role === 'assistant' || t.role === 'ana'
+                      const isUser = t.role === 'user' || t.role === 'lead'
+                      return (
+                        <div key={i} style={{ display: 'flex', gap: 8, justifyContent: isUser ? 'flex-end' : 'flex-start' }}>
+                          {isAna && (
+                            <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#7B3FE420', border: '1px solid #7B3FE430', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                              <Mic style={{ width: 12, height: 12, color: '#A78BFA' }} />
                             </div>
-                            {isUser && (
-                              <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#14532d30', border: '1px solid #16653440', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
-                                <User style={{ width: 12, height: 12, color: '#4ade80' }} />
-                              </div>
-                            )}
+                          )}
+                          <div style={{ maxWidth: '72%' }}>
+                            <div style={{
+                              padding: '8px 12px', borderRadius: 14, fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+                              background: isAna ? '#1C1C1E' : '#14532d40',
+                              color: isAna ? '#E4E4E7' : '#bbf7d0',
+                              border: `1px solid ${isAna ? '#2a2a2a' : '#166534'}`,
+                              borderBottomRightRadius: isUser ? 4 : 14,
+                              borderBottomLeftRadius: isAna ? 4 : 14,
+                            }}>
+                              {t.text}
+                            </div>
                           </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* No VAPI data */}
-              {!vapiData && !vapiLoading && selected.call_id && (
-                <div style={{ textAlign: 'center', color: '#444', fontSize: 12, paddingTop: 32 }}>
-                  <p>Não foi possível carregar o transcript do VAPI</p>
-                </div>
-              )}
-              {!selected.call_id && (
-                <div style={{ textAlign: 'center', color: '#444', fontSize: 12, paddingTop: 32 }}>
-                  <p>Essa ligação não tem call_id registrado — transcript indisponível</p>
-                </div>
-              )}
-            </div>
-          )}
+                          {isUser && (
+                            <div style={{ width: 24, height: 24, borderRadius: '50%', background: '#14532d30', border: '1px solid #16653440', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                              <User style={{ width: 12, height: 12, color: '#4ade80' }} />
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div style={{ textAlign: 'center', color: '#444', fontSize: 12, paddingTop: 32 }}>
+                <p>Sem transcrição registrada para esta ligação</p>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
