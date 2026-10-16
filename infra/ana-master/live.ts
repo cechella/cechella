@@ -1113,6 +1113,11 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
   let liveReferidosInfo: { total: number; semDados: number; semMensagem: number; missaoCompleta: boolean } | null = null
   let livePipelineEtapa = 1  // tracks last etapa pushed to leads table (1=apresentacao)
 
+  // André (post-sales) tool state
+  let andreColetaDados = false  // true após André solicitar dados do paciente
+  let andreDadosSalvos = false  // true após salvar dados no Supabase
+  let andreExamesSolicitados = false  // true após enviar lista de exames
+
   function dispatchAutoPix(metodo: 'pix' | 'cartao') {
     if (livePixAutoSent || livePagamentoConfirmado) return
     livePixAutoSent = true
@@ -1166,6 +1171,14 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         liveRecusaDefinitiva = true
         console.log('[ANA LIVE] 🚫 recusa definitiva detectada')
       }
+    }
+
+    // André: capture CPF, email from patient input and save to memory
+    if (profileName === 'andre') {
+      const cpfMatch = text.match(/\b(\d{3}[\s.\-]?\d{3}[\s.\-]?\d{3}[\s.\-]?\d{2})\b/)
+      if (cpfMatch) saveMemory(callSid, 'cpf', cpfMatch[1].replace(/\D/g, '')).catch(() => {})
+      const emailMatch = text.match(/\b[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}\b/)
+      if (emailMatch) saveMemory(callSid, 'email', emailMatch[0].toLowerCase()).catch(() => {})
     }
 
     // RECUSA FAVOR: detect "sim" after Ana asks "posso te pedir um favor especial?" on refusal path
@@ -1246,6 +1259,12 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
           updateCallStage(callSid, etapaStr).catch((e: Error) => console.error('[ANA LIVE] pipeline call stage error:', e.message))
         }
       }
+    }
+
+    // André: detect when he asks for CPF/personal data → arm salvar_dados_paciente
+    if (profileName === 'andre' && !andreColetaDados && /cpf|data.de.nascimento|data de nascimento|e-?mail|endere[cç]o|cep/i.test(text)) {
+      andreColetaDados = true
+      console.log('[ANDRE] 📋 André solicitando dados do paciente — coleta armada')
     }
 
     // Ana mentioned payment method → arm auto-PIX watch + 10s fallback
@@ -1486,6 +1505,107 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
       case 'session.delegation.created': {
         const delegationId = event.delegation?.id
         console.log(`[ANA LIVE] delegation.created id=${delegationId} metodo=${liveMetodo} waitForYes=${liveWaitForYes} referrals=${liveReferralsWaiting} pago=${livePagamentoConfirmado}`)
+
+        // ── André (post-sales) tools ─────────────────────────────────────────
+        if (profileName === 'andre') {
+          if (!andreDadosSalvos && andreColetaDados) {
+            // ── salvar_dados_paciente ─────────────────────────────────────────
+            ;(async () => {
+              try {
+                const memories = await getMemories(callSid)
+                const dados = {
+                  telefone: telefone.replace(/\D/g, ''),
+                  nome: (memories.nome_paciente as string) ?? liveNomeLead ?? null,
+                  cpf: (memories.cpf as string) ?? null,
+                  email: (memories.email as string) ?? null,
+                  data_nascimento: (memories.data_nascimento as string) ?? null,
+                  endereco: (memories.endereco as string) ?? null,
+                  cidade: (memories.cidade as string) ?? null,
+                  estado: (memories.estado as string) ?? null,
+                  cep: (memories.cep as string) ?? null,
+                }
+                const { error } = await supabase
+                  .from('pacientes_pos_venda')
+                  .upsert(dados, { onConflict: 'telefone' })
+                if (error) throw new Error(error.message)
+                andreDadosSalvos = true
+                console.log(`[ANDRE] dados salvos telefone=${dados.telefone}`)
+                sendToLive({
+                  type: 'session.thinking.append',
+                  event_id: `andre_dados_${Date.now()}`,
+                  delegation_id: delegationId,
+                  content: JSON.stringify({ ok: true, dados_salvos: true, campos: Object.keys(dados).filter(k => dados[k as keyof typeof dados]) }),
+                })
+              } catch (e: any) {
+                console.error('[ANDRE] erro ao salvar dados:', e.message)
+                sendToLive({
+                  type: 'session.thinking.append',
+                  event_id: `andre_dados_err_${Date.now()}`,
+                  delegation_id: delegationId,
+                  content: `{"ok":false,"erro":"${e.message}"}`,
+                })
+              }
+            })()
+          } else if (andreDadosSalvos && !andreExamesSolicitados) {
+            // ── solicitar_exames ──────────────────────────────────────────────
+            ;(async () => {
+              try {
+                const { ZAPI_BASE, ZAPI_CLIENT_TOKEN } = await import('./config.js')
+                const phone = telefone.startsWith('55') ? telefone.replace(/\D/g, '') : `55${telefone.replace(/\D/g, '')}`
+                const mensagem =
+                  `📋 *Lista de exames pré-implante*\n\n` +
+                  `Olá${liveNomeLead ? `, ${liveNomeLead}` : ''}! Aqui é o André, assistente do Dr. Vinícius Cechella.\n\n` +
+                  `Para garantir que seu implante aconteça com segurança, precisamos dos seguintes exames:\n\n` +
+                  `1️⃣ Hemograma completo\n` +
+                  `2️⃣ Glicemia de jejum\n` +
+                  `3️⃣ TSH e T4 livre\n` +
+                  `4️⃣ Colesterol total e frações (LDL/HDL/triglicerídeos)\n` +
+                  `5️⃣ Testosterona total e livre\n` +
+                  `6️⃣ DHEA-S\n` +
+                  `7️⃣ Progesterona (se aplicável)\n` +
+                  `8️⃣ Estradiol\n` +
+                  `9️⃣ FSH e LH\n` +
+                  `🔟 Prolactina\n\n` +
+                  `Assim que tiver os resultados, me envie por aqui mesmo. 💜\n\n` +
+                  `Qualquer dúvida, estou à disposição!`
+                await fetch(`${ZAPI_BASE}/send-text`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_CLIENT_TOKEN },
+                  body: JSON.stringify({ phone, message: mensagem }),
+                })
+                andreExamesSolicitados = true
+                // Atualiza flag no banco
+                await supabase.from('pacientes_pos_venda')
+                  .update({ exames_solicitados: true })
+                  .eq('telefone', telefone.replace(/\D/g, ''))
+                console.log(`[ANDRE] exames enviados telefone=${phone}`)
+                sendToLive({
+                  type: 'session.thinking.append',
+                  event_id: `andre_exames_${Date.now()}`,
+                  delegation_id: delegationId,
+                  content: JSON.stringify({ ok: true, exames_enviados: true, mensagem: 'Lista de exames enviada no WhatsApp' }),
+                })
+              } catch (e: any) {
+                console.error('[ANDRE] erro ao enviar exames:', e.message)
+                sendToLive({
+                  type: 'session.thinking.append',
+                  event_id: `andre_exames_err_${Date.now()}`,
+                  delegation_id: delegationId,
+                  content: `{"ok":false,"erro":"${e.message}"}`,
+                })
+              }
+            })()
+          } else {
+            // André tool genérico — apenas confirma
+            sendToLive({
+              type: 'session.thinking.append',
+              event_id: `andre_generic_${Date.now()}`,
+              delegation_id: delegationId,
+              content: JSON.stringify({ ok: true }),
+            })
+          }
+          break
+        }
 
         // Route to correct tool based on conversation state
         if (!livePagamentoConfirmado && liveMetodo) {
