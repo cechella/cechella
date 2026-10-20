@@ -23,8 +23,7 @@ export async function sendWhatsApp(telefone: string, mensagem: string) {
 // Fornecedores
 const MIKIT_PHONE = '5548988405443'
 const MK_HEALTH_PHONE = '5547932052958'
-// TODO: confirmar número do Leandro (Biòs Farmacêutica) e substituir abaixo
-const BIOS_PHONE = process.env.BIOS_LEANDRO_PHONE ?? '5548311204058'
+const BIOS_PHONE = '5548992233296'
 
 export async function pedidoMikit(paciente: string, qtdKits: number, tamanhoLuva: string, tamTrocater: string, enderecoEntrega: string) {
   const phone = MIKIT_PHONE
