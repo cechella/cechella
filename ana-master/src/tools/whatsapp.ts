@@ -20,13 +20,19 @@ export async function sendWhatsApp(telefone: string, mensagem: string) {
   await zapiPost('send-text', { phone, message: mensagem })
 }
 
-// Fornecedores
-const MIKIT_PHONE = '5548988405443'
-const MK_HEALTH_PHONE = '5547932052958'
-const BIOS_PHONE = '5548992233296'
+// Fornecedores — lidos do Supabase (configuracoes.fornecedores), fallback hardcoded
+async function getFornecedores() {
+  const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'fornecedores').maybeSingle()
+  const f = (data?.valor as Record<string, string> | null) ?? {}
+  return {
+    bios_leandro: f.bios_leandro ?? '5548992233296',
+    mikit:        f.mikit        ?? '5548988405443',
+    mk_health:    f.mk_health    ?? '5547932052958',
+  }
+}
 
 export async function pedidoMikit(paciente: string, qtdKits: number, tamanhoLuva: string, tamTrocater: string, enderecoEntrega: string) {
-  const phone = MIKIT_PHONE
+  const { mikit: phone } = await getFornecedores()
   const message =
     `Olá! Sou André, assistente do Dr. Vinícius Cechella.\n\n` +
     `*Pedido de Kit — ${paciente}*\n\n` +
@@ -40,7 +46,7 @@ export async function pedidoMikit(paciente: string, qtdKits: number, tamanhoLuva
 }
 
 export async function pedidoBios(paciente: string, prescricao: string[], enderecoEntrega: string) {
-  const phone = BIOS_PHONE
+  const { bios_leandro: phone } = await getFornecedores()
   const itens = prescricao.map(i => `• ${i}`).join('\n')
   const message =
     `Olá Leandro! Sou André, assistente do Dr. Vinícius Cechella.\n\n` +
@@ -52,7 +58,7 @@ export async function pedidoBios(paciente: string, prescricao: string[], enderec
 }
 
 export async function reservarSalaMK(data: string, horarioInicio: string, horarioFim: string, qtdPacientes: number) {
-  const phone = MK_HEALTH_PHONE
+  const { mk_health: phone } = await getFornecedores()
   const message =
     `Olá! Sou André, assistente do Dr. Vinícius Cechella.\n\n` +
     `Gostaria de reservar a sala para procedimentos:\n\n` +

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import { createClient } from '@supabase/supabase-js'
-import { PhoneCall, UserCheck, Clock, CheckCircle2, Calendar, FileText, Package, Bot, Settings, Save, ChevronDown, ChevronUp, Zap } from 'lucide-react'
+import { PhoneCall, UserCheck, Clock, CheckCircle2, Calendar, FileText, Package, Bot, Settings, Save, ChevronDown, ChevronUp, Zap, Phone } from 'lucide-react'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -67,10 +67,17 @@ export default function PosVendasPage() {
   const [ligando, setLigando] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [configOpen, setConfigOpen] = useState(false)
+  const [fornecedoresOpen, setFornecedoresOpen] = useState(false)
   const [andrePrompt, setAndrePrompt] = useState('')
   const [savingPrompt, setSavingPrompt] = useState(false)
   const [andreAuto, setAndreAuto] = useState(false)
   const [savingAuto, setSavingAuto] = useState(false)
+  const [fornecedores, setFornecedores] = useState({
+    bios_leandro: '5548992233296',
+    mikit: '5548988405443',
+    mk_health: '5547932052958',
+  })
+  const [savingForn, setSavingForn] = useState(false)
 
   function showToast(msg: string) {
     setToast(msg)
@@ -80,16 +87,19 @@ export default function PosVendasPage() {
   useEffect(() => {
     async function carregar() {
       setLoading(true)
-      const [{ data: leads }, cfgRes, autoRes] = await Promise.all([
+      const [{ data: leads }, cfgRes, autoRes, fornRes] = await Promise.all([
         supabase.from('leads').select('id, nome, telefone, etapa_agente, updated_at, onboarding_status, data_implante').gte('etapa_agente', 7).order('updated_at', { ascending: false }),
         fetch('/api/admin/andre-config'),
         fetch('/api/admin/andre-auto'),
+        fetch('/api/admin/configuracoes'),
       ])
       setPacientes((leads as PacientePos[]) ?? [])
       const cfg = await cfgRes.json()
       if (cfg?.instructions) setAndrePrompt(cfg.instructions)
       const autoCfg = await autoRes.json().catch(() => ({}))
       setAndreAuto(autoCfg?.ativo === true)
+      const fornCfg = await fornRes.json().catch(() => ({}))
+      if (fornCfg?.config?.fornecedores) setFornecedores(fornCfg.config.fornecedores)
       setLoading(false)
     }
     carregar()
@@ -132,6 +142,17 @@ export default function PosVendasPage() {
       showToast('Erro de conexão')
     }
     setLigando(null)
+  }
+
+  async function salvarFornecedores() {
+    setSavingForn(true)
+    await fetch('/api/admin/configuracoes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chave: 'fornecedores', valor: fornecedores }),
+    })
+    setSavingForn(false)
+    showToast('Fornecedores salvos ✅')
   }
 
   async function atualizarStatus(id: string, status: OnboardingStatus) {
@@ -262,6 +283,55 @@ export default function PosVendasPage() {
                   >
                     <Save className="w-3.5 h-3.5" />
                     {savingPrompt ? 'Salvando...' : 'Salvar prompt'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Fornecedores */}
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl mb-6 overflow-hidden">
+            <button
+              onClick={() => setFornecedoresOpen(o => !o)}
+              className="w-full flex items-center justify-between px-6 py-4 hover:bg-[#111115] transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <Phone className="w-4 h-4 text-[#3b82f6]" />
+                <span className="text-sm font-semibold text-white">Fornecedores & Contatos</span>
+                <span className="text-[10px] text-[#3F3F46] bg-[#18181A] px-2 py-0.5 rounded font-mono">números de WhatsApp</span>
+              </div>
+              {fornecedoresOpen ? <ChevronUp className="w-4 h-4 text-[#52525B]" /> : <ChevronDown className="w-4 h-4 text-[#52525B]" />}
+            </button>
+            {fornecedoresOpen && (
+              <div className="px-6 pb-5 border-t border-[#1C1C1E]">
+                <p className="text-xs text-[#52525B] mt-4 mb-4">Para testes, substitua pelo seu número. Formato: 5548999990000 (sem + ou espaços)</p>
+                <div className="flex flex-col gap-4">
+                  {[
+                    { key: 'bios_leandro', label: 'Biòs Farmacêutica — Leandro', desc: 'Pedido de hormônios manipulados' },
+                    { key: 'mikit',        label: 'MiKit — Kit cirúrgico',        desc: 'Kit Duas Inserções com Trocater' },
+                    { key: 'mk_health',    label: 'MK Evolution Health — Eduarda', desc: 'Reserva de sala · Balneário Camboriú' },
+                  ].map(f => (
+                    <div key={f.key}>
+                      <p className="text-xs font-semibold text-white mb-1">{f.label}</p>
+                      <p className="text-[10px] text-[#52525B] mb-1.5">{f.desc}</p>
+                      <input
+                        type="text"
+                        value={fornecedores[f.key as keyof typeof fornecedores]}
+                        onChange={e => setFornecedores(prev => ({ ...prev, [f.key]: e.target.value.replace(/\D/g, '') }))}
+                        placeholder="5548999990000"
+                        className="w-full bg-[#0A0A0B] border border-[#1C1C1E] rounded-xl px-4 py-2.5 text-sm text-white font-mono focus:outline-none focus:border-[#3b82f6]/50"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end mt-4">
+                  <button
+                    onClick={salvarFornecedores}
+                    disabled={savingForn}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-[#3b82f6] hover:bg-[#2563eb] text-white text-sm font-semibold transition-colors disabled:opacity-50"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    {savingForn ? 'Salvando...' : 'Salvar números'}
                   </button>
                 </div>
               </div>
