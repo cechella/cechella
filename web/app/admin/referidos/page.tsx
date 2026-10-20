@@ -1212,8 +1212,6 @@ export default function ReferidosPage() {
           </div>
         </div>
       )}
-
-      )}
     </div>
   )
 }
