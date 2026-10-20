@@ -847,6 +847,7 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         registerLiveSession(callSid, {
           sendToLive,
           setTokenIndicacao: (token: string) => { liveTokenIndicacao = token },
+          setReferidosNotificados: () => {},
         })
 
         // Inject history context and restore in-memory flags if this is a resumed call
