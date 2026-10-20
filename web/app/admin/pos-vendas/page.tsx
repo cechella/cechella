@@ -15,6 +15,9 @@ type OnboardingStatus =
   | 'aguardando_contato'
   | 'dados_coletados'
   | 'exames_solicitados'
+  | 'receita_gerada'
+  | 'termo_enviado'
+  | 'pedidos_feitos'
   | 'implante_agendado'
   | 'concluido'
 
@@ -32,6 +35,9 @@ const STATUS_CONFIG: Record<OnboardingStatus, { label: string; color: string; ic
   aguardando_contato: { label: 'Aguardando contato', color: '#f59e0b', icon: <Clock className="w-3 h-3" /> },
   dados_coletados:    { label: 'Dados coletados',    color: '#7B3FE4', icon: <FileText className="w-3 h-3" /> },
   exames_solicitados: { label: 'Exames solicitados', color: '#3b82f6', icon: <Bot className="w-3 h-3" /> },
+  receita_gerada:     { label: 'Receita gerada',     color: '#8b5cf6', icon: <FileText className="w-3 h-3" /> },
+  termo_enviado:      { label: 'Termo enviado',       color: '#ec4899', icon: <FileText className="w-3 h-3" /> },
+  pedidos_feitos:     { label: 'Pedidos feitos',      color: '#f97316', icon: <Package className="w-3 h-3" /> },
   implante_agendado:  { label: 'Implante agendado',  color: '#22c55e', icon: <Calendar className="w-3 h-3" /> },
   concluido:          { label: 'Concluído',           color: '#10b981', icon: <CheckCircle2 className="w-3 h-3" /> },
 }
@@ -40,6 +46,9 @@ const ETAPAS: { key: OnboardingStatus; label: string; icon: React.ReactNode }[] 
   { key: 'aguardando_contato', label: 'Aguardando', icon: <Clock className="w-4 h-4" /> },
   { key: 'dados_coletados',    label: 'Dados',      icon: <FileText className="w-4 h-4" /> },
   { key: 'exames_solicitados', label: 'Exames',     icon: <Bot className="w-4 h-4" /> },
+  { key: 'receita_gerada',     label: 'Receita',    icon: <FileText className="w-4 h-4" /> },
+  { key: 'termo_enviado',      label: 'Termo',      icon: <FileText className="w-4 h-4" /> },
+  { key: 'pedidos_feitos',     label: 'Pedidos',    icon: <Package className="w-4 h-4" /> },
   { key: 'implante_agendado',  label: 'Agendado',   icon: <Calendar className="w-4 h-4" /> },
   { key: 'concluido',          label: 'Concluído',  icon: <CheckCircle2 className="w-4 h-4" /> },
 ]
@@ -133,6 +142,7 @@ export default function PosVendasPage() {
   const aguardando   = pacientes.filter(p => !p.onboarding_status || p.onboarding_status === 'aguardando_contato')
   const emAndamento  = pacientes.filter(p => p.onboarding_status && p.onboarding_status !== 'aguardando_contato' && p.onboarding_status !== 'concluido')
   const concluidos   = pacientes.filter(p => p.onboarding_status === 'concluido')
+  const agendados    = pacientes.filter(p => p.onboarding_status === 'implante_agendado' || p.onboarding_status === 'concluido')
 
   return (
     <div className="flex h-screen bg-[#0A0A0B] overflow-hidden">
@@ -186,8 +196,8 @@ export default function PosVendasPage() {
             {[
               { label: 'Total pacientes', value: pacientes.length,   color: '#7B3FE4' },
               { label: 'Aguardando André', value: aguardando.length,  color: '#f59e0b' },
-              { label: 'Em andamento',     value: emAndamento.length, color: '#3b82f6' },
-              { label: 'Concluídos',       value: concluidos.length,  color: '#22c55e' },
+              { label: 'Implantes agendados', value: agendados.length, color: '#22c55e' },
+              { label: 'Concluídos',       value: concluidos.length,  color: '#10b981' },
             ].map(k => (
               <div key={k.label} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4">
                 <p className="text-2xl font-bold font-mono" style={{ color: k.color }}>{k.value}</p>
@@ -284,6 +294,12 @@ export default function PosVendasPage() {
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-white truncate">{p.nome || 'Paciente'}</p>
                           <p className="text-xs font-mono text-[#52525B]">{p.telefone} · fechou {tempoRelativo(p.updated_at)}</p>
+                          {p.data_implante && (
+                            <p className="text-xs text-[#22c55e] mt-0.5 flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />
+                              Implante: {new Date(p.data_implante).toLocaleDateString('pt-BR')}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">

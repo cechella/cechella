@@ -20,6 +20,50 @@ export async function sendWhatsApp(telefone: string, mensagem: string) {
   await zapiPost('send-text', { phone, message: mensagem })
 }
 
+// Fornecedores
+const MIKIT_PHONE = '5548988405443'
+const MK_HEALTH_PHONE = '5547932052958'
+// TODO: confirmar número do Leandro (Biòs Farmacêutica) e substituir abaixo
+const BIOS_PHONE = process.env.BIOS_LEANDRO_PHONE ?? '5548311204058'
+
+export async function pedidoMikit(paciente: string, qtdKits: number, tamanhoLuva: string, tamTrocater: string, enderecoEntrega: string) {
+  const phone = MIKIT_PHONE
+  const message =
+    `Olá! Sou André, assistente do Dr. Vinícius Cechella.\n\n` +
+    `*Pedido de Kit — ${paciente}*\n\n` +
+    `• Kit Duas Inserções com Trocater\n` +
+    `• Qtd: ${qtdKits} kit(s)\n` +
+    `• Luvas: ${tamanhoLuva}\n` +
+    `• Trocaters: ${tamTrocater}mm\n\n` +
+    `*Endereço de entrega:*\n${enderecoEntrega}\n\n` +
+    `Por favor, confirme disponibilidade e prazo. Frete PAC por conta do destinatário. 🙏`
+  return zapiPost('send-text', { phone, message })
+}
+
+export async function pedidoBios(paciente: string, prescricao: string[], enderecoEntrega: string) {
+  const phone = BIOS_PHONE
+  const itens = prescricao.map(i => `• ${i}`).join('\n')
+  const message =
+    `Olá Leandro! Sou André, assistente do Dr. Vinícius Cechella.\n\n` +
+    `*Pedido de manipulação — ${paciente}*\n\n` +
+    `${itens}\n\n` +
+    `*Endereço de entrega:*\n${enderecoEntrega}\n\n` +
+    `Desconto padrão 20%. Por favor, confirme orçamento e prazo. 🙏`
+  return zapiPost('send-text', { phone, message })
+}
+
+export async function reservarSalaMK(data: string, horarioInicio: string, horarioFim: string, qtdPacientes: number) {
+  const phone = MK_HEALTH_PHONE
+  const message =
+    `Olá! Sou André, assistente do Dr. Vinícius Cechella.\n\n` +
+    `Gostaria de reservar a sala para procedimentos:\n\n` +
+    `📅 *Data:* ${data}\n` +
+    `🕐 *Horário:* ${horarioInicio} às ${horarioFim}\n` +
+    `👥 *Pacientes:* ${qtdPacientes}\n\n` +
+    `Por favor, confirme disponibilidade e envie a chave PIX para pagamento. 🙏`
+  return zapiPost('send-text', { phone, message })
+}
+
 export async function sendWelcome(telefone: string) {
   const phone = normalizePhone(telefone)
   const mensagem =
