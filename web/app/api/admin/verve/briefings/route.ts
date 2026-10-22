@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { requireAdmin } from '@/lib/verve/admin-auth'
+import { atlasAuthorized } from '@/lib/verve/admin-core'
+import { validateBriefingInput } from '@/lib/verve/briefing-input'
+
+export const dynamic = 'force-dynamic'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -7,13 +12,18 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-function isServiceKey(req: NextRequest): boolean {
-  const auth = req.headers.get('authorization') ?? ''
-  return auth === `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`
-}
+const MAX_BODY = 64 * 1024
 
-// GET /api/admin/verve/briefings — lista briefings (uso interno do admin, sem auth de sessão aqui pois chamado server-side)
-export async function GET() {
+// GET /api/admin/verve/briefings — lista (só administrador logado; o ATLAS lê o status de UM briefing com ?id=)
+export async function GET(req: NextRequest) {
+  const id = new URL(req.url).searchParams.get('id')
+  if (id && atlasAuthorized(process.env.VERVE_ATLAS_TOKEN, req.headers)) {
+    const { data, error } = await supabase.from('verve_briefings').select('id,status').eq('id', id).single()
+    if (error) return NextResponse.json({ error: 'nao_encontrado' }, { status: 404 })
+    return NextResponse.json({ id: data.id, status: data.status })
+  }
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
   const { data, error } = await supabase
     .from('verve_briefings')
     .select('*')
@@ -22,44 +32,50 @@ export async function GET() {
   return NextResponse.json({ briefings: data })
 }
 
-// POST /api/admin/verve/briefings — Gustavo cria proposta (service key) ou admin cria manualmente
+// POST /api/admin/verve/briefings — proposta do Gustavo. Token DEDICADO do ATLAS (VERVE_ATLAS_TOKEN) ou administrador logado.
+// A chave de serviço do Supabase NÃO vale aqui: ela dá acesso total ao banco e não pode sair da Hormone.
 export async function POST(req: NextRequest) {
-  if (!isServiceKey(req)) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  const viaAtlas = atlasAuthorized(process.env.VERVE_ATLAS_TOKEN, req.headers)
+  if (!viaAtlas) {
+    const auth = await requireAdmin(req)
+    if (!auth.ok) return auth.response
   }
+  const raw = await req.text()
+  if (raw.length > MAX_BODY) return NextResponse.json({ error: 'corpo_grande_demais' }, { status: 413 })
+  let body: unknown
+  try { body = JSON.parse(raw) } catch { return NextResponse.json({ error: 'json_invalido' }, { status: 400 }) }
+  const v = validateBriefingInput(body)
+  if (!v.ok) return NextResponse.json({ error: 'briefing_invalido', erros: v.erros }, { status: 422 })
+  const b = v.value
 
-  const body = await req.json()
-  const { titulo, objetivo, publico_alvo, pilar, gatilho_manychat, semana, posts } = body
-
-  if (!titulo || !objetivo || !semana) {
-    return NextResponse.json({ error: 'titulo, objetivo e semana são obrigatórios' }, { status: 400 })
-  }
-
+  // Status e origem são definidos AQUI; nada disso vem do corpo da requisição.
   const { data, error } = await supabase
     .from('verve_briefings')
     .insert({
-      titulo,
-      objetivo,
-      publico_alvo: publico_alvo ?? '',
-      pilar: pilar ?? 'autoridade',
-      gatilho_manychat: gatilho_manychat ?? '',
-      semana,
-      posts: posts ?? [],
+      titulo: b.titulo,
+      objetivo: b.objetivo,
+      publico_alvo: b.publico_alvo,
+      pilar: b.pilar,
+      gatilho_manychat: b.gatilho_manychat,
+      semana: b.semana,
+      posts: b.posts,
       status: 'proposta',
     })
     .select()
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ briefing: data }, { status: 201 })
+  return NextResponse.json({ id: data.id, status: data.status, briefing: data, banner: 'Aguardando aprovação do CEO — nenhuma alteração aplicada' }, { status: 201 })
 }
 
-// PATCH /api/admin/verve/briefings — CEO aprova ou recusa + gera rascunhos
+// PATCH /api/admin/verve/briefings — SÓ o administrador logado decide. Só decide uma proposta (nunca um briefing já decidido).
 export async function PATCH(req: NextRequest) {
-  const body = await req.json()
-  const { id, status } = body
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
 
-  if (!id || !['aprovado', 'recusado'].includes(status)) {
+  const body = await req.json().catch(() => ({}))
+  const { id, status } = body as { id?: string; status?: string }
+  if (!id || !['aprovado', 'recusado'].includes(String(status))) {
     return NextResponse.json({ error: 'id e status (aprovado|recusado) são obrigatórios' }, { status: 400 })
   }
 
@@ -67,27 +83,35 @@ export async function PATCH(req: NextRequest) {
     .from('verve_briefings')
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', id)
+    .eq('status', 'proposta')
     .select()
     .single()
 
-  if (bErr) return NextResponse.json({ error: bErr.message }, { status: 500 })
+  if (bErr || !briefing) return NextResponse.json({ error: 'briefing_inexistente_ou_ja_decidido' }, { status: 409 })
 
-  // Ao aprovar: gera rascunhos de post a partir do plano da semana
-  if (status === 'aprovado' && Array.isArray(briefing.posts) && briefing.posts.length > 0) {
-    const rascunhos = briefing.posts.map((p: { tipo: string; tema: string; pilar: string; scheduled_at: string }) => ({
-      tipo: p.tipo ?? 'carrossel',
+  // Ao aprovar: os posts do plano viram rascunhos (re-validados: o que está no banco passa pelo mesmo filtro).
+  let rascunhos = 0
+  if (status === 'aprovado') {
+    const v = validateBriefingInput({
+      titulo: briefing.titulo, objetivo: briefing.objetivo, publico_alvo: briefing.publico_alvo, pilar: briefing.pilar,
+      gatilho_manychat: briefing.gatilho_manychat ?? '', semana: briefing.semana, posts: briefing.posts,
+    })
+    if (!v.ok) return NextResponse.json({ briefing, error: 'plano_invalido_nao_gerou_rascunhos', erros: v.erros }, { status: 422 })
+    const linhas = v.value.posts.map(p => ({
+      tipo: p.tipo,
       titulo: p.tema,
-      legenda: '',
-      pilar: p.pilar ?? briefing.pilar,
+      legenda: p.legenda ?? '',
+      pilar: p.pilar,
       scheduled_at: p.scheduled_at,
       image_urls: [],
       slides: p.tipo === 'carrossel' ? 8 : null,
       status: 'rascunho',
       briefing_id: briefing.id,
     }))
-
-    await supabase.from('verve_posts').insert(rascunhos)
+    const { error: pErr } = await supabase.from('verve_posts').insert(linhas)
+    if (pErr) return NextResponse.json({ briefing, error: 'rascunhos_nao_gerados: ' + pErr.message }, { status: 500 })
+    rascunhos = linhas.length
   }
 
-  return NextResponse.json({ briefing })
+  return NextResponse.json({ briefing, rascunhos_gerados: rascunhos })
 }
