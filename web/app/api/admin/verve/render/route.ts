@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/verve/admin-auth'
 import satori from 'satori'
 import { Resvg } from '@resvg/resvg-js'
 
@@ -7,6 +8,8 @@ import { Resvg } from '@resvg/resvg-js'
 // Returns: PNG 1080x1350 as base64 + data URL
 
 export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
   try {
     const body = await req.json()
     const {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/verve/admin-auth'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -9,6 +10,8 @@ const supabase = createClient(
 
 // GET /api/admin/verve/posts — lista posts com filtro opcional de status
 export async function GET(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
   const { searchParams } = new URL(req.url)
   const status = searchParams.get('status')
   const semana = searchParams.get('semana') // YYYY-WW
@@ -39,6 +42,8 @@ export async function GET(req: NextRequest) {
 
 // POST /api/admin/verve/posts — cria novo post na fila
 export async function POST(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
   const body = await req.json()
   const { tipo, titulo, legenda, pilar, scheduled_at, image_urls, slides } = body
 
@@ -67,6 +72,8 @@ export async function POST(req: NextRequest) {
 
 // PATCH /api/admin/verve/posts — atualiza status (aprovar/recusar)
 export async function PATCH(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
   const body = await req.json()
   const { id, status } = body
 

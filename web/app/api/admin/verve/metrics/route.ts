@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/verve/admin-auth'
 
 const IG_USER_ID = process.env.INSTAGRAM_USER_ID ?? '17841411826853302'
 const IG_TOKEN   = process.env.INSTAGRAM_ACCESS_TOKEN ?? ''
@@ -14,7 +15,9 @@ async function igGet(path: string, params: Record<string, string> = {}) {
 
 // GET /api/admin/verve/metrics
 // Retorna: seguidores, alcance semanal, sends/reach, saves
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const auth = await requireAdmin(req)
+  if (!auth.ok) return auth.response
   if (!IG_TOKEN) {
     return NextResponse.json({ error: 'INSTAGRAM_ACCESS_TOKEN não configurado' }, { status: 500 })
   }
