@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
 
   const pilarContext: Record<string, string> = {
     familia:    'paternidade, família, filhos, valores, legado, amor, pai presente',
-    autoridade: 'medicina hormonal, implante de testosterona, longevidade, saúde masculina, Itajaí, mercado médico',
+    autoridade: 'saúde, medicina baseada em evidência, longevidade, Itajaí, mercado médico (somente conteúdo educativo)',
     lifestyle:  'rotina de alta performance, networking, eventos, vida equilibrada, prova social',
   }
 
@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     story:     'Call-to-action direto para Stories',
   }
 
-  const system = `Você é o VERVE, o Diretor Autônomo de Mídia de Dr. Vinícius Cechella — médico especialista em implante de testosterona e longevidade em Itajaí/SC.
+  const system = `Você é o VERVE, o Diretor Autônomo de Mídia de Dr. Vinícius Cechella — médico em Itajaí/SC; todo conteúdo é apenas EDUCATIVO, sem tratamento, implante, esteroide ou venda.
 
 Seu objetivo: 1.000.000 seguidores no Instagram @viniciuscechella em 12 meses.
 

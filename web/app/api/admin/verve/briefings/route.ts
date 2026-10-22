@@ -152,7 +152,7 @@ export async function PATCH(req: NextRequest) {
     const client = new Anthropic()
     const pilarContext: Record<string, string> = {
       familia:    'paternidade, família, filhos, valores, legado, amor, pai presente',
-      autoridade: 'medicina hormonal, implante de testosterona, longevidade, saúde masculina, Itajaí, mercado médico',
+      autoridade: 'saúde, medicina baseada em evidência, longevidade, Itajaí, mercado médico (somente conteúdo educativo)',
       lifestyle:  'rotina de alta performance, networking, eventos, vida equilibrada, prova social',
     }
     await Promise.allSettled(semLegenda.map(async (post: { id: string; titulo: string; pilar: string; tipo: string; slides: number | null }) => {
