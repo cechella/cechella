@@ -152,10 +152,17 @@ export async function POST(req: NextRequest) {
       },
     }
 
+    // Carrega Inter Bold do Google Fonts — satori exige pelo menos uma fonte
+    const fontRes = await fetch(
+      'https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuI6fAZBiA.woff2',
+      { next: { revalidate: 86400 } }
+    )
+    const fontData = await fontRes.arrayBuffer()
+
     const svg = await satori(element as Parameters<typeof satori>[0], {
       width: 1080,
       height: 1350,
-      fonts: [], // uses system sans-serif fallback
+      fonts: [{ name: 'Inter', data: fontData, weight: 700, style: 'normal' }],
     })
 
     const resvg = new Resvg(svg, { fitTo: { mode: 'width', value: 1080 } })

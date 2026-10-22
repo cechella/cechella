@@ -101,10 +101,7 @@ async function publishPost(post: Record<string, unknown>) {
   throw new Error('Nenhuma image_url fornecida para publicação')
 }
 
-// POST /api/admin/verve/publish
-// Chamado pelo Vercel Cron — publica posts com status=aprovado e scheduled_at <= agora
-export async function POST(req: NextRequest) {
-  // Valida secret do cron
+async function handlePublish(req: NextRequest): Promise<NextResponse> {
   if (!cronAuthorized(process.env.CRON_SECRET, req.headers)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
@@ -151,3 +148,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ published: results.filter(r => r.ok).length, results })
 }
+
+// Vercel Cron chama GET; aceita também POST para testes manuais
+export async function GET(req: NextRequest) { return handlePublish(req) }
+export async function POST(req: NextRequest) { return handlePublish(req) }
