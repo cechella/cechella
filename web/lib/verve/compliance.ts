@@ -1,9 +1,10 @@
 // Regras de publicidade médica aplicadas ao texto do VERVE ANTES de qualquer aprovação. Filtro determinístico e conservador:
 // ele só barra; quem aprova continua sendo o CEO. Não substitui revisão médica/jurídica.
-// ESCOPO (decisão do CEO, 22/10/2026): SOMENTE conteúdo educativo sobre menopausa e saúde da mulher. Fora do escopo, e barrado pelo filtro:
-// implantes hormonais, "chip da beleza", esteroides anabolizantes e seus nomes, tratamento específico e linguagem de venda.
+// ESCOPO (decisão do CEO, 22/10/2026, ampliado 22/10/2026): conteúdo educativo sobre saúde hormonal masculina e feminina.
+// Autorizado: menopausa, andropausa, saúde da mulher 35-50, saúde do homem 40-60, longevidade hormonal.
+// Fora do escopo: implantes hormonais, "chip da beleza", esteroides anabolizantes, tratamento específico, linguagem de venda.
 export const ESCOPO_PT =
-  'ESCOPO (obrigatório): somente conteúdo EDUCATIVO sobre menopausa e saúde da mulher (o que é, o que causa, quando procurar um médico). ' +
+  'ESCOPO (obrigatório): somente conteúdo EDUCATIVO sobre saúde hormonal (menopausa, andropausa, longevidade hormonal, saúde da mulher 35-50 e do homem 40-60 — o que é, o que causa, quando procurar um médico). ' +
   'Terapia/reposição hormonal só pode ser citada de forma educativa (o que é, que existe, que a indicação é individual e médica), sem indicar para o leitor, sem dose, marca, medicamento específico nem promessa. ' +
   'É proibido falar de implante hormonal, "chip da beleza", esteroides ou anabolizantes, indicar tratamento específico, vender consulta ou criar urgência.'
 
