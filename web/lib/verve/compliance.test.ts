@@ -35,3 +35,17 @@ test('o texto das regras para a IA traz o escopo', async () => {
   assert.ok(COMPLIANCE_RULES_PT.includes(ESCOPO_PT))
   for (const k of ['somente conteúdo EDUCATIVO', 'menopausa', 'implante hormonal', 'esteroides']) assert.ok(ESCOPO_PT.includes(k), k)
 })
+
+test('reposição hormonal pode ser citada de forma educativa (não é barrada) e o escopo diz como', async () => {
+  const { ESCOPO_PT } = await import('./compliance.ts')
+  assert.deepEqual(complianceViolations('A terapia de reposição hormonal é uma opção que existe e a indicação é individual e médica.'), [])
+  for (const k of ['Terapia/reposição hormonal só pode ser citada de forma educativa', 'sem dose, marca', 'indicar tratamento específico']) assert.ok(ESCOPO_PT.includes(k), k)
+})
+test('assinatura obrigatória: CRM do CEO é acrescentado uma única vez, sem inventar RQE', async () => {
+  const { comAssinatura, ASSINATURA_MEDICO } = await import('./compliance.ts')
+  const a = comAssinatura('Texto educativo.')
+  assert.ok(a.endsWith(ASSINATURA_MEDICO))
+  assert.equal(comAssinatura(a), a)
+  assert.ok(ASSINATURA_MEDICO.includes('CRM 38765/SC'))
+  assert.ok(!/RQE/.test(ASSINATURA_MEDICO))
+})

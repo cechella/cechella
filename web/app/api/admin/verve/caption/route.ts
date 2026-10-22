@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/verve/admin-auth'
 import Anthropic from '@anthropic-ai/sdk'
-import { COMPLIANCE_RULES_PT, complianceViolations } from '@/lib/verve/compliance'
+import { COMPLIANCE_RULES_PT, complianceViolations, comAssinatura } from '@/lib/verve/compliance'
 
 // POST /api/admin/verve/caption
 // Body: { titulo, pilar, tipo, slides? }
@@ -61,7 +61,7 @@ Sempre termine com no máximo 5 hashtags de nicho relevantes (sem hashtags gené
     ],
   })
 
-  const legenda = (message.content[0] as { type: string; text: string }).text.trim()
+  const legenda = comAssinatura((message.content[0] as { type: string; text: string }).text)
   const violations = complianceViolations(legenda)
   if (violations.length) {
     return NextResponse.json({ error: 'legenda reprovada pela regra de publicidade médica', violations }, { status: 422 })

@@ -4,7 +4,15 @@
 // implantes hormonais, "chip da beleza", esteroides anabolizantes e seus nomes, tratamento específico e linguagem de venda.
 export const ESCOPO_PT =
   'ESCOPO (obrigatório): somente conteúdo EDUCATIVO sobre menopausa e saúde da mulher (o que é, o que causa, quando procurar um médico). ' +
-  'É proibido falar de implante hormonal, "chip da beleza", esteroides ou anabolizantes, indicar tratamento ou medicamento, vender consulta ou criar urgência.'
+  'Terapia/reposição hormonal só pode ser citada de forma educativa (o que é, que existe, que a indicação é individual e médica), sem indicar para o leitor, sem dose, marca, medicamento específico nem promessa. ' +
+  'É proibido falar de implante hormonal, "chip da beleza", esteroides ou anabolizantes, indicar tratamento específico, vender consulta ou criar urgência.'
+
+// Assinatura obrigatória em toda legenda (CRM informado pelo CEO em 22/10/2026). Falta o RQE: só entra quando o CEO informar; nunca inventado.
+export const ASSINATURA_MEDICO = 'Dr. Vinícius Cechella · CRM 38765/SC'
+export function comAssinatura(legenda: string): string {
+  const t = legenda.trim()
+  return t.includes('CRM 38765') ? t : `${t}\n\n${ASSINATURA_MEDICO}`
+}
 
 export const COMPLIANCE_RULES_PT =
   ESCOPO_PT + ' REGRAS DE PUBLICIDADE MÉDICA (obrigatórias): não prometer resultado nem cura; não usar "garantido", "definitivo", "100%", "milagre"; ' +
