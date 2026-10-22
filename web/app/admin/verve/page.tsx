@@ -22,12 +22,34 @@ import {
   Upload,
   X,
   Plus,
+  FileText,
+  Bot,
 } from 'lucide-react'
 
-type Tab = 'calendario' | 'aprovacao' | 'metas' | 'metricas'
+type Tab = 'calendario' | 'aprovacao' | 'briefings' | 'metas' | 'metricas'
 
 type PostType = 'reel' | 'carrossel' | 'story'
 type PostStatus = 'rascunho' | 'aguardando' | 'aprovado' | 'publicado' | 'recusado'
+
+interface BriefingPost {
+  tipo: string
+  tema: string
+  pilar: string
+  scheduled_at: string
+}
+
+interface Briefing {
+  id: string
+  titulo: string
+  objetivo: string
+  publico_alvo: string
+  pilar: string
+  gatilho_manychat: string
+  semana: string
+  posts: BriefingPost[]
+  status: 'proposta' | 'aprovado' | 'recusado'
+  created_at: string
+}
 
 interface Metrics {
   followers_count: number
@@ -101,6 +123,8 @@ export default function VervePage() {
   const [posts, setPosts] = useState<Post[]>(POSTS_SEMANA)
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(false)
+  const [briefings, setBriefings] = useState<Briefing[]>([])
+  const [briefingsLoading, setBriefingsLoading] = useState(false)
   const [captions, setCaptions] = useState<Record<string, string>>({})
   const [captionLoading, setCaptionLoading] = useState<Record<string, boolean>>({})
   const [showUpload, setShowUpload] = useState(false)
@@ -130,7 +154,37 @@ export default function VervePage() {
 
   useEffect(() => {
     if (tab === 'metricas') loadMetrics()
+    if (tab === 'briefings') loadBriefings()
   }, [tab])
+
+  async function loadBriefings() {
+    setBriefingsLoading(true)
+    try {
+      const res = await fetch('/api/admin/verve/briefings')
+      const data = await res.json()
+      if (data.briefings) setBriefings(data.briefings)
+    } finally {
+      setBriefingsLoading(false)
+    }
+  }
+
+  async function aprovarBriefing(id: string) {
+    setBriefings(prev => prev.map(b => b.id === id ? { ...b, status: 'aprovado' } : b))
+    await fetch('/api/admin/verve/briefings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status: 'aprovado' }),
+    })
+  }
+
+  async function recusarBriefing(id: string) {
+    setBriefings(prev => prev.map(b => b.id === id ? { ...b, status: 'recusado' } : b))
+    await fetch('/api/admin/verve/briefings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status: 'recusado' }),
+    })
+  }
 
   async function generateCaption(post: Post) {
     setCaptionLoading(prev => ({ ...prev, [post.id]: true }))
@@ -283,6 +337,7 @@ export default function VervePage() {
             {([
               { key: 'calendario', label: 'Calendário', icon: <Calendar className="w-3.5 h-3.5" /> },
               { key: 'aprovacao',  label: `Aprovação${pendentes.length ? ` (${pendentes.length})` : ''}`, icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+              { key: 'briefings',  label: `Briefings${briefings.filter(b => b.status === 'proposta').length ? ` (${briefings.filter(b => b.status === 'proposta').length})` : ''}`, icon: <FileText className="w-3.5 h-3.5" /> },
               { key: 'metas',      label: 'Metas',       icon: <Target className="w-3.5 h-3.5" /> },
               { key: 'metricas',   label: 'Métricas',    icon: <BarChart3 className="w-3.5 h-3.5" /> },
             ] as { key: Tab; label: string; icon: React.ReactNode }[]).map(t => (
@@ -413,6 +468,123 @@ export default function VervePage() {
                             <Sparkles className="w-3 h-3" /> Legenda gerada pelo VERVE
                           </p>
                           <p className="text-xs text-[#A1A1AA] whitespace-pre-wrap leading-relaxed">{captions[p.id]}</p>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── TAB: BRIEFINGS ── */}
+          {tab === 'briefings' && (
+            <div>
+              <div className="flex items-center gap-2 mb-5">
+                <div className="flex items-center gap-2 bg-[#111113] border border-[#1C1C1E] rounded-xl px-4 py-3 flex-1">
+                  <Bot className="w-4 h-4 text-purple-400" />
+                  <p className="text-xs text-[#71717A]">Propostas do <span className="text-white font-semibold">Gustavo</span> — agente de mídia · Aprovação exclusiva do CEO</p>
+                </div>
+                <button onClick={loadBriefings} disabled={briefingsLoading} className="flex items-center gap-1.5 bg-[#111113] border border-[#1C1C1E] rounded-xl px-4 py-3 text-xs text-[#71717A] hover:text-white transition-all disabled:opacity-50">
+                  <RefreshCw className={`w-3 h-3 ${briefingsLoading ? 'animate-spin' : ''}`} />
+                  Atualizar
+                </button>
+              </div>
+
+              {briefingsLoading && (
+                <div className="flex items-center justify-center py-20">
+                  <RefreshCw className="w-6 h-6 text-[#3F3F46] animate-spin" />
+                </div>
+              )}
+
+              {!briefingsLoading && briefings.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Bot className="w-12 h-12 text-[#3F3F46] mb-3 opacity-40" />
+                  <p className="text-[#71717A] font-medium">Nenhum briefing recebido ainda</p>
+                  <p className="text-[#3F3F46] text-sm mt-1">O Gustavo vai enviar propostas pelo WhatsApp</p>
+                </div>
+              )}
+
+              {!briefingsLoading && briefings.length > 0 && (
+                <div className="flex flex-col gap-4">
+                  {briefings.map(b => (
+                    <div key={b.id} className={`bg-[#111113] border rounded-2xl p-5 ${
+                      b.status === 'proposta' ? 'border-yellow-500/30' :
+                      b.status === 'aprovado' ? 'border-green-500/20' : 'border-[#1C1C1E]'
+                    }`}>
+                      {/* Header */}
+                      <div className="flex items-start justify-between gap-4 mb-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className="text-base font-bold text-white">{b.titulo}</p>
+                            <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                              b.status === 'proposta' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                              b.status === 'aprovado' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                              'bg-red-500/10 text-red-400 border-red-500/20'
+                            }`}>{b.status}</span>
+                          </div>
+                          <p className="text-sm text-[#71717A] leading-relaxed">{b.objetivo}</p>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="text-[10px] text-[#3F3F46]">Semana</p>
+                          <p className="text-sm font-mono text-white">{b.semana}</p>
+                        </div>
+                      </div>
+
+                      {/* Detalhes */}
+                      <div className="grid grid-cols-3 gap-3 mb-4">
+                        {[
+                          { label: 'Público', value: b.publico_alvo || '—' },
+                          { label: 'Pilar', value: b.pilar },
+                          { label: 'Gatilho ManyChat', value: b.gatilho_manychat || '—' },
+                        ].map(d => (
+                          <div key={d.label} className="bg-[#18181A] rounded-xl p-3">
+                            <p className="text-[10px] text-[#3F3F46] uppercase tracking-wider mb-1">{d.label}</p>
+                            <p className="text-xs text-white font-medium">{d.value}</p>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Plano da semana */}
+                      {b.posts?.length > 0 && (
+                        <div className="mb-4">
+                          <p className="text-[10px] font-bold text-[#3F3F46] uppercase tracking-wider mb-2">Plano da semana — {b.posts.length} posts</p>
+                          <div className="flex flex-col gap-1.5">
+                            {b.posts.map((p, i) => (
+                              <div key={i} className="flex items-center gap-3 bg-[#18181A] rounded-lg px-3 py-2">
+                                <span className="text-[10px] font-mono text-[#3F3F46] w-5">{String(i + 1).padStart(2, '0')}</span>
+                                <span className={`text-[10px] font-semibold rounded px-1.5 py-0.5 border ${tipoColor[p.tipo as PostType] ?? 'bg-[#1C1C1E] text-[#71717A] border-[#252d42]'}`}>
+                                  {p.tipo}
+                                </span>
+                                <span className="text-xs text-white flex-1">{p.tema}</span>
+                                <span className="text-[10px] text-[#3F3F46]">{p.scheduled_at?.slice(0, 10)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Ações */}
+                      {b.status === 'proposta' && (
+                        <div className="flex gap-2 pt-2 border-t border-[#1C1C1E]">
+                          <button
+                            onClick={() => recusarBriefing(b.id)}
+                            className="px-4 py-2 rounded-lg text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
+                          >
+                            ✕ Recusar proposta
+                          </button>
+                          <button
+                            onClick={() => aprovarBriefing(b.id)}
+                            className="px-5 py-2 rounded-lg text-xs font-bold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all"
+                          >
+                            ✓ Aprovar e gerar rascunhos
+                          </button>
+                          <p className="text-[10px] text-[#3F3F46] self-center ml-2">Ao aprovar o VERVE cria os rascunhos automaticamente</p>
+                        </div>
+                      )}
+                      {b.status === 'aprovado' && (
+                        <div className="pt-2 border-t border-[#1C1C1E]">
+                          <p className="text-xs text-green-400">✓ Aprovado — rascunhos gerados na aba Aprovação</p>
                         </div>
                       )}
                     </div>
