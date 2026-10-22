@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import {
@@ -17,12 +17,23 @@ import {
   Sparkles,
   TrendingUp,
   Users,
+  RefreshCw,
+  Wand2,
 } from 'lucide-react'
 
 type Tab = 'calendario' | 'aprovacao' | 'metas' | 'metricas'
 
 type PostType = 'reel' | 'carrossel' | 'story'
 type PostStatus = 'rascunho' | 'aguardando' | 'aprovado' | 'publicado' | 'recusado'
+
+interface Metrics {
+  followers_count: number
+  followers_gained_week: number
+  reach_week: number
+  sends_reach_pct: string
+  saves_recent: number
+  updated_at: string
+}
 
 interface Post {
   id: string
@@ -76,8 +87,42 @@ const statusColor: Record<PostStatus, string> = {
 export default function VervePage() {
   const [tab, setTab] = useState<Tab>('calendario')
   const [posts, setPosts] = useState<Post[]>(POSTS_SEMANA)
+  const [metrics, setMetrics] = useState<Metrics | null>(null)
+  const [metricsLoading, setMetricsLoading] = useState(false)
+  const [captions, setCaptions] = useState<Record<string, string>>({})
+  const [captionLoading, setCaptionLoading] = useState<Record<string, boolean>>({})
 
   const pendentes = posts.filter(p => p.status === 'aguardando')
+
+  async function loadMetrics() {
+    setMetricsLoading(true)
+    try {
+      const res = await fetch('/api/admin/verve/metrics')
+      const data = await res.json()
+      if (!data.error) setMetrics(data)
+    } finally {
+      setMetricsLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (tab === 'metricas') loadMetrics()
+  }, [tab])
+
+  async function generateCaption(post: Post) {
+    setCaptionLoading(prev => ({ ...prev, [post.id]: true }))
+    try {
+      const res = await fetch('/api/admin/verve/caption', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ titulo: post.titulo, pilar: post.pilar, tipo: post.tipo, slides: post.slides }),
+      })
+      const data = await res.json()
+      if (data.legenda) setCaptions(prev => ({ ...prev, [post.id]: data.legenda }))
+    } finally {
+      setCaptionLoading(prev => ({ ...prev, [post.id]: false }))
+    }
+  }
 
   async function aprovar(id: string) {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'aprovado' } : p))
@@ -238,38 +283,56 @@ export default function VervePage() {
                 <div className="flex flex-col gap-3">
                   <p className="text-sm text-[#71717A] mb-1">{pendentes.length} post{pendentes.length > 1 ? 's' : ''} aguardando sua aprovação para publicar</p>
                   {pendentes.map(p => (
-                    <div key={p.id} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4 flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl"
-                        style={{ background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.2)' }}>
-                        {p.tipo === 'reel' ? '🎬' : p.tipo === 'carrossel' ? '📷' : '⭕'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold text-white truncate">{p.titulo}</p>
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                          <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold border ${tipoColor[p.tipo]}`}>
-                            {tipoIcon[p.tipo]}
-                            {p.tipo}{p.slides ? ` · ${p.slides} slides` : ''}
-                          </span>
-                          <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-semibold border ${pilarColor[p.pilar]}`}>
-                            {p.pilar}
-                          </span>
-                          <span className="text-[11px] text-[#71717A]">{p.data.slice(5).replace('-', '/')} às {p.hora}</span>
+                    <div key={p.id} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl"
+                          style={{ background: 'rgba(168,85,247,0.1)', border: '1px solid rgba(168,85,247,0.2)' }}>
+                          {p.tipo === 'reel' ? '🎬' : p.tipo === 'carrossel' ? '📷' : '⭕'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{p.titulo}</p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold border ${tipoColor[p.tipo]}`}>
+                              {tipoIcon[p.tipo]}
+                              {p.tipo}{p.slides ? ` · ${p.slides} slides` : ''}
+                            </span>
+                            <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-semibold border ${pilarColor[p.pilar]}`}>
+                              {p.pilar}
+                            </span>
+                            <span className="text-[11px] text-[#71717A]">{p.data.slice(5).replace('-', '/')} às {p.hora}</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0">
+                          <button
+                            onClick={() => generateCaption(p)}
+                            disabled={captionLoading[p.id]}
+                            className="px-3 py-2 rounded-lg text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5"
+                          >
+                            {captionLoading[p.id] ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                            Legenda IA
+                          </button>
+                          <button
+                            onClick={() => recusar(p.id)}
+                            className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
+                          >
+                            ✕ Recusar
+                          </button>
+                          <button
+                            onClick={() => aprovar(p.id)}
+                            className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all"
+                          >
+                            ✓ Autorizar
+                          </button>
                         </div>
                       </div>
-                      <div className="flex gap-2 flex-shrink-0">
-                        <button
-                          onClick={() => recusar(p.id)}
-                          className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
-                        >
-                          ✕ Recusar
-                        </button>
-                        <button
-                          onClick={() => aprovar(p.id)}
-                          className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all"
-                        >
-                          ✓ Autorizar
-                        </button>
-                      </div>
+                      {captions[p.id] && (
+                        <div className="mt-3 p-3 bg-purple-500/5 border border-purple-500/15 rounded-xl">
+                          <p className="text-[10px] text-purple-400 font-bold uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                            <Sparkles className="w-3 h-3" /> Legenda gerada pelo VERVE
+                          </p>
+                          <p className="text-xs text-[#A1A1AA] whitespace-pre-wrap leading-relaxed">{captions[p.id]}</p>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -356,39 +419,90 @@ export default function VervePage() {
               <div className="flex items-center gap-2 mb-5 bg-[#111113] border border-[#1C1C1E] rounded-xl px-4 py-3">
                 <Instagram className="w-4 h-4 text-[#71717A]" />
                 <p className="text-xs text-[#71717A]">
-                  Dados via Meta Graph API · <span className="font-mono text-[#3F3F46]">instagram_basic + pages_read_engagement</span>
+                  Dados via Meta Graph API · <span className="font-mono text-[#3F3F46]">instagram_insights</span>
                 </p>
-                <span className="ml-auto text-[10px] text-[#3F3F46] bg-[#18181A] px-2 py-0.5 rounded font-mono">Atualização em tempo real</span>
+                <button
+                  onClick={loadMetrics}
+                  disabled={metricsLoading}
+                  className="ml-auto flex items-center gap-1.5 text-[10px] text-[#71717A] hover:text-white bg-[#18181A] px-3 py-1.5 rounded transition-all disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3 h-3 ${metricsLoading ? 'animate-spin' : ''}`} />
+                  {metrics ? `Atualizado ${new Date(metrics.updated_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : 'Carregar'}
+                </button>
               </div>
 
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
                 {[
-                  { label: 'Seguidores ganhos', value: '—', sub: 'esta semana', color: '#a855f7', icon: <Users className="w-4 h-4" /> },
-                  { label: 'Alcance total',      value: '—', sub: 'impressões únicas', color: '#3b82f6', icon: <TrendingUp className="w-4 h-4" /> },
-                  { label: 'Sends / Reach',       value: '—', sub: 'meta: > 5%', color: '#22c55e', icon: <BarChart3 className="w-4 h-4" /> },
-                  { label: 'Saves',               value: '—', sub: 'conteúdo salvo', color: '#f97316', icon: <Sparkles className="w-4 h-4" /> },
+                  {
+                    label: 'Seguidores ganhos',
+                    value: metrics ? (metrics.followers_gained_week > 0 ? `+${metrics.followers_gained_week.toLocaleString('pt-BR')}` : metrics.followers_count.toLocaleString('pt-BR')) : '—',
+                    sub: metrics ? (metrics.followers_gained_week > 0 ? 'esta semana' : 'total de seguidores') : 'esta semana',
+                    color: '#a855f7', icon: <Users className="w-4 h-4" />,
+                  },
+                  {
+                    label: 'Alcance semanal',
+                    value: metrics ? metrics.reach_week.toLocaleString('pt-BR') : '—',
+                    sub: 'impressões únicas',
+                    color: '#3b82f6', icon: <TrendingUp className="w-4 h-4" />,
+                  },
+                  {
+                    label: 'Sends / Reach',
+                    value: metrics ? `${metrics.sends_reach_pct}%` : '—',
+                    sub: 'meta: > 5%',
+                    color: parseFloat(metrics?.sends_reach_pct ?? '0') >= 5 ? '#22c55e' : '#eab308',
+                    icon: <BarChart3 className="w-4 h-4" />,
+                  },
+                  {
+                    label: 'Saves (recentes)',
+                    value: metrics ? metrics.saves_recent.toLocaleString('pt-BR') : '—',
+                    sub: 'últimas 10 mídias',
+                    color: '#f97316', icon: <Sparkles className="w-4 h-4" />,
+                  },
                 ].map(m => (
                   <div key={m.label} className="bg-[#111113] border border-[#1C1C1E] rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-2" style={{ color: m.color }}>
                       {m.icon}
                       <span className="text-[10px] font-bold uppercase tracking-wider text-[#71717A]">{m.label}</span>
                     </div>
-                    <p className="text-2xl font-bold font-mono" style={{ color: m.color }}>{m.value}</p>
+                    <p className={`text-2xl font-bold font-mono ${metricsLoading ? 'opacity-40' : ''}`} style={{ color: m.color }}>{m.value}</p>
                     <p className="text-[11px] text-[#3F3F46] mt-0.5">{m.sub}</p>
                   </div>
                 ))}
               </div>
 
-              <div className="bg-[#111113] border border-dashed border-[#1C1C1E] rounded-2xl p-8 flex flex-col items-center justify-center text-center">
-                <BarChart3 className="w-10 h-10 text-[#3F3F46] mb-3" />
-                <p className="text-sm font-semibold text-[#3F3F46]">Métricas em tempo real</p>
-                <p className="text-xs text-[#2D2D32] mt-1 max-w-xs">
-                  Conecte o token do Instagram Graph API nas variáveis de ambiente para ativar o dashboard de métricas em tempo real.
-                </p>
-                <code className="mt-3 text-[10px] font-mono text-[#3F3F46] bg-[#18181A] px-3 py-1.5 rounded">
-                  INSTAGRAM_ACCESS_TOKEN=...
-                </code>
-              </div>
+              {metrics && (
+                <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5">
+                  <h3 className="text-[10px] font-bold tracking-[0.1em] text-[#3F3F46] uppercase mb-4 flex items-center gap-2">
+                    Progresso da meta
+                    <span className="flex-1 h-px bg-[#1C1C1E]" />
+                  </h3>
+                  <div className="flex items-end gap-3 mb-2">
+                    <p className="text-3xl font-bold font-mono text-purple-400">{metrics.followers_count.toLocaleString('pt-BR')}</p>
+                    <p className="text-sm text-[#71717A] pb-1">seguidores atuais</p>
+                    <p className="text-sm text-[#3F3F46] pb-1 ml-auto">Meta: 1.000.000</p>
+                  </div>
+                  <div className="h-2 bg-[#1C1C1E] rounded-full overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all"
+                      style={{
+                        width: `${Math.min((metrics.followers_count / 1_000_000) * 100, 100).toFixed(2)}%`,
+                        background: 'linear-gradient(90deg, #a855f7, #3b82f6)',
+                      }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-[#3F3F46] mt-1.5 text-right">
+                    {((metrics.followers_count / 1_000_000) * 100).toFixed(2)}% concluído
+                  </p>
+                </div>
+              )}
+
+              {!metrics && !metricsLoading && (
+                <div className="bg-[#111113] border border-dashed border-[#1C1C1E] rounded-2xl p-8 flex flex-col items-center justify-center text-center">
+                  <BarChart3 className="w-10 h-10 text-[#3F3F46] mb-3" />
+                  <p className="text-sm font-semibold text-[#3F3F46]">Clique em &quot;Carregar&quot; para buscar métricas reais</p>
+                  <p className="text-xs text-[#2D2D32] mt-1 max-w-xs">Dados via Instagram Graph API · Atualiza a cada 5 minutos</p>
+                </div>
+              )}
             </div>
           )}
 
