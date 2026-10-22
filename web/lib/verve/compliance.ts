@@ -8,11 +8,11 @@ export const ESCOPO_PT =
   'Terapia/reposição hormonal só pode ser citada de forma educativa (o que é, que existe, que a indicação é individual e médica), sem indicar para o leitor, sem dose, marca, medicamento específico nem promessa. ' +
   'É proibido falar de implante hormonal, "chip da beleza", esteroides ou anabolizantes, indicar tratamento específico, vender consulta ou criar urgência.'
 
-// Assinatura obrigatória em toda legenda (CRM informado pelo CEO em 22/10/2026). Falta o RQE: só entra quando o CEO informar; nunca inventado.
-export const ASSINATURA_MEDICO = 'Dr. Vinícius Cechella Borba · CRM 38765/SC'
+// Assinatura obrigatória em toda legenda: nome, a palavra MÉDICO e o CRM (Res. CFM 2.336/2023, Art. 4). O CEO informou em 22/10/2026 que não tem especialidade registrada: sem RQE.
+export const ASSINATURA_MEDICO = 'Dr. Vinícius Cechella Borba · MÉDICO · CRM-SC 38765'
 export function comAssinatura(legenda: string): string {
   const t = legenda.trim()
-  return t.includes('CRM 38765') ? t : `${t}\n\n${ASSINATURA_MEDICO}`
+  return t.includes('38765') ? t : `${t}\n\n${ASSINATURA_MEDICO}`
 }
 
 export const COMPLIANCE_RULES_PT =
