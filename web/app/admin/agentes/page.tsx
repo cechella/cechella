@@ -36,6 +36,24 @@ const agents: AgentCard[] = [
     ],
   },
   {
+    icon: '📱',
+    name: 'VERVE',
+    role: 'Diretor de Mídia — Meta Graph API',
+    status: 'online',
+    color: '#a855f7',
+    description: 'Planeja, cria e publica conteúdo autonomamente no @viniciuscechella. Gerencia calendário editorial, fila de aprovação e métricas. Vinícius só grava — VERVE faz o resto.',
+    metrics: [
+      { label: 'Posts hoje', value: '—', color: '#a855f7' },
+      { label: 'Seguidores +', value: '—', color: '#22c55e' },
+      { label: 'Aprovações', value: '—', color: '#eab308' },
+    ],
+    tools: ['Meta Graph API', 'Claude API', 'Supabase', 'n8n', 'Instagram'],
+    links: [
+      { label: 'Calendário Editorial', href: '/admin/verve' },
+      { label: 'Prompt VERVE', href: '/admin/verve?tab=config' },
+    ],
+  },
+  {
     icon: '💬',
     name: 'Ana WhatsApp',
     role: 'Agente de Mensagens — Z-API',
@@ -51,6 +69,24 @@ const agents: AgentCard[] = [
     links: [
       { label: 'Ver no n8n', href: 'https://n8n.hormoneecosystem.com' },
       { label: 'Logs Z-API', href: 'https://app.z-api.io' },
+    ],
+  },
+  {
+    icon: '🧑‍💼',
+    name: 'André',
+    role: 'Agente Pós-Vendas — gpt-live-1 · Voz Tempo',
+    status: 'online',
+    color: '#f59e0b',
+    description: 'Liga para novos pacientes após o fechamento. Coleta dados cadastrais (CPF, e-mail, nascimento), solicita exames, agenda o implante e acompanha insumos até o dia do procedimento.',
+    metrics: [
+      { label: 'Ligações hoje', value: '—', color: '#f59e0b' },
+      { label: 'Onboardings', value: '—', color: '#22c55e' },
+      { label: 'Agendados', value: '—' },
+    ],
+    tools: ['gpt-live-1', 'Twilio', 'Supabase', 'Z-API'],
+    links: [
+      { label: 'Pós-Vendas', href: '/admin/pos-vendas' },
+      { label: 'Prompt André', href: '/admin/pos-vendas?tab=config' },
     ],
   },
 ]
@@ -76,7 +112,7 @@ export default function AgentesPage() {
             </div>
             <div className="flex items-center gap-2 bg-[#131720] border border-[#252d42] rounded-full px-3 py-1.5 text-xs font-semibold text-[#22c55e]">
               <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />
-              2 agentes online
+              4 agentes online
             </div>
           </div>
 
