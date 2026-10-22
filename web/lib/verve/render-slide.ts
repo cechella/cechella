@@ -1,18 +1,6 @@
 import path from 'path'
 import fs from 'fs'
-
-// URLs das fotos premium hospedadas no Vercel Blob.
-// Para adicionar/alterar fotos, faça upload via script scripts/upload-fotos-verve.ts
-// e cole as URLs resultantes aqui.
-export const PHOTO_URLS: string[] = [
-  // Preencher após upload: process.env.VERVE_PHOTO_1 ?? ''
-  process.env.VERVE_PHOTO_1 ?? '',
-  process.env.VERVE_PHOTO_2 ?? '',
-  process.env.VERVE_PHOTO_3 ?? '',
-  process.env.VERVE_PHOTO_4 ?? '',
-  process.env.VERVE_PHOTO_5 ?? '',
-  process.env.VERVE_PHOTO_6 ?? '',
-].filter(Boolean)
+import { generatePhotoForPost } from './generate-photo'
 
 const TEMPLATE_PATH = path.join(process.cwd(), 'lib/verve/slide-template.html')
 let _template: string | null = null
@@ -21,11 +9,6 @@ function getTemplate(): string {
   if (_template) return _template
   _template = fs.readFileSync(TEMPLATE_PATH, 'utf8')
   return _template
-}
-
-function pickPhoto(index: number): string {
-  if (!PHOTO_URLS.length) return ''
-  return PHOTO_URLS[index % PHOTO_URLS.length]
 }
 
 function buildHtml(vars: {
@@ -85,7 +68,7 @@ export async function renderSlide(input: SlideInput): Promise<Buffer> {
     image_url,
   } = input
 
-  const imageUrl = image_url ?? pickPhoto(slide_number - 1)
+  const imageUrl = image_url ?? ''
   const html = buildHtml({
     imageUrl,
     badge: is_cta ? '' : badge,
@@ -113,22 +96,34 @@ export async function renderCarrossel(params: {
   pilar?: string
   slides?: number
   badge?: string
+  persona?: string
 }): Promise<Buffer[]> {
-  const { titulo, temas = [], slides = 8, badge = '' } = params
+  const { titulo, temas = [], pilar = 'autoridade', slides = 8, badge = '', persona } = params
   const total = Math.max(2, Math.min(slides, 10))
   const buffers: Buffer[] = []
+
+  // Gera uma foto por slide via Flux (ou fallback para sem foto se FAL_KEY ausente)
+  const photoPromises = Array.from({ length: total }, (_, i) => {
+    const isCta = i + 1 === total
+    const tema = temas[i] ?? titulo
+    if (!process.env.FAL_KEY) return Promise.resolve('')
+    return generatePhotoForPost({ tema: isCta ? 'consultation medical office' : tema, pilar, persona })
+      .then(r => r.url)
+      .catch(() => '')
+  })
+  const photoUrls = await Promise.all(photoPromises)
 
   for (let i = 1; i <= total; i++) {
     const isCta = i === total
     const tema = temas[i - 1]
     buffers.push(await renderSlide({
       titulo: isCta ? 'Agende\nsua consulta' : (tema ?? titulo),
-      descricao: isCta ? '@viniciuscechella | wa.me/link' : (i > 1 && !tema ? '' : ''),
+      descricao: isCta ? '@viniciuscechella | wa.me/link' : '',
       badge: isCta ? '' : badge,
       slide_number: i,
       total_slides: total,
       is_cta: isCta,
-      image_url: pickPhoto(i - 1),
+      image_url: photoUrls[i - 1] ?? '',
     }))
   }
 

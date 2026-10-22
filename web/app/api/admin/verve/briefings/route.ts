@@ -129,7 +129,7 @@ export async function PATCH(req: NextRequest) {
     await Promise.allSettled(inserted.map(async (post: { id: string; titulo: string; pilar: string; tipo: string; slides: number | null }) => {
       if (post.tipo !== 'carrossel') return
       try {
-        const buffers = await renderCarrossel({ titulo: post.titulo, pilar: post.pilar, slides: post.slides ?? 8 })
+        const buffers = await renderCarrossel({ titulo: post.titulo, pilar: post.pilar, slides: post.slides ?? 8, persona: briefing.publico_alvo?.includes('homem') ? 'homem_40_60' : 'mulher_35_50' })
         const urls: string[] = []
         for (let i = 0; i < buffers.length; i++) {
           const blob = await put(
