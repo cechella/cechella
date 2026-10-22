@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
+import { put } from '@vercel/blob'
 import { requireAdmin } from '@/lib/verve/admin-auth'
 import { atlasAuthorized } from '@/lib/verve/admin-core'
 import { validateBriefingInput } from '@/lib/verve/briefing-input'
 import { COMPLIANCE_RULES_PT, complianceViolations } from '@/lib/verve/compliance'
+import { renderCarrossel } from '@/lib/verve/render-slide'
 
 export const dynamic = 'force-dynamic'
 
@@ -120,6 +122,27 @@ export async function PATCH(req: NextRequest) {
   }))
   const { data: inserted, error: pErr } = await supabase.from('verve_posts').insert(linhas).select()
   if (pErr) return NextResponse.json({ briefing, error: 'rascunhos_nao_gerados: ' + pErr.message }, { status: 500 })
+
+  // Renderiza slides automaticamente para posts do tipo carrossel
+  // Cada post fica com image_urls preenchido — desbloqueio do fluxo de aprovação
+  if (inserted?.length) {
+    await Promise.allSettled(inserted.map(async (post: { id: string; titulo: string; pilar: string; tipo: string; slides: number | null }) => {
+      if (post.tipo !== 'carrossel') return
+      try {
+        const buffers = await renderCarrossel({ titulo: post.titulo, pilar: post.pilar, slides: post.slides ?? 8 })
+        const urls: string[] = []
+        for (let i = 0; i < buffers.length; i++) {
+          const blob = await put(
+            `verve/slides/${post.id}/slide-${String(i + 1).padStart(2, '0')}.png`,
+            buffers[i],
+            { access: 'public', contentType: 'image/png' }
+          )
+          urls.push(blob.url)
+        }
+        await supabase.from('verve_posts').update({ image_urls: urls, status: 'aguardando' }).eq('id', post.id)
+      } catch { /* slide rendering falhou; post fica como rascunho sem imagem */ }
+    }))
+  }
 
   // Legenda automática só para rascunho sem legenda, e só vale se passar pelo filtro de publicidade médica (a regra no prompt não basta).
   let geradas = 0
