@@ -79,11 +79,21 @@ export default function VervePage() {
 
   const pendentes = posts.filter(p => p.status === 'aguardando')
 
-  function aprovar(id: string) {
+  async function aprovar(id: string) {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'aprovado' } : p))
+    await fetch('/api/admin/verve/posts', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status: 'aprovado' }),
+    })
   }
-  function recusar(id: string) {
+  async function recusar(id: string) {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'recusado' } : p))
+    await fetch('/api/admin/verve/posts', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, status: 'recusado' }),
+    })
   }
 
   return (
