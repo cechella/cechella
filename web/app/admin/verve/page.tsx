@@ -71,6 +71,8 @@ interface Post {
   hora: string
   status: PostStatus
   slides?: number
+  image_urls?: string[]
+  legenda?: string
 }
 
 const POSTS_SEMANA: Post[] = [
@@ -136,6 +138,8 @@ export default function VervePage() {
   const [showUpload, setShowUpload] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadDone, setUploadDone] = useState(false)
+  const [previewPost, setPreviewPost] = useState<Post | null>(null)
+  const [previewSlide, setPreviewSlide] = useState(0)
   const [novoPost, setNovoPost] = useState<NovoPost>({
     tipo: 'carrossel',
     titulo: '',
@@ -176,7 +180,8 @@ export default function VervePage() {
         setPosts(data.posts.map((p: {
           id: string; tipo: PostType; titulo: string;
           pilar: 'familia' | 'autoridade' | 'lifestyle';
-          scheduled_at: string; status: PostStatus; slides?: number
+          scheduled_at: string; status: PostStatus; slides?: number;
+          image_urls?: string[]; legenda?: string
         }) => ({
           id: p.id,
           tipo: p.tipo,
@@ -186,6 +191,8 @@ export default function VervePage() {
           hora: p.scheduled_at?.slice(11, 16) ?? '',
           status: p.status,
           slides: p.slides,
+          image_urls: p.image_urls,
+          legenda: p.legenda,
         })))
       }
     } finally {
@@ -498,6 +505,15 @@ export default function VervePage() {
                           </div>
                         </div>
                         <div className="flex gap-2 flex-shrink-0">
+                          {p.image_urls && p.image_urls.length > 0 && (
+                            <button
+                              onClick={() => { setPreviewPost(p); setPreviewSlide(0) }}
+                              className="px-3 py-2 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all flex items-center gap-1.5"
+                            >
+                              <Instagram className="w-3 h-3" />
+                              Preview
+                            </button>
+                          )}
                           <button
                             onClick={() => generateCaption(p)}
                             disabled={captionLoading[p.id]}
@@ -1047,6 +1063,114 @@ export default function VervePage() {
                 ) : (
                   <><Upload className="w-4 h-4" /> Enviar para aprovação</>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL PREVIEW INSTAGRAM ── */}
+      {previewPost && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          onClick={() => setPreviewPost(null)}
+        >
+          <div
+            className="relative w-full max-w-sm"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Phone frame */}
+            <div className="bg-[#0a0a0a] rounded-[2.5rem] border border-[#2a2a2a] shadow-2xl overflow-hidden">
+              {/* Instagram header */}
+              <div className="px-4 pt-4 pb-2 flex items-center gap-2.5 border-b border-[#1a1a1a]">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 p-0.5 flex-shrink-0">
+                  <div className="w-full h-full rounded-full bg-[#0a0a0a] flex items-center justify-center">
+                    <span className="text-[8px] font-bold text-white">VC</span>
+                  </div>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[11px] font-semibold text-white leading-tight">viniciuscechella</p>
+                  <p className="text-[10px] text-[#71717A]">Hormone Ecosystem · Patrocinado</p>
+                </div>
+                <button onClick={() => setPreviewPost(null)} className="text-[#71717A] hover:text-white">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Slide image */}
+              <div className="relative bg-black aspect-square overflow-hidden">
+                {previewPost.image_urls && previewPost.image_urls[previewSlide] ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={previewPost.image_urls[previewSlide]}
+                    alt={`Slide ${previewSlide + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-[#111]">
+                    <p className="text-[#444] text-sm">Gerando fotos…</p>
+                  </div>
+                )}
+                {/* Slide counter dots */}
+                {previewPost.image_urls && previewPost.image_urls.length > 1 && (
+                  <div className="absolute top-2 left-0 right-0 flex justify-center gap-1">
+                    {previewPost.image_urls.map((_, i) => (
+                      <div
+                        key={i}
+                        className={`h-1 rounded-full transition-all ${i === previewSlide ? 'w-4 bg-white' : 'w-1 bg-white/40'}`}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* Prev / Next arrows */}
+                {previewPost.image_urls && previewSlide > 0 && (
+                  <button
+                    onClick={() => setPreviewSlide(s => s - 1)}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white text-xs"
+                  >‹</button>
+                )}
+                {previewPost.image_urls && previewSlide < previewPost.image_urls.length - 1 && (
+                  <button
+                    onClick={() => setPreviewSlide(s => s + 1)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white text-xs"
+                  >›</button>
+                )}
+              </div>
+
+              {/* Actions row */}
+              <div className="px-3 py-2 flex items-center gap-3 border-b border-[#1a1a1a]">
+                <span className="text-lg">🤍</span>
+                <span className="text-lg">💬</span>
+                <span className="text-lg">➤</span>
+                <div className="flex-1" />
+                <span className="text-lg">🔖</span>
+              </div>
+
+              {/* Caption */}
+              <div className="px-3 py-2 max-h-28 overflow-y-auto">
+                <p className="text-[11px] text-white leading-relaxed">
+                  <span className="font-semibold">viniciuscechella</span>{' '}
+                  {captions[previewPost.id] || previewPost.legenda || previewPost.titulo}
+                </p>
+                <p className="text-[10px] text-[#71717A] mt-1">
+                  Slide {previewSlide + 1} de {previewPost.image_urls?.length ?? previewPost.slides ?? 1}
+                </p>
+              </div>
+            </div>
+
+            {/* Action buttons below phone */}
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => { recusar(previewPost.id); setPreviewPost(null) }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
+              >
+                ✕ Recusar
+              </button>
+              <button
+                onClick={() => { aprovar(previewPost.id); setPreviewPost(null) }}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all"
+              >
+                ✓ Autorizar e publicar
               </button>
             </div>
           </div>
