@@ -1,0 +1,71 @@
+{
+  "titulo": "EXEMPLO DE TESTE — Carrossel educativo: queda de estrogênio",
+  "objetivo": "Educar mulheres de 35 a 50 anos sobre sinais comuns associados à queda de estrogênio e convidá-las a conversar sobre avaliação individual.",
+  "publico_alvo": "Mulheres de 35 a 50 anos que sentem sono ruim, irritabilidade, dor articular e inchaço e ainda não sabem a causa.",
+  "pilar": "autoridade",
+  "indicadores": [
+    {
+      "nome": "seguidores ganhos na semana",
+      "meta": null,
+      "fonte": "instagram_graph_api"
+    },
+    {
+      "nome": "alcance semanal",
+      "meta": null,
+      "fonte": "instagram_graph_api"
+    },
+    {
+      "nome": "sends/reach",
+      "meta": "acima de 5%",
+      "fonte": "instagram_graph_api"
+    },
+    {
+      "nome": "saves",
+      "meta": null,
+      "fonte": "instagram_graph_api"
+    },
+    {
+      "nome": "leads pela palavra MENOPAUSA",
+      "meta": null,
+      "fonte": "manychat"
+    }
+  ],
+  "gatilho_manychat": {
+    "tipo": "manychat",
+    "palavra": "MENOPAUSA",
+    "fluxo": "comentario>dm>whatsapp_business"
+  },
+  "plano_semana": [
+    {
+      "dia": "2026-10-26",
+      "hora": "09:00",
+      "tipo": "carrossel",
+      "titulo": "4 sinais que podem estar ligados à queda de estrogênio",
+      "pilar": "autoridade",
+      "slides": [
+        {
+          "titulo": "Você dorme mal e acorda cansada?",
+          "texto": "O sono costuma ser um dos primeiros sinais que as mulheres relatam nessa fase."
+        },
+        {
+          "titulo": "Irritabilidade que parece fora do normal",
+          "texto": "Oscilações hormonais podem influenciar o humor. Nem toda irritação tem essa causa."
+        },
+        {
+          "titulo": "Dor nas articulações e inchaço",
+          "texto": "Também são queixas frequentes, mas têm várias causas possíveis."
+        },
+        {
+          "titulo": "O que fazer com isso?",
+          "texto": "Só uma avaliação médica individual pode explicar o que acontece com você."
+        }
+      ],
+      "legenda": "Sono ruim, irritabilidade, dor articular e inchaço têm várias causas. Em mulheres de 35 a 50 anos, a queda de estrogênio pode ser uma delas. Este conteúdo é educativo e não substitui uma consulta. Comente MENOPAUSA para receber orientações pelo WhatsApp.",
+      "cta": {
+        "palavra": "MENOPAUSA",
+        "texto": "Comente MENOPAUSA para receber orientações pelo WhatsApp."
+      },
+      "revisao_necessaria": true
+    }
+  ]
+}

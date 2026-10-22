@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:verve": "node --experimental-strip-types --test lib/verve/*.test.ts"
+    "test:verve": "node --experimental-strip-types --import ./lib/verve/test-support/register.mjs --test lib/verve/*.test.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.1.0",
