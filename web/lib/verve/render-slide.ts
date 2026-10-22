@@ -13,16 +13,13 @@ export interface SlideInput {
 }
 
 // Mantido para compatibilidade com /api/admin/verve/render (preview manual)
-// Retorna o HTML do template como Buffer de texto — sem Playwright (evita timeout no Vercel Hobby)
 export async function renderSlide(input: SlideInput): Promise<Buffer> {
   const { image_url = '' } = input
-  // Retorna a URL da foto como buffer — o chamador usa diretamente
   return Buffer.from(image_url)
 }
 
-// Gera N fotos via Flux 1.1 Pro, faz upload para Vercel Blob e retorna URLs públicas.
-// Não usa Playwright — compatível com Vercel Hobby (timeout 10s por invocação não se aplica
-// pois as chamadas Flux são paralelas e cada uma resolve em ~5s).
+// Gera N fotos via Flux 1.1 Pro em paralelo, faz upload para Vercel Blob e retorna URLs públicas.
+// Sem Playwright — compatível com Vercel Hobby (sem timeout de 10s).
 export async function renderCarrossel(params: {
   titulo: string
   temas?: string[]
@@ -35,7 +32,6 @@ export async function renderCarrossel(params: {
   const { titulo, temas = [], pilar = 'autoridade', slides = 8, persona, postId = 'preview' } = params
   const total = Math.max(2, Math.min(slides, 10))
 
-  // Gera todas as fotos em paralelo via Flux
   const photoPromises = Array.from({ length: total }, (_, i) => {
     const isCta = i + 1 === total
     const tema = temas[i] ?? titulo
@@ -51,7 +47,6 @@ export async function renderCarrossel(params: {
 
   const photoUrls = await Promise.all(photoPromises)
 
-  // Faz re-upload para Vercel Blob (URL permanente e pública)
   const blobUrls = await Promise.all(
     photoUrls.map(async (url, i) => {
       if (!url) return ''
@@ -65,7 +60,7 @@ export async function renderCarrossel(params: {
         )
         return blob.url
       } catch {
-        return url // fallback: usa URL do fal.ai diretamente
+        return url
       }
     })
   )

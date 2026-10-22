@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { requireAdmin } from '@/lib/verve/admin-auth'
 import { atlasAuthorized } from '@/lib/verve/admin-core'
 import { validateBriefingInput } from '@/lib/verve/briefing-input'
-import { COMPLIANCE_RULES_PT, complianceViolations } from '@/lib/verve/compliance'
+import { COMPLIANCE_RULES_PT, complianceViolations, comAssinatura } from '@/lib/verve/compliance'
 import { renderCarrossel } from '@/lib/verve/render-slide'
 
 export const dynamic = 'force-dynamic'
@@ -150,7 +150,7 @@ export async function PATCH(req: NextRequest) {
     const client = new Anthropic()
     const pilarContext: Record<string, string> = {
       familia:    'paternidade, família, filhos, valores, legado, amor, pai presente',
-      autoridade: 'medicina hormonal, implante de testosterona, longevidade, saúde masculina, Itajaí, mercado médico',
+      autoridade: 'saúde, medicina baseada em evidência, longevidade, Itajaí, mercado médico (somente conteúdo educativo)',
       lifestyle:  'rotina de alta performance, networking, eventos, vida equilibrada, prova social',
     }
     await Promise.allSettled(semLegenda.map(async (post: { id: string; titulo: string; pilar: string; tipo: string; slides: number | null }) => {
@@ -163,7 +163,7 @@ export async function PATCH(req: NextRequest) {
           system,
           messages: [{ role: 'user', content: `Crie legenda para: "${post.titulo}" (${post.tipo}${post.slides ? `, ${post.slides} slides` : ''})` }],
         })
-        const legenda = (msg.content[0] as { type: string; text: string }).text.trim()
+        const legenda = comAssinatura((msg.content[0] as { type: string; text: string }).text)
         if (complianceViolations(legenda).length) { reprovadas++; return }
         await supabase.from('verve_posts').update({ legenda }).eq('id', post.id)
         geradas++
