@@ -19,6 +19,9 @@ import {
   Users,
   RefreshCw,
   Wand2,
+  Upload,
+  X,
+  Plus,
 } from 'lucide-react'
 
 type Tab = 'calendario' | 'aprovacao' | 'metas' | 'metricas'
@@ -84,6 +87,15 @@ const statusColor: Record<PostStatus, string> = {
   recusado:   'text-red-400',
 }
 
+interface NovoPost {
+  tipo: PostType
+  titulo: string
+  legenda: string
+  pilar: 'familia' | 'autoridade' | 'lifestyle'
+  scheduled_at: string
+  files: File[]
+}
+
 export default function VervePage() {
   const [tab, setTab] = useState<Tab>('calendario')
   const [posts, setPosts] = useState<Post[]>(POSTS_SEMANA)
@@ -91,6 +103,17 @@ export default function VervePage() {
   const [metricsLoading, setMetricsLoading] = useState(false)
   const [captions, setCaptions] = useState<Record<string, string>>({})
   const [captionLoading, setCaptionLoading] = useState<Record<string, boolean>>({})
+  const [showUpload, setShowUpload] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadDone, setUploadDone] = useState(false)
+  const [novoPost, setNovoPost] = useState<NovoPost>({
+    tipo: 'carrossel',
+    titulo: '',
+    legenda: '',
+    pilar: 'autoridade',
+    scheduled_at: '',
+    files: [],
+  })
 
   const pendentes = posts.filter(p => p.status === 'aguardando')
 
@@ -121,6 +144,56 @@ export default function VervePage() {
       if (data.legenda) setCaptions(prev => ({ ...prev, [post.id]: data.legenda }))
     } finally {
       setCaptionLoading(prev => ({ ...prev, [post.id]: false }))
+    }
+  }
+
+  async function submitNovoPost() {
+    if (!novoPost.titulo || !novoPost.scheduled_at || !novoPost.files.length) return
+    setUploading(true)
+    try {
+      const fd = new FormData()
+      novoPost.files.forEach(f => fd.append('files', f))
+      const upRes = await fetch('/api/admin/verve/upload', { method: 'POST', body: fd })
+      const upData = await upRes.json()
+      if (!upData.urls?.length) throw new Error('Falha no upload')
+
+      const postRes = await fetch('/api/admin/verve/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tipo: novoPost.tipo,
+          titulo: novoPost.titulo,
+          legenda: novoPost.legenda,
+          pilar: novoPost.pilar,
+          scheduled_at: novoPost.scheduled_at,
+          image_urls: upData.urls,
+          slides: novoPost.files.length > 1 ? novoPost.files.length : undefined,
+        }),
+      })
+      const postData = await postRes.json()
+      if (postData.post) {
+        setPosts(prev => [...prev, {
+          id: postData.post.id,
+          tipo: novoPost.tipo,
+          titulo: novoPost.titulo,
+          pilar: novoPost.pilar,
+          data: novoPost.scheduled_at.slice(0, 10),
+          hora: novoPost.scheduled_at.slice(11, 16),
+          status: 'aguardando',
+          slides: novoPost.files.length > 1 ? novoPost.files.length : undefined,
+        }])
+        setUploadDone(true)
+        setTimeout(() => {
+          setShowUpload(false)
+          setUploadDone(false)
+          setNovoPost({ tipo: 'carrossel', titulo: '', legenda: '', pilar: 'autoridade', scheduled_at: '', files: [] })
+          setTab('aprovacao')
+        }, 1500)
+      }
+    } catch (err) {
+      alert(String(err))
+    } finally {
+      setUploading(false)
     }
   }
 
@@ -165,16 +238,25 @@ export default function VervePage() {
                 <p className="text-sm text-[#71717A] mt-0.5">Diretor Autônomo de Mídia · @viniciuscechella · Meta: 1M seguidores / ano</p>
               </div>
             </div>
-            <a
-              href="https://www.instagram.com/viniciuscechella"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 bg-[#131720] border border-[#252d42] rounded-xl px-4 py-2 text-xs font-semibold text-[#71717A] hover:text-white hover:border-[#7B3FE4]/40 transition-all"
-            >
-              <Instagram className="w-3.5 h-3.5" />
-              @viniciuscechella
-              <ExternalLink className="w-3 h-3" />
-            </a>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowUpload(true)}
+                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl px-4 py-2 text-xs font-bold transition-all"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Novo Post
+              </button>
+              <a
+                href="https://www.instagram.com/viniciuscechella"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 bg-[#131720] border border-[#252d42] rounded-xl px-4 py-2 text-xs font-semibold text-[#71717A] hover:text-white hover:border-[#7B3FE4]/40 transition-all"
+              >
+                <Instagram className="w-3.5 h-3.5" />
+                @viniciuscechella
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
           </div>
 
           {/* Stat strip */}
@@ -508,6 +590,148 @@ export default function VervePage() {
 
         </main>
       </div>
+
+      {/* ── MODAL: NOVO POST ── */}
+      {showUpload && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="bg-[#111113] border border-[#252d42] rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-5 border-b border-[#1C1C1E]">
+              <div className="flex items-center gap-2">
+                <Upload className="w-4 h-4 text-purple-400" />
+                <h2 className="text-base font-bold text-white">Novo Post</h2>
+              </div>
+              <button onClick={() => setShowUpload(false)} className="text-[#71717A] hover:text-white transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 flex flex-col gap-4">
+              {/* Tipo */}
+              <div>
+                <label className="text-[10px] font-bold text-[#71717A] uppercase tracking-wider mb-2 block">Tipo</label>
+                <div className="flex gap-2">
+                  {(['carrossel', 'reel', 'story'] as PostType[]).map(t => (
+                    <button
+                      key={t}
+                      onClick={() => setNovoPost(p => ({ ...p, tipo: t }))}
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                        novoPost.tipo === t
+                          ? 'bg-purple-500/20 text-purple-300 border-purple-500/40'
+                          : 'bg-[#18181A] text-[#71717A] border-[#252d42] hover:text-white'
+                      }`}
+                    >
+                      {t === 'carrossel' ? '📷' : t === 'reel' ? '🎬' : '⭕'} {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Título */}
+              <div>
+                <label className="text-[10px] font-bold text-[#71717A] uppercase tracking-wider mb-2 block">Título</label>
+                <input
+                  value={novoPost.titulo}
+                  onChange={e => setNovoPost(p => ({ ...p, titulo: e.target.value }))}
+                  placeholder="Ex: Menopausa aos 40?"
+                  className="w-full bg-[#18181A] border border-[#252d42] rounded-lg px-3 py-2.5 text-sm text-white placeholder-[#3F3F46] focus:outline-none focus:border-purple-500/50"
+                />
+              </div>
+
+              {/* Pilar */}
+              <div>
+                <label className="text-[10px] font-bold text-[#71717A] uppercase tracking-wider mb-2 block">Pilar</label>
+                <div className="flex gap-2">
+                  {(['familia', 'autoridade', 'lifestyle'] as const).map(p => (
+                    <button
+                      key={p}
+                      onClick={() => setNovoPost(prev => ({ ...prev, pilar: p }))}
+                      className={`flex-1 py-2 rounded-lg text-xs font-semibold border transition-all ${
+                        novoPost.pilar === p
+                          ? pilarColor[p]
+                          : 'bg-[#18181A] text-[#71717A] border-[#252d42] hover:text-white'
+                      }`}
+                    >
+                      {p}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Agendamento */}
+              <div>
+                <label className="text-[10px] font-bold text-[#71717A] uppercase tracking-wider mb-2 block">Publicar em</label>
+                <input
+                  type="datetime-local"
+                  value={novoPost.scheduled_at}
+                  onChange={e => setNovoPost(p => ({ ...p, scheduled_at: e.target.value }))}
+                  className="w-full bg-[#18181A] border border-[#252d42] rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-purple-500/50 [color-scheme:dark]"
+                />
+              </div>
+
+              {/* Legenda */}
+              <div>
+                <label className="text-[10px] font-bold text-[#71717A] uppercase tracking-wider mb-2 block">Legenda</label>
+                <textarea
+                  value={novoPost.legenda}
+                  onChange={e => setNovoPost(p => ({ ...p, legenda: e.target.value }))}
+                  rows={4}
+                  placeholder="Cole a legenda aqui..."
+                  className="w-full bg-[#18181A] border border-[#252d42] rounded-lg px-3 py-2.5 text-sm text-white placeholder-[#3F3F46] focus:outline-none focus:border-purple-500/50 resize-none"
+                />
+              </div>
+
+              {/* Upload de imagens */}
+              <div>
+                <label className="text-[10px] font-bold text-[#71717A] uppercase tracking-wider mb-2 block">
+                  Imagens {novoPost.files.length > 0 && <span className="text-purple-400">({novoPost.files.length} arquivo{novoPost.files.length > 1 ? 's' : ''})</span>}
+                </label>
+                <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-[#252d42] rounded-xl p-6 cursor-pointer hover:border-purple-500/40 transition-all">
+                  <Upload className="w-6 h-6 text-[#3F3F46]" />
+                  <p className="text-xs text-[#71717A] text-center">
+                    Arraste os slides aqui ou clique para selecionar<br/>
+                    <span className="text-[#3F3F46]">JPG/PNG · 1080×1350 · até 20 arquivos</span>
+                  </p>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={e => {
+                      const fs = Array.from(e.target.files ?? [])
+                      setNovoPost(p => ({ ...p, files: fs }))
+                    }}
+                  />
+                </label>
+                {novoPost.files.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {novoPost.files.map((f, i) => (
+                      <span key={i} className="text-[10px] bg-purple-500/10 text-purple-300 border border-purple-500/20 rounded px-2 py-0.5">
+                        {String(i + 1).padStart(2, '0')} {f.name.slice(0, 20)}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Submit */}
+              <button
+                onClick={submitNovoPost}
+                disabled={uploading || uploadDone || !novoPost.titulo || !novoPost.scheduled_at || !novoPost.files.length}
+                className="w-full py-3 rounded-xl text-sm font-bold transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                style={{ background: uploadDone ? '#22c55e' : 'rgb(147,51,234)', color: 'white' }}
+              >
+                {uploadDone ? (
+                  <>✓ Post adicionado à fila de aprovação</>
+                ) : uploading ? (
+                  <><RefreshCw className="w-4 h-4 animate-spin" /> Enviando imagens...</>
+                ) : (
+                  <><Upload className="w-4 h-4" /> Enviar para aprovação</>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
