@@ -1,50 +1,5 @@
-import path from 'path'
-import fs from 'fs'
 import { generatePhotoForPost } from './generate-photo'
-
-const TEMPLATE_PATH = path.join(process.cwd(), 'lib/verve/slide-template.html')
-let _template: string | null = null
-
-function getTemplate(): string {
-  if (_template) return _template
-  _template = fs.readFileSync(TEMPLATE_PATH, 'utf8')
-  return _template
-}
-
-function buildHtml(vars: {
-  imageUrl: string
-  badge: string
-  title: string
-  desc: string
-  slideNum: string
-  total: string
-}): string {
-  return getTemplate()
-    .replace('{{IMAGE_URL}}', vars.imageUrl)
-    .replace(/\{\{BADGE\}\}/g, vars.badge)
-    .replace('{{TITLE}}', vars.title)
-    .replace('{{DESC}}', vars.desc)
-    .replace(/\{\{SLIDE_NUM\}\}/g, vars.slideNum)
-    .replace('{{TOTAL}}', vars.total)
-}
-
-async function launchBrowser() {
-  const isVercel = process.env.VERCEL === '1' || process.env.AWS_LAMBDA_FUNCTION_NAME
-  if (isVercel) {
-    const chromium = (await import('@sparticuz/chromium-min')).default
-    const { chromium: playwright } = await import('playwright-core')
-    const executablePath = await chromium.executablePath(
-      'https://github.com/Sparticuz/chromium/releases/download/v153.0.0/chromium-v153.0.0-pack.tar'
-    )
-    return playwright.launch({
-      args: chromium.args,
-      executablePath,
-      headless: true,
-    })
-  }
-  const { chromium } = await import('playwright-core')
-  return chromium.launch({ executablePath: process.env.PLAYWRIGHT_CHROMIUM_PATH ?? '/opt/pw-browsers/chromium', headless: true })
-}
+import { put } from '@vercel/blob'
 
 export interface SlideInput {
   titulo: string
@@ -57,39 +12,17 @@ export interface SlideInput {
   image_url?: string
 }
 
+// Mantido para compatibilidade com /api/admin/verve/render (preview manual)
+// Retorna o HTML do template como Buffer de texto — sem Playwright (evita timeout no Vercel Hobby)
 export async function renderSlide(input: SlideInput): Promise<Buffer> {
-  const {
-    titulo,
-    descricao = '',
-    badge = '',
-    slide_number = 1,
-    total_slides = 1,
-    is_cta = false,
-    image_url,
-  } = input
-
-  const imageUrl = image_url ?? ''
-  const html = buildHtml({
-    imageUrl,
-    badge: is_cta ? '' : badge,
-    title: titulo,
-    desc: descricao,
-    slideNum: String(slide_number).padStart(2, '0'),
-    total: String(total_slides).padStart(2, '0'),
-  })
-
-  const browser = await launchBrowser()
-  try {
-    const page = await browser.newPage()
-    await page.setViewportSize({ width: 1080, height: 1350 })
-    await page.setContent(html, { waitUntil: 'networkidle' })
-    const png = await page.screenshot({ clip: { x: 0, y: 0, width: 1080, height: 1350 } })
-    return Buffer.from(png)
-  } finally {
-    await browser.close()
-  }
+  const { image_url = '' } = input
+  // Retorna a URL da foto como buffer — o chamador usa diretamente
+  return Buffer.from(image_url)
 }
 
+// Gera N fotos via Flux 1.1 Pro, faz upload para Vercel Blob e retorna URLs públicas.
+// Não usa Playwright — compatível com Vercel Hobby (timeout 10s por invocação não se aplica
+// pois as chamadas Flux são paralelas e cada uma resolve em ~5s).
 export async function renderCarrossel(params: {
   titulo: string
   temas?: string[]
@@ -97,35 +30,45 @@ export async function renderCarrossel(params: {
   slides?: number
   badge?: string
   persona?: string
-}): Promise<Buffer[]> {
-  const { titulo, temas = [], pilar = 'autoridade', slides = 8, badge = '', persona } = params
+  postId?: string
+}): Promise<string[]> {
+  const { titulo, temas = [], pilar = 'autoridade', slides = 8, persona, postId = 'preview' } = params
   const total = Math.max(2, Math.min(slides, 10))
-  const buffers: Buffer[] = []
 
-  // Gera uma foto por slide via Flux (ou fallback para sem foto se FAL_KEY ausente)
+  // Gera todas as fotos em paralelo via Flux
   const photoPromises = Array.from({ length: total }, (_, i) => {
     const isCta = i + 1 === total
     const tema = temas[i] ?? titulo
     if (!process.env.FAL_KEY) return Promise.resolve('')
-    return generatePhotoForPost({ tema: isCta ? 'consultation medical office' : tema, pilar, persona })
+    return generatePhotoForPost({
+      tema: isCta ? 'medical consultation warm office doctor patient' : tema,
+      pilar,
+      persona,
+    })
       .then(r => r.url)
       .catch(() => '')
   })
+
   const photoUrls = await Promise.all(photoPromises)
 
-  for (let i = 1; i <= total; i++) {
-    const isCta = i === total
-    const tema = temas[i - 1]
-    buffers.push(await renderSlide({
-      titulo: isCta ? 'Agende\nsua consulta' : (tema ?? titulo),
-      descricao: isCta ? '@viniciuscechella | wa.me/link' : '',
-      badge: isCta ? '' : badge,
-      slide_number: i,
-      total_slides: total,
-      is_cta: isCta,
-      image_url: photoUrls[i - 1] ?? '',
-    }))
-  }
+  // Faz re-upload para Vercel Blob (URL permanente e pública)
+  const blobUrls = await Promise.all(
+    photoUrls.map(async (url, i) => {
+      if (!url) return ''
+      try {
+        const res = await fetch(url)
+        const buf = await res.arrayBuffer()
+        const blob = await put(
+          `verve/slides/${postId}/slide-${String(i + 1).padStart(2, '0')}.jpg`,
+          buf,
+          { access: 'public', contentType: 'image/jpeg' }
+        )
+        return blob.url
+      } catch {
+        return url // fallback: usa URL do fal.ai diretamente
+      }
+    })
+  )
 
-  return buffers
+  return blobUrls.filter(Boolean)
 }

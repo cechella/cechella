@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
-import { put } from '@vercel/blob'
 import { requireAdmin } from '@/lib/verve/admin-auth'
 import { atlasAuthorized } from '@/lib/verve/admin-core'
 import { validateBriefingInput } from '@/lib/verve/briefing-input'
@@ -129,18 +128,17 @@ export async function PATCH(req: NextRequest) {
     await Promise.allSettled(inserted.map(async (post: { id: string; titulo: string; pilar: string; tipo: string; slides: number | null }) => {
       if (post.tipo !== 'carrossel') return
       try {
-        const buffers = await renderCarrossel({ titulo: post.titulo, pilar: post.pilar, slides: post.slides ?? 8, persona: briefing.publico_alvo?.includes('homem') ? 'homem_40_60' : 'mulher_35_50' })
-        const urls: string[] = []
-        for (let i = 0; i < buffers.length; i++) {
-          const blob = await put(
-            `verve/slides/${post.id}/slide-${String(i + 1).padStart(2, '0')}.png`,
-            buffers[i],
-            { access: 'public', contentType: 'image/png' }
-          )
-          urls.push(blob.url)
+        const urls = await renderCarrossel({
+          titulo: post.titulo,
+          pilar: post.pilar,
+          slides: post.slides ?? 8,
+          persona: briefing.publico_alvo?.includes('homem') ? 'homem_40_60' : 'mulher_35_50',
+          postId: post.id,
+        })
+        if (urls.length) {
+          await supabase.from('verve_posts').update({ image_urls: urls, status: 'aguardando' }).eq('id', post.id)
         }
-        await supabase.from('verve_posts').update({ image_urls: urls, status: 'aguardando' }).eq('id', post.id)
-      } catch { /* slide rendering falhou; post fica como rascunho sem imagem */ }
+      } catch { /* geração falhou; post fica como rascunho sem imagem */ }
     }))
   }
 
