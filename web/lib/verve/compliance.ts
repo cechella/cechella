@@ -8,7 +8,7 @@ export const ESCOPO_PT =
   'É proibido falar de implante hormonal, "chip da beleza", esteroides ou anabolizantes, indicar tratamento específico, vender consulta ou criar urgência.'
 
 // Assinatura obrigatória em toda legenda (CRM informado pelo CEO em 22/10/2026). Falta o RQE: só entra quando o CEO informar; nunca inventado.
-export const ASSINATURA_MEDICO = 'Dr. Vinícius Cechella · CRM 38765/SC'
+export const ASSINATURA_MEDICO = 'Dr. Vinícius Cechella Borba · CRM 38765/SC'
 export function comAssinatura(legenda: string): string {
   const t = legenda.trim()
   return t.includes('CRM 38765') ? t : `${t}\n\n${ASSINATURA_MEDICO}`
