@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { cronAuthorized } from '@/lib/verve/admin-core'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -104,8 +105,7 @@ async function publishPost(post: Record<string, unknown>) {
 // Chamado pelo Vercel Cron — publica posts com status=aprovado e scheduled_at <= agora
 export async function POST(req: NextRequest) {
   // Valida secret do cron
-  const secret = req.headers.get('x-cron-secret')
-  if (secret !== process.env.CRON_SECRET) {
+  if (!cronAuthorized(process.env.CRON_SECRET, req.headers)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
