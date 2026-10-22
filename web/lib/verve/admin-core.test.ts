@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { decideAdmin, cronAuthorized } from './admin-core.ts'
+import { decideAdmin, cronAuthorized, atlasAuthorized, safeEqual } from './admin-core.ts'
 
 const h = (o: Record<string, string>) => ({ get: (n: string) => o[n.toLowerCase()] ?? null })
 
@@ -35,4 +35,16 @@ test('cron: precisa de segredo configurado e correto', () => {
   assert.equal(cronAuthorized('s3', h({ 'x-cron-secret': 's3' })), true)
   assert.equal(cronAuthorized('s3', h({ authorization: 'Bearer s3' })), true)
   assert.equal(cronAuthorized('s3', h({ authorization: 'Bearer outro' })), false)
+})
+
+test('token do ATLAS: precisa existir, ter 32+ caracteres e bater', () => {
+  const tok = 'a'.repeat(40)
+  assert.equal(atlasAuthorized(undefined, h({ authorization: 'Bearer x' })), false)
+  assert.equal(atlasAuthorized('curto', h({ authorization: 'Bearer curto' })), false)
+  assert.equal(atlasAuthorized(tok, h({})), false)
+  assert.equal(atlasAuthorized(tok, h({ authorization: 'Bearer ' + 'b'.repeat(40) })), false)
+  assert.equal(atlasAuthorized(tok, h({ authorization: tok })), false)
+  assert.equal(atlasAuthorized(tok, h({ authorization: 'Bearer ' + tok })), true)
+  assert.equal(safeEqual('abc', 'abd'), false)
+  assert.equal(safeEqual('abc', 'abc'), true)
 })
