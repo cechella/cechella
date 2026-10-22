@@ -182,6 +182,7 @@ export default function VervePage() {
     }
   }
 
+
   async function loadBriefings() {
     setBriefingsLoading(true)
     try {
