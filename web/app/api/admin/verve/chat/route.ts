@@ -25,6 +25,13 @@ export async function POST(req: NextRequest) {
   if (!Array.isArray(messages) || !messages.length) {
     return NextResponse.json({ error: 'messages é obrigatório' }, { status: 400 })
   }
+  // Limita histórico e tamanho de mensagem individual
+  const MAX_MSG_LEN = 2000
+  const trimmed = messages.slice(-20).map((m: { role: string; content: string }) => ({
+    role: m.role,
+    content: String(m.content).slice(0, MAX_MSG_LEN),
+  }))
+  if (!trimmed.length) return NextResponse.json({ error: 'mensagem inválida' }, { status: 400 })
 
   // Busca contexto atual: briefings pendentes + posts desta semana
   const [{ data: briefings }, { data: posts }] = await Promise.all([
@@ -55,7 +62,7 @@ ${contexto}`
     model: process.env.VERVE_CAPTION_MODEL ?? 'claude-sonnet-5-5',
     max_tokens: 1024,
     system,
-    messages: messages.map((m: { role: string; content: string }) => ({
+    messages: trimmed.map((m: { role: string; content: string }) => ({
       role: m.role as 'user' | 'assistant',
       content: m.content,
     })),

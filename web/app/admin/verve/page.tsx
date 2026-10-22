@@ -123,6 +123,7 @@ interface NovoPost {
 export default function VervePage() {
   const [tab, setTab] = useState<Tab>('calendario')
   const [posts, setPosts] = useState<Post[]>(POSTS_SEMANA)
+  const [postsLoading, setPostsLoading] = useState(false)
   const [metrics, setMetrics] = useState<Metrics | null>(null)
   const [metricsLoading, setMetricsLoading] = useState(false)
   const [briefings, setBriefings] = useState<Briefing[]>([])
@@ -158,9 +159,39 @@ export default function VervePage() {
   }
 
   useEffect(() => {
+    loadPosts()
+  }, [])
+
+  useEffect(() => {
     if (tab === 'metricas') loadMetrics()
     if (tab === 'briefings') loadBriefings()
   }, [tab])
+
+  async function loadPosts() {
+    setPostsLoading(true)
+    try {
+      const res = await fetch('/api/admin/verve/posts')
+      const data = await res.json()
+      if (data.posts?.length) {
+        setPosts(data.posts.map((p: {
+          id: string; tipo: PostType; titulo: string;
+          pilar: 'familia' | 'autoridade' | 'lifestyle';
+          scheduled_at: string; status: PostStatus; slides?: number
+        }) => ({
+          id: p.id,
+          tipo: p.tipo,
+          titulo: p.titulo,
+          pilar: p.pilar,
+          data: p.scheduled_at?.slice(0, 10) ?? '',
+          hora: p.scheduled_at?.slice(11, 16) ?? '',
+          status: p.status,
+          slides: p.slides,
+        })))
+      }
+    } finally {
+      setPostsLoading(false)
+    }
+  }
 
   async function sendChatMessage() {
     if (!chatInput.trim() || chatLoading) return
