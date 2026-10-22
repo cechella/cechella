@@ -46,6 +46,6 @@ test('assinatura obrigatória: CRM do CEO é acrescentado uma única vez, sem in
   const a = comAssinatura('Texto educativo.')
   assert.ok(a.endsWith(ASSINATURA_MEDICO))
   assert.equal(comAssinatura(a), a)
-  assert.ok(ASSINATURA_MEDICO.includes('CRM 38765/SC'))
+  assert.ok(ASSINATURA_MEDICO.includes('MÉDICO · CRM-SC 38765'))
   assert.ok(!/RQE/.test(ASSINATURA_MEDICO))
 })
