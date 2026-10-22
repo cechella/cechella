@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import Anthropic from '@anthropic-ai/sdk'
 import { requireAdmin } from '@/lib/verve/admin-auth'
 import { atlasAuthorized } from '@/lib/verve/admin-core'
 import { validateBriefingInput } from '@/lib/verve/briefing-input'
+import { COMPLIANCE_RULES_PT, complianceViolations } from '@/lib/verve/compliance'
 
 export const dynamic = 'force-dynamic'
 
@@ -79,39 +81,74 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: 'id e status (aprovado|recusado) são obrigatórios' }, { status: 400 })
   }
 
-  const { data: briefing, error: bErr } = await supabase
+  const { data: atual } = await supabase.from('verve_briefings').select('*').eq('id', id).single()
+  if (!atual || atual.status !== 'proposta') {
+    return NextResponse.json({ error: 'briefing_inexistente_ou_ja_decidido' }, { status: 409 })
+  }
+
+  // Antes de aprovar, o plano guardado no banco passa de novo pelas mesmas regras (nada muda se for inválido).
+  let plano = null as ReturnType<typeof validateBriefingInput> | null
+  if (status === 'aprovado') {
+    plano = validateBriefingInput({
+      titulo: atual.titulo, objetivo: atual.objetivo, publico_alvo: atual.publico_alvo, pilar: atual.pilar,
+      gatilho_manychat: atual.gatilho_manychat ?? '', semana: atual.semana, posts: atual.posts,
+    })
+    if (!plano.ok) return NextResponse.json({ error: 'plano_invalido_nada_foi_aprovado', erros: plano.erros }, { status: 422 })
+  }
+
+  const { data: briefing } = await supabase
     .from('verve_briefings')
     .update({ status, updated_at: new Date().toISOString() })
     .eq('id', id)
     .eq('status', 'proposta')
     .select()
     .single()
+  if (!briefing) return NextResponse.json({ error: 'briefing_inexistente_ou_ja_decidido' }, { status: 409 })
+  if (status !== 'aprovado' || !plano || !plano.ok) return NextResponse.json({ briefing, rascunhos_gerados: 0 })
 
-  if (bErr || !briefing) return NextResponse.json({ error: 'briefing_inexistente_ou_ja_decidido' }, { status: 409 })
+  // Aprovado: os posts do plano viram rascunhos (legenda do Gustavo, se veio; senão a legenda é gerada abaixo).
+  const linhas = plano.value.posts.map(p => ({
+    tipo: p.tipo,
+    titulo: p.tema,
+    legenda: p.legenda ?? '',
+    pilar: p.pilar,
+    scheduled_at: p.scheduled_at,
+    image_urls: [],
+    slides: p.tipo === 'carrossel' ? 8 : null,
+    status: 'rascunho',
+    briefing_id: briefing.id,
+  }))
+  const { data: inserted, error: pErr } = await supabase.from('verve_posts').insert(linhas).select()
+  if (pErr) return NextResponse.json({ briefing, error: 'rascunhos_nao_gerados: ' + pErr.message }, { status: 500 })
 
-  // Ao aprovar: os posts do plano viram rascunhos (re-validados: o que está no banco passa pelo mesmo filtro).
-  let rascunhos = 0
-  if (status === 'aprovado') {
-    const v = validateBriefingInput({
-      titulo: briefing.titulo, objetivo: briefing.objetivo, publico_alvo: briefing.publico_alvo, pilar: briefing.pilar,
-      gatilho_manychat: briefing.gatilho_manychat ?? '', semana: briefing.semana, posts: briefing.posts,
-    })
-    if (!v.ok) return NextResponse.json({ briefing, error: 'plano_invalido_nao_gerou_rascunhos', erros: v.erros }, { status: 422 })
-    const linhas = v.value.posts.map(p => ({
-      tipo: p.tipo,
-      titulo: p.tema,
-      legenda: p.legenda ?? '',
-      pilar: p.pilar,
-      scheduled_at: p.scheduled_at,
-      image_urls: [],
-      slides: p.tipo === 'carrossel' ? 8 : null,
-      status: 'rascunho',
-      briefing_id: briefing.id,
+  // Legenda automática só para rascunho sem legenda, e só vale se passar pelo filtro de publicidade médica (a regra no prompt não basta).
+  let geradas = 0
+  let reprovadas = 0
+  const semLegenda = (inserted ?? []).filter((p: { legenda?: string }) => !p.legenda)
+  if (semLegenda.length && process.env.ANTHROPIC_API_KEY) {
+    const client = new Anthropic()
+    const pilarContext: Record<string, string> = {
+      familia:    'paternidade, família, filhos, valores, legado, amor, pai presente',
+      autoridade: 'medicina hormonal, implante de testosterona, longevidade, saúde masculina, Itajaí, mercado médico',
+      lifestyle:  'rotina de alta performance, networking, eventos, vida equilibrada, prova social',
+    }
+    await Promise.allSettled(semLegenda.map(async (post: { id: string; titulo: string; pilar: string; tipo: string; slides: number | null }) => {
+      const pilar = post.pilar ?? briefing.pilar
+      const system = `Você é o VERVE, Diretor Autônomo de Mídia de Dr. Vinícius Cechella. Tom direto, científico, acessível. Pilar: ${pilar} — ${pilarContext[pilar] ?? pilar}. ${COMPLIANCE_RULES_PT} Termine com no máximo 5 hashtags de nicho.`
+      try {
+        const msg = await client.messages.create({
+          model: process.env.VERVE_CAPTION_MODEL ?? 'claude-sonnet-5-5',
+          max_tokens: 500,
+          system,
+          messages: [{ role: 'user', content: `Crie legenda para: "${post.titulo}" (${post.tipo}${post.slides ? `, ${post.slides} slides` : ''})` }],
+        })
+        const legenda = (msg.content[0] as { type: string; text: string }).text.trim()
+        if (complianceViolations(legenda).length) { reprovadas++; return }
+        await supabase.from('verve_posts').update({ legenda }).eq('id', post.id)
+        geradas++
+      } catch { /* legenda fica vazia, sem quebrar o fluxo */ }
     }))
-    const { error: pErr } = await supabase.from('verve_posts').insert(linhas)
-    if (pErr) return NextResponse.json({ briefing, error: 'rascunhos_nao_gerados: ' + pErr.message }, { status: 500 })
-    rascunhos = linhas.length
   }
 
-  return NextResponse.json({ briefing, rascunhos_gerados: rascunhos })
+  return NextResponse.json({ briefing, rascunhos_gerados: linhas.length, legendas_geradas: geradas, legendas_reprovadas: reprovadas })
 }
