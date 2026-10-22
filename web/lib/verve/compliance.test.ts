@@ -33,7 +33,7 @@ test('conteúdo educativo sobre menopausa passa', () => {
 test('o texto das regras para a IA traz o escopo', async () => {
   const { COMPLIANCE_RULES_PT, ESCOPO_PT } = await import('./compliance.ts')
   assert.ok(COMPLIANCE_RULES_PT.includes(ESCOPO_PT))
-  for (const k of ['somente conteúdo EDUCATIVO', 'menopausa', 'implante hormonal', 'esteroides']) assert.ok(ESCOPO_PT.includes(k), k)
+  for (const k of ['somente conteúdo EDUCATIVO', 'menopausa', 'andropausa', 'implante hormonal', 'esteroides']) assert.ok(ESCOPO_PT.includes(k), k)
 })
 
 test('reposição hormonal pode ser citada de forma educativa (não é barrada) e o escopo diz como', async () => {
