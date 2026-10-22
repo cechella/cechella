@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import Anthropic from '@anthropic-ai/sdk'
+import { COMPLIANCE_RULES_PT } from '@/lib/verve/compliance'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -86,7 +88,32 @@ export async function PATCH(req: NextRequest) {
       briefing_id: briefing.id,
     }))
 
-    await supabase.from('verve_posts').insert(rascunhos)
+    const { data: inserted } = await supabase.from('verve_posts').insert(rascunhos).select()
+
+    // Gera legendas automaticamente para cada rascunho
+    if (inserted?.length && process.env.ANTHROPIC_API_KEY) {
+      const client = new Anthropic()
+      const pilarContext: Record<string, string> = {
+        familia:    'paternidade, família, filhos, valores, legado, amor, pai presente',
+        autoridade: 'medicina hormonal, implante de testosterona, longevidade, saúde masculina, Itajaí, mercado médico',
+        lifestyle:  'rotina de alta performance, networking, eventos, vida equilibrada, prova social',
+      }
+      await Promise.allSettled(inserted.map(async (post: { id: string; titulo: string; pilar: string; tipo: string; slides: number | null }) => {
+        const pilar = post.pilar ?? briefing.pilar
+        const tipo = post.tipo ?? 'carrossel'
+        const system = `Você é o VERVE, Diretor Autônomo de Mídia de Dr. Vinícius Cechella. Tom direto, científico, acessível. Pilar: ${pilar} — ${pilarContext[pilar] ?? pilar}. ${COMPLIANCE_RULES_PT} Termine com no máximo 5 hashtags de nicho.`
+        try {
+          const msg = await client.messages.create({
+            model: process.env.VERVE_CAPTION_MODEL ?? 'claude-sonnet-5-5',
+            max_tokens: 500,
+            system,
+            messages: [{ role: 'user', content: `Crie legenda para: "${post.titulo}" (${tipo}${post.slides ? `, ${post.slides} slides` : ''})` }],
+          })
+          const legenda = (msg.content[0] as { type: string; text: string }).text.trim()
+          await supabase.from('verve_posts').update({ legenda }).eq('id', post.id)
+        } catch { /* legenda fica vazia, sem quebrar o fluxo */ }
+      }))
+    }
   }
 
   return NextResponse.json({ briefing })

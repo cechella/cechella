@@ -24,9 +24,11 @@ import {
   Plus,
   FileText,
   Bot,
+  MessageSquare,
+  Send,
 } from 'lucide-react'
 
-type Tab = 'calendario' | 'aprovacao' | 'briefings' | 'metas' | 'metricas'
+type Tab = 'calendario' | 'aprovacao' | 'briefings' | 'metas' | 'metricas' | 'chat'
 
 type PostType = 'reel' | 'carrossel' | 'story'
 type PostStatus = 'rascunho' | 'aguardando' | 'aprovado' | 'publicado' | 'recusado'
@@ -127,6 +129,9 @@ export default function VervePage() {
   const [briefingsLoading, setBriefingsLoading] = useState(false)
   const [captions, setCaptions] = useState<Record<string, string>>({})
   const [captionLoading, setCaptionLoading] = useState<Record<string, boolean>>({})
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [chatLoading, setChatLoading] = useState(false)
   const [showUpload, setShowUpload] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [uploadDone, setUploadDone] = useState(false)
@@ -156,6 +161,26 @@ export default function VervePage() {
     if (tab === 'metricas') loadMetrics()
     if (tab === 'briefings') loadBriefings()
   }, [tab])
+
+  async function sendChatMessage() {
+    if (!chatInput.trim() || chatLoading) return
+    const userMsg = { role: 'user' as const, content: chatInput.trim() }
+    const newMessages = [...chatMessages, userMsg]
+    setChatMessages(newMessages)
+    setChatInput('')
+    setChatLoading(true)
+    try {
+      const res = await fetch('/api/admin/verve/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: newMessages }),
+      })
+      const data = await res.json()
+      if (data.reply) setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply }])
+    } finally {
+      setChatLoading(false)
+    }
+  }
 
   async function loadBriefings() {
     setBriefingsLoading(true)
@@ -340,6 +365,7 @@ export default function VervePage() {
               { key: 'briefings',  label: `Briefings${briefings.filter(b => b.status === 'proposta').length ? ` (${briefings.filter(b => b.status === 'proposta').length})` : ''}`, icon: <FileText className="w-3.5 h-3.5" /> },
               { key: 'metas',      label: 'Metas',       icon: <Target className="w-3.5 h-3.5" /> },
               { key: 'metricas',   label: 'Métricas',    icon: <BarChart3 className="w-3.5 h-3.5" /> },
+              { key: 'chat',       label: 'Chat VERVE',  icon: <MessageSquare className="w-3.5 h-3.5" /> },
             ] as { key: Tab; label: string; icon: React.ReactNode }[]).map(t => (
               <button
                 key={t.key}
@@ -757,6 +783,96 @@ export default function VervePage() {
                   <p className="text-xs text-[#2D2D32] mt-1 max-w-xs">Dados via Instagram Graph API · Atualiza a cada 5 minutos</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── TAB: CHAT ── */}
+          {tab === 'chat' && (
+            <div className="flex flex-col h-[calc(100vh-280px)] min-h-[400px]">
+              {/* Info bar */}
+              <div className="flex items-center gap-2 mb-4 bg-[#111113] border border-[#1C1C1E] rounded-xl px-4 py-3">
+                <Bot className="w-4 h-4 text-purple-400" />
+                <p className="text-xs text-[#71717A]">
+                  Fale diretamente com o <span className="text-white font-semibold">VERVE</span> — ele tem contexto dos seus briefings e posts desta semana
+                </p>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 overflow-y-auto flex flex-col gap-3 mb-4 pr-1">
+                {chatMessages.length === 0 && (
+                  <div className="flex flex-col items-center justify-center h-full text-center opacity-50">
+                    <MessageSquare className="w-10 h-10 text-[#3F3F46] mb-3" />
+                    <p className="text-sm text-[#71717A]">Inicie a conversa com o VERVE</p>
+                    <div className="flex flex-wrap gap-2 mt-4 justify-center">
+                      {[
+                        'Qual o plano desta semana?',
+                        'Gera uma legenda para o carrossel de hormônios',
+                        'Quais briefings estão pendentes?',
+                        'Sugere pauta para amanhã',
+                      ].map(s => (
+                        <button
+                          key={s}
+                          onClick={() => { setChatInput(s) }}
+                          className="px-3 py-1.5 bg-[#18181A] border border-[#252d42] rounded-lg text-xs text-[#71717A] hover:text-white hover:border-purple-500/30 transition-all"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {chatMessages.map((m, i) => (
+                  <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    {m.role === 'assistant' && (
+                      <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0 mr-2 mt-0.5"
+                        style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.25)' }}>
+                        📱
+                      </div>
+                    )}
+                    <div className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                      m.role === 'user'
+                        ? 'bg-purple-600 text-white rounded-tr-sm'
+                        : 'bg-[#111113] border border-[#1C1C1E] text-[#E4E4E7] rounded-tl-sm'
+                    }`}>
+                      <p className="whitespace-pre-wrap">{m.content}</p>
+                    </div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="flex justify-start">
+                    <div className="w-7 h-7 rounded-lg flex items-center justify-center text-sm flex-shrink-0 mr-2"
+                      style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.25)' }}>
+                      📱
+                    </div>
+                    <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl rounded-tl-sm px-4 py-3">
+                      <div className="flex gap-1 items-center">
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Input */}
+              <div className="flex gap-2">
+                <input
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage() } }}
+                  placeholder="Digite para o VERVE..."
+                  disabled={chatLoading}
+                  className="flex-1 bg-[#111113] border border-[#252d42] rounded-xl px-4 py-3 text-sm text-white placeholder-[#3F3F46] focus:outline-none focus:border-purple-500/50 disabled:opacity-50"
+                />
+                <button
+                  onClick={sendChatMessage}
+                  disabled={!chatInput.trim() || chatLoading}
+                  className="px-4 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           )}
 
