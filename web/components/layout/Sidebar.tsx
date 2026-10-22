@@ -37,6 +37,7 @@ import {
   Brain,
   Briefcase,
   Globe,
+  Sparkles,
   UserCheck,
 } from 'lucide-react'
 
@@ -103,6 +104,7 @@ const adminNav: NavSection[] = [
       { label: 'Resultados',    href: '/admin/resultados',     icon: <TrendingUp className="w-5 h-5" /> },
       { label: 'Usuários',      href: '/admin/users',          icon: <Users className="w-5 h-5" /> },
       { label: 'Agentes',       href: '/admin/agentes',        icon: <Cpu className="w-5 h-5" /> },
+      { label: 'VERVE',         href: '/admin/verve',          icon: <Sparkles className="w-5 h-5" /> },
       { label: 'Infraestrutura',href: '/admin/infraestrutura', icon: <ServerCog className="w-5 h-5" /> },
     ],
   },
