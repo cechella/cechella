@@ -151,14 +151,12 @@ export default function VervePage() {
     if (!novoPost.titulo || !novoPost.scheduled_at || !novoPost.files.length) return
     setUploading(true)
     try {
-      // 1. Upload das imagens para Vercel Blob
       const fd = new FormData()
       novoPost.files.forEach(f => fd.append('files', f))
       const upRes = await fetch('/api/admin/verve/upload', { method: 'POST', body: fd })
       const upData = await upRes.json()
       if (!upData.urls?.length) throw new Error('Falha no upload')
 
-      // 2. Cria o post na fila com status aguardando
       const postRes = await fetch('/api/admin/verve/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -174,7 +172,6 @@ export default function VervePage() {
       })
       const postData = await postRes.json()
       if (postData.post) {
-        // Adiciona na lista local como aguardando
         setPosts(prev => [...prev, {
           id: postData.post.id,
           tipo: novoPost.tipo,
