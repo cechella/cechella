@@ -311,6 +311,7 @@ export default function PaginaIndicacao() {
     Array.from({ length: 20 }, (_, i) => ({ id: i + 1, nome: '', telefone: '', profissao: '', hobby: '' }))
   )
   const primeiroVazioRef = useRef<HTMLInputElement>(null)
+  const primeiroSemMsgRef = useRef<HTMLDivElement>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [scrollToIncompleto, setScrollToIncompleto] = useState(false)
 
@@ -414,6 +415,26 @@ export default function PaginaIndicacao() {
     }, 400)
   }, [scrollToIncompleto])
 
+  // Ao carregar a página, rola automaticamente para o primeiro contato sem profissão/hobby
+  useEffect(() => {
+    if (loading) return
+    const temIncompleto = contatos.some(c => !!c.telefone && (!c.profissao || !c.hobby))
+    if (!temIncompleto) return
+    setTimeout(() => {
+      primeiroVazioRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 600)
+  }, [loading])
+
+  // Ao carregar a tela de missão (mensagens), rola para o primeiro contato sem mensagem enviada
+  useEffect(() => {
+    if (loading) return
+    const temPendente = jaEnviados.some(c => !msgEnviada[c.telefone.replace(/\D/g, '')])
+    if (!temPendente) return
+    setTimeout(() => {
+      primeiroSemMsgRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 600)
+  }, [loading, jaEnviados.length])
+
   // Polling ativo quando importandoWpp=true (clicou botão verde)
   useEffect(() => {
     if (!importandoWpp) return
@@ -505,7 +526,7 @@ export default function PaginaIndicacao() {
       // Restaura quais contatos já tiveram mensagem enviada
       const jaEnviadosMap: Record<string, boolean> = {}
       enviados.forEach((c: any) => {
-        if (c.status === 'mensagem_enviada') {
+        if (c.status === 'mensagem_enviada' || c.mensagem_enviada === true) {
           jaEnviadosMap[String(c.telefone).replace(/\D/g, '')] = true
         }
       })
@@ -815,15 +836,38 @@ export default function PaginaIndicacao() {
                 <CheckCircle className="w-9 h-9 text-emerald-400" />
               </div>
             </div>
-            <h1 className="text-white text-2xl font-bold tracking-tight mb-2">Missão completa! 🎉</h1>
-            <p className="text-[#9CA3AF] text-sm leading-relaxed max-w-xs mx-auto">
+            <h1 className="text-white text-2xl font-bold tracking-tight mb-2">{totalEnviados >= contatosMissao.length ? 'Missão completa! 🎉' : 'Quase lá! 💜'}</h1>
+            <p className="text-[#9CA3AF] text-sm leading-relaxed max-w-xs mx-auto mb-5">
               Envie para todas de uma vez ou individualmente — 1 clique por amiga!
             </p>
-            {totalEnviados > 0 && (
-              <p className="text-emerald-400 text-sm font-semibold mt-2">
-                ✅ {totalEnviados} de {contatosMissao.length} enviadas
-              </p>
-            )}
+
+            {/* Barra de progresso 3 etapas */}
+            {(() => {
+              const etapa1 = contatosMissao.length >= 20
+              const etapa2 = contatosMissao.filter(c => c.profissao && c.hobby).length >= 20
+              const etapa3 = totalEnviados >= 20
+              const progresso = (etapa1 ? 33.33 : 0) + (etapa2 ? 33.33 : 0) + (etapa3 ? 33.34 : 0)
+              return (
+                <div className="w-full max-w-xs mx-auto mb-2">
+                  <div className="flex justify-between text-xs text-[#9CA3AF] mb-1.5">
+                    <span className={etapa1 ? 'text-emerald-400 font-semibold' : ''}>Contatos</span>
+                    <span className={etapa2 ? 'text-emerald-400 font-semibold' : ''}>Prof. e Hobby</span>
+                    <span className={etapa3 ? 'text-emerald-400 font-semibold' : ''}>Msgs enviadas</span>
+                  </div>
+                  <div className="w-full h-2.5 rounded-full bg-[#2D2040] overflow-hidden">
+                    <div
+                      className="h-full rounded-full transition-all duration-700"
+                      style={{ width: `${progresso}%`, background: progresso >= 100 ? 'linear-gradient(90deg, #10B981, #34D399)' : 'linear-gradient(90deg, #7C3AED, #A855F7)' }}
+                    />
+                  </div>
+                  <div className="flex justify-between mt-1.5">
+                    <span className="text-lg">{etapa1 ? '✅' : '⏳'}</span>
+                    <span className="text-lg">{etapa2 ? '✅' : '⏳'}</span>
+                    <span className="text-lg">{etapa3 ? '✅' : '⏳'}</span>
+                  </div>
+                </div>
+              )
+            })()}
           </div>
         </div>
 
@@ -898,8 +942,9 @@ export default function PaginaIndicacao() {
             const tel = contato.telefone.replace(/\D/g, '')
             const enviando = enviandoMsg[tel]
             const enviado = msgEnviada[tel]
+            const isPrimeiroSemMsg = !enviado && !contatosMissao.slice(0, idx).some(c => !msgEnviada[c.telefone.replace(/\D/g, '')])
             return (
-            <div key={contato.id} className={`rounded-2xl border overflow-hidden transition-all ${enviado ? 'border-emerald-500/40' : selecionadas.has(tel) ? 'border-[#7C3AED]/60' : 'border-[#1F1935]'}`}
+            <div key={contato.id} ref={isPrimeiroSemMsg ? primeiroSemMsgRef : undefined} className={`rounded-2xl border overflow-hidden transition-all ${enviado ? 'border-emerald-500/40' : selecionadas.has(tel) ? 'border-[#7C3AED]/60' : 'border-[#1F1935]'}`}
               style={{ background: enviado ? 'linear-gradient(160deg, #0D1F16 0%, #0a1a12 100%)' : selecionadas.has(tel) ? 'linear-gradient(160deg, #1a1035 0%, #130d28 100%)' : 'linear-gradient(160deg, #131020 0%, #0F0D1A 100%)' }}>
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3">
@@ -944,7 +989,7 @@ export default function PaginaIndicacao() {
           <div className="bg-[#1A1528] border border-[#2D2040] rounded-2xl px-4 py-3.5 mt-2">
             <p className="text-[#9CA3AF] text-xs leading-relaxed text-center">
               Avisa suas amigas que vão receber uma ligação do número{' '}
-              <strong className="text-white">{process.env.ANA_PHONE_NUMBER ?? '+55 17 2786-2778'}</strong>
+              <strong className="text-white">{process.env.ANA_PHONE_NUMBER ?? '+55 47 2398-0061'}</strong>
               {' '}— pode atender com tranquilidade! 📞
             </p>
           </div>

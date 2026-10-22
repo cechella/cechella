@@ -41,6 +41,18 @@ supabase
             })
             .catch(e => console.error(`[SERVER] referidos link erro: ${e.message}`))
         }
+        // Avança etapa_agente para 7 (fechado/pago) — alimenta o faturamento do dashboard
+        if (lead_telefone) {
+          const digits = String(lead_telefone).replace(/\D/g, '')
+          const bare = digits.replace(/^55/, '')
+          supabase.from('leads')
+            .update({ etapa_agente: 7 })
+            .or(`telefone.eq.${digits},telefone.eq.${bare}`)
+            .then(({ error }: { error: any }) => {
+              if (error) console.error(`[SERVER] etapa_agente update erro: ${error.message}`)
+              else console.log(`[SERVER] ✅ etapa_agente=7 atualizado para ${digits}`)
+            })
+        }
         injectPaymentConfirmed(call_sid)
         injectLivePaymentConfirmed(call_sid)
       }
@@ -76,12 +88,28 @@ const referidosDebounce = new Map<string, ReturnType<typeof setTimeout>>()
 async function processReferidosUpdate(indicadorPhone: string) {
   const digits = String(indicadorPhone).replace(/\D/g, '')
   const bare = digits.replace(/^55/, '')
-  const { data: call } = await supabase
+
+  // Primary: call marcada como em_ligacao=true
+  let { data: call } = await supabase
     .from('ana_calls')
     .select('call_sid')
     .eq('em_ligacao', true)
     .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${bare}`)
     .maybeSingle()
+
+  // Fallback: call mais recente nos últimos 30 min (em_ligacao pode não estar setado)
+  if (!call?.call_sid) {
+    const since30m = new Date(Date.now() - 30 * 60 * 1000).toISOString()
+    const { data: recent } = await supabase
+      .from('ana_calls')
+      .select('call_sid')
+      .or(`telefone.eq.${digits},telefone.eq.55${digits},telefone.eq.${bare}`)
+      .gte('created_at', since30m)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    call = recent
+  }
 
   if (!call?.call_sid) return
 
@@ -127,6 +155,38 @@ supabase
     console.log(`[SERVER] referidos listener status=${status}`)
   })
 
+// André auto-call listener — when leads.etapa_agente = 7, auto-dispatch André if toggle enabled
+supabase
+  .channel('andre-auto-call')
+  .on('postgres_changes' as any, { event: 'UPDATE', schema: 'public', table: 'leads' }, async (payload: any) => {
+    const { etapa_agente, telefone, nome, onboarding_status } = payload.new ?? {}
+    if (etapa_agente !== 7) return
+    if (onboarding_status && onboarding_status !== 'aguardando_contato') return // já iniciado
+
+    // Check toggle
+    const { data: cfg } = await supabase
+      .from('configuracoes')
+      .select('valor')
+      .eq('chave', 'andre_auto')
+      .maybeSingle()
+    if (!cfg?.valor?.ativo) return
+
+    const digits = String(telefone ?? '').replace(/\D/g, '')
+    if (!digits) return
+    const numero = digits.startsWith('55') ? digits : `55${digits}`
+    console.log(`[ANDRE AUTO] 📞 disparando ligação automática para ${numero}`)
+
+    const ANA_MASTER_URL = process.env.ANA_MASTER_URL ?? 'http://localhost:3001'
+    fetch(`${ANA_MASTER_URL}/outbound`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ numero, nome: nome ?? '', contexto: 'pos_vendas', origem: 'pos_vendas', profile: 'andre' }).toString(),
+    }).catch((e: any) => console.error('[ANDRE AUTO] fetch error:', e.message))
+  })
+  .subscribe((status: string) => {
+    console.log(`[SERVER] andre-auto listener status=${status}`)
+  })
+
 // Parse Twilio's application/x-www-form-urlencoded webhook bodies
 // Must be registered BEFORE any routes that consume this content type
 app.addContentTypeParser(
@@ -159,18 +219,30 @@ app.post('/twiml', async (req, reply) => {
   const referidor = query?.referidor ?? ''
   const nome = query?.nome ?? ''
   const origem = query?.origem ?? ''
+  const profile = query?.profile ?? ''
   const host = PUBLIC_HOST.replace(/^https?:\/\//, '')
+
+  // Build WSS URL with all params as query string — Twilio <Parameter> elements are read
+  // from the WebSocket 'start' event body, but the /media-stream handler reads req.query.
+  // Passing them in the URL ensures they are available immediately on connection.
+  const wsUrl = new URL(`wss://${host}/media-stream`)
+  if (contexto) wsUrl.searchParams.set('contexto', contexto)
+  if (referidor) wsUrl.searchParams.set('referidor', referidor)
+  if (nome) wsUrl.searchParams.set('nome', nome)
+  if (origem) wsUrl.searchParams.set('origem', origem)
+  if (profile) wsUrl.searchParams.set('profile', profile)
 
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Connect>
-    <Stream url="wss://${host}/media-stream">
+    <Stream url="${wsUrl.toString().replace(/&/g, '&amp;')}">
       <Parameter name="callSid" value="${callSid}" />
       <Parameter name="from" value="${from}" />
-      <Parameter name="contexto" value="${contexto}" />
-      <Parameter name="referidor" value="${referidor}" />
-      <Parameter name="nome" value="${nome}" />
-      <Parameter name="origem" value="${origem}" />
+      ${profile ? `<Parameter name="profile" value="${profile}" />` : ''}
+      ${contexto ? `<Parameter name="contexto" value="${contexto}" />` : ''}
+      ${nome ? `<Parameter name="nome" value="${nome}" />` : ''}
+      ${referidor ? `<Parameter name="referidor" value="${referidor}" />` : ''}
+      ${origem ? `<Parameter name="origem" value="${origem}" />` : ''}
     </Stream>
   </Connect>
 </Response>`
@@ -186,7 +258,8 @@ app.get('/media-stream', { websocket: true }, async (socket, req) => {
   const referidor = query?.referidor ?? ''
   const nome = query?.nome ?? ''
   const origem = query?.origem ?? ''
-  app.log.info({ contexto }, 'Twilio Media Stream connected')
+  const profile = query?.profile ?? ''
+  app.log.info({ contexto, profile }, 'Twilio Media Stream connected')
 
   const rawWs = (socket as any).socket
 
@@ -204,7 +277,7 @@ app.get('/media-stream', { websocket: true }, async (socket, req) => {
   rawWs.off('message', earlyListener)
 
   if (voiceStack === 'live') {
-    createAnaLiveSession(rawWs, { contexto, referidor, nome, origem, earlyQueue })
+    createAnaLiveSession(rawWs, { contexto, referidor, nome, origem, profile, earlyQueue })
       .then(() => { app.log.info('ANA LIVE session started') })
       .catch((err: unknown) => {
         app.log.error({ err }, 'Failed to start Live session — closing stream')
@@ -231,6 +304,7 @@ app.post('/outbound', async (req, reply) => {
   const contexto = body?.contexto ?? ''
   const nome = body?.nome ?? ''
   const origem = body?.origem ?? ''
+  const profile = body?.profile ?? ''
 
   if (!numero) return reply.status(400).send({ error: 'numero obrigatório' })
 
@@ -242,6 +316,7 @@ app.post('/outbound', async (req, reply) => {
   if (contexto) twimlUrl.searchParams.set('contexto', contexto)
   if (nome) twimlUrl.searchParams.set('nome', nome)
   if (origem) twimlUrl.searchParams.set('origem', origem)
+  if (profile) twimlUrl.searchParams.set('profile', profile)
 
   const recordingCallback = `${PUBLIC_HOST}/recording-status`
 
@@ -385,6 +460,19 @@ app.post('/api/admin/ana-master/recusa-referidos', async (req, reply) => {
     console.error('[SERVER] /recusa-referidos erro:', e.message)
     return reply.status(500).send({ error: e.message })
   }
+})
+
+// GitHub webhook — auto-deploy on push to main
+import { exec } from 'child_process'
+const DEPLOY_SECRET = process.env.DEPLOY_WEBHOOK_SECRET ?? ''
+app.post('/deploy-webhook', async (req: any, reply: any) => {
+  const secret = (req.headers['x-deploy-secret'] ?? '') as string
+  if (DEPLOY_SECRET && secret !== DEPLOY_SECRET) return reply.status(401).send({ error: 'unauthorized' })
+  exec('/home/vcechella/deploy-ana.sh', (err, stdout, stderr) => {
+    if (err) console.error('[DEPLOY] erro:', stderr)
+    else console.log('[DEPLOY] ✅ sucesso:', stdout.slice(-200))
+  })
+  return { ok: true, message: 'deploy iniciado' }
 })
 
 await app.listen({ port: PORT, host: '0.0.0.0' })

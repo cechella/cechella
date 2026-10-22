@@ -1,0 +1,19 @@
+name: Deploy Ana Master
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'infra/ana-master/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger deploy via webhook
+        run: |
+          curl -s -X POST \
+            https://ana-master.hormoneecosystem.com/deploy-webhook \
+            -H "Content-Type: application/json" \
+            -H "x-deploy-secret: ${{ secrets.DEPLOY_WEBHOOK_SECRET }}" \
+            -d '{}'

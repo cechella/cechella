@@ -1,7 +1,7 @@
 import { supabase, saveMemory } from './supabase.js'
 
-const MAX_RETRIES = 2
-const RETRY_DELAYS_MS = [30_000, 120_000]
+const MAX_RETRIES = 1
+const RETRY_DELAYS_MS = [30_000]
 
 export async function scheduleCallback(callSid: string): Promise<void> {
   try {
@@ -41,6 +41,20 @@ export async function scheduleCallback(callSid: string): Promise<void> {
       return
     }
 
+    // Skip if payment already approved — lead is in post-sales onboarding, no need to call back
+    const { data: pagamentoAprovado } = await supabase
+      .from('pagamentos')
+      .select('id')
+      .or(`lead_telefone.eq.${telefone},lead_telefone.eq.55${bare},lead_telefone.eq.${bare}`)
+      .eq('status', 'approved')
+      .limit(1)
+      .maybeSingle()
+
+    if (pagamentoAprovado) {
+      console.log(`[REDIAL] pagamento aprovado — sem retorno necessário callSid=${callSid}`)
+      return
+    }
+
     // Count ALL previous calls for this phone number in the last 24h to prevent infinite loop
     // Each callback creates a new callSid — must count across calls, not per-call memories
     const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
@@ -76,10 +90,24 @@ export async function scheduleCallback(callSid: string): Promise<void> {
           return
         }
 
+        // Also skip if payment was confirmed in the meantime
+        const { data: pagAprovado } = await supabase
+          .from('pagamentos')
+          .select('id')
+          .or(`lead_telefone.eq.${telefone},lead_telefone.eq.55${bare},lead_telefone.eq.${bare}`)
+          .eq('status', 'approved')
+          .limit(1)
+          .maybeSingle()
+
+        if (pagAprovado) {
+          console.log(`[REDIAL] pagamento aprovado ao disparar — cancelando retorno telefone=${call.telefone}`)
+          return
+        }
+
         const memories2: Record<string, any> = call.memories ?? {}
         const nomeLead = String(memories2.nome_lead ?? '').trim()
         const nomeParam = nomeLead ? `&nome=${encodeURIComponent(nomeLead)}` : ''
-        const twimlUrl = `${PUBLIC_HOST.replace(/^https?:\/\//, 'https://')}/twiml?contexto=retomada&from=${call.telefone}${nomeParam}`
+        const twimlUrl = `${PUBLIC_HOST.replace(/^https?:\/\//, 'https://')}/twiml?contexto=retomada&numero=${call.telefone}${nomeParam}`
         const body = new URLSearchParams({
           To: call.telefone.startsWith('+') ? call.telefone : `+${call.telefone}`,
           From: TWILIO_PHONE_NUMBER!,

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { supabase, getMemories, saveMemory, checkReferidos, updateLeadsGanho } from '../supabase.js'
-import { iniciarColetaReferidos, sendWelcome } from './whatsapp.js'
+import { iniciarColetaReferidos, sendWelcome, pedidoMikit, pedidoBios, reservarSalaMK } from './whatsapp.js'
 
 export type SessionRef = {
   callSid: string
@@ -178,6 +178,105 @@ export function buildTools(session: SessionRef) {
           console.log(`[REFERIDOS] create_response=true — missão completa, avançando para encerramento callSid=${session.callSid}`)
         }
         return JSON.stringify(ref)
+      },
+    },
+
+    // ── André: ferramentas de logística e agendamento ────────────────────────
+
+    {
+      name: 'fazer_pedido_mikit',
+      description:
+        'Envia pedido de kit cirúrgico para a MiKit via WhatsApp. Use após confirmar a prescrição e o endereço de entrega do Dr. Vinícius. Informe quantos kits (1 por paciente, salvo instrução contrária), tamanho da luva e do trocater.',
+      parameters: z.object({
+        paciente: z.string().describe('Nome da paciente (ou "múltiplas pacientes" se mais de uma)'),
+        qtd_kits: z.number().int().min(1).describe('Quantidade de kits'),
+        tamanho_luva: z.string().describe('Tamanho da luva (ex: 7.5)'),
+        tam_trocater: z.string().describe('Diâmetro do trocater em mm (ex: 4.5)'),
+        endereco_entrega: z.string().describe('Endereço completo de entrega'),
+      }),
+      execute: async ({ paciente, qtd_kits, tamanho_luva, tam_trocater, endereco_entrega }: {
+        paciente: string; qtd_kits: number; tamanho_luva: string; tam_trocater: string; endereco_entrega: string
+      }) => {
+        try {
+          const ok = await pedidoMikit(paciente, qtd_kits, tamanho_luva, tam_trocater, endereco_entrega)
+          await saveMemory(session.callSid, 'pedido_mikit_enviado', true).catch(() => {})
+          console.log(`[MIKIT] pedido enviado paciente=${paciente} qtd=${qtd_kits} ok=${ok}`)
+          return JSON.stringify({ ok, mensagem: 'Pedido enviado para MiKit via WhatsApp.' })
+        } catch (e: any) {
+          return JSON.stringify({ ok: false, erro: e.message })
+        }
+      },
+    },
+
+    {
+      name: 'fazer_pedido_bios',
+      description:
+        'Envia pedido de manipulação de hormônios para a Biòs Farmacêutica (Leandro) via WhatsApp. Use após o Dr. Vinícius liberar a prescrição. Liste os itens exatamente como prescritos (ex: "Gestrinona 35mg — 2 unidades").',
+      parameters: z.object({
+        paciente: z.string().describe('Nome da paciente'),
+        prescricao: z.array(z.string()).describe('Lista de itens prescritos com dosagem e quantidade'),
+        endereco_entrega: z.string().describe('Endereço completo de entrega'),
+      }),
+      execute: async ({ paciente, prescricao, endereco_entrega }: {
+        paciente: string; prescricao: string[]; endereco_entrega: string
+      }) => {
+        try {
+          const ok = await pedidoBios(paciente, prescricao, endereco_entrega)
+          await saveMemory(session.callSid, 'pedido_bios_enviado', true).catch(() => {})
+          console.log(`[BIOS] pedido enviado paciente=${paciente} itens=${prescricao.length} ok=${ok}`)
+          return JSON.stringify({ ok, mensagem: 'Pedido enviado para Biòs Farmacêutica via WhatsApp.' })
+        } catch (e: any) {
+          return JSON.stringify({ ok: false, erro: e.message })
+        }
+      },
+    },
+
+    {
+      name: 'reservar_sala_mk',
+      description:
+        'Envia mensagem para MK Evolution Health (Eduarda) reservando a sala para procedimentos do Dr. Vinícius. Use ao confirmar a data e os horários de implante. A Eduarda responde com chave PIX para pagamento.',
+      parameters: z.object({
+        data: z.string().describe('Data do procedimento (ex: "sábado, 25 de outubro de 2026")'),
+        horario_inicio: z.string().describe('Horário de início (ex: "13:00")'),
+        horario_fim: z.string().describe('Horário de término (ex: "17:00")'),
+        qtd_pacientes: z.number().int().min(1).describe('Número de pacientes no dia'),
+      }),
+      execute: async ({ data, horario_inicio, horario_fim, qtd_pacientes }: {
+        data: string; horario_inicio: string; horario_fim: string; qtd_pacientes: number
+      }) => {
+        try {
+          const ok = await reservarSalaMK(data, horario_inicio, horario_fim, qtd_pacientes)
+          await saveMemory(session.callSid, 'sala_mk_reservada', { data, horario_inicio, horario_fim }).catch(() => {})
+          console.log(`[MK] sala reservada data=${data} ${horario_inicio}-${horario_fim} pacientes=${qtd_pacientes} ok=${ok}`)
+          return JSON.stringify({ ok, mensagem: 'Mensagem enviada para MK Evolution Health. Aguardando confirmação e chave PIX da Eduarda.' })
+        } catch (e: any) {
+          return JSON.stringify({ ok: false, erro: e.message })
+        }
+      },
+    },
+
+    {
+      name: 'calcular_agenda',
+      description:
+        'Calcula quantos pacientes cabem em um período e sugere os horários. Use quando o Dr. Vinícius ou a paciente perguntarem sobre disponibilidade. Cada procedimento dura aproximadamente 30 minutos.',
+      parameters: z.object({
+        horario_inicio: z.string().describe('Hora de início (ex: "13:00")'),
+        horario_fim: z.string().describe('Hora de término (ex: "17:00")'),
+        duracao_min: z.number().int().default(30).describe('Duração por paciente em minutos (padrão 30)'),
+      }),
+      execute: async ({ horario_inicio, horario_fim, duracao_min }: {
+        horario_inicio: string; horario_fim: string; duracao_min: number
+      }) => {
+        const [hIni, mIni] = horario_inicio.split(':').map(Number)
+        const [hFim, mFim] = horario_fim.split(':').map(Number)
+        const totalMin = (hFim * 60 + mFim) - (hIni * 60 + mIni)
+        const qtd = Math.floor(totalMin / duracao_min)
+        const slots: string[] = []
+        for (let i = 0; i < qtd; i++) {
+          const minAbs = hIni * 60 + mIni + i * duracao_min
+          slots.push(`${String(Math.floor(minAbs / 60)).padStart(2, '0')}:${String(minAbs % 60).padStart(2, '0')}`)
+        }
+        return JSON.stringify({ total_pacientes: qtd, duracao_min, slots, mensagem: `Das ${horario_inicio} às ${horario_fim} cabem ${qtd} pacientes (${duracao_min}min cada).` })
       },
     },
   ]

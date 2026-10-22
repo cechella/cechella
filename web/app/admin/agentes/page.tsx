@@ -2,7 +2,7 @@
 
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
-import { Bot, PhoneCall, Share2, Settings, ExternalLink, Activity, MessageSquare, Zap } from 'lucide-react'
+import { Bot, PhoneCall, Share2, Settings, ExternalLink, Activity, MessageSquare, Zap, UserCheck } from 'lucide-react'
 
 interface AgentCard {
   icon: string
@@ -86,15 +86,15 @@ const agents: AgentCard[] = [
     tools: ['gpt-live-1', 'Twilio', 'Supabase', 'Z-API'],
     links: [
       { label: 'Pós-Vendas', href: '/admin/pos-vendas' },
-      { label: 'Prompt André', href: '/admin/pos-vendas?tab=config' },
+      { label: 'Prompt André', href: '/admin/ana-master' },
     ],
   },
 ]
 
 const coming: { icon: string; name: string; desc: string }[] = [
-  { icon: '🏥', name: 'Administrativo', desc: 'Agendamentos, confirmações e lembretes automatizados' },
   { icon: '💰', name: 'Financeiro', desc: 'Cobranças, inadimplência e renovações' },
   { icon: '🩺', name: 'Clínico', desc: 'Orientações pós-implante e acompanhamento de resultados' },
+  { icon: '🏥', name: 'Agenda', desc: 'Agendamentos, confirmações e lembretes automatizados' },
 ]
 
 export default function AgentesPage() {

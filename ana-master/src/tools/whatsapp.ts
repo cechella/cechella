@@ -20,6 +20,55 @@ export async function sendWhatsApp(telefone: string, mensagem: string) {
   await zapiPost('send-text', { phone, message: mensagem })
 }
 
+// Fornecedores — lidos do Supabase (configuracoes.fornecedores), fallback hardcoded
+async function getFornecedores() {
+  const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'fornecedores').maybeSingle()
+  const f = (data?.valor as Record<string, string> | null) ?? {}
+  return {
+    bios_leandro: f.bios_leandro ?? '5548992233296',
+    mikit:        f.mikit        ?? '5548988405443',
+    mk_health:    f.mk_health    ?? '5547932052958',
+  }
+}
+
+export async function pedidoMikit(paciente: string, qtdKits: number, tamanhoLuva: string, tamTrocater: string, enderecoEntrega: string) {
+  const { mikit: phone } = await getFornecedores()
+  const message =
+    `Olá! Sou André, assistente do Dr. Vinícius Cechella.\n\n` +
+    `*Pedido de Kit — ${paciente}*\n\n` +
+    `• Kit Duas Inserções com Trocater\n` +
+    `• Qtd: ${qtdKits} kit(s)\n` +
+    `• Luvas: ${tamanhoLuva}\n` +
+    `• Trocaters: ${tamTrocater}mm\n\n` +
+    `*Endereço de entrega:*\n${enderecoEntrega}\n\n` +
+    `Por favor, confirme disponibilidade e prazo. Frete PAC por conta do destinatário. 🙏`
+  return zapiPost('send-text', { phone, message })
+}
+
+export async function pedidoBios(paciente: string, prescricao: string[], enderecoEntrega: string) {
+  const { bios_leandro: phone } = await getFornecedores()
+  const itens = prescricao.map(i => `• ${i}`).join('\n')
+  const message =
+    `Olá Leandro! Sou André, assistente do Dr. Vinícius Cechella.\n\n` +
+    `*Pedido de manipulação — ${paciente}*\n\n` +
+    `${itens}\n\n` +
+    `*Endereço de entrega:*\n${enderecoEntrega}\n\n` +
+    `Desconto padrão 20%. Por favor, confirme orçamento e prazo. 🙏`
+  return zapiPost('send-text', { phone, message })
+}
+
+export async function reservarSalaMK(data: string, horarioInicio: string, horarioFim: string, qtdPacientes: number) {
+  const { mk_health: phone } = await getFornecedores()
+  const message =
+    `Olá! Sou André, assistente do Dr. Vinícius Cechella.\n\n` +
+    `Gostaria de reservar a sala para procedimentos:\n\n` +
+    `📅 *Data:* ${data}\n` +
+    `🕐 *Horário:* ${horarioInicio} às ${horarioFim}\n` +
+    `👥 *Pacientes:* ${qtdPacientes}\n\n` +
+    `Por favor, confirme disponibilidade e envie a chave PIX para pagamento. 🙏`
+  return zapiPost('send-text', { phone, message })
+}
+
 export async function sendWelcome(telefone: string) {
   const phone = normalizePhone(telefone)
   const mensagem =

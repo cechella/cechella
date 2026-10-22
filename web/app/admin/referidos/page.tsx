@@ -306,9 +306,6 @@ export default function ReferidosPage() {
   }
 
   const [ligandoVoz, setLigandoVoz] = useState<string | null>(null)
-  const [ligandoVozLote, setLigandoVozLote] = useState(false)
-  const [vozLoteProgresso, setVozLoteProgresso] = useState<{ atual: number; total: number } | null>(null)
-  const [confirmarVozLote, setConfirmarVozLote] = useState<{ alvos: typeof referidos } | null>(null)
   const [copiandoLink, setCopiandoLink] = useState<string | null>(null)
 
   // ANA PTL
@@ -345,19 +342,19 @@ export default function ReferidosPage() {
     setTimeout(() => setCopiandoLink(null), 2000)
   }
 
-  const ligarVoz = async (telefone: string, id: string) => {
+  const ligarVoz = async (telefone: string, id: string, nome?: string | null) => {
     if (!telefone) return showToast('Sem telefone', 'err')
     setLigandoVoz(id)
     const tel = telefone.replace(/\D/g, '')
-    const number = `+55${tel}`
+    const numero = tel.startsWith('55') ? tel : `55${tel}`
     try {
-      const res = await fetch('/api/admin/vapi-call', {
+      const res = await fetch('/api/admin/ana-master-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ number }),
+        body: JSON.stringify({ numero, nome: nome || '', contexto: 'gold' }),
       })
       if (res.ok) {
-        showToast(`Ligando para ${number}...`)
+        showToast(`Ligando para ${numero}...`)
       } else {
         showToast('Erro ao iniciar ligação', 'err')
       }
@@ -455,41 +452,6 @@ export default function ReferidosPage() {
     showToast(`Distribuído para ${consultor.name || 'consultor'}!`)
   }
 
-  const iniciarVozLote = () => {
-    const alvos = referidos.filter(r => selecionados.has(r.id) && r.telefone)
-    if (alvos.length === 0) return showToast('Nenhum referido com telefone selecionado', 'err')
-    setConfirmarVozLote({ alvos })
-  }
-
-  const ligarVozLote = async () => {
-    const alvos = confirmarVozLote?.alvos ?? []
-    setConfirmarVozLote(null)
-    if (alvos.length === 0) return
-    setLigandoVozLote(true)
-    setVozLoteProgresso({ atual: 0, total: alvos.length })
-    let ok = 0
-    const CONCORRENCIA = 10
-    for (let i = 0; i < alvos.length; i += CONCORRENCIA) {
-      const lote = alvos.slice(i, i + CONCORRENCIA)
-      await Promise.all(lote.map(async (ref) => {
-        const tel = ref.telefone!.replace(/\D/g, '')
-        try {
-          const res = await fetch('/api/admin/vapi-call', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ number: `+55${tel}` }),
-          })
-          if (res.ok) ok++
-        } catch {}
-      }))
-      setVozLoteProgresso({ atual: Math.min(i + CONCORRENCIA, alvos.length), total: alvos.length })
-      if (i + CONCORRENCIA < alvos.length) await new Promise(r => setTimeout(r, 60000))
-    }
-    showToast(`${ok}/${alvos.length} ligações disparadas!`)
-    setSelecionados(new Set())
-    setLigandoVozLote(false)
-    setVozLoteProgresso(null)
-  }
 
   // Acionar Ana em lote (existente — sem alteração)
   const acionarAnaLote = async () => {
@@ -799,16 +761,6 @@ export default function ReferidosPage() {
                   {acionandoLote ? 'Enviando...' : `Mensagem (${selecionados.size})`}
                 </button>
                 <button
-                  onClick={iniciarVozLote}
-                  disabled={ligandoVozLote}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  <PhoneCall className="w-3.5 h-3.5" />
-                  {ligandoVozLote && vozLoteProgresso
-                    ? `Ligando... ${vozLoteProgresso.atual}/${vozLoteProgresso.total}`
-                    : `Ligar Voz (${selecionados.size})`}
-                </button>
-                <button
                   onClick={notificarLote}
                   disabled={notificandoLote}
                   className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg transition-colors disabled:opacity-50"
@@ -896,25 +848,14 @@ export default function ReferidosPage() {
                                 </button>
                                 {lead.telefone && (
                                   <button
-                                    onClick={() => ligarVoz(lead.telefone!, lead.id)}
+                                    onClick={() => ligarVoz(lead.telefone!, lead.id, lead.nome)}
                                     disabled={ligandoVoz === lead.id}
                                     className="flex items-center gap-1 text-xs px-2 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 rounded-lg transition-colors disabled:opacity-50"
-                                    title="Ligar via Ana Voz"
+                                    title="Ligar via Ana Master"
                                   >
                                     <PhoneCall className="w-3 h-3" />
                                     {ligandoVoz === lead.id ? '...' : 'Voz'}
                                   </button>
-                                )}
-                                {lead.telefone && (
-                                  <a
-                                    href={`https://wa.me/${lead.telefone.replace(/\D/g, '')}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-1.5 text-[#71717A] hover:text-green-400 hover:bg-[#1C1C1E] rounded-lg transition-colors"
-                                    title="Abrir WhatsApp"
-                                  >
-                                    <Phone className="w-3.5 h-3.5" />
-                                  </a>
                                 )}
                               </div>
                             </td>
@@ -1268,51 +1209,6 @@ export default function ReferidosPage() {
               <input type="checkbox" checked={notificarWpp} onChange={e => setNotificarWpp(e.target.checked)} className="accent-[#7B3FE4]" />
               <span className="text-xs text-[#A1A1AA]">Notificar consultor via WhatsApp</span>
             </label>
-          </div>
-        </div>
-      )}
-
-      {/* Modal confirmação voz em lote */}
-      {confirmarVozLote && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl w-full max-w-sm p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center flex-shrink-0">
-                <PhoneCall className="w-5 h-5 text-green-400" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-white">Confirmar ligações em lote</h3>
-                <p className="text-xs text-[#71717A] mt-0.5">Ana Voz vai ligar para {confirmarVozLote.alvos.length} contato{confirmarVozLote.alvos.length !== 1 ? 's' : ''}</p>
-              </div>
-            </div>
-
-            <div className="bg-[#18181A] rounded-xl p-3 space-y-1 max-h-40 overflow-y-auto">
-              {confirmarVozLote.alvos.map(ref => (
-                <div key={ref.id} className="flex items-center justify-between text-xs">
-                  <span className="text-white">{ref.nome || '—'}</span>
-                  <span className="text-[#71717A]">{ref.telefone}</span>
-                </div>
-              ))}
-            </div>
-
-            <p className="text-xs text-[#71717A]">
-              Serão disparadas até 10 ligações simultâneas. Cada ligação consome créditos VAPI.
-            </p>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => setConfirmarVozLote(null)}
-                className="flex-1 px-4 py-2.5 text-sm text-[#71717A] hover:text-white border border-[#1C1C1E] hover:border-[#3F3F46] rounded-xl transition-colors"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={ligarVozLote}
-                className="flex-1 px-4 py-2.5 text-sm font-medium text-white bg-green-600 hover:bg-green-500 rounded-xl transition-colors"
-              >
-                Confirmar e ligar
-              </button>
-            </div>
           </div>
         </div>
       )}
