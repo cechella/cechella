@@ -22,6 +22,7 @@ import {
   Wand2,
   Upload,
   X,
+  MoreHorizontal,
   Plus,
   FileText,
   Bot,
@@ -165,6 +166,7 @@ export default function VervePage() {
   const [publishResult, setPublishResult] = useState<Record<string, { ok: boolean; permalink?: string; error?: string }>>({})
   const [publishSuccess, setPublishSuccess] = useState<{ titulo: string; permalink?: string } | null>(null)
   const [publishError, setPublishError] = useState<{ titulo: string; error: string } | null>(null)
+  const [openMenu, setOpenMenu] = useState<string | null>(null)
 
   async function publicarAgora(id: string) {
     setPublishLoading(s => ({ ...s, [id]: true }))
@@ -709,6 +711,39 @@ export default function VervePage() {
                               {publishLoading[p.id] ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
                               {publishLoading[p.id] ? 'Publicando…' : 'Publicar agora'}
                             </button>
+                            {/* Three-dot menu */}
+                            <div className="relative">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setOpenMenu(s => s === p.id ? null : p.id) }}
+                                className="p-2 rounded-lg text-[#71717A] hover:text-white hover:bg-[#2a2a2a] transition-all"
+                              >
+                                <MoreHorizontal className="w-4 h-4" />
+                              </button>
+                              {openMenu === p.id && (
+                                <div className="absolute right-0 top-9 z-20 bg-[#1C1C1E] border border-[#2a2a2a] rounded-xl shadow-xl py-1 w-52" onClick={e => e.stopPropagation()}>
+                                  <button
+                                    onClick={async () => {
+                                      setOpenMenu(null)
+                                      await fetch('/api/admin/verve/posts', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, status: 'publicado' }) })
+                                      await loadPosts()
+                                    }}
+                                    className="w-full text-left px-4 py-2.5 text-xs text-blue-400 hover:bg-blue-500/10 flex items-center gap-2"
+                                  >
+                                    <Instagram className="w-3.5 h-3.5" /> Marcar como publicado
+                                  </button>
+                                  <button
+                                    onClick={async () => {
+                                      setOpenMenu(null)
+                                      await fetch('/api/admin/verve/posts', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, status: 'recusado' }) })
+                                      await loadPosts()
+                                    }}
+                                    className="w-full text-left px-4 py-2.5 text-xs text-red-400 hover:bg-red-500/10 flex items-center gap-2"
+                                  >
+                                    <X className="w-3.5 h-3.5" /> Recusar post
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                         {p.status === 'publicando' && !publishResult[p.id] && (
