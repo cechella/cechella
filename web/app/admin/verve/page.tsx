@@ -29,7 +29,7 @@ import {
   Send,
 } from 'lucide-react'
 
-type Tab = 'calendario' | 'aprovacao' | 'briefings' | 'metas' | 'metricas' | 'chat'
+type Tab = 'calendario' | 'aprovacao' | 'publicados' | 'briefings' | 'metas' | 'metricas' | 'chat'
 
 type PostType = 'reel' | 'carrossel' | 'story'
 type PostStatus = 'rascunho' | 'aguardando' | 'aprovado' | 'publicado' | 'recusado' | 'publicando' | 'erro'
@@ -74,6 +74,8 @@ interface Post {
   slides?: number
   image_urls?: string[]
   legenda?: string
+  ig_media_id?: string
+  permalink?: string
 }
 
 const POSTS_SEMANA: Post[] = [
@@ -248,6 +250,8 @@ export default function VervePage() {
           slides: p.slides,
           image_urls: p.image_urls,
           legenda: p.legenda,
+          ig_media_id: (p as { ig_media_id?: string }).ig_media_id,
+          permalink: (p as { permalink?: string }).permalink,
         })))
       }
     } finally {
@@ -488,6 +492,7 @@ export default function VervePage() {
             {([
               { key: 'calendario', label: 'Calendário', icon: <Calendar className="w-3.5 h-3.5" /> },
               { key: 'aprovacao',  label: `Aprovação${pendentes.length ? ` (${pendentes.length})` : ''}`, icon: <CheckCircle2 className="w-3.5 h-3.5" /> },
+              { key: 'publicados', label: `Publicados${posts.filter(p => p.status === 'publicado').length ? ` (${posts.filter(p => p.status === 'publicado').length})` : ''}`, icon: <Instagram className="w-3.5 h-3.5" /> },
               { key: 'briefings',  label: `Briefings${briefings.filter(b => b.status === 'proposta').length ? ` (${briefings.filter(b => b.status === 'proposta').length})` : ''}`, icon: <FileText className="w-3.5 h-3.5" /> },
               { key: 'metas',      label: 'Metas',       icon: <Target className="w-3.5 h-3.5" /> },
               { key: 'metricas',   label: 'Métricas',    icon: <BarChart3 className="w-3.5 h-3.5" /> },
@@ -754,6 +759,113 @@ export default function VervePage() {
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Faixa: Publicados no Instagram */}
+              {posts.filter(p => p.status === 'publicado').length > 0 && (
+                <div className="mt-6">
+                  <p className="text-sm text-blue-400 font-semibold mb-3 flex items-center gap-2">
+                    <Instagram className="w-4 h-4" /> Publicados no Instagram
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    {posts.filter(p => p.status === 'publicado').sort((a, b) => b.data.localeCompare(a.data)).map(p => (
+                      <div key={p.id} className="bg-[#111113] border border-blue-500/20 rounded-2xl p-4">
+                        <div className="flex items-center gap-4">
+                          {p.image_urls && p.image_urls.length > 0 ? (
+                            <img src={p.image_urls[0]} alt="" className="w-12 h-12 rounded-xl object-cover flex-shrink-0 border border-[#2a2a2a]" />
+                          ) : (
+                            <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl bg-[#1C1C1E] border border-[#2a2a2a]">
+                              {p.tipo === 'reel' ? '🎬' : '📷'}
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">{p.titulo}</p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold border ${tipoColor[p.tipo]}`}>
+                                {tipoIcon[p.tipo]}{p.tipo}{p.slides ? ` · ${p.slides} slides` : ''}
+                              </span>
+                              <span className="text-[11px] text-[#71717A]">{p.data.slice(5).replace('-', '/')} às {p.hora}</span>
+                              <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">✓ publicado</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 flex-shrink-0">
+                            {p.image_urls && p.image_urls.length > 0 && (
+                              <button onClick={() => { setPreviewPost(p); setPreviewSlide(0) }}
+                                className="px-3 py-2 rounded-lg text-xs font-semibold bg-[#1C1C1E] text-[#71717A] border border-[#2a2a2a] hover:text-white transition-all flex items-center gap-1.5">
+                                Preview
+                              </button>
+                            )}
+                            {p.permalink ? (
+                              <a href={p.permalink} target="_blank" rel="noreferrer"
+                                className="px-3 py-2 rounded-lg text-xs font-semibold bg-gradient-to-r from-[#f09433] via-[#e6683c] to-[#bc1888] text-white hover:opacity-90 transition-all flex items-center gap-1.5">
+                                <Instagram className="w-3 h-3" /> Ver no Instagram
+                              </a>
+                            ) : (
+                              <a href="https://www.instagram.com/viniciuscechella" target="_blank" rel="noreferrer"
+                                className="px-3 py-2 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all flex items-center gap-1.5">
+                                <Instagram className="w-3 h-3" /> @viniciuscechella
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── TAB: PUBLICADOS ── */}
+          {tab === 'publicados' && (
+            <div>
+              {posts.filter(p => p.status === 'publicado').length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 text-center">
+                  <Instagram className="w-12 h-12 text-[#71717A] mb-3 opacity-40" />
+                  <p className="text-[#71717A] font-medium">Nenhum post publicado ainda</p>
+                  <p className="text-[#3F3F46] text-sm mt-1">Os posts publicados no Instagram aparecerão aqui</p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm text-[#71717A] mb-1">{posts.filter(p => p.status === 'publicado').length} post{posts.filter(p => p.status === 'publicado').length > 1 ? 's' : ''} publicado{posts.filter(p => p.status === 'publicado').length > 1 ? 's' : ''} no Instagram</p>
+                  {posts.filter(p => p.status === 'publicado').sort((a, b) => b.data.localeCompare(a.data)).map(p => (
+                    <div key={p.id} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4">
+                      <div className="flex items-center gap-4">
+                        {p.image_urls && p.image_urls.length > 0 && (
+                          <img src={p.image_urls[0]} alt="" className="w-16 h-16 rounded-xl object-cover flex-shrink-0 border border-[#2a2a2a]" />
+                        )}
+                        {(!p.image_urls || p.image_urls.length === 0) && (
+                          <div className="w-16 h-16 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl bg-[#1C1C1E] border border-[#2a2a2a]">
+                            {p.tipo === 'reel' ? '🎬' : '📷'}
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{p.titulo}</p>
+                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                            <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold border ${tipoColor[p.tipo]}`}>
+                              {tipoIcon[p.tipo]}{p.tipo}{p.slides ? ` · ${p.slides} slides` : ''}
+                            </span>
+                            <span className="text-[11px] text-[#71717A]">{p.data.slice(5).replace('-', '/')} às {p.hora}</span>
+                            <span className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20">✓ publicado</span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2 flex-shrink-0">
+                          {p.permalink ? (
+                            <a href={p.permalink} target="_blank" rel="noreferrer"
+                              className="px-3 py-2 rounded-lg text-xs font-semibold bg-gradient-to-r from-[#f09433] via-[#e6683c] to-[#bc1888] text-white hover:opacity-90 transition-all flex items-center gap-1.5">
+                              <Instagram className="w-3 h-3" /> Ver no Instagram
+                            </a>
+                          ) : (
+                            <a href="https://www.instagram.com/viniciuscechella" target="_blank" rel="noreferrer"
+                              className="px-3 py-2 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all flex items-center gap-1.5">
+                              <Instagram className="w-3 h-3" /> @viniciuscechella
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
