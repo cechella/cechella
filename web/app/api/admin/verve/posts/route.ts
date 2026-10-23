@@ -77,7 +77,7 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json()
   const { id, status, scheduled_at } = body
 
-  const allowed = ['rascunho', 'aguardando', 'aprovado', 'recusado']
+  const allowed = ['rascunho', 'aguardando', 'aprovado', 'recusado', 'erro']
   if (!id || !allowed.includes(status)) {
     return NextResponse.json({ error: 'id e status válido são obrigatórios' }, { status: 400 })
   }
