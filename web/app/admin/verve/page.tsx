@@ -1,5 +1,6 @@
 'use client'
 
+import { emBrasilia } from '@/lib/verve/horario'
 import { useState, useEffect } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
@@ -206,8 +207,8 @@ export default function VervePage() {
           tipo: p.tipo,
           titulo: p.titulo,
           pilar: p.pilar,
-          data: p.scheduled_at?.slice(0, 10) ?? '',
-          hora: p.scheduled_at?.slice(11, 16) ?? '',
+          data: emBrasilia(p.scheduled_at).data,
+          hora: emBrasilia(p.scheduled_at).hora,
           status: p.status,
           slides: p.slides,
           image_urls: p.image_urls,
@@ -505,6 +506,12 @@ export default function VervePage() {
                         {renderMsg[p.id] && <p className="text-[11px] text-red-400 mt-1">{renderMsg[p.id]}</p>}
                       </div>
                       <button
+                        onClick={() => recusar(p.id)}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
+                      >
+                        ✕ Recusar
+                      </button>
+                      <button
                         onClick={() => gerarImagens(p.id)}
                         disabled={renderLoading[p.id]}
                         className="px-3 py-2 rounded-lg text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5"
@@ -672,7 +679,7 @@ export default function VervePage() {
                                   {p.tipo}
                                 </span>
                                 <span className="text-xs text-white flex-1">{p.tema}</span>
-                                <span className="text-[10px] text-[#3F3F46]">{p.scheduled_at?.slice(0, 10)}</span>
+                                <span className="text-[10px] text-[#3F3F46]">{emBrasilia(p.scheduled_at).data}</span>
                               </div>
                             ))}
                           </div>
