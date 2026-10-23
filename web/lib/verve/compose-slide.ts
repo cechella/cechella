@@ -202,7 +202,7 @@ export async function composeSlide(content: SlideContent): Promise<Buffer> {
                         style: { display: 'flex', flexDirection: 'column', gap: 2 },
                         children: [
                           { type: 'span', props: { style: { fontSize: 18, fontWeight: 600, letterSpacing: 1.2, color: '#fff' }, children: 'DR. VINÍCIUS CECHELLA' } },
-                          { type: 'span', props: { style: { fontSize: 13, fontWeight: 600, letterSpacing: 1.5, color: 'rgba(255,255,255,0.6)' }, children: 'CRM 38765/SC' } },
+                          { type: 'span', props: { style: { fontSize: 13, fontWeight: 600, letterSpacing: 1.5, color: 'rgba(255,255,255,0.6)' }, children: 'MÉDICO · CRM-SC 38765' } },
                         ],
                       },
                     },

@@ -118,10 +118,7 @@ export async function PATCH(req: NextRequest) {
   // slides_temas: array com o tema de cada slide, vindo do campo slides[] do briefing do Gustavo.
   const persona = detectPersona(briefing.publico_alvo, briefing.titulo, briefing.objetivo)
   const linhas = plano.value.posts.map(p => {
-    const slideTemas: string[] = Array.isArray((p as unknown as Record<string, unknown>).slides)
-      ? ((p as unknown as Record<string, unknown>).slides as Array<{ tema?: string; titulo?: string }>)
-          .map(s => s.tema ?? s.titulo ?? '').filter(Boolean)
-      : []
+    const nSlides = p.slides?.length ?? 0
     return {
       tipo: p.tipo,
       titulo: p.tema,
@@ -129,8 +126,7 @@ export async function PATCH(req: NextRequest) {
       pilar: p.pilar,
       scheduled_at: p.scheduled_at,
       image_urls: [],
-      slides: p.tipo === 'carrossel' ? (slideTemas.length || 8) : null,
-      slides_temas: slideTemas.length ? slideTemas : null,
+      slides: p.tipo === 'carrossel' ? (nSlides || 8) : null,
       status: 'rascunho',
       briefing_id: briefing.id,
     }
@@ -141,12 +137,15 @@ export async function PATCH(req: NextRequest) {
   // Renderiza slides automaticamente para posts do tipo carrossel
   // Cada post fica com image_urls preenchido — desbloqueio do fluxo de aprovação
   if (inserted?.length) {
-    await Promise.allSettled(inserted.map(async (post: { id: string; titulo: string; pilar: string; tipo: string; slides: number | null; slides_temas?: string[] }) => {
+    await Promise.allSettled(inserted.map(async (post: { id: string; titulo: string; pilar: string; tipo: string; slides: number | null }, i: number) => {
       if (post.tipo !== 'carrossel') return
+      // Os slides do Gustavo (título e texto de cada um, em sequência) vêm do plano validado, na mesma ordem dos rascunhos inseridos.
+      const planoSlides = plano.value.posts[i]?.tema === post.titulo ? (plano.value.posts[i]?.slides ?? []) : []
       try {
         const urls = await renderCarrossel({
           titulo: post.titulo,
-          temas: post.slides_temas ?? [],   // temas por slide — foto específica para cada um
+          temas: planoSlides.map(s => s.titulo),        // título de cada slide (e base da foto específica)
+          descricoes: planoSlides.map(s => s.texto),    // texto de cada slide
           pilar: post.pilar,
           slides: post.slides ?? 8,
           persona,
