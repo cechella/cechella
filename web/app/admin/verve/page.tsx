@@ -29,7 +29,7 @@ import {
   Send,
 } from 'lucide-react'
 
-type Tab = 'calendario' | 'aprovacao' | 'briefings' | 'metas' | 'metricas' | 'chat'
+type Tab = 'calendario' | 'aprovacao' | 'publicados' | 'briefings' | 'metas' | 'metricas' | 'chat'
 
 type PostType = 'reel' | 'carrossel' | 'story'
 type PostStatus = 'rascunho' | 'aguardando' | 'aprovado' | 'publicado' | 'recusado' | 'publicando' | 'erro'
@@ -74,6 +74,8 @@ interface Post {
   slides?: number
   image_urls?: string[]
   legenda?: string
+  ig_media_id?: string
+  permalink?: string
 }
 
 const POSTS_SEMANA: Post[] = [
@@ -248,6 +250,8 @@ export default function VervePage() {
           slides: p.slides,
           image_urls: p.image_urls,
           legenda: p.legenda,
+          ig_media_id: (p as { ig_media_id?: string }).ig_media_id,
+          permalink: (p as { permalink?: string }).permalink,
         })))
       }
     } finally {
