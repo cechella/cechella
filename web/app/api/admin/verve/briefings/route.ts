@@ -115,31 +115,41 @@ export async function PATCH(req: NextRequest) {
   if (status !== 'aprovado' || !plano || !plano.ok) return NextResponse.json({ briefing, rascunhos_gerados: 0 })
 
   // Aprovado: os posts do plano viram rascunhos (legenda do Gustavo, se veio; senão a legenda é gerada abaixo).
-  const linhas = plano.value.posts.map(p => ({
-    tipo: p.tipo,
-    titulo: p.tema,
-    legenda: p.legenda ?? '',
-    pilar: p.pilar,
-    scheduled_at: p.scheduled_at,
-    image_urls: [],
-    slides: p.tipo === 'carrossel' ? 8 : null,
-    status: 'rascunho',
-    briefing_id: briefing.id,
-  }))
+  // slides_temas: array com o tema de cada slide, vindo do campo slides[] do briefing do Gustavo.
+  const persona = detectPersona(briefing.publico_alvo, briefing.titulo, briefing.objetivo)
+  const linhas = plano.value.posts.map(p => {
+    const slideTemas: string[] = Array.isArray((p as unknown as Record<string, unknown>).slides)
+      ? ((p as unknown as Record<string, unknown>).slides as Array<{ tema?: string; titulo?: string }>)
+          .map(s => s.tema ?? s.titulo ?? '').filter(Boolean)
+      : []
+    return {
+      tipo: p.tipo,
+      titulo: p.tema,
+      legenda: p.legenda ?? '',
+      pilar: p.pilar,
+      scheduled_at: p.scheduled_at,
+      image_urls: [],
+      slides: p.tipo === 'carrossel' ? (slideTemas.length || 8) : null,
+      slides_temas: slideTemas.length ? slideTemas : null,
+      status: 'rascunho',
+      briefing_id: briefing.id,
+    }
+  })
   const { data: inserted, error: pErr } = await supabase.from('verve_posts').insert(linhas).select()
   if (pErr) return NextResponse.json({ briefing, error: 'rascunhos_nao_gerados: ' + pErr.message }, { status: 500 })
 
   // Renderiza slides automaticamente para posts do tipo carrossel
   // Cada post fica com image_urls preenchido — desbloqueio do fluxo de aprovação
   if (inserted?.length) {
-    await Promise.allSettled(inserted.map(async (post: { id: string; titulo: string; pilar: string; tipo: string; slides: number | null }) => {
+    await Promise.allSettled(inserted.map(async (post: { id: string; titulo: string; pilar: string; tipo: string; slides: number | null; slides_temas?: string[] }) => {
       if (post.tipo !== 'carrossel') return
       try {
         const urls = await renderCarrossel({
           titulo: post.titulo,
+          temas: post.slides_temas ?? [],   // temas por slide — foto específica para cada um
           pilar: post.pilar,
           slides: post.slides ?? 8,
-          persona: detectPersona(briefing.publico_alvo, briefing.titulo, briefing.objetivo),
+          persona,
           postId: post.id,
         })
         if (urls.length) {

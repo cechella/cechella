@@ -18,29 +18,27 @@ export async function renderSlide(input: SlideInput): Promise<Buffer> {
   return Buffer.from(image_url)
 }
 
-// Gera N fotos via Flux 1.1 Pro em paralelo, faz upload para Vercel Blob e retorna URLs públicas.
-// Sem Playwright — compatível com Vercel Hobby (sem timeout de 10s).
+// Gera N fotos via Flux 1.1 Pro — uma por slide com tema específico.
+// Upload para Vercel Blob, retorna URLs públicas.
 export async function renderCarrossel(params: {
   titulo: string
-  temas?: string[]
+  temas?: string[]       // tema de cada slide (vindo do briefing do Gustavo)
   pilar?: string
   slides?: number
   badge?: string
   persona?: string
   postId?: string
 }): Promise<string[]> {
-  const { titulo, temas = [], pilar = 'autoridade', slides = 8, persona, postId = 'preview' } = params
+  const { titulo, temas = [], pilar = 'autoridade', slides = 8, persona = 'mulher_35_50', postId = 'preview' } = params
   const total = Math.max(2, Math.min(slides, 10))
+
+  if (!process.env.FAL_KEY) return []
 
   const photoPromises = Array.from({ length: total }, (_, i) => {
     const isCta = i + 1 === total
+    // Usa tema específico do slide se disponível, senão o título do post
     const tema = temas[i] ?? titulo
-    if (!process.env.FAL_KEY) return Promise.resolve('')
-    return generatePhotoForPost({
-      tema: isCta ? 'medical consultation warm office doctor patient' : tema,
-      pilar,
-      persona,
-    })
+    return generatePhotoForPost({ tema, pilar, persona, isCta })
       .then(r => r.url)
       .catch(() => '')
   })
