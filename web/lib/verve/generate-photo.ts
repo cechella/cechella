@@ -8,6 +8,7 @@ export interface PhotoPromptInput {
   isCta?: boolean
   faixa?: Faixa      // faixa etária do público (do briefing); padrão 40 a 60
   indice?: number    // posição do slide: varia a idade dentro da faixa
+  instrucao?: string // direção de arte pedida pelo CEO (já validada e em inglês), ex.: "warmer light, outdoor"
 }
 
 // A idade vem da faixa do briefing. O modelo de imagem tende a rejuvenescer, por isso a descrição pede sinais de idade reais.
@@ -42,21 +43,23 @@ function temaToVisual(tema: string): string {
 }
 
 export function buildPhotoPrompt(input: PhotoPromptInput): string {
-  const { tema, pilar, persona = 'mulher_35_50', isCta = false, faixa, indice = 0 } = input
+  const { tema, pilar, persona = 'mulher_35_50', isCta = false, faixa, indice = 0, instrucao } = input
 
   const subject = descricaoPessoa(persona, faixa, indice)
   const mood = pilarMood[pilar] ?? 'editorial, natural light'
+
+  const extra = instrucao ? `, art direction: ${instrucao}` : ''
 
   // Slide CTA: diferencia consultório por persona
   if (isCta) {
     const ctaScene = persona === 'homem_40_60'
       ? 'middle-aged man in warm doctor consultation, masculine clinical environment, reassuring atmosphere'
       : 'woman in warm doctor consultation, feminine clinical environment, reassuring atmosphere'
-    return `editorial photography, ${subject}, ${ctaScene}, ${mood}, photorealistic, ultra detailed, 4:5 portrait, no text, no watermark`
+    return `editorial photography, ${subject}, ${ctaScene}, ${mood}${extra}, photorealistic, ultra detailed, 4:5 portrait, no text, no watermark`
   }
 
   const visual = temaToVisual(tema)
-  return `editorial photography, ${subject}, ${visual}, ${mood}, photorealistic, ultra detailed, 4:5 portrait, no text, no watermark`
+  return `editorial photography, ${subject}, ${visual}, ${mood}${extra}, photorealistic, ultra detailed, 4:5 portrait, no text, no watermark`
 }
 
 export interface GeneratedPhoto {

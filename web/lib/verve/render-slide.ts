@@ -38,6 +38,7 @@ export async function renderCarrossel(params: {
   badge?: string
   persona?: string
   faixa?: Faixa
+  instrucao?: string
   postId?: string
 }): Promise<string[]> {
   const {
@@ -55,7 +56,7 @@ export async function renderCarrossel(params: {
   const photoPromises = Array.from({ length: total }, (_, i) => {
     const isCta = i + 1 === total
     const tema = temas[i] ?? titulo
-    return generatePhotoForPost({ tema, pilar, persona, isCta, faixa, indice: i })
+    return generatePhotoForPost({ tema, pilar, persona, isCta, faixa, indice: i, instrucao: params.instrucao })
       .then(r => r.url)
       .catch(() => '')
   })
