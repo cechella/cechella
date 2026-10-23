@@ -34,5 +34,5 @@ export async function POST(req: NextRequest) {
   }
   const r = await renderPost(supabase, id, pedido.opcoes)
   if (!r.ok) return NextResponse.json({ ...r }, { status: r.status })
-  return NextResponse.json({ ok: true, id, imagens: r.imagens, persona: r.persona, faixa: r.faixa, status: 'aguardando' })
+  return NextResponse.json({ ok: true, id, imagens: r.imagens, persona: r.persona, faixa: r.faixa, qa: r.qa, status: 'aguardando' })
 }

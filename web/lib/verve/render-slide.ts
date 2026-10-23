@@ -3,6 +3,7 @@ import { composeSlide } from './compose-slide'
 import { put } from '@vercel/blob'
 import sharp from 'sharp'
 import { FAIXA_PADRAO, type Faixa } from './persona'
+import { fotoConferida, leitorClaude, type Leitor, type QaEntrada } from './foto-qa'
 
 export interface SlideInput {
   titulo: string
@@ -39,6 +40,8 @@ export async function renderCarrossel(params: {
   persona?: string
   faixa?: Faixa
   instrucao?: string
+  qaLog?: QaEntrada[]   // recebe cada conferência (slide, tentativa, motivo, ação)
+  leitor?: Leitor       // injetável nos testes; padrão: modelo de visão
   postId?: string
 }): Promise<string[]> {
   const {
@@ -56,9 +59,13 @@ export async function renderCarrossel(params: {
   const photoPromises = Array.from({ length: total }, (_, i) => {
     const isCta = i + 1 === total
     const tema = temas[i] ?? titulo
-    return generatePhotoForPost({ tema, pilar, persona, isCta, faixa, indice: i, instrucao: params.instrucao })
-      .then(r => r.url)
-      .catch(() => '')
+    // Cada foto é CONFERIDA (idade aparente, gênero, texto, deformação) e refeita com correção se reprovar; esgotado, vira '' e o carrossel inteiro falha fechado.
+    return fotoConferida({
+      slide: i + 1, persona, faixa, instrucao: params.instrucao,
+      gerar: instrucao => generatePhotoForPost({ tema, pilar, persona, isCta, faixa, indice: i, instrucao }).then(r => r.url),
+      ler: params.leitor ?? leitorClaude(),
+      log: params.qaLog ?? [],
+    })
   })
   const photoUrls = await Promise.all(photoPromises)
 
