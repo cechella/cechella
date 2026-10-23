@@ -164,7 +164,7 @@ export default function VervePage() {
 
   async function publicarAgora(id: string) {
     setPublishLoading(s => ({ ...s, [id]: true }))
-    setPublishResult(s => ({ ...s, [id]: { ok: false } }))
+    setPublishResult(s => { const n = { ...s }; delete n[id]; return n })
     try {
       const res = await fetch('/api/admin/verve/posts/publish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
       const data = await res.json().catch(() => ({}))
@@ -671,13 +671,13 @@ export default function VervePage() {
                           </div>
                           <div className="flex gap-2 flex-shrink-0 items-center">
                             {p.image_urls && p.image_urls.length > 0 && (
-                              <button onClick={() => { setPreviewPost(p); setPreviewSlide(0) }}
+                              <button onClick={(e) => { e.stopPropagation(); setPreviewPost(p); setPreviewSlide(0) }}
                                 className="px-3 py-2 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all flex items-center gap-1.5">
                                 <Instagram className="w-3 h-3" /> Preview
                               </button>
                             )}
                             <button
-                              onClick={() => publicarAgora(p.id)}
+                              onClick={(e) => { e.stopPropagation(); publicarAgora(p.id) }}
                               disabled={publishLoading[p.id]}
                               className="px-4 py-2 rounded-lg text-xs font-bold bg-[#22c55e] text-black hover:bg-[#16a34a] disabled:opacity-60 transition-all flex items-center gap-1.5"
                             >
