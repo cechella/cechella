@@ -660,13 +660,13 @@ export default function VervePage() {
               )}
 
               {/* Posts aprovados — prontos para publicar */}
-              {posts.filter(p => p.status === 'aprovado' || p.status === 'erro').length > 0 && (
+              {posts.filter(p => p.status === 'aprovado' || p.status === 'erro' || p.status === 'publicando').length > 0 && (
                 <div className="mt-6">
                   <p className="text-sm text-[#22c55e] font-semibold mb-3 flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" /> Autorizados — prontos para publicar
                   </p>
                   <div className="flex flex-col gap-3">
-                    {posts.filter(p => p.status === 'aprovado' || p.status === 'erro').map(p => (
+                    {posts.filter(p => p.status === 'aprovado' || p.status === 'erro' || p.status === 'publicando').map(p => (
                       <div key={p.id} className="bg-[#111113] border border-[#22c55e]/20 rounded-2xl p-4">
                         <div className="flex items-center gap-4">
                           <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl"
@@ -699,6 +699,20 @@ export default function VervePage() {
                             </button>
                           </div>
                         </div>
+                        {p.status === 'publicando' && !publishResult[p.id] && (
+                          <div className="mt-3 p-3 rounded-xl bg-yellow-500/10 border border-yellow-500/25 flex items-center justify-between gap-3">
+                            <p className="text-xs text-yellow-400">Post preso em &ldquo;publicando&rdquo; — provável falha anterior. Clique em Resetar.</p>
+                            <button
+                              onClick={async () => {
+                                await fetch('/api/admin/verve/posts', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, status: 'aprovado' }) })
+                                await loadPosts()
+                              }}
+                              className="px-3 py-1 rounded-lg text-[10px] font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30 transition-all whitespace-nowrap flex-shrink-0"
+                            >
+                              Resetar
+                            </button>
+                          </div>
+                        )}
                         {publishResult[p.id] && (
                           <div className={`mt-3 p-3 rounded-xl ${publishResult[p.id].ok ? 'bg-[#22c55e]/10 border border-[#22c55e]/25' : 'bg-red-500/10 border border-red-500/25'}`}>
                             {publishResult[p.id].ok ? (
