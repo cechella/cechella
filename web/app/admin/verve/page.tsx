@@ -112,6 +112,8 @@ const statusColor: Record<PostStatus, string> = {
   aprovado:   'text-green-400',
   publicado:  'text-blue-400',
   recusado:   'text-red-400',
+  publicando: 'text-yellow-300',
+  erro:       'text-red-500',
 }
 
 interface NovoPost {
