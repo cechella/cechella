@@ -1348,12 +1348,23 @@ export default function VervePage() {
               >
                 ✕ Recusar
               </button>
-              <button
-                onClick={() => openScheduleModal(previewPost.id)}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all"
-              >
-                ✓ Autorizar
-              </button>
+              {(previewPost.status === 'aprovado' || previewPost.status === 'erro') ? (
+                <button
+                  onClick={() => { publicarAgora(previewPost.id); setPreviewPost(null) }}
+                  disabled={publishLoading[previewPost.id]}
+                  className="flex-1 py-3 rounded-xl text-sm font-bold bg-[#22c55e] text-black hover:bg-[#16a34a] disabled:opacity-60 transition-all flex items-center justify-center gap-2"
+                >
+                  {publishLoading[previewPost.id] ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {publishLoading[previewPost.id] ? 'Publicando…' : '🚀 Publicar agora'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => openScheduleModal(previewPost.id)}
+                  className="flex-1 py-3 rounded-xl text-sm font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all"
+                >
+                  ✓ Autorizar
+                </button>
+              )}
             </div>
           </div>
         </div>
