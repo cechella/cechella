@@ -1,4 +1,5 @@
 import { generatePhotoForPost } from './generate-photo'
+import { composeSlide } from './compose-slide'
 import { put } from '@vercel/blob'
 
 export interface SlideInput {
@@ -18,47 +19,80 @@ export async function renderSlide(input: SlideInput): Promise<Buffer> {
   return Buffer.from(image_url)
 }
 
-// Gera N fotos via Flux 1.1 Pro — uma por slide com tema específico.
-// Upload para Vercel Blob, retorna URLs públicas.
+// Deriva badge a partir do persona detectado
+function buildBadge(persona: string, pilar: string): string {
+  if (pilar === 'familia') return 'FAMÍLIA'
+  if (pilar === 'lifestyle') return 'LIFESTYLE'
+  return persona === 'homem_40_60'
+    ? 'PARA HOMENS DE 40 A 60 ANOS'
+    : 'PARA MULHERES DE 35 A 50 ANOS'
+}
+
+// Gera N slides compostos (foto Flux + texto SVG) e persiste no Vercel Blob.
 export async function renderCarrossel(params: {
   titulo: string
   temas?: string[]       // tema de cada slide (vindo do briefing do Gustavo)
+  descricoes?: string[]  // descrição por slide (opcional)
   pilar?: string
   slides?: number
   badge?: string
   persona?: string
   postId?: string
 }): Promise<string[]> {
-  const { titulo, temas = [], pilar = 'autoridade', slides = 8, persona = 'mulher_35_50', postId = 'preview' } = params
+  const {
+    titulo, temas = [], descricoes = [],
+    pilar = 'autoridade', slides = 8,
+    persona = 'mulher_35_50', postId = 'preview',
+  } = params
   const total = Math.max(2, Math.min(slides, 10))
+  const badge = params.badge ?? buildBadge(persona, pilar)
 
   if (!process.env.FAL_KEY) return []
 
+  // Gera fotos em paralelo
   const photoPromises = Array.from({ length: total }, (_, i) => {
     const isCta = i + 1 === total
-    // Usa tema específico do slide se disponível, senão o título do post
     const tema = temas[i] ?? titulo
     return generatePhotoForPost({ tema, pilar, persona, isCta })
       .then(r => r.url)
       .catch(() => '')
   })
-
   const photoUrls = await Promise.all(photoPromises)
 
+  // Para cada foto: baixa, composta com texto e faz upload no Blob
   const blobUrls = await Promise.all(
     photoUrls.map(async (url, i) => {
       if (!url) return ''
+      const isCta = i + 1 === total
+      const slideNum = i + 1
+      const slideTema = temas[i] ?? titulo
+      const slideDesc = descricoes[i] ?? undefined
+
       try {
+        // Download da foto do Flux
         const res = await fetch(url)
-        const buf = await res.arrayBuffer()
+        const photoBuffer = Buffer.from(await res.arrayBuffer())
+
+        // Composta texto sobre a foto
+        const composed = await composeSlide({
+          titulo: isCta ? 'Percebeu alguma mudança?' : slideTema,
+          descricao: isCta ? 'Converse com um médico para uma avaliação individual.' : slideDesc,
+          badge: slideNum === 1 ? badge : undefined,  // badge só no slide 1
+          slideNum,
+          totalSlides: total,
+          imageBuffer: photoBuffer,
+          isCta,
+        })
+
+        // Upload do PNG final
         const blob = await put(
-          `verve/slides/${postId}/slide-${String(i + 1).padStart(2, '0')}.jpg`,
-          buf,
-          { access: 'public', contentType: 'image/jpeg' }
+          `verve/slides/${postId}/slide-${String(slideNum).padStart(2, '0')}.png`,
+          composed,
+          { access: 'public', contentType: 'image/png' }
         )
         return blob.url
       } catch {
-        return url
+        return url // fallback: URL da foto sem texto
       }
     })
   )
