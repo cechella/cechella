@@ -645,13 +645,13 @@ export default function VervePage() {
               )}
 
               {/* Posts aprovados — prontos para publicar */}
-              {posts.filter(p => p.status === 'aprovado').length > 0 && (
+              {posts.filter(p => p.status === 'aprovado' || p.status === 'erro').length > 0 && (
                 <div className="mt-6">
                   <p className="text-sm text-[#22c55e] font-semibold mb-3 flex items-center gap-2">
                     <CheckCircle2 className="w-4 h-4" /> Autorizados — prontos para publicar
                   </p>
                   <div className="flex flex-col gap-3">
-                    {posts.filter(p => p.status === 'aprovado').map(p => (
+                    {posts.filter(p => p.status === 'aprovado' || p.status === 'erro').map(p => (
                       <div key={p.id} className="bg-[#111113] border border-[#22c55e]/20 rounded-2xl p-4">
                         <div className="flex items-center gap-4">
                           <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl"
@@ -691,7 +691,27 @@ export default function VervePage() {
                                 ✓ Publicado no Instagram!{publishResult[p.id].permalink ? <> · <a href={publishResult[p.id].permalink} target="_blank" rel="noreferrer" className="underline">Ver post</a></> : ''}
                               </p>
                             ) : (
-                              <p className="text-xs text-red-400">Erro: {publishResult[p.id].error}</p>
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="text-xs text-red-400">
+                                  {publishResult[p.id].error?.startsWith('status_invalido') || publishResult[p.id].error === 'so_publica_aprovado'
+                                    ? 'Post em estado inválido no banco. Clique em Resetar para corrigir.'
+                                    : publishResult[p.id].error === 'ja_esta_sendo_publicado'
+                                    ? 'Já está sendo publicado — aguarde ou recarregue.'
+                                    : `Erro: ${publishResult[p.id].error}`}
+                                </p>
+                                {(publishResult[p.id].error?.startsWith('status_invalido') || publishResult[p.id].error === 'so_publica_aprovado') && (
+                                  <button
+                                    onClick={async () => {
+                                      await fetch('/api/admin/verve/posts', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, status: 'aprovado' }) })
+                                      setPublishResult(s => ({ ...s, [p.id]: { ok: false } }))
+                                      await loadPosts()
+                                    }}
+                                    className="px-3 py-1 rounded-lg text-[10px] font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hover:bg-yellow-500/30 transition-all whitespace-nowrap flex-shrink-0"
+                                  >
+                                    Resetar
+                                  </button>
+                                )}
+                              </div>
                             )}
                           </div>
                         )}
