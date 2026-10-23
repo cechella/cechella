@@ -150,6 +150,25 @@ export default function VervePage() {
   })
 
   const pendentes = posts.filter(p => p.status === 'aguardando')
+  // Carrosséis que ficaram como rascunho sem imagem (a geração foi cortada ou falhou): o CEO pode gerar as imagens de novo.
+  const semImagem = posts.filter(p => p.status === 'rascunho' && p.tipo === 'carrossel' && !(p.image_urls && p.image_urls.length))
+  const [renderLoading, setRenderLoading] = useState<Record<string, boolean>>({})
+  const [renderMsg, setRenderMsg] = useState<Record<string, string>>({})
+
+  async function gerarImagens(id: string) {
+    setRenderLoading(s => ({ ...s, [id]: true }))
+    setRenderMsg(s => ({ ...s, [id]: '' }))
+    try {
+      const res = await fetch('/api/admin/verve/posts/render', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      const data = await res.json().catch(() => ({}))
+      if (data.ok) await loadPosts()
+      else setRenderMsg(s => ({ ...s, [id]: `Não gerou (${data.error ?? res.status}). Tente de novo.` }))
+    } catch {
+      setRenderMsg(s => ({ ...s, [id]: 'Falha de conexão. Tente de novo.' }))
+    } finally {
+      setRenderLoading(s => ({ ...s, [id]: false }))
+    }
+  }
 
   async function loadMetrics() {
     setMetricsLoading(true)
@@ -475,6 +494,28 @@ export default function VervePage() {
           {/* ── TAB: APROVAÇÃO ── */}
           {tab === 'aprovacao' && (
             <div>
+              {semImagem.length > 0 && (
+                <div className="mb-4 flex flex-col gap-2">
+                  <p className="text-sm text-[#71717A]">{semImagem.length} carrossel{semImagem.length > 1 ? 'éis' : ''} sem imagens (rascunho). Gere as imagens para poder revisar e autorizar.</p>
+                  {semImagem.map(p => (
+                    <div key={p.id} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4 flex items-center gap-4">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{p.titulo}</p>
+                        <p className="text-[11px] text-[#71717A] mt-1">{p.data.slice(5).replace('-', '/')} às {p.hora} · rascunho sem imagens</p>
+                        {renderMsg[p.id] && <p className="text-[11px] text-red-400 mt-1">{renderMsg[p.id]}</p>}
+                      </div>
+                      <button
+                        onClick={() => gerarImagens(p.id)}
+                        disabled={renderLoading[p.id]}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5"
+                      >
+                        {renderLoading[p.id] ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
+                        {renderLoading[p.id] ? 'Gerando… (até 1 min)' : 'Gerar imagens'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
               {pendentes.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 text-center">
                   <CheckCircle2 className="w-12 h-12 text-[#22c55e] mb-3 opacity-40" />

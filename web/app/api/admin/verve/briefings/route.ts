@@ -6,15 +6,11 @@ import { atlasAuthorized } from '@/lib/verve/admin-core'
 import { validateBriefingInput } from '@/lib/verve/briefing-input'
 import { COMPLIANCE_RULES_PT, complianceViolations, comAssinatura } from '@/lib/verve/compliance'
 import { renderCarrossel } from '@/lib/verve/render-slide'
+import { detectPersona } from '@/lib/verve/persona'
 
 export const dynamic = 'force-dynamic'
 
-// Detecta persona corretamente — case-insensitive, analisa publico_alvo + titulo + objetivo
-function detectPersona(publico_alvo?: string, titulo?: string, objetivo?: string): 'homem_40_60' | 'mulher_35_50' {
-  const texto = [publico_alvo, titulo, objetivo].join(' ').toLowerCase()
-  const masculino = /\bhomem\b|\bhomens\b|\bmasculin\w+|\bandropausa\b|\btestosterona\b|\bpai\b|\bpais\b|\bmasculinidade\b/
-  return masculino.test(texto) ? 'homem_40_60' : 'mulher_35_50'
-}
+export const maxDuration = 60   // gerar 8 fotos e compor os slides leva dezenas de segundos; o padrão do plano Hobby (10 s) cortava a geração
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
