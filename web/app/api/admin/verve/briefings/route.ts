@@ -9,6 +9,13 @@ import { renderCarrossel } from '@/lib/verve/render-slide'
 
 export const dynamic = 'force-dynamic'
 
+// Detecta persona corretamente — case-insensitive, analisa publico_alvo + titulo + objetivo
+function detectPersona(publico_alvo?: string, titulo?: string, objetivo?: string): 'homem_40_60' | 'mulher_35_50' {
+  const texto = [publico_alvo, titulo, objetivo].join(' ').toLowerCase()
+  const masculino = /\bhomem\b|\bhomens\b|\bmasculin\w+|\bandropausa\b|\btestosterona\b|\bpai\b|\bpais\b|\bmasculinidade\b/
+  return masculino.test(texto) ? 'homem_40_60' : 'mulher_35_50'
+}
+
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -132,7 +139,7 @@ export async function PATCH(req: NextRequest) {
           titulo: post.titulo,
           pilar: post.pilar,
           slides: post.slides ?? 8,
-          persona: briefing.publico_alvo?.includes('homem') ? 'homem_40_60' : 'mulher_35_50',
+          persona: detectPersona(briefing.publico_alvo, briefing.titulo, briefing.objetivo),
           postId: post.id,
         })
         if (urls.length) {
