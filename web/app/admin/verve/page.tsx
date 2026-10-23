@@ -386,9 +386,19 @@ export default function VervePage() {
     else if (option === 'hora') { now.setHours(now.getHours() + 1); scheduledAt = now.toISOString() }
     else if (option === '3h') { now.setHours(now.getHours() + 3); scheduledAt = now.toISOString() }
     else scheduledAt = new Date(scheduleCustom).toISOString()
-    await aprovar(scheduleModal.postId, scheduledAt)
+
+    const postId = scheduleModal.postId
+    const post = posts.find(p => p.id === postId)
     setScheduleModal(null)
     setPreviewPost(null)
+
+    if (option === 'agora' && (post?.status === 'aprovado' || post?.status === 'erro')) {
+      // Post já autorizado: publica direto no Instagram agora
+      await publicarAgora(postId)
+    } else {
+      // Ainda não autorizado (ou horário futuro): aprova com o horário escolhido
+      await aprovar(postId, scheduledAt)
+    }
   }
   async function recusar(id: string) {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'recusado' } : p))
@@ -1348,23 +1358,12 @@ export default function VervePage() {
               >
                 ✕ Recusar
               </button>
-              {(previewPost.status === 'aprovado' || previewPost.status === 'erro') ? (
-                <button
-                  onClick={() => { publicarAgora(previewPost.id); setPreviewPost(null) }}
-                  disabled={publishLoading[previewPost.id]}
-                  className="flex-1 py-3 rounded-xl text-sm font-bold bg-[#22c55e] text-black hover:bg-[#16a34a] disabled:opacity-60 transition-all flex items-center justify-center gap-2"
-                >
-                  {publishLoading[previewPost.id] ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  {publishLoading[previewPost.id] ? 'Publicando…' : '🚀 Publicar agora'}
-                </button>
-              ) : (
-                <button
-                  onClick={() => openScheduleModal(previewPost.id)}
-                  className="flex-1 py-3 rounded-xl text-sm font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all"
-                >
-                  ✓ Autorizar
-                </button>
-              )}
+              <button
+                onClick={() => openScheduleModal(previewPost.id)}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all"
+              >
+                {(previewPost.status === 'aprovado' || previewPost.status === 'erro') ? '🚀 Publicar' : '✓ Autorizar'}
+              </button>
             </div>
           </div>
         </div>
@@ -1385,7 +1384,7 @@ export default function VervePage() {
                 <button
                   key={opt.key}
                   onClick={() => confirmarAgendamento(opt.key as 'agora' | 'hora' | '3h')}
-                  className="w-full py-3 px-4 rounded-xl text-sm font-medium text-white bg-[#1C1C1E] border border-[#2a2a2a] hover:border-[#22c55e]/50 hover:bg-[#22c55e]/10 transition-all text-left"
+                  className={`w-full py-3 px-4 rounded-xl text-sm font-medium text-white border transition-all text-left active:scale-95 ${opt.key === 'agora' ? 'bg-[#22c55e]/15 border-[#22c55e]/50 hover:bg-[#22c55e]/25' : 'bg-[#1C1C1E] border-[#2a2a2a] hover:border-[#22c55e]/50 hover:bg-[#22c55e]/10'}`}
                 >
                   {opt.label}
                 </button>
