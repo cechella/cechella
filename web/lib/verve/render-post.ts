@@ -2,7 +2,7 @@
 // e pelo render automático (o agendador do ATLAS). Falha fechada: o post só vai para "aguardando" com TODAS as imagens.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { renderCarrossel } from './render-slide'
-import { detectPersona } from './persona'
+import { detectPersona, detectFaixa } from './persona'
 
 export type ResultadoRender =
   | { ok: true; imagens: number; persona: string; slides_do_gustavo: boolean }
@@ -25,6 +25,7 @@ export async function renderPostRascunho(supabase: SupabaseClient, postId: strin
     }
   }
   const persona = detectPersona(publico, post.titulo, objetivo)
+  const faixa = detectFaixa(publico, objetivo)
   const total = slides.length || post.slides || 8
   const esperadas = Math.max(2, Math.min(total, 10))
 
@@ -35,6 +36,7 @@ export async function renderPostRascunho(supabase: SupabaseClient, postId: strin
     pilar: post.pilar,
     slides: total,
     persona,
+    faixa,
     postId: post.id,
   })
   if (urls.length !== esperadas) return { ok: false, erro: 'geracao_incompleta', status: 502, geradas: urls.length, esperadas }

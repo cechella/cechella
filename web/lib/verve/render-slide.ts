@@ -2,6 +2,7 @@ import { generatePhotoForPost } from './generate-photo'
 import { composeSlide } from './compose-slide'
 import { put } from '@vercel/blob'
 import sharp from 'sharp'
+import { FAIXA_PADRAO, type Faixa } from './persona'
 
 export interface SlideInput {
   titulo: string
@@ -21,12 +22,10 @@ export async function renderSlide(input: SlideInput): Promise<Buffer> {
 }
 
 // Deriva badge a partir do persona detectado
-function buildBadge(persona: string, pilar: string): string {
+export function buildBadge(persona: string, pilar: string, faixa: Faixa = FAIXA_PADRAO): string {
   if (pilar === 'familia') return 'FAMÍLIA'
   if (pilar === 'lifestyle') return 'LIFESTYLE'
-  return persona === 'homem_40_60'
-    ? 'PARA HOMENS DE 40 A 60 ANOS'
-    : 'PARA MULHERES DE 35 A 50 ANOS'
+  return `PARA ${persona === 'homem_40_60' ? 'HOMENS' : 'MULHERES'} DE ${faixa.min} A ${faixa.max} ANOS`
 }
 
 // Gera N slides compostos (foto Flux + texto SVG) e persiste no Vercel Blob.
@@ -38,6 +37,7 @@ export async function renderCarrossel(params: {
   slides?: number
   badge?: string
   persona?: string
+  faixa?: Faixa
   postId?: string
 }): Promise<string[]> {
   const {
@@ -46,7 +46,8 @@ export async function renderCarrossel(params: {
     persona = 'mulher_35_50', postId = 'preview',
   } = params
   const total = Math.max(2, Math.min(slides, 10))
-  const badge = params.badge ?? buildBadge(persona, pilar)
+  const faixa = params.faixa ?? FAIXA_PADRAO
+  const badge = params.badge ?? buildBadge(persona, pilar, faixa)
 
   if (!process.env.FAL_KEY) return []
 
@@ -54,7 +55,7 @@ export async function renderCarrossel(params: {
   const photoPromises = Array.from({ length: total }, (_, i) => {
     const isCta = i + 1 === total
     const tema = temas[i] ?? titulo
-    return generatePhotoForPost({ tema, pilar, persona, isCta })
+    return generatePhotoForPost({ tema, pilar, persona, isCta, faixa, indice: i })
       .then(r => r.url)
       .catch(() => '')
   })

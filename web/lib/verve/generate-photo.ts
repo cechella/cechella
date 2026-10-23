@@ -1,15 +1,22 @@
 import { fal } from '@fal-ai/client'
+import { FAIXA_PADRAO, idadeDoSlide, type Faixa } from './persona'
 
 export interface PhotoPromptInput {
   tema: string
   pilar: 'familia' | 'autoridade' | 'lifestyle' | string
   persona?: 'mulher_35_50' | 'homem_40_60' | string
   isCta?: boolean
+  faixa?: Faixa      // faixa etária do público (do briefing); padrão 40 a 60
+  indice?: number    // posição do slide: varia a idade dentro da faixa
 }
 
-const personaDesc: Record<string, string> = {
-  mulher_35_50: 'Brazilian woman, 40s, natural curly hair, real skin texture, minimal makeup',
-  homem_40_60:  'Brazilian man, 50s, well-groomed, short grey hair, distinguished, natural look',
+// A idade vem da faixa do briefing. O modelo de imagem tende a rejuvenescer, por isso a descrição pede sinais de idade reais.
+export function descricaoPessoa(persona: string, faixa: Faixa = FAIXA_PADRAO, indice = 0): string {
+  const idade = idadeDoSlide(faixa, indice)
+  const sinais = `aged ${idade}, mature face with natural fine lines and expression lines, some gray hair, real skin texture, minimal makeup, not a young model, age-appropriate`
+  if (persona === 'homem_40_60') return `Brazilian man ${sinais}, well-groomed, natural look`
+  if (persona === 'mulher_35_50') return `Brazilian woman ${sinais}`
+  return persona
 }
 
 const pilarMood: Record<string, string> = {
@@ -35,9 +42,9 @@ function temaToVisual(tema: string): string {
 }
 
 export function buildPhotoPrompt(input: PhotoPromptInput): string {
-  const { tema, pilar, persona = 'mulher_35_50', isCta = false } = input
+  const { tema, pilar, persona = 'mulher_35_50', isCta = false, faixa, indice = 0 } = input
 
-  const subject = personaDesc[persona] ?? persona
+  const subject = descricaoPessoa(persona, faixa, indice)
   const mood = pilarMood[pilar] ?? 'editorial, natural light'
 
   // Slide CTA: diferencia consultório por persona
