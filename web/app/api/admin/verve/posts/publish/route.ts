@@ -57,7 +57,13 @@ export async function POST(req: NextRequest) {
 
   const { data: post } = await supabase.from('verve_posts').select('*').eq('id', id).single()
   if (!post) return NextResponse.json({ error: 'post_nao_encontrado' }, { status: 404 })
-  if (post.status !== 'aprovado') return NextResponse.json({ error: 'so_publica_aprovado', status_atual: post.status }, { status: 409 })
+  // Admin pode retentar posts em estado 'erro'; 'publicando' pode estar em progresso, bloqueado
+  if (!['aprovado', 'erro'].includes(post.status)) {
+    const msg = post.status === 'publicando'
+      ? 'ja_esta_sendo_publicado'
+      : `status_invalido: ${post.status} (esperado: aprovado)`
+    return NextResponse.json({ error: msg, status_atual: post.status }, { status: 409 })
+  }
 
   const problema = problemaDoPost(post)
   if (problema) return NextResponse.json({ error: problema }, { status: 422 })
@@ -67,9 +73,9 @@ export async function POST(req: NextRequest) {
     .from('verve_posts')
     .update({ status: 'publicando' })
     .eq('id', id)
-    .eq('status', 'aprovado')
+    .in('status', ['aprovado', 'erro'])
     .select('id')
-  if (!reservado?.length) return NextResponse.json({ error: 'ja_esta_sendo_publicado' }, { status: 409 })
+  if (!reservado?.length) return NextResponse.json({ error: 'ja_esta_sendo_publicado', status_atual: post.status }, { status: 409 })
 
   try {
     const imageUrls: string[] = Array.isArray(post.image_urls) ? post.image_urls : []
