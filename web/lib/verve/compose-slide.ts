@@ -157,7 +157,7 @@ export async function composeSlide(content: SlideContent): Promise<Buffer> {
                 type: 'div',
                 props: {
                   style: {
-                    fontSize: 22, lineHeight: 1.45, fontWeight: 400,
+                    fontSize: 34, lineHeight: 1.45, fontWeight: 400,
                     color: 'rgba(255,255,255,0.88)',
                   },
                   children: descricao,
