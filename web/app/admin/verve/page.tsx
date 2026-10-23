@@ -161,15 +161,18 @@ export default function VervePage() {
   const [renderMsg, setRenderMsg] = useState<Record<string, string>>({})
   const [publishLoading, setPublishLoading] = useState<Record<string, boolean>>({})
   const [publishResult, setPublishResult] = useState<Record<string, { ok: boolean; permalink?: string; error?: string }>>({})
+  const [publishSuccess, setPublishSuccess] = useState<{ titulo: string; permalink?: string } | null>(null)
 
   async function publicarAgora(id: string) {
     setPublishLoading(s => ({ ...s, [id]: true }))
-    setPublishResult(s => ({ ...s, [id]: { ok: false } }))
+    setPublishResult(s => { const n = { ...s }; delete n[id]; return n })
     try {
       const res = await fetch('/api/admin/verve/posts/publish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
       const data = await res.json().catch(() => ({}))
       if (data.ok) {
         setPublishResult(s => ({ ...s, [id]: { ok: true, permalink: data.permalink } }))
+        const post = posts.find(p => p.id === id)
+        setPublishSuccess({ titulo: post?.titulo ?? 'Post', permalink: data.permalink })
         await loadPosts()
       } else {
         setPublishResult(s => ({ ...s, [id]: { ok: false, error: data.error ?? `Erro ${res.status}` } }))
@@ -386,9 +389,19 @@ export default function VervePage() {
     else if (option === 'hora') { now.setHours(now.getHours() + 1); scheduledAt = now.toISOString() }
     else if (option === '3h') { now.setHours(now.getHours() + 3); scheduledAt = now.toISOString() }
     else scheduledAt = new Date(scheduleCustom).toISOString()
-    await aprovar(scheduleModal.postId, scheduledAt)
+
+    const postId = scheduleModal.postId
+    const post = posts.find(p => p.id === postId)
     setScheduleModal(null)
     setPreviewPost(null)
+
+    if (option === 'agora' && (post?.status === 'aprovado' || post?.status === 'erro')) {
+      // Post já autorizado: publica direto no Instagram agora
+      await publicarAgora(postId)
+    } else {
+      // Ainda não autorizado (ou horário futuro): aprova com o horário escolhido
+      await aprovar(postId, scheduledAt)
+    }
   }
   async function recusar(id: string) {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'recusado' } : p))
@@ -671,13 +684,13 @@ export default function VervePage() {
                           </div>
                           <div className="flex gap-2 flex-shrink-0 items-center">
                             {p.image_urls && p.image_urls.length > 0 && (
-                              <button onClick={() => { setPreviewPost(p); setPreviewSlide(0) }}
+                              <button onClick={(e) => { e.stopPropagation(); setPreviewPost(p); setPreviewSlide(0) }}
                                 className="px-3 py-2 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all flex items-center gap-1.5">
                                 <Instagram className="w-3 h-3" /> Preview
                               </button>
                             )}
                             <button
-                              onClick={() => publicarAgora(p.id)}
+                              onClick={(e) => { e.stopPropagation(); publicarAgora(p.id) }}
                               disabled={publishLoading[p.id]}
                               className="px-4 py-2 rounded-lg text-xs font-bold bg-[#22c55e] text-black hover:bg-[#16a34a] disabled:opacity-60 transition-all flex items-center gap-1.5"
                             >
@@ -1352,7 +1365,7 @@ export default function VervePage() {
                 onClick={() => openScheduleModal(previewPost.id)}
                 className="flex-1 py-3 rounded-xl text-sm font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all"
               >
-                ✓ Autorizar
+                {(previewPost.status === 'aprovado' || previewPost.status === 'erro') ? '🚀 Publicar' : '✓ Autorizar'}
               </button>
             </div>
           </div>
@@ -1374,7 +1387,7 @@ export default function VervePage() {
                 <button
                   key={opt.key}
                   onClick={() => confirmarAgendamento(opt.key as 'agora' | 'hora' | '3h')}
-                  className="w-full py-3 px-4 rounded-xl text-sm font-medium text-white bg-[#1C1C1E] border border-[#2a2a2a] hover:border-[#22c55e]/50 hover:bg-[#22c55e]/10 transition-all text-left"
+                  className={`w-full py-3 px-4 rounded-xl text-sm font-medium text-white border transition-all text-left active:scale-95 ${opt.key === 'agora' ? 'bg-[#22c55e]/15 border-[#22c55e]/50 hover:bg-[#22c55e]/25' : 'bg-[#1C1C1E] border-[#2a2a2a] hover:border-[#22c55e]/50 hover:bg-[#22c55e]/10'}`}
                 >
                   {opt.label}
                 </button>
@@ -1397,6 +1410,39 @@ export default function VervePage() {
               </div>
             </div>
             <button onClick={() => setScheduleModal(null)} className="w-full py-2 text-sm text-[#71717A] hover:text-white transition-colors">Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL SUCESSO PUBLICAÇÃO ── */}
+      {publishSuccess && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4" onClick={() => setPublishSuccess(null)}>
+          <div className="bg-[#111113] border border-[#22c55e]/30 rounded-2xl p-8 w-full max-w-sm shadow-2xl text-center" onClick={e => e.stopPropagation()}>
+            <div className="w-16 h-16 rounded-full bg-[#22c55e]/15 border border-[#22c55e]/30 flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">✅</span>
+            </div>
+            <h3 className="text-white font-bold text-xl mb-2">Publicado no Instagram!</h3>
+            <p className="text-[#71717A] text-sm mb-6 leading-relaxed">
+              O carrossel <span className="text-white font-medium">&ldquo;{publishSuccess.titulo}&rdquo;</span> foi publicado com sucesso em <span className="text-[#22c55e] font-semibold">@viniciuscechella</span>.
+            </p>
+            <div className="flex flex-col gap-3">
+              {publishSuccess.permalink && (
+                <a
+                  href={publishSuccess.permalink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-[#f09433] via-[#e6683c] to-[#bc1888] text-white hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                >
+                  <Instagram className="w-4 h-4" /> Ver no Instagram
+                </a>
+              )}
+              <button
+                onClick={() => setPublishSuccess(null)}
+                className="w-full py-3 rounded-xl text-sm font-semibold bg-[#1C1C1E] text-[#71717A] hover:text-white border border-[#2a2a2a] transition-all"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}
