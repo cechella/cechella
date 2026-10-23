@@ -36,3 +36,21 @@ test('só devolve os campos conhecidos; status e quem criou não vêm do corpo',
   const v = (r as { ok: true; value: Record<string, unknown> }).value
   for (const k of ['status', 'criado_por', 'id']) assert.equal(k in v, false, k)
 })
+
+test('slides do Gustavo: título e texto de cada slide são validados, mantidos e passam pelo filtro', async () => {
+  const { validateBriefingInput } = await import('./briefing-input.ts')
+  const base = { titulo: 'Titulo valido', objetivo: 'Objetivo educativo valido', publico_alvo: 'Homens de 40 a 60 anos', pilar: 'autoridade', gatilho_manychat: 'ANDROPAUSA', semana: '2026-W44' }
+  const slides = [1, 2, 3, 4].map(n => ({ titulo: `Slide ${n}`, texto: `Texto educativo do slide ${n}` }))
+  const post = { tipo: 'carrossel', tema: 'Tema do carrossel', pilar: 'autoridade', scheduled_at: '2026-10-26T15:00:00-03:00', slides }
+  const ok = validateBriefingInput({ ...base, posts: [post] })
+  assert.equal(ok.ok, true)
+  if (ok.ok) assert.deepEqual(ok.value.posts[0].slides, slides)
+  const poucos = validateBriefingInput({ ...base, posts: [{ ...post, slides: slides.slice(0, 2) }] })
+  assert.equal(poucos.ok, false)
+  const longo = validateBriefingInput({ ...base, posts: [{ ...post, slides: [{ titulo: 'x'.repeat(81), texto: 'ok ok' }, ...slides.slice(1)] }] })
+  assert.equal(longo.ok, false)
+  const proibido = validateBriefingInput({ ...base, posts: [{ ...post, slides: [{ titulo: 'Slide 1', texto: 'Resultado garantido' }, ...slides.slice(1)] }] })
+  assert.equal(proibido.ok, false)
+  const sem = validateBriefingInput({ ...base, posts: [{ ...post, slides: undefined }] })
+  assert.equal(sem.ok, true)
+})

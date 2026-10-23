@@ -1,6 +1,7 @@
 import { generatePhotoForPost } from './generate-photo'
 import { composeSlide } from './compose-slide'
 import { put } from '@vercel/blob'
+import sharp from 'sharp'
 
 export interface SlideInput {
   titulo: string
@@ -84,18 +85,20 @@ export async function renderCarrossel(params: {
           isCta,
         })
 
-        // Upload do PNG final
+        // A API de publicação do Instagram documenta JPEG como único formato de imagem: converte antes de subir.
+        const jpeg = await sharp(composed).jpeg({ quality: 92, mozjpeg: true }).toBuffer()
         const blob = await put(
-          `verve/slides/${postId}/slide-${String(slideNum).padStart(2, '0')}.png`,
-          composed,
-          { access: 'public', contentType: 'image/png' }
+          `verve/slides/${postId}/slide-${String(slideNum).padStart(2, '0')}.jpg`,
+          jpeg,
+          { access: 'public', contentType: 'image/jpeg' }
         )
         return blob.url
       } catch {
-        return url // fallback: URL da foto sem texto
+        return '' // falha fechada: nunca devolve foto sem texto no lugar do slide
       }
     })
   )
 
-  return blobUrls.filter(Boolean)
+  // Carrossel incompleto não vai para aprovação: se qualquer slide falhou, devolve vazio e o post fica como rascunho sem imagem.
+  return blobUrls.every(Boolean) ? blobUrls : []
 }

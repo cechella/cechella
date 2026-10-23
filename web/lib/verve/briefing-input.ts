@@ -6,7 +6,9 @@ export const PILARES = ['familia', 'autoridade', 'lifestyle'] as const
 export const TIPOS = ['carrossel', 'reel', 'story'] as const
 export const MAX_POSTS = 14
 
-export interface PostInput { tipo: string; tema: string; pilar: string; scheduled_at: string; legenda?: string }
+export interface SlideInput { titulo: string; texto: string }
+export interface PostInput { tipo: string; tema: string; pilar: string; scheduled_at: string; legenda?: string; slides?: SlideInput[] }
+export const MAX_SLIDES = 10
 export interface BriefingInput {
   titulo: string; objetivo: string; publico_alvo: string; pilar: string
   gatilho_manychat: string; semana: string; posts: PostInput[]
@@ -40,8 +42,21 @@ export function validateBriefingInput(b: unknown): { ok: true; value: BriefingIn
     if (!(PILARES as readonly unknown[]).includes(pp)) erros.push(`${w}.pilar`)
     if (!(typeof p.scheduled_at === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2})?(Z|[+-]\d{2}:\d{2})$/.test(p.scheduled_at) && !Number.isNaN(Date.parse(p.scheduled_at)))) erros.push(`${w}.scheduled_at`)
     if (p.legenda !== undefined && !(typeof p.legenda === 'string' && p.legenda.length <= 2200)) erros.push(`${w}.legenda`)
+    // Slides do Gustavo (opcionais): sequência lógica do carrossel, título e texto de cada slide. Entram no filtro de publicidade médica.
+    let slides: SlideInput[] | undefined
+    if (p.slides !== undefined && p.slides !== null) {
+      if (!Array.isArray(p.slides) || p.slides.length < 3 || p.slides.length > MAX_SLIDES) erros.push(`${w}.slides`)
+      else {
+        slides = []
+        p.slides.forEach((s, k) => {
+          if (!isObj(s) || !str(s.titulo, 3, 80) || !str(s.texto, 3, 280)) { erros.push(`${w}.slides[${k}]`); return }
+          slides!.push({ titulo: String(s.titulo), texto: String(s.texto) })
+          textos.push(String(s.titulo), String(s.texto))
+        })
+      }
+    }
     textos.push(String(p.tema ?? ''), String(p.legenda ?? ''))
-    norm.push({ tipo: String(p.tipo), tema: String(p.tema), pilar: String(pp), scheduled_at: String(p.scheduled_at), ...(typeof p.legenda === 'string' && p.legenda ? { legenda: p.legenda } : {}) })
+    norm.push({ tipo: String(p.tipo), tema: String(p.tema), pilar: String(pp), scheduled_at: String(p.scheduled_at), ...(typeof p.legenda === 'string' && p.legenda ? { legenda: p.legenda } : {}), ...(slides && slides.length ? { slides } : {}) })
   })
   for (const v of complianceViolations(textos.join('\n'))) erros.push(`publicidade_medica:${v}`)
   if (erros.length) return { ok: false, erros }
