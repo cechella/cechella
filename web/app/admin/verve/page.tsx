@@ -161,6 +161,7 @@ export default function VervePage() {
   const [renderMsg, setRenderMsg] = useState<Record<string, string>>({})
   const [publishLoading, setPublishLoading] = useState<Record<string, boolean>>({})
   const [publishResult, setPublishResult] = useState<Record<string, { ok: boolean; permalink?: string; error?: string }>>({})
+  const [publishSuccess, setPublishSuccess] = useState<{ titulo: string; permalink?: string } | null>(null)
 
   async function publicarAgora(id: string) {
     setPublishLoading(s => ({ ...s, [id]: true }))
@@ -170,6 +171,8 @@ export default function VervePage() {
       const data = await res.json().catch(() => ({}))
       if (data.ok) {
         setPublishResult(s => ({ ...s, [id]: { ok: true, permalink: data.permalink } }))
+        const post = posts.find(p => p.id === id)
+        setPublishSuccess({ titulo: post?.titulo ?? 'Post', permalink: data.permalink })
         await loadPosts()
       } else {
         setPublishResult(s => ({ ...s, [id]: { ok: false, error: data.error ?? `Erro ${res.status}` } }))
@@ -1407,6 +1410,39 @@ export default function VervePage() {
               </div>
             </div>
             <button onClick={() => setScheduleModal(null)} className="w-full py-2 text-sm text-[#71717A] hover:text-white transition-colors">Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL SUCESSO PUBLICAÇÃO ── */}
+      {publishSuccess && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4" onClick={() => setPublishSuccess(null)}>
+          <div className="bg-[#111113] border border-[#22c55e]/30 rounded-2xl p-8 w-full max-w-sm shadow-2xl text-center" onClick={e => e.stopPropagation()}>
+            <div className="w-16 h-16 rounded-full bg-[#22c55e]/15 border border-[#22c55e]/30 flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">✅</span>
+            </div>
+            <h3 className="text-white font-bold text-xl mb-2">Publicado no Instagram!</h3>
+            <p className="text-[#71717A] text-sm mb-6 leading-relaxed">
+              O carrossel <span className="text-white font-medium">&ldquo;{publishSuccess.titulo}&rdquo;</span> foi publicado com sucesso em <span className="text-[#22c55e] font-semibold">@viniciuscechella</span>.
+            </p>
+            <div className="flex flex-col gap-3">
+              {publishSuccess.permalink && (
+                <a
+                  href={publishSuccess.permalink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="w-full py-3 rounded-xl text-sm font-bold bg-gradient-to-r from-[#f09433] via-[#e6683c] to-[#bc1888] text-white hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                >
+                  <Instagram className="w-4 h-4" /> Ver no Instagram
+                </a>
+              )}
+              <button
+                onClick={() => setPublishSuccess(null)}
+                className="w-full py-3 rounded-xl text-sm font-semibold bg-[#1C1C1E] text-[#71717A] hover:text-white border border-[#2a2a2a] transition-all"
+              >
+                Fechar
+              </button>
+            </div>
           </div>
         </div>
       )}
