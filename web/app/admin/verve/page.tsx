@@ -162,6 +162,7 @@ export default function VervePage() {
   const [publishLoading, setPublishLoading] = useState<Record<string, boolean>>({})
   const [publishResult, setPublishResult] = useState<Record<string, { ok: boolean; permalink?: string; error?: string }>>({})
   const [publishSuccess, setPublishSuccess] = useState<{ titulo: string; permalink?: string } | null>(null)
+  const [publishError, setPublishError] = useState<{ titulo: string; error: string } | null>(null)
 
   async function publicarAgora(id: string) {
     setPublishLoading(s => ({ ...s, [id]: true }))
@@ -175,10 +176,16 @@ export default function VervePage() {
         setPublishSuccess({ titulo: post?.titulo ?? 'Post', permalink: data.permalink })
         await loadPosts()
       } else {
-        setPublishResult(s => ({ ...s, [id]: { ok: false, error: data.error ?? `Erro ${res.status}` } }))
+        const errMsg = data.error ?? `Erro ${res.status}`
+        setPublishResult(s => ({ ...s, [id]: { ok: false, error: errMsg } }))
+        const post = posts.find(p => p.id === id)
+        setPublishError({ titulo: post?.titulo ?? 'Post', error: errMsg })
       }
     } catch (e) {
-      setPublishResult(s => ({ ...s, [id]: { ok: false, error: String(e) } }))
+      const errMsg = String(e)
+      setPublishResult(s => ({ ...s, [id]: { ok: false, error: errMsg } }))
+      const post = posts.find(p => p.id === id)
+      setPublishError({ titulo: post?.titulo ?? 'Post', error: errMsg })
     } finally {
       setPublishLoading(s => ({ ...s, [id]: false }))
     }
@@ -395,8 +402,8 @@ export default function VervePage() {
     setScheduleModal(null)
     setPreviewPost(null)
 
-    if (option === 'agora' && (post?.status === 'aprovado' || post?.status === 'erro')) {
-      // Post já autorizado: publica direto no Instagram agora
+    if (option === 'agora' && (post?.status === 'aprovado' || post?.status === 'erro' || post?.status === 'publicando')) {
+      // Post já autorizado (ou travado): publica direto no Instagram agora
       await publicarAgora(postId)
     } else {
       // Ainda não autorizado (ou horário futuro): aprova com o horário escolhido
@@ -1424,6 +1431,25 @@ export default function VervePage() {
               </div>
             </div>
             <button onClick={() => setScheduleModal(null)} className="w-full py-2 text-sm text-[#71717A] hover:text-white transition-colors">Cancelar</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL ERRO PUBLICAÇÃO ── */}
+      {publishError && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4" onClick={() => setPublishError(null)}>
+          <div className="bg-[#111113] border border-red-500/30 rounded-2xl p-8 w-full max-w-sm shadow-2xl text-center" onClick={e => e.stopPropagation()}>
+            <div className="w-16 h-16 rounded-full bg-red-500/15 border border-red-500/30 flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">❌</span>
+            </div>
+            <h3 className="text-white font-bold text-xl mb-2">Falha na publicação</h3>
+            <p className="text-[#71717A] text-sm mb-2 leading-relaxed">
+              Não foi possível publicar <span className="text-white font-medium">&ldquo;{publishError.titulo}&rdquo;</span>.
+            </p>
+            <p className="text-red-400 text-xs font-mono bg-red-500/10 rounded-lg px-3 py-2 mb-6 break-all">{publishError.error}</p>
+            <button onClick={() => setPublishError(null)} className="w-full py-3 rounded-xl text-sm font-semibold bg-[#1C1C1E] text-[#71717A] hover:text-white border border-[#2a2a2a] transition-all">
+              Fechar
+            </button>
           </div>
         </div>
       )}
