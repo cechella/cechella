@@ -70,21 +70,24 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ post: data }, { status: 201 })
 }
 
-// PATCH /api/admin/verve/posts — atualiza status (aprovar/recusar)
+// PATCH /api/admin/verve/posts — atualiza status e opcionalmente scheduled_at
 export async function PATCH(req: NextRequest) {
   const auth = await requireAdmin(req)
   if (!auth.ok) return auth.response
   const body = await req.json()
-  const { id, status } = body
+  const { id, status, scheduled_at } = body
 
   const allowed = ['rascunho', 'aguardando', 'aprovado', 'recusado']
   if (!id || !allowed.includes(status)) {
     return NextResponse.json({ error: 'id e status válido são obrigatórios' }, { status: 400 })
   }
 
+  const update: Record<string, unknown> = { status, updated_at: new Date().toISOString() }
+  if (scheduled_at && !isNaN(Date.parse(scheduled_at))) update.scheduled_at = scheduled_at
+
   const { data, error } = await supabase
     .from('verve_posts')
-    .update({ status, updated_at: new Date().toISOString() })
+    .update(update)
     .eq('id', id)
     .select()
     .single()

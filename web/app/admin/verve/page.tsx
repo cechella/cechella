@@ -141,6 +141,8 @@ export default function VervePage() {
   const [uploadDone, setUploadDone] = useState(false)
   const [previewPost, setPreviewPost] = useState<Post | null>(null)
   const [previewSlide, setPreviewSlide] = useState(0)
+  const [scheduleModal, setScheduleModal] = useState<{ postId: string; scheduledAt: string } | null>(null)
+  const [scheduleCustom, setScheduleCustom] = useState('')
   const [novoPost, setNovoPost] = useState<NovoPost>({
     tipo: 'carrossel',
     titulo: '',
@@ -335,13 +337,35 @@ export default function VervePage() {
     }
   }
 
-  async function aprovar(id: string) {
+  async function aprovar(id: string, scheduledAt?: string) {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'aprovado' } : p))
+    const body: Record<string, unknown> = { id, status: 'aprovado' }
+    if (scheduledAt) body.scheduled_at = scheduledAt
     await fetch('/api/admin/verve/posts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status: 'aprovado' }),
+      body: JSON.stringify(body),
     })
+  }
+
+  function openScheduleModal(postId: string) {
+    const post = posts.find(p => p.id === postId)
+    const defaultAt = post ? `${post.data}T${post.hora}` : ''
+    setScheduleModal({ postId, scheduledAt: defaultAt })
+    setScheduleCustom(defaultAt)
+  }
+
+  async function confirmarAgendamento(option: 'agora' | 'hora' | '3h' | 'custom') {
+    if (!scheduleModal) return
+    const now = new Date()
+    let scheduledAt: string
+    if (option === 'agora') scheduledAt = now.toISOString()
+    else if (option === 'hora') { now.setHours(now.getHours() + 1); scheduledAt = now.toISOString() }
+    else if (option === '3h') { now.setHours(now.getHours() + 3); scheduledAt = now.toISOString() }
+    else scheduledAt = new Date(scheduleCustom).toISOString()
+    await aprovar(scheduleModal.postId, scheduledAt)
+    setScheduleModal(null)
+    setPreviewPost(null)
   }
   async function recusar(id: string) {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'recusado' } : p))
@@ -470,7 +494,9 @@ export default function VervePage() {
                         {dayPosts.map(p => (
                           <div
                             key={p.id}
-                            className={`flex items-center gap-1 rounded px-1.5 py-0.5 border text-[9px] font-semibold ${tipoColor[p.tipo]}`}
+                            onClick={() => p.image_urls && p.image_urls.length > 0 ? (setPreviewPost(p), setPreviewSlide(0)) : undefined}
+                            className={`flex items-center gap-1 rounded px-1.5 py-0.5 border text-[9px] font-semibold ${tipoColor[p.tipo]} ${p.image_urls && p.image_urls.length > 0 ? 'cursor-pointer hover:brightness-125' : ''}`}
+                            title={p.image_urls && p.image_urls.length > 0 ? 'Clique para ver preview' : p.titulo}
                           >
                             {tipoIcon[p.tipo]}
                             <span className="truncate leading-tight">{p.titulo}</span>
@@ -577,7 +603,7 @@ export default function VervePage() {
                             ✕ Recusar
                           </button>
                           <button
-                            onClick={() => aprovar(p.id)}
+                            onClick={() => openScheduleModal(p.id)}
                             className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all"
                           >
                             ✓ Autorizar
@@ -1118,35 +1144,38 @@ export default function VervePage() {
       )}
 
       {/* ── MODAL PREVIEW INSTAGRAM ── */}
+      {/* Instagram preview modal — portrait 4:5 full-screen */}
       {previewPost && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
           onClick={() => setPreviewPost(null)}
         >
           <div
-            className="relative w-full max-w-sm"
+            className="relative flex flex-col"
+            style={{ width: 'min(420px, 95vw)', maxHeight: '96vh' }}
             onClick={e => e.stopPropagation()}
           >
-            {/* Phone frame */}
-            <div className="bg-[#0a0a0a] rounded-[2.5rem] border border-[#2a2a2a] shadow-2xl overflow-hidden">
-              {/* Instagram header */}
-              <div className="px-4 pt-4 pb-2 flex items-center gap-2.5 border-b border-[#1a1a1a]">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 p-0.5 flex-shrink-0">
+            {/* Instagram phone shell */}
+            <div className="bg-[#0a0a0a] rounded-[2rem] border border-[#2a2a2a] shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '92vh' }}>
+
+              {/* IG header */}
+              <div className="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-[#1a1a1a] flex-shrink-0">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 p-0.5 flex-shrink-0">
                   <div className="w-full h-full rounded-full bg-[#0a0a0a] flex items-center justify-center">
-                    <span className="text-[8px] font-bold text-white">VC</span>
+                    <span className="text-[9px] font-bold text-white">VC</span>
                   </div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[11px] font-semibold text-white leading-tight">viniciuscechella</p>
-                  <p className="text-[10px] text-[#71717A]">Hormone Ecosystem · Patrocinado</p>
+                  <p className="text-[13px] font-semibold text-white leading-tight">viniciuscechella</p>
+                  <p className="text-[11px] text-[#71717A]">Hormone Ecosystem · Patrocinado</p>
                 </div>
-                <button onClick={() => setPreviewPost(null)} className="text-[#71717A] hover:text-white">
-                  <X className="w-4 h-4" />
+                <button onClick={() => setPreviewPost(null)} className="text-[#71717A] hover:text-white p-1">
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Slide image */}
-              <div className="relative bg-black aspect-square overflow-hidden">
+              {/* Slide image — aspect 4:5 portrait (Instagram native) */}
+              <div className="relative bg-black flex-shrink-0" style={{ aspectRatio: '4/5', width: '100%' }}>
                 {previewPost.image_urls && previewPost.image_urls[previewSlide] ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -1161,66 +1190,113 @@ export default function VervePage() {
                 )}
                 {/* Slide counter dots */}
                 {previewPost.image_urls && previewPost.image_urls.length > 1 && (
-                  <div className="absolute top-2 left-0 right-0 flex justify-center gap-1">
+                  <div className="absolute top-3 left-0 right-0 flex justify-center gap-1">
                     {previewPost.image_urls.map((_, i) => (
                       <div
                         key={i}
-                        className={`h-1 rounded-full transition-all ${i === previewSlide ? 'w-4 bg-white' : 'w-1 bg-white/40'}`}
+                        className={`h-1 rounded-full transition-all ${i === previewSlide ? 'w-5 bg-white' : 'w-1.5 bg-white/40'}`}
                       />
                     ))}
                   </div>
                 )}
-                {/* Prev / Next arrows */}
+                {/* Tap zones prev/next — full half-screen touch area */}
                 {previewPost.image_urls && previewSlide > 0 && (
                   <button
                     onClick={() => setPreviewSlide(s => s - 1)}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white text-xs"
-                  >‹</button>
+                    className="absolute left-0 top-0 w-1/3 h-full flex items-center justify-start pl-3 opacity-0 hover:opacity-100 transition-opacity"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-black/60 flex items-center justify-center text-white text-xl">‹</div>
+                  </button>
                 )}
                 {previewPost.image_urls && previewSlide < previewPost.image_urls.length - 1 && (
                   <button
                     onClick={() => setPreviewSlide(s => s + 1)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 flex items-center justify-center text-white text-xs"
-                  >›</button>
+                    className="absolute right-0 top-0 w-1/3 h-full flex items-center justify-end pr-3 opacity-0 hover:opacity-100 transition-opacity"
+                  >
+                    <div className="w-9 h-9 rounded-full bg-black/60 flex items-center justify-center text-white text-xl">›</div>
+                  </button>
                 )}
+                {/* Slide number badge */}
+                <div className="absolute bottom-3 right-3 bg-black/60 rounded-full px-2.5 py-1 text-[11px] text-white font-medium">
+                  {previewSlide + 1} / {previewPost.image_urls?.length ?? previewPost.slides ?? 1}
+                </div>
               </div>
 
-              {/* Actions row */}
-              <div className="px-3 py-2 flex items-center gap-3 border-b border-[#1a1a1a]">
-                <span className="text-lg">🤍</span>
-                <span className="text-lg">💬</span>
-                <span className="text-lg">➤</span>
+              {/* IG action row */}
+              <div className="px-4 py-3 flex items-center gap-4 border-b border-[#1a1a1a] flex-shrink-0">
+                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white fill-none stroke-current stroke-2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white fill-none stroke-current stroke-2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white fill-none stroke-current stroke-2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 <div className="flex-1" />
-                <span className="text-lg">🔖</span>
+                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white fill-none stroke-current stroke-2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
               </div>
 
-              {/* Caption */}
-              <div className="px-3 py-2 max-h-28 overflow-y-auto">
-                <p className="text-[11px] text-white leading-relaxed">
+              {/* Caption — full text, scrollable */}
+              <div className="px-4 py-3 overflow-y-auto flex-1" style={{ minHeight: '80px', maxHeight: '200px' }}>
+                <p className="text-[13px] text-white leading-relaxed whitespace-pre-wrap">
                   <span className="font-semibold">viniciuscechella</span>{' '}
                   {captions[previewPost.id] || previewPost.legenda || previewPost.titulo}
-                </p>
-                <p className="text-[10px] text-[#71717A] mt-1">
-                  Slide {previewSlide + 1} de {previewPost.image_urls?.length ?? previewPost.slides ?? 1}
                 </p>
               </div>
             </div>
 
-            {/* Action buttons below phone */}
+            {/* Action buttons */}
             <div className="flex gap-2 mt-3">
               <button
                 onClick={() => { recusar(previewPost.id); setPreviewPost(null) }}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
+                className="flex-1 py-3 rounded-xl text-sm font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
               >
                 ✕ Recusar
               </button>
               <button
-                onClick={() => { aprovar(previewPost.id); setPreviewPost(null) }}
-                className="flex-1 py-2.5 rounded-xl text-sm font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all"
+                onClick={() => openScheduleModal(previewPost.id)}
+                className="flex-1 py-3 rounded-xl text-sm font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all"
               >
-                ✓ Autorizar e publicar
+                ✓ Autorizar
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Schedule modal */}
+      {scheduleModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4" onClick={() => setScheduleModal(null)}>
+          <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-white font-bold text-lg mb-1">Quando publicar?</h3>
+            <p className="text-[#71717A] text-sm mb-5">Escolha o horário de publicação no Instagram</p>
+            <div className="flex flex-col gap-2 mb-4">
+              {[
+                { key: 'agora', label: '🟢 Publicar agora' },
+                { key: 'hora', label: '⏱ Em 1 hora' },
+                { key: '3h', label: '⏰ Em 3 horas' },
+              ].map(opt => (
+                <button
+                  key={opt.key}
+                  onClick={() => confirmarAgendamento(opt.key as 'agora' | 'hora' | '3h')}
+                  className="w-full py-3 px-4 rounded-xl text-sm font-medium text-white bg-[#1C1C1E] border border-[#2a2a2a] hover:border-[#22c55e]/50 hover:bg-[#22c55e]/10 transition-all text-left"
+                >
+                  {opt.label}
+                </button>
+              ))}
+              <div className="border border-[#2a2a2a] rounded-xl p-3">
+                <p className="text-[#71717A] text-[11px] mb-2 uppercase tracking-wider font-semibold">Horário específico</p>
+                <input
+                  type="datetime-local"
+                  value={scheduleCustom}
+                  onChange={e => setScheduleCustom(e.target.value)}
+                  className="w-full bg-[#0A0A0B] border border-[#2a2a2a] rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-[#22c55e]/50"
+                />
+                <button
+                  onClick={() => confirmarAgendamento('custom')}
+                  disabled={!scheduleCustom}
+                  className="mt-2 w-full py-2 rounded-lg text-sm font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] disabled:opacity-40 transition-all"
+                >
+                  Confirmar horário
+                </button>
+              </div>
+            </div>
+            <button onClick={() => setScheduleModal(null)} className="w-full py-2 text-sm text-[#71717A] hover:text-white transition-colors">Cancelar</button>
           </div>
         </div>
       )}
