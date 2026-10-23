@@ -1,7 +1,7 @@
 'use client'
 
 import { emBrasilia } from '@/lib/verve/horario'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { TopBar } from '@/components/layout/TopBar'
 import {
@@ -185,6 +185,18 @@ export default function VervePage() {
   useEffect(() => {
     loadPosts()
   }, [])
+
+  // Automático: ao abrir o VERVE, carrosséis em rascunho sem imagens começam a ser gerados sozinhos (um por vez, uma tentativa por post por visita).
+  // O agendador do ATLAS faz o mesmo em segundo plano (até 3 tentativas); aqui o CEO vê "Gerando…" e não precisa apertar nada.
+  const autoTentados = useRef<Set<string>>(new Set())
+  useEffect(() => {
+    if (postsLoading || Object.values(renderLoading).some(Boolean)) return
+    const alvo = semImagem.find(p => /^[0-9a-f-]{36}$/i.test(p.id) && !autoTentados.current.has(p.id))
+    if (!alvo) return
+    autoTentados.current.add(alvo.id)
+    gerarImagens(alvo.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posts, postsLoading])
 
   useEffect(() => {
     if (tab === 'metricas') loadMetrics()
@@ -497,12 +509,12 @@ export default function VervePage() {
             <div>
               {semImagem.length > 0 && (
                 <div className="mb-4 flex flex-col gap-2">
-                  <p className="text-sm text-[#71717A]">{semImagem.length} carrossel{semImagem.length > 1 ? 'éis' : ''} sem imagens (rascunho). Gere as imagens para poder revisar e autorizar.</p>
+                  <p className="text-sm text-[#71717A]">{semImagem.length} carrossel{semImagem.length > 1 ? 'éis' : ''} com as imagens sendo geradas automaticamente. Quando terminar, o post aparece aqui para você revisar e autorizar.</p>
                   {semImagem.map(p => (
                     <div key={p.id} className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-4 flex items-center gap-4">
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white truncate">{p.titulo}</p>
-                        <p className="text-[11px] text-[#71717A] mt-1">{p.data.slice(5).replace('-', '/')} às {p.hora} · rascunho sem imagens</p>
+                        <p className="text-[11px] text-[#71717A] mt-1">{p.data.slice(5).replace('-', '/')} às {p.hora} · {renderLoading[p.id] ? 'gerando imagens…' : 'aguardando as imagens'}</p>
                         {renderMsg[p.id] && <p className="text-[11px] text-red-400 mt-1">{renderMsg[p.id]}</p>}
                       </div>
                       <button
@@ -517,7 +529,7 @@ export default function VervePage() {
                         className="px-3 py-2 rounded-lg text-xs font-semibold bg-purple-500/10 text-purple-400 border border-purple-500/20 hover:bg-purple-500/20 transition-all disabled:opacity-50 flex items-center gap-1.5"
                       >
                         {renderLoading[p.id] ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Wand2 className="w-3 h-3" />}
-                        {renderLoading[p.id] ? 'Gerando… (até 1 min)' : 'Gerar imagens'}
+                        {renderLoading[p.id] ? 'Gerando… (até 1 min)' : 'Tentar de novo'}
                       </button>
                     </div>
                   ))}
