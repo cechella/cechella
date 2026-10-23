@@ -157,6 +157,27 @@ export default function VervePage() {
   const semImagem = posts.filter(p => p.status === 'rascunho' && p.tipo === 'carrossel' && !(p.image_urls && p.image_urls.length))
   const [renderLoading, setRenderLoading] = useState<Record<string, boolean>>({})
   const [renderMsg, setRenderMsg] = useState<Record<string, string>>({})
+  const [publishLoading, setPublishLoading] = useState<Record<string, boolean>>({})
+  const [publishResult, setPublishResult] = useState<Record<string, { ok: boolean; permalink?: string; error?: string }>>({})
+
+  async function publicarAgora(id: string) {
+    setPublishLoading(s => ({ ...s, [id]: true }))
+    setPublishResult(s => ({ ...s, [id]: { ok: false } }))
+    try {
+      const res = await fetch('/api/admin/verve/posts/publish', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      const data = await res.json().catch(() => ({}))
+      if (data.ok) {
+        setPublishResult(s => ({ ...s, [id]: { ok: true, permalink: data.permalink } }))
+        await loadPosts()
+      } else {
+        setPublishResult(s => ({ ...s, [id]: { ok: false, error: data.error ?? `Erro ${res.status}` } }))
+      }
+    } catch (e) {
+      setPublishResult(s => ({ ...s, [id]: { ok: false, error: String(e) } }))
+    } finally {
+      setPublishLoading(s => ({ ...s, [id]: false }))
+    }
+  }
 
   async function gerarImagens(id: string) {
     setRenderLoading(s => ({ ...s, [id]: true }))
@@ -620,6 +641,63 @@ export default function VervePage() {
                       )}
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Posts aprovados — prontos para publicar */}
+              {posts.filter(p => p.status === 'aprovado').length > 0 && (
+                <div className="mt-6">
+                  <p className="text-sm text-[#22c55e] font-semibold mb-3 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" /> Autorizados — prontos para publicar
+                  </p>
+                  <div className="flex flex-col gap-3">
+                    {posts.filter(p => p.status === 'aprovado').map(p => (
+                      <div key={p.id} className="bg-[#111113] border border-[#22c55e]/20 rounded-2xl p-4">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 text-2xl"
+                            style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.2)' }}>
+                            {p.tipo === 'reel' ? '🎬' : p.tipo === 'carrossel' ? '📷' : '⭕'}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">{p.titulo}</p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              <span className={`inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-semibold border ${tipoColor[p.tipo]}`}>
+                                {tipoIcon[p.tipo]}{p.tipo}{p.slides ? ` · ${p.slides} slides` : ''}
+                              </span>
+                              <span className="text-[11px] text-[#22c55e]">✓ Autorizado · {p.data.slice(5).replace('-', '/')} às {p.hora}</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 flex-shrink-0 items-center">
+                            {p.image_urls && p.image_urls.length > 0 && (
+                              <button onClick={() => { setPreviewPost(p); setPreviewSlide(0) }}
+                                className="px-3 py-2 rounded-lg text-xs font-semibold bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 transition-all flex items-center gap-1.5">
+                                <Instagram className="w-3 h-3" /> Preview
+                              </button>
+                            )}
+                            <button
+                              onClick={() => publicarAgora(p.id)}
+                              disabled={publishLoading[p.id]}
+                              className="px-4 py-2 rounded-lg text-xs font-bold bg-[#22c55e] text-black hover:bg-[#16a34a] disabled:opacity-60 transition-all flex items-center gap-1.5"
+                            >
+                              {publishLoading[p.id] ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                              {publishLoading[p.id] ? 'Publicando…' : 'Publicar agora'}
+                            </button>
+                          </div>
+                        </div>
+                        {publishResult[p.id] && (
+                          <div className={`mt-3 p-3 rounded-xl ${publishResult[p.id].ok ? 'bg-[#22c55e]/10 border border-[#22c55e]/25' : 'bg-red-500/10 border border-red-500/25'}`}>
+                            {publishResult[p.id].ok ? (
+                              <p className="text-xs text-[#22c55e] font-semibold">
+                                ✓ Publicado no Instagram!{publishResult[p.id].permalink ? <> · <a href={publishResult[p.id].permalink} target="_blank" rel="noreferrer" className="underline">Ver post</a></> : ''}
+                              </p>
+                            ) : (
+                              <p className="text-xs text-red-400">Erro: {publishResult[p.id].error}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
