@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cronAuthorized } from '@/lib/verve/admin-core'
+import { publishAuthorized, classificar, problemaDoPost, ANTECEDENCIA_MS, MAX_POR_EXECUCAO } from '@/lib/verve/publish-core'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -102,53 +103,81 @@ async function publishPost(post: Record<string, unknown>) {
 }
 
 async function handlePublish(req: NextRequest): Promise<NextResponse> {
-  if (!cronAuthorized(process.env.CRON_SECRET, req.headers)) {
+  if (!cronAuthorized(process.env.CRON_SECRET, req.headers) && !publishAuthorized(process.env.VERVE_PUBLISH_TOKEN, req.headers)) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
+  // Sem token da Meta não reserva nem marca nada: evita deixar post em "publicando" por falta de configuração.
+  if (!IG_TOKEN) return NextResponse.json({ error: 'instagram_nao_configurado' }, { status: 503 })
 
-  const now = new Date()
-  const window = new Date(now.getTime() + 5 * 60 * 1000) // +5 min
+  const agora = new Date()
+  const limite = new Date(agora.getTime() + ANTECEDENCIA_MS)
 
   const { data: posts, error } = await supabase
     .from('verve_posts')
     .select('*')
     .eq('status', 'aprovado')
-    .lte('scheduled_at', window.toISOString())
+    .lte('scheduled_at', limite.toISOString())
     .order('scheduled_at', { ascending: true })
-    .limit(10)
+    .limit(MAX_POR_EXECUCAO)
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!posts?.length) return NextResponse.json({ published: 0, message: 'Nenhum post para publicar' })
 
-  const results: { id: string; ok: boolean; igId?: string; error?: string }[] = []
+  // Posts que ficaram "publicando": não se tenta de novo sozinho (pode já ter ido ao Instagram); só se informa para conferência humana.
+  const { data: presos } = await supabase.from('verve_posts').select('id,titulo').eq('status', 'publicando').limit(20)
 
-  for (const post of posts) {
-    // Marca como publicando para evitar double-publish
-    await supabase
+  const results: { id: string; titulo?: string; ok: boolean; igId?: string; permalink?: string; error?: string }[] = []
+
+  for (const post of posts ?? []) {
+    const janela = classificar(post.scheduled_at, agora)
+    if (janela === 'cedo') continue
+    if (janela === 'atrasado' || janela === 'invalido') {
+      const msg = janela === 'atrasado' ? 'atrasado: passou mais de 6 h do horário marcado; reagende e autorize de novo' : 'horario_invalido'
+      await supabase.from('verve_posts').update({ status: 'erro', error_msg: msg }).eq('id', post.id).eq('status', 'aprovado')
+      results.push({ id: post.id, titulo: post.titulo, ok: false, error: msg })
+      continue
+    }
+    const problema = problemaDoPost(post)
+    if (problema) {
+      await supabase.from('verve_posts').update({ status: 'erro', error_msg: problema }).eq('id', post.id).eq('status', 'aprovado')
+      results.push({ id: post.id, titulo: post.titulo, ok: false, error: problema })
+      continue
+    }
+
+    // Reserva ATÔMICA: só quem conseguir mudar 'aprovado' -> 'publicando' publica. Duas execuções sobrepostas nunca publicam o mesmo post.
+    const { data: reservado } = await supabase
       .from('verve_posts')
       .update({ status: 'publicando' })
       .eq('id', post.id)
+      .eq('status', 'aprovado')
+      .select('id')
+    if (!reservado?.length) continue
 
     try {
       const result = await publishPost(post)
-      await supabase
+      if (!result?.id) throw new Error(`Meta não devolveu o identificador da publicação: ${JSON.stringify(result)}`)
+      let permalink: string | undefined
+      try {
+        const info = await igGet(`/${result.id}?fields=permalink`)
+        if (typeof info.permalink === 'string') permalink = info.permalink
+      } catch { /* o link é opcional */ }
+      const { error: updErr } = await supabase
         .from('verve_posts')
         .update({ status: 'publicado', ig_media_id: result.id, published_at: new Date().toISOString() })
         .eq('id', post.id)
-      results.push({ id: post.id, ok: true, igId: result.id })
+      results.push({ id: post.id, titulo: post.titulo, ok: true, igId: result.id, permalink, ...(updErr ? { error: 'publicado_no_instagram_mas_nao_gravado: ' + updErr.message } : {}) })
     } catch (err) {
-      const msg = String(err)
-      await supabase
-        .from('verve_posts')
-        .update({ status: 'erro', error_msg: msg })
-        .eq('id', post.id)
-      results.push({ id: post.id, ok: false, error: msg })
+      const msg = String(err).slice(0, 500)
+      await supabase.from('verve_posts').update({ status: 'erro', error_msg: msg }).eq('id', post.id)
+      results.push({ id: post.id, titulo: post.titulo, ok: false, error: msg })
     }
   }
 
-  return NextResponse.json({ published: results.filter(r => r.ok).length, results })
+  return NextResponse.json({
+    published: results.filter(r => r.ok).length,
+    results,
+    ...(presos?.length ? { presos } : {}),
+  })
 }
 
-// Vercel Cron chama GET; aceita também POST para testes manuais
 export async function GET(req: NextRequest) { return handlePublish(req) }
 export async function POST(req: NextRequest) { return handlePublish(req) }
