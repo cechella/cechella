@@ -32,7 +32,7 @@ import {
 type Tab = 'calendario' | 'aprovacao' | 'briefings' | 'metas' | 'metricas' | 'chat'
 
 type PostType = 'reel' | 'carrossel' | 'story'
-type PostStatus = 'rascunho' | 'aguardando' | 'aprovado' | 'publicado' | 'recusado'
+type PostStatus = 'rascunho' | 'aguardando' | 'aprovado' | 'publicado' | 'recusado' | 'publicando' | 'erro'
 
 interface BriefingPost {
   tipo: string
