@@ -2,6 +2,8 @@
 // Sem Playwright — compatível com Vercel Hobby (cada slide ~200-400ms).
 import satori from 'satori'
 import { Resvg } from '@resvg/resvg-js'
+import { FRAUNCES_700_B64 } from './font-fraunces700'
+import { INSTRUMENT_400_B64 } from './font-instrument400'
 
 export interface SlideContent {
   titulo: string
@@ -20,26 +22,12 @@ function imageToDataUri(buf: Buffer): string {
   return `data:image/jpeg;base64,${buf.toString('base64')}`
 }
 
-// Satori não suporta fontes do Google Fonts via URL — precisamos do buffer da fonte.
-// Carregamos uma vez e reutilizamos.
-let fontFraunces700: Buffer | null = null
-let fontInstrument400: Buffer | null = null
-
-async function loadFonts() {
-  if (fontFraunces700 && fontInstrument400) return
-
-  const [f1, f2] = await Promise.all([
-    fetch('https://fonts.gstatic.com/s/fraunces/v31/6NUu8FyLNQOQZAnv9bYEvDiIdE9Ea92uemAk_WBq8U_9v0c2Bg.woff2').then(r => r.arrayBuffer()),
-    fetch('https://fonts.gstatic.com/s/instrumentsans/v1/pxiTypc9vsFDm051Uf6KVwgkfoSxQ0GrkiZonA.woff2').then(r => r.arrayBuffer()),
-  ])
-  fontFraunces700   = Buffer.from(f1)
-  fontInstrument400 = Buffer.from(f2)
-}
+// Satori só lê TTF/OTF/WOFF estáticos (NÃO WOFF2). As fontes ficam embutidas no código (font-*.ts): sem rede, sem arquivo a rastrear no deploy.
+const fontFraunces700: Buffer = Buffer.from(FRAUNCES_700_B64, 'base64')
+const fontInstrument400: Buffer = Buffer.from(INSTRUMENT_400_B64, 'base64')
 
 export async function composeSlide(content: SlideContent): Promise<Buffer> {
   const { titulo, descricao, badge, slideNum, totalSlides, imageBuffer, isCta = false } = content
-
-  await loadFonts()
 
   const imgDataUri = imageToDataUri(imageBuffer)
   const numStr = String(slideNum).padStart(2, '0')
@@ -221,8 +209,8 @@ export async function composeSlide(content: SlideContent): Promise<Buffer> {
     width: W,
     height: H,
     fonts: [
-      { name: 'Fraunces',       data: fontFraunces700!,   weight: 700, style: 'normal' },
-      { name: 'Instrument Sans', data: fontInstrument400!, weight: 400, style: 'normal' },
+      { name: 'Fraunces',       data: fontFraunces700,   weight: 700, style: 'normal' },
+      { name: 'Instrument Sans', data: fontInstrument400, weight: 400, style: 'normal' },
     ],
   })
 
