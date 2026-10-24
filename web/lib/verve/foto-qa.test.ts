@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { avaliar, correcaoPara, fotoConferida, resumoQa, validarLaudo, MAX_TENTATIVAS, type Laudo, type QaEntrada } from './foto-qa.ts'
+import { avaliar, correcaoPara, fotoConferida, resumoQa, validarLaudo, diagnosticarLaudo, leitorClaude, MAX_TENTATIVAS, type Laudo, type QaEntrada, type ClienteMensagens } from './foto-qa.ts'
 
 const FAIXA = { min: 40, max: 60 }
 const laudo = (o: Partial<Laudo> = {}): Laudo => ({ idade_aparente_min: 45, idade_aparente_max: 55, genero_apresentado: 'feminino', pessoas: 1, texto_ou_marca_dagua: false, deformidade_visivel: false, conteudo_improprio: false, observacao: '', ...o })
@@ -83,4 +83,30 @@ test('sem laudo (leitura falhou) a foto NUNCA passa sem conferir', async () => {
     ler: async () => { throw new Error('qa_indisponivel_sem_chave') },
   })
   assert.equal(url, ''); assert.ok(log.every(e => !e.ok && /leitura_falhou/.test(e.acao ?? '')))
+})
+
+test('o laudo aceita variações de FORMA do modelo (texto numérico, "true", gênero em outras palavras) e diz QUAL campo falhou', () => {
+  const ok = validarLaudo({ idade_aparente_min: '45', idade_aparente_max: '55', genero_apresentado: 'Mulher', pessoas: '1', texto_ou_marca_dagua: 'false', deformidade_visivel: false, conteudo_improprio: 'false' })
+  assert.deepEqual(ok && [ok.idade_aparente_min, ok.genero_apresentado, ok.pessoas, ok.texto_ou_marca_dagua], [45, 'feminino', 1, false])
+  assert.equal(diagnosticarLaudo({ ...laudo(), idade_aparente_min: null }).campo, 'idade_aparente_min')
+  assert.equal(diagnosticarLaudo({ ...laudo(), genero_apresentado: 'banana' }).campo, 'genero_apresentado')
+  assert.equal(diagnosticarLaudo({ ...laudo(), deformidade_visivel: 'talvez' }).campo, 'deformidade_visivel')
+  assert.equal(diagnosticarLaudo({ ...laudo(), idade_aparente_min: 60, idade_aparente_max: 40 }).campo, 'faixa_de_idade')
+  assert.equal(diagnosticarLaudo(null).campo, 'objeto')
+})
+
+const cliente = (content: Array<{ type: string; input?: unknown; text?: string }>, vistos: unknown[] = []): ClienteMensagens => ({ messages: { create: async (a: unknown) => { vistos.push(a); return { content } } } })
+
+test('o leitor obriga a resposta pela ferramenta (estrutura garantida) e devolve o laudo', async () => {
+  const vistos: any[] = []
+  const l = await leitorClaude(cliente([{ type: 'tool_use', input: laudo({ idade_aparente_min: 50, idade_aparente_max: 58 }) }], vistos))('https://img/x')
+  assert.equal(l.idade_aparente_min, 50)
+  assert.deepEqual(vistos[0].tool_choice, { type: 'tool', name: 'registrar_laudo' })
+  assert.equal(vistos[0].tools[0].name, 'registrar_laudo')
+  assert.equal(vistos[0].messages[0].content[0].source.url, 'https://img/x')
+})
+
+test('o leitor nunca aprova sem laudo: recusa em prosa e laudo inválido viram erro com o motivo', async () => {
+  await assert.rejects(leitorClaude(cliente([{ type: 'text', text: 'Não posso estimar a idade de pessoas.' }]))('https://img/x'), /qa_sem_laudo:Não posso estimar/)
+  await assert.rejects(leitorClaude(cliente([{ type: 'tool_use', input: { ...laudo(), pessoas: undefined } }]))('https://img/x'), /qa_laudo_invalido:pessoas/)
 })
