@@ -6,7 +6,7 @@ import { atlasAuthorized } from '@/lib/verve/admin-core'
 import { validateBriefingInput } from '@/lib/verve/briefing-input'
 import { COMPLIANCE_RULES_PT, complianceViolations, comAssinatura } from '@/lib/verve/compliance'
 import { renderCarrossel } from '@/lib/verve/render-slide'
-import { detectPersona } from '@/lib/verve/persona'
+import { detectPersona, detectFaixa } from '@/lib/verve/persona'
 
 export const dynamic = 'force-dynamic'
 
@@ -113,6 +113,7 @@ export async function PATCH(req: NextRequest) {
   // Aprovado: os posts do plano viram rascunhos (legenda do Gustavo, se veio; senão a legenda é gerada abaixo).
   // slides_temas: array com o tema de cada slide, vindo do campo slides[] do briefing do Gustavo.
   const persona = detectPersona(briefing.publico_alvo, briefing.titulo, briefing.objetivo)
+  const faixa = detectFaixa(briefing.publico_alvo, briefing.objetivo)
   const linhas = plano.value.posts.map(p => {
     const nSlides = p.slides?.length ?? 0
     return {
@@ -145,6 +146,7 @@ export async function PATCH(req: NextRequest) {
           pilar: post.pilar,
           slides: post.slides ?? 8,
           persona,
+          faixa,
           postId: post.id,
         })
         if (urls.length) {

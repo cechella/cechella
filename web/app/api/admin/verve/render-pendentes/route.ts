@@ -46,5 +46,5 @@ export async function POST(req: NextRequest) {
   if (r.ok) await supabase.from('verve_posts').update({ error_msg: null }).eq('id', alvo.id)
   else await supabase.from('verve_posts').update({ error_msg: `render_tentativas=${tentativas(alvo.error_msg) + 1}: ${r.erro}`.slice(0, 300) }).eq('id', alvo.id).eq('status', 'rascunho')
   const restantes = elegiveis.length - 1
-  return NextResponse.json({ id: alvo.id, titulo: alvo.titulo, ...(r.ok ? { ok: true, imagens: r.imagens } : { ok: false, erro: r.erro, geradas: r.geradas, esperadas: r.esperadas, tentativas: tentativas(alvo.error_msg) + 1 }), restantes, ...(esgotados.length ? { esgotados } : {}) })
+  return NextResponse.json({ id: alvo.id, titulo: alvo.titulo, ...(r.ok ? { ok: true, imagens: r.imagens, qa: r.qa } : { ok: false, erro: r.erro, geradas: r.geradas, esperadas: r.esperadas, qa: r.qa, tentativas: tentativas(alvo.error_msg) + 1 }), restantes, ...(esgotados.length ? { esgotados } : {}) })
 }
