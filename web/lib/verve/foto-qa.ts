@@ -21,15 +21,41 @@ export interface QaEntrada { slide: number; tentativa: number; ok: boolean; falh
 export const TOLERANCIA_ANOS = 2
 export const MAX_TENTATIVAS = 3   // a original + 2 correções (cada uma gasta uma foto paga e uma leitura)
 
-export function validarLaudo(x: unknown): Laudo | null {
+// Aceita o que o modelo devolve com tolerância de FORMA (número como texto, "true"/"false", gênero em outras palavras) e recusa só o que não dá para interpretar.
+// O motivo da recusa diz QUAL campo falhou, para o aviso ao CEO ser diagnosticável.
+const num = (v: unknown): number | null => {
+  if (typeof v === 'number' && Number.isFinite(v)) return v
+  if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v)
+  return null
+}
+const bool = (v: unknown): boolean | null => (typeof v === 'boolean' ? v : v === 'true' ? true : v === 'false' ? false : null)
+const genero = (v: unknown): Laudo['genero_apresentado'] | null => {
+  const t = String(v ?? '').toLowerCase().trim()
+  if (['feminino', 'feminina', 'mulher', 'female', 'woman'].includes(t)) return 'feminino'
+  if (['masculino', 'masculina', 'homem', 'male', 'man'].includes(t)) return 'masculino'
+  if (['indefinido', 'indeterminado', 'ambiguo', 'ambíguo', 'unknown', 'nao_identificavel'].includes(t)) return 'indefinido'
+  return null
+}
+
+export function diagnosticarLaudo(x: unknown): { laudo: Laudo | null; campo?: string } {
   const o = x as Record<string, unknown>
-  if (!o || typeof o !== 'object') return null
-  const n = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null)
-  const min = n(o.idade_aparente_min), max = n(o.idade_aparente_max), pessoas = n(o.pessoas)
-  if (min === null || max === null || pessoas === null || min < 0 || max > 120 || min > max) return null
-  if (!['feminino', 'masculino', 'indefinido'].includes(String(o.genero_apresentado))) return null
-  if (typeof o.texto_ou_marca_dagua !== 'boolean' || typeof o.deformidade_visivel !== 'boolean' || typeof o.conteudo_improprio !== 'boolean') return null
-  return { idade_aparente_min: min, idade_aparente_max: max, genero_apresentado: o.genero_apresentado as Laudo['genero_apresentado'], pessoas, texto_ou_marca_dagua: o.texto_ou_marca_dagua, deformidade_visivel: o.deformidade_visivel, conteudo_improprio: o.conteudo_improprio, observacao: typeof o.observacao === 'string' ? o.observacao.slice(0, 200) : '' }
+  if (!o || typeof o !== 'object') return { laudo: null, campo: 'objeto' }
+  const min = num(o.idade_aparente_min), max = num(o.idade_aparente_max), pessoas = num(o.pessoas)
+  if (min === null) return { laudo: null, campo: 'idade_aparente_min' }
+  if (max === null) return { laudo: null, campo: 'idade_aparente_max' }
+  if (pessoas === null) return { laudo: null, campo: 'pessoas' }
+  if (min < 0 || max > 120 || min > max) return { laudo: null, campo: 'faixa_de_idade' }
+  const g = genero(o.genero_apresentado)
+  if (!g) return { laudo: null, campo: 'genero_apresentado' }
+  const t = bool(o.texto_ou_marca_dagua), d = bool(o.deformidade_visivel), i = bool(o.conteudo_improprio)
+  if (t === null) return { laudo: null, campo: 'texto_ou_marca_dagua' }
+  if (d === null) return { laudo: null, campo: 'deformidade_visivel' }
+  if (i === null) return { laudo: null, campo: 'conteudo_improprio' }
+  return { laudo: { idade_aparente_min: min, idade_aparente_max: max, genero_apresentado: g, pessoas, texto_ou_marca_dagua: t, deformidade_visivel: d, conteudo_improprio: i, observacao: typeof o.observacao === 'string' ? o.observacao.slice(0, 200) : '' } }
+}
+
+export function validarLaudo(x: unknown): Laudo | null {
+  return diagnosticarLaudo(x).laudo
 }
 
 // Decisão determinística (testada): o modelo só descreve; quem aprova é esta função, com a faixa e a persona do briefing.
@@ -67,26 +93,48 @@ export function correcaoPara(falhas: Falha[], persona: string, faixa: Faixa): st
 }
 
 const SISTEMA = 'Você confere uma foto para um carrossel educativo de saúde no Instagram. Descreva o que VÊ, sem identificar ninguém e sem inferir nacionalidade ou etnia. ' +
-  'Responda SOMENTE JSON: {"idade_aparente_min":int,"idade_aparente_max":int (faixa de idade APARENTE da pessoa principal, com amplitude de até 10 anos),"genero_apresentado":"feminino"|"masculino"|"indefinido","pessoas":int,' +
-  '"texto_ou_marca_dagua":bool,"deformidade_visivel":bool,"conteudo_improprio":bool (nudez, sensualização, sangue, procedimento invasivo),"observacao":"uma frase"}'
+  'Idade aparente é uma estimativa visual aproximada, sempre preenchida (faixa de até 10 anos), mesmo com incerteza. Registre o resultado SOMENTE chamando a ferramenta registrar_laudo.'
+
+const FERRAMENTA = {
+  name: 'registrar_laudo',
+  description: 'Registra o laudo visual da foto.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      idade_aparente_min: { type: 'integer', description: 'idade aparente mínima da pessoa principal' },
+      idade_aparente_max: { type: 'integer', description: 'idade aparente máxima (no máximo 10 anos acima da mínima)' },
+      genero_apresentado: { type: 'string', enum: ['feminino', 'masculino', 'indefinido'] },
+      pessoas: { type: 'integer', description: 'quantas pessoas aparecem' },
+      texto_ou_marca_dagua: { type: 'boolean', description: 'há texto, letras, logotipo ou marca d\u2019água' },
+      deformidade_visivel: { type: 'boolean', description: 'mãos, rosto ou anatomia deformados' },
+      conteudo_improprio: { type: 'boolean', description: 'nudez, sensualização, sangue ou procedimento invasivo' },
+      observacao: { type: 'string', description: 'uma frase' },
+    },
+    required: ['idade_aparente_min', 'idade_aparente_max', 'genero_apresentado', 'pessoas', 'texto_ou_marca_dagua', 'deformidade_visivel', 'conteudo_improprio'],
+  },
+}
 
 export type Leitor = (url: string) => Promise<Laudo>
+export interface ClienteMensagens { messages: { create: (args: any) => Promise<{ content: Array<{ type: string; input?: unknown; text?: string }> }> } }
 
-export function leitorClaude(): Leitor {
+// A resposta vem pela FERRAMENTA (estrutura garantida pelo esquema), não por texto livre: acaba o JSON solto, em bloco de código ou com recusa em prosa.
+export function leitorClaude(cliente?: ClienteMensagens): Leitor {
   return async (url: string) => {
-    if (!process.env.ANTHROPIC_API_KEY) throw new Error('qa_indisponivel_sem_chave')
-    const client = new Anthropic()
+    if (!cliente && !process.env.ANTHROPIC_API_KEY) throw new Error('qa_indisponivel_sem_chave')
+    const client = cliente ?? (new Anthropic() as unknown as ClienteMensagens)
     const r = await client.messages.create({
       model: process.env.VERVE_FOTO_QA_MODEL ?? 'claude-haiku-5-5',
-      max_tokens: 300,
+      max_tokens: 400,
       system: SISTEMA,
-      messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'url', url } }, { type: 'text', text: 'Descreva a foto no formato pedido.' }] }],
+      tools: [FERRAMENTA],
+      tool_choice: { type: 'tool', name: FERRAMENTA.name },
+      messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'url', url } }, { type: 'text', text: 'Registre o laudo desta foto.' }] }],
     })
-    const t = (r.content[0] as { type: string; text?: string }).text ?? ''
-    const i = t.indexOf('{'), j = t.lastIndexOf('}')
-    const laudo = i >= 0 && j > i ? validarLaudo(JSON.parse(t.slice(i, j + 1))) : null
-    if (!laudo) throw new Error('qa_laudo_invalido')
-    return laudo
+    const uso = r.content.find(b => b.type === 'tool_use')
+    if (!uso) throw new Error('qa_sem_laudo:' + String(r.content.find(b => b.type === 'text')?.text ?? 'sem_texto').replace(/\s+/g, ' ').slice(0, 60))
+    const d = diagnosticarLaudo(uso.input)
+    if (!d.laudo) throw new Error('qa_laudo_invalido:' + (d.campo ?? '?'))
+    return d.laudo
   }
 }
 
