@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/verve/admin-auth'
+import { validarMotivo, montarMotivo } from '@/lib/verve/motivo-recusa'
 import { createClient } from '@supabase/supabase-js'
 
 const supabase = createClient(
@@ -75,7 +76,7 @@ export async function PATCH(req: NextRequest) {
   const auth = await requireAdmin(req)
   if (!auth.ok) return auth.response
   const body = await req.json()
-  const { id, status, scheduled_at } = body
+  const { id, status, scheduled_at, motivo } = body
 
   const allowed = ['rascunho', 'aguardando', 'aprovado', 'recusado', 'erro', 'publicado']
   if (!id || !allowed.includes(status)) {
@@ -84,6 +85,9 @@ export async function PATCH(req: NextRequest) {
 
   const update: Record<string, unknown> = { status, updated_at: new Date().toISOString() }
   if (scheduled_at && !isNaN(Date.parse(scheduled_at))) update.scheduled_at = scheduled_at
+  // Recusa com motivo (aspectos + texto livre): alimenta o perfil de gosto do CEO. Só vale ao recusar.
+  const m = status === 'recusado' ? validarMotivo(motivo) : null
+  if (m) update.error_msg = montarMotivo(m)
 
   const { data, error } = await supabase
     .from('verve_posts')
