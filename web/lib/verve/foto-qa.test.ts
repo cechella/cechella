@@ -1,9 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { avaliar, correcaoPara, fotoConferida, resumoQa, validarLaudo, diagnosticarLaudo, leitorClaude, MAX_TENTATIVAS, type Laudo, type QaEntrada, type ClienteMensagens } from './foto-qa.ts'
+import { avaliar, correcaoPara, fotoConferida, resumoQa, validarLaudo, diagnosticarLaudo, leitorClaude, MAX_TENTATIVAS, LIMIAR_ATRATIVO, type Laudo, type QaEntrada, type ClienteMensagens } from './foto-qa.ts'
 
 const FAIXA = { min: 40, max: 60 }
-const laudo = (o: Partial<Laudo> = {}): Laudo => ({ idade_aparente_min: 45, idade_aparente_max: 55, genero_apresentado: 'feminino', pessoas: 1, texto_ou_marca_dagua: false, deformidade_visivel: false, conteudo_improprio: false, observacao: '', ...o })
+const laudo = (o: Partial<Laudo> = {}): Laudo => ({ idade_aparente_min: 45, idade_aparente_max: 55, genero_apresentado: 'feminino', pessoas: 1, texto_ou_marca_dagua: false, deformidade_visivel: false, conteudo_improprio: false, atrativo: 5, mesma_pessoa: null, observacao: '', ...o })
 
 test('mulher de 45 a 55 aparentes passa na faixa 40 a 60', () => {
   assert.deepEqual(avaliar(laudo(), 'mulher_35_50', FAIXA), { ok: true, falhas: [] })
@@ -86,7 +86,7 @@ test('sem laudo (leitura falhou) a foto NUNCA passa sem conferir', async () => {
 })
 
 test('o laudo aceita variações de FORMA do modelo (texto numérico, "true", gênero em outras palavras) e diz QUAL campo falhou', () => {
-  const ok = validarLaudo({ idade_aparente_min: '45', idade_aparente_max: '55', genero_apresentado: 'Mulher', pessoas: '1', texto_ou_marca_dagua: 'false', deformidade_visivel: false, conteudo_improprio: 'false' })
+  const ok = validarLaudo({ idade_aparente_min: '45', idade_aparente_max: '55', genero_apresentado: 'Mulher', pessoas: '1', texto_ou_marca_dagua: 'false', deformidade_visivel: false, conteudo_improprio: 'false', atrativo: '4' })
   assert.deepEqual(ok && [ok.idade_aparente_min, ok.genero_apresentado, ok.pessoas, ok.texto_ou_marca_dagua], [45, 'feminino', 1, false])
   assert.equal(diagnosticarLaudo({ ...laudo(), idade_aparente_min: null }).campo, 'idade_aparente_min')
   assert.equal(diagnosticarLaudo({ ...laudo(), genero_apresentado: 'banana' }).campo, 'genero_apresentado')
@@ -109,4 +109,52 @@ test('o leitor obriga a resposta pela ferramenta (estrutura garantida) e devolve
 test('o leitor nunca aprova sem laudo: recusa em prosa e laudo inválido viram erro com o motivo', async () => {
   await assert.rejects(leitorClaude(cliente([{ type: 'text', text: 'Não posso estimar a idade de pessoas.' }]))('https://img/x'), /qa_sem_laudo:Não posso estimar/)
   await assert.rejects(leitorClaude(cliente([{ type: 'tool_use', input: { ...laudo(), pessoas: undefined } }]))('https://img/x'), /qa_laudo_invalido:pessoas/)
+})
+
+test('foto pouco atraente reprova mesmo estando na idade certa (sensibilidade crítica do VERVE)', () => {
+  const r = avaliar(laudo({ atrativo: 2, observacao: 'rosto duro e abatido' }), 'mulher_35_50', FAIXA)
+  assert.equal(r.ok, false); assert.equal(r.falhas[0].codigo, 'pouco_atrativa')
+  assert.match(r.falhas[0].motivo, /nota 2 de 5, mínimo 4\): rosto duro e abatido/)
+  assert.equal(avaliar(laudo({ atrativo: LIMIAR_ATRATIVO }), 'mulher_35_50', FAIXA).ok, true)
+  assert.match(correcaoPara(r.falhas, 'mulher_35_50', FAIXA), /more beautiful, flattering and warm/)
+})
+
+test('com referência, outra pessoa reprova (uma personagem só); sem referência o campo é ignorado', () => {
+  const l = laudo({ mesma_pessoa: false })
+  const com = avaliar(l, 'mulher_35_50', FAIXA, true)
+  assert.equal(com.ok, false); assert.equal(com.falhas[0].codigo, 'outra_pessoa')
+  assert.match(correcaoPara(com.falhas, 'mulher_35_50', FAIXA), /exactly the same woman as in the reference/)
+  assert.equal(avaliar(l, 'mulher_35_50', FAIXA, false).ok, true)
+  assert.equal(avaliar(laudo({ mesma_pessoa: true }), 'mulher_35_50', FAIXA, true).ok, true)
+  assert.equal(diagnosticarLaudo({ ...laudo(), atrativo: 9 }).campo, 'atrativo')
+  assert.equal(diagnosticarLaudo({ ...laudo(), mesma_pessoa: 'talvez' }).campo, 'mesma_pessoa')
+})
+
+test('o leitor manda a referência junto quando há uma e o laudo traz a comparação', async () => {
+  const vistos: any[] = []
+  const l = await leitorClaude(cliente([{ type: 'tool_use', input: laudo({ mesma_pessoa: true }) }], vistos))('https://img/novo', 'https://img/abertura')
+  assert.equal(l.mesma_pessoa, true)
+  const imagens = vistos[0].messages[0].content.filter((b: any) => b.type === 'image').map((b: any) => b.source.url)
+  assert.deepEqual(imagens, ['https://img/abertura', 'https://img/novo'])
+})
+
+test('o prazo da rota: esgotado o limite, não começa nova tentativa e a foto falha fechada', async () => {
+  const log: QaEntrada[] = []
+  let geradas = 0
+  const url = await fotoConferida({
+    slide: 2, persona: 'mulher_35_50', faixa: FAIXA, log, limite: Date.now() - 1,
+    gerar: async () => { geradas++; return 'https://img/z' },
+    ler: async () => laudo({ atrativo: 1 }),
+  })
+  assert.equal(url, ''); assert.equal(geradas, 1)
+  assert.equal(log[log.length - 1].acao, 'prazo_esgotado')
+})
+
+test('com referência, o fotoConferida repassa a abertura ao leitor', async () => {
+  const log: QaEntrada[] = []; const refs: Array<string | undefined> = []
+  const url = await fotoConferida({
+    slide: 3, persona: 'mulher_35_50', faixa: FAIXA, log, referencia: 'https://img/abertura',
+    gerar: async () => 'https://img/n', ler: async (_u, r) => { refs.push(r); return laudo({ mesma_pessoa: true }) },
+  })
+  assert.equal(url, 'https://img/n'); assert.deepEqual(refs, ['https://img/abertura'])
 })

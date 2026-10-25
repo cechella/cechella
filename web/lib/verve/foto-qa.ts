@@ -13,12 +13,15 @@ export interface Laudo {
   texto_ou_marca_dagua: boolean
   deformidade_visivel: boolean
   conteudo_improprio: boolean
+  atrativo: number                 // 1 a 5: foto bonita, favorecedora, saudável e acolhedora (conversão), não dura nem abatida
+  mesma_pessoa: boolean | null     // só com referência: é a mesma pessoa da foto de abertura?
   observacao: string
 }
-export interface Falha { codigo: 'idade_menor' | 'idade_maior' | 'genero' | 'sem_pessoa' | 'texto' | 'deformidade' | 'improprio'; motivo: string }
+export interface Falha { codigo: 'idade_menor' | 'idade_maior' | 'genero' | 'sem_pessoa' | 'texto' | 'deformidade' | 'improprio' | 'pouco_atrativa' | 'outra_pessoa'; motivo: string }
 export interface QaEntrada { slide: number; tentativa: number; ok: boolean; falhas: Falha[]; acao?: string }
 
 export const TOLERANCIA_ANOS = 2
+export const LIMIAR_ATRATIVO = 4   // nota mínima (1 a 5) de beleza/acolhimento para ir ao CEO
 export const MAX_TENTATIVAS = 3   // a original + 2 correções (cada uma gasta uma foto paga e uma leitura)
 
 // Aceita o que o modelo devolve com tolerância de FORMA (número como texto, "true"/"false", gênero em outras palavras) e recusa só o que não dá para interpretar.
@@ -47,11 +50,15 @@ export function diagnosticarLaudo(x: unknown): { laudo: Laudo | null; campo?: st
   if (min < 0 || max > 120 || min > max) return { laudo: null, campo: 'faixa_de_idade' }
   const g = genero(o.genero_apresentado)
   if (!g) return { laudo: null, campo: 'genero_apresentado' }
+  const at = num(o.atrativo)
+  if (at === null || at < 1 || at > 5) return { laudo: null, campo: 'atrativo' }
+  const mp = o.mesma_pessoa === undefined || o.mesma_pessoa === null ? null : bool(o.mesma_pessoa)
+  if (o.mesma_pessoa !== undefined && o.mesma_pessoa !== null && mp === null) return { laudo: null, campo: 'mesma_pessoa' }
   const t = bool(o.texto_ou_marca_dagua), d = bool(o.deformidade_visivel), i = bool(o.conteudo_improprio)
   if (t === null) return { laudo: null, campo: 'texto_ou_marca_dagua' }
   if (d === null) return { laudo: null, campo: 'deformidade_visivel' }
   if (i === null) return { laudo: null, campo: 'conteudo_improprio' }
-  return { laudo: { idade_aparente_min: min, idade_aparente_max: max, genero_apresentado: g, pessoas, texto_ou_marca_dagua: t, deformidade_visivel: d, conteudo_improprio: i, observacao: typeof o.observacao === 'string' ? o.observacao.slice(0, 200) : '' } }
+  return { laudo: { idade_aparente_min: min, idade_aparente_max: max, genero_apresentado: g, pessoas, texto_ou_marca_dagua: t, deformidade_visivel: d, conteudo_improprio: i, atrativo: Math.round(at), mesma_pessoa: mp, observacao: typeof o.observacao === 'string' ? o.observacao.slice(0, 200) : '' } }
 }
 
 export function validarLaudo(x: unknown): Laudo | null {
@@ -59,7 +66,7 @@ export function validarLaudo(x: unknown): Laudo | null {
 }
 
 // Decisão determinística (testada): o modelo só descreve; quem aprova é esta função, com a faixa e a persona do briefing.
-export function avaliar(laudo: Laudo, persona: string, faixa: Faixa): { ok: boolean; falhas: Falha[] } {
+export function avaliar(laudo: Laudo, persona: string, faixa: Faixa, comReferencia = false): { ok: boolean; falhas: Falha[] } {
   const falhas: Falha[] = []
   const meio = (laudo.idade_aparente_min + laudo.idade_aparente_max) / 2
   if (laudo.pessoas < 1) falhas.push({ codigo: 'sem_pessoa', motivo: 'não há pessoa na foto' })
@@ -72,6 +79,8 @@ export function avaliar(laudo: Laudo, persona: string, faixa: Faixa): { ok: bool
   if (laudo.texto_ou_marca_dagua) falhas.push({ codigo: 'texto', motivo: 'a foto tem texto, letras ou marca d’água' })
   if (laudo.deformidade_visivel) falhas.push({ codigo: 'deformidade', motivo: 'deformação visível (mãos, rosto ou anatomia)' })
   if (laudo.conteudo_improprio) falhas.push({ codigo: 'improprio', motivo: 'conteúdo impróprio para publicidade médica' })
+  if (laudo.atrativo < LIMIAR_ATRATIVO) falhas.push({ codigo: 'pouco_atrativa', motivo: `foto pouco favorecedora para a campanha (nota ${laudo.atrativo} de 5, mínimo ${LIMIAR_ATRATIVO})${laudo.observacao ? ': ' + laudo.observacao : ''}` })
+  if (comReferencia && laudo.mesma_pessoa === false) falhas.push({ codigo: 'outra_pessoa', motivo: 'não é a mesma pessoa da foto de abertura (o carrossel precisa de uma personagem só)' })
   return { ok: falhas.length === 0, falhas }
 }
 
@@ -87,13 +96,15 @@ export function correcaoPara(falhas: Falha[], persona: string, faixa: Faixa): st
     if (f.codigo === 'sem_pessoa') partes.push(`a ${sujeito} must be clearly visible in the frame`)
     if (f.codigo === 'texto') partes.push('absolutely no text, letters, logos or watermarks anywhere')
     if (f.codigo === 'deformidade') partes.push('natural anatomy, well-formed face and hands, no distortions')
+    if (f.codigo === 'pouco_atrativa') partes.push(`a more beautiful, flattering and warm portrait: radiant healthy skin, soft flattering light, elegant styling, kind confident expression, never harsh or tired`)
+    if (f.codigo === 'outra_pessoa') partes.push(`must be exactly the same ${sujeito} as in the reference photo: identical face, hair, skin tone and age`)
     if (f.codigo === 'improprio') partes.push('conservative, professional, fully clothed, clinical editorial mood')
   }
   return partes.join('; ').slice(0, 300)
 }
 
 const SISTEMA = 'Você confere uma foto para um carrossel educativo de saúde no Instagram. Descreva o que VÊ, sem identificar ninguém e sem inferir nacionalidade ou etnia. ' +
-  'Idade aparente é uma estimativa visual aproximada, sempre preenchida (faixa de até 10 anos), mesmo com incerteza. Registre o resultado SOMENTE chamando a ferramenta registrar_laudo.'
+  'Idade aparente é uma estimativa visual aproximada, sempre preenchida (faixa de até 10 anos), mesmo com incerteza. Seja um diretor de arte exigente: nota baixa para foto dura, abatida, envelhecida demais, mal iluminada ou pouco convincente para vender confiança. Registre o resultado SOMENTE chamando a ferramenta registrar_laudo.'
 
 const FERRAMENTA = {
   name: 'registrar_laudo',
@@ -108,18 +119,20 @@ const FERRAMENTA = {
       texto_ou_marca_dagua: { type: 'boolean', description: 'há texto, letras, logotipo ou marca d\u2019água' },
       deformidade_visivel: { type: 'boolean', description: 'mãos, rosto ou anatomia deformados' },
       conteudo_improprio: { type: 'boolean', description: 'nudez, sensualização, sangue ou procedimento invasivo' },
-      observacao: { type: 'string', description: 'uma frase' },
+      atrativo: { type: 'integer', description: 'de 1 a 5: quão bonita, favorecedora, saudável e acolhedora é a foto para uma campanha de saúde premium (5 = campanha de revista; 3 = comum; 1 = dura, abatida ou pouco convincente)' },
+      mesma_pessoa: { type: 'boolean', description: 'SÓ quando houver foto de referência: a pessoa principal é a mesma da referência (mesmo rosto, cabelo e idade)?' },
+      observacao: { type: 'string', description: 'uma frase com o principal ponto fraco ou forte' },
     },
-    required: ['idade_aparente_min', 'idade_aparente_max', 'genero_apresentado', 'pessoas', 'texto_ou_marca_dagua', 'deformidade_visivel', 'conteudo_improprio'],
+    required: ['idade_aparente_min', 'idade_aparente_max', 'genero_apresentado', 'pessoas', 'texto_ou_marca_dagua', 'deformidade_visivel', 'conteudo_improprio', 'atrativo'],
   },
 }
 
-export type Leitor = (url: string) => Promise<Laudo>
+export type Leitor = (url: string, referencia?: string) => Promise<Laudo>
 export interface ClienteMensagens { messages: { create: (args: any) => Promise<{ content: Array<{ type: string; input?: unknown; text?: string }> }> } }
 
 // A resposta vem pela FERRAMENTA (estrutura garantida pelo esquema), não por texto livre: acaba o JSON solto, em bloco de código ou com recusa em prosa.
 export function leitorClaude(cliente?: ClienteMensagens): Leitor {
-  return async (url: string) => {
+  return async (url: string, referencia?: string) => {
     if (!cliente && !process.env.ANTHROPIC_API_KEY) throw new Error('qa_indisponivel_sem_chave')
     const client = cliente ?? (new Anthropic() as unknown as ClienteMensagens)
     const r = await client.messages.create({
@@ -128,7 +141,9 @@ export function leitorClaude(cliente?: ClienteMensagens): Leitor {
       system: SISTEMA,
       tools: [FERRAMENTA],
       tool_choice: { type: 'tool', name: FERRAMENTA.name },
-      messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'url', url } }, { type: 'text', text: 'Registre o laudo desta foto.' }] }],
+      messages: [{ role: 'user', content: referencia
+        ? [{ type: 'text', text: 'FOTO DE REFERÊNCIA (a personagem do carrossel):' }, { type: 'image', source: { type: 'url', url: referencia } }, { type: 'text', text: 'FOTO A CONFERIR:' }, { type: 'image', source: { type: 'url', url } }, { type: 'text', text: 'Registre o laudo da foto a conferir; em mesma_pessoa compare com a referência.' }]
+        : [{ type: 'image', source: { type: 'url', url } }, { type: 'text', text: 'Registre o laudo desta foto.' }] }],
     })
     const uso = r.content.find(b => b.type === 'tool_use')
     if (!uso) throw new Error('qa_sem_laudo:' + String(r.content.find(b => b.type === 'text')?.text ?? 'sem_texto').replace(/\s+/g, ' ').slice(0, 60))
@@ -141,20 +156,23 @@ export function leitorClaude(cliente?: ClienteMensagens): Leitor {
 // Gera, confere e, se reprovar, refaz com correção. Devolve a URL aprovada ou '' (falha fechada). `log` recebe cada tentativa com o motivo.
 export async function fotoConferida(params: {
   slide: number; persona: string; faixa: Faixa; instrucao?: string
+  referencia?: string                 // foto de abertura: confere também se é a mesma pessoa
+  limite?: number                     // instante (ms) em que para de refazer: a rota do Vercel tem 60 s
   gerar: (instrucao?: string) => Promise<string>
   ler: Leitor
   log: QaEntrada[]
 }): Promise<string> {
   let instrucao = params.instrucao
   for (let t = 1; t <= MAX_TENTATIVAS; t++) {
+    if (t > 1 && params.limite && Date.now() > params.limite) { params.log.push({ slide: params.slide, tentativa: t, ok: false, falhas: [], acao: 'prazo_esgotado' }); break }
     let url = ''
     try { url = await params.gerar(instrucao) } catch { params.log.push({ slide: params.slide, tentativa: t, ok: false, falhas: [], acao: 'geracao_falhou' }); continue }
     let laudo: Laudo
-    try { laudo = await params.ler(url) } catch (e) {
+    try { laudo = await params.ler(url, params.referencia) } catch (e) {
       params.log.push({ slide: params.slide, tentativa: t, ok: false, falhas: [], acao: 'leitura_falhou:' + String((e as Error).message).slice(0, 60) })
       continue   // sem laudo não aprova: tenta de novo e, esgotado, o slide falha (nunca passa sem conferir)
     }
-    const r = avaliar(laudo, params.persona, params.faixa)
+    const r = avaliar(laudo, params.persona, params.faixa, !!params.referencia)
     if (r.ok) { params.log.push({ slide: params.slide, tentativa: t, ok: true, falhas: [] }); return url }
     const corr = correcaoPara(r.falhas, params.persona, params.faixa)
     params.log.push({ slide: params.slide, tentativa: t, ok: false, falhas: r.falhas, acao: t < MAX_TENTATIVAS ? 'refeita: ' + corr : 'esgotadas_as_tentativas' })

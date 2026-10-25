@@ -4,6 +4,9 @@ import { put } from '@vercel/blob'
 import sharp from 'sharp'
 import { FAIXA_PADRAO, type Faixa } from './persona'
 import { fotoConferida, leitorClaude, type Leitor, type QaEntrada } from './foto-qa'
+import { sementeDoPost } from './personagem'
+
+const PRAZO_MS = 45_000   // a rota tem 60 s no plano atual: depois disso não começa nova tentativa
 
 export interface SlideInput {
   titulo: string
@@ -55,19 +58,24 @@ export async function renderCarrossel(params: {
 
   if (!process.env.FAL_KEY) return []
 
-  // Gera fotos em paralelo
-  const photoPromises = Array.from({ length: total }, (_, i) => {
+  // A MESMA personagem em todo o carrossel: gera a foto de abertura (conferida), e os demais slides partem dela (edição por referência), cada um conferido
+  // também quanto a "é a mesma pessoa". O prazo protege o limite de 60 s da rota: esgotado, para de refazer e o post fica como estava.
+  const limite = Date.now() + PRAZO_MS
+  const ler = params.leitor ?? leitorClaude()
+  const log = params.qaLog ?? []
+  const seed = sementeDoPost(postId)
+  const uma = (i: number, referencia?: string) => {
     const isCta = i + 1 === total
     const tema = temas[i] ?? titulo
-    // Cada foto é CONFERIDA (idade aparente, gênero, texto, deformação) e refeita com correção se reprovar; esgotado, vira '' e o carrossel inteiro falha fechado.
     return fotoConferida({
-      slide: i + 1, persona, faixa, instrucao: params.instrucao,
-      gerar: instrucao => generatePhotoForPost({ tema, pilar, persona, isCta, faixa, indice: i, instrucao }).then(r => r.url),
-      ler: params.leitor ?? leitorClaude(),
-      log: params.qaLog ?? [],
+      slide: i + 1, persona, faixa, instrucao: params.instrucao, referencia, limite,
+      gerar: instrucao => generatePhotoForPost({ tema, pilar, persona, isCta, faixa, indice: i, total, instrucao, referencia, seed }).then(r => r.url),
+      ler, log,
     })
-  })
-  const photoUrls = await Promise.all(photoPromises)
+  }
+  const abertura = await uma(0)
+  const demais = abertura ? await Promise.all(Array.from({ length: total - 1 }, (_, k) => uma(k + 1, abertura))) : Array.from({ length: total - 1 }, () => '')
+  const photoUrls = [abertura, ...demais]
 
   // Para cada foto: baixa, composta com texto e faz upload no Blob
   const blobUrls = await Promise.all(

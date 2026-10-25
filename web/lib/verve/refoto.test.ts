@@ -8,6 +8,8 @@ test('pedido de refoto: faixa, persona e instrução válidas; nada a mudar é r
   if (p.ok) { assert.deepEqual(p.opcoes.faixa, { min: 40, max: 60 }); assert.equal(p.opcoes.instrucao, 'warm light, outdoor'); assert.equal(p.opcoes.nova_pasta, true) }
   assert.deepEqual(validarPedido({}), { ok: false, erro: 'nada_a_mudar' })
   assert.deepEqual(validarPedido(null), { ok: false, erro: 'nada_a_mudar' })
+  assert.equal(validarPedido({ refazer: true }).ok, true)   // "as fotos ficaram feias": refaz com o padrão visual
+  assert.equal(validarPedido({ refazer: 'sim' }).ok, false)
 })
 
 test('pedido de refoto: rejeita faixa absurda, persona desconhecida, instrução longa ou imprópria', () => {
