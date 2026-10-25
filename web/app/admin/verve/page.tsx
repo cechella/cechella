@@ -433,12 +433,12 @@ export default function VervePage() {
       await aprovar(postId, scheduledAt)
     }
   }
-  async function recusar(id: string) {
+  async function recusar(id: string, motivo?: { aspectos: string[]; texto?: string }) {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'recusado' } : p))
     await fetch('/api/admin/verve/posts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status: 'recusado' }),
+      body: JSON.stringify({ id, status: 'recusado', ...(motivo ? { motivo } : {}) }),
     })
   }
 
@@ -1417,7 +1417,7 @@ export default function VervePage() {
           slide={previewSlide}
           onSlide={setPreviewSlide}
           onClose={() => setPreviewPost(null)}
-          onRecusar={() => { recusar(previewPost.id); setPreviewPost(null) }}
+          onRecusar={motivo => { recusar(previewPost.id, motivo); setPreviewPost(null) }}
           onAutorizar={() => openScheduleModal(previewPost.id)}
           rotuloAutorizar={(previewPost.status === 'aprovado' || previewPost.status === 'erro') ? '🚀 Publicar' : '✓ Autorizar'}
         />

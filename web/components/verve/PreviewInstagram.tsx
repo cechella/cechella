@@ -28,7 +28,7 @@ export default function PreviewInstagram(props: {
   slide: number
   onSlide: (n: number) => void
   onClose: () => void
-  onRecusar: () => void
+  onRecusar: (motivo?: { aspectos: string[]; texto?: string }) => void
   onAutorizar: () => void
   rotuloAutorizar: string
 }) {
@@ -36,6 +36,9 @@ export default function PreviewInstagram(props: {
   const [modo, setModo] = useState<'celular' | 'pc'>('celular')
   const [claro, setClaro] = useState(false)
   const [aberta, setAberta] = useState(false)
+  const [pedindoMotivo, setPedindoMotivo] = useState(false)
+  const [aspectos, setAspectos] = useState<string[]>([])
+  const [motivoTexto, setMotivoTexto] = useState('')
   const imgs = (post.image_urls ?? []).filter(Boolean)
   const legenda = typeof post.legenda === 'string' ? post.legenda : ''
   const resumo = resumoPreview(post)
@@ -132,7 +135,7 @@ export default function PreviewInstagram(props: {
           <button onClick={onClose} className="px-2 py-1.5 text-white/70 hover:text-white" aria-label="Fechar">✕</button>
         </div>
 
-        <div className="pv-card overflow-hidden flex-shrink-0">
+        <div className={`pv-card overflow-hidden flex-shrink-0 ${pedindoMotivo ? 'hidden' : ''}`}>
           {Cabecalho}
           {Slide}
           {Acoes}
@@ -140,15 +143,31 @@ export default function PreviewInstagram(props: {
         </div>
 
         {/* Só o essencial; avisos só quando algo faria o post sair diferente do esperado */}
-        <div className="text-[11px] text-white/60 leading-snug flex-shrink-0">
+        <div className={`text-[11px] text-white/60 leading-snug flex-shrink-0 ${pedindoMotivo ? 'hidden' : ''}`}>
           {resumo.avisos.map(x => <p key={x} className="text-red-300 font-semibold">⚠ {x}</p>)}
           <p>{resumo.slides} imagens · legenda de {resumo.caracteres} caracteres{resumo.hashtags ? ` · ${resumo.hashtags} hashtags` : ''}{imgs[0] ? ` · layout ${versaoDoLayout(imgs[0])}` : ''}</p>
         </div>
 
+        {pedindoMotivo ? (
+          <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-3 text-white">
+            <p className="text-[13px] font-semibold mb-2">O que não agradou? <span className="font-normal text-white/60">(ajuda o VERVE a acertar o próximo)</span></p>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {[['foto', 'Foto'], ['texto', 'Texto'], ['gancho', 'Gancho da capa'], ['layout', 'Layout'], ['legenda', 'Legenda'], ['tema', 'Tema']].map(([k, rot]) => (
+                <button key={k} onClick={() => setAspectos(a => a.includes(k) ? a.filter(x => x !== k) : [...a, k])} className={`px-3 py-1.5 rounded-full text-[12px] border ${aspectos.includes(k) ? 'bg-red-500 text-white border-red-500' : 'border-white/25 text-white/80'}`}>{rot}</button>
+              ))}
+            </div>
+            <input value={motivoTexto} onChange={e => setMotivoTexto(e.target.value)} maxLength={200} placeholder="Quer explicar? (opcional)" className="w-full rounded-lg bg-black/40 border border-white/15 px-3 py-2 text-[13px] mb-2" />
+            <div className="flex gap-2">
+              <button onClick={() => onRecusar()} className="flex-1 py-2 rounded-lg text-[13px] border border-white/20 text-white/70">Recusar sem motivo</button>
+              <button onClick={() => onRecusar({ aspectos, texto: motivoTexto })} disabled={!aspectos.length && !motivoTexto.trim()} className="flex-1 py-2 rounded-lg text-[13px] font-semibold bg-red-500 text-white disabled:opacity-40">Recusar com motivo</button>
+            </div>
+          </div>
+        ) : (
         <div className="flex gap-2">
-          <button onClick={onRecusar} className="flex-1 py-3 rounded-xl text-sm font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all">✕ Recusar</button>
+          <button onClick={() => setPedindoMotivo(true)} className="flex-1 py-3 rounded-xl text-sm font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all">✕ Recusar</button>
           <button onClick={onAutorizar} className="flex-1 py-3 rounded-xl text-sm font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all">{rotuloAutorizar}</button>
         </div>
+        )}
       </div>
       </div>
     </div>
