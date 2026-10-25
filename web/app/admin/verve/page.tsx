@@ -1414,11 +1414,12 @@ export default function VervePage() {
         >
           <div
             className="relative flex flex-col"
-            style={{ width: 'min(420px, 95vw)', maxHeight: '96vh' }}
+            // A largura acompanha a ALTURA da janela (foto 4:5 + cabeçalho + ações + legenda + botões): em tela de Windows baixa ou com zoom a legenda não some mais.
+            style={{ width: 'min(420px, 95vw, max(260px, calc((100dvh - 340px) * 0.8)))' }}
             onClick={e => e.stopPropagation()}
           >
             {/* Instagram phone shell */}
-            <div className="bg-[#0a0a0a] rounded-[2rem] border border-[#2a2a2a] shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '92vh' }}>
+            <div className="bg-[#0a0a0a] rounded-[2rem] border border-[#2a2a2a] shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: 'calc(100dvh - 84px)' }}>
 
               {/* IG header */}
               <div className="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-[#1a1a1a] flex-shrink-0">
@@ -1494,7 +1495,7 @@ export default function VervePage() {
               </div>
 
               {/* Caption — full text, scrollable */}
-              <div className="px-4 py-3 overflow-y-auto flex-1" style={{ minHeight: '80px', maxHeight: '200px' }}>
+              <div className="px-4 py-3 overflow-y-auto flex-1" style={{ minHeight: '110px', maxHeight: '200px' }}>
                 <p className="text-[13px] text-white leading-relaxed whitespace-pre-wrap">
                   <span className="font-semibold">viniciuscechella</span>{' '}
                   {captions[previewPost.id] || previewPost.legenda || previewPost.titulo}
