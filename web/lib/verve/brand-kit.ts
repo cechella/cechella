@@ -3,8 +3,7 @@
 export const KIT = {
   nome: 'kit-v1',
   cores: {
-    painel: 'rgba(26,21,18,0.84)',   // bloco de texto: marrom quase preto, quente
-    painelBorda: 'rgba(201,169,110,0.45)',
+    faixa: '#1A1512',                // faixa de texto: marrom quase preto, quente
     destaque: '#C9A96E',              // champanhe: linha, selo e seta
     texto: '#F7F2EA',
     textoSuave: 'rgba(247,242,234,0.82)',
