@@ -84,8 +84,12 @@ export default function PreviewInstagram(props: {
   const Legenda = (completa: boolean) => (
     <div className="pv-cap px-3 pb-3 text-[14px] leading-snug">
       {legenda.trim() ? (
-        completa || aberta || !rec.cortou ? (
+        completa ? (
           <p className="whitespace-pre-wrap"><span className="font-semibold">viniciuscechella</span> {legenda}</p>
+        ) : aberta || !rec.cortou ? (
+          <div className="pv-capbox">
+            <p className="whitespace-pre-wrap"><span className="font-semibold">viniciuscechella</span> {legenda}{rec.cortou && <> <button onClick={() => setAberta(false)} className="text-[var(--pv-mudo)]">menos</button></>}</p>
+          </div>
         ) : (
           <p className="whitespace-pre-wrap"><span className="font-semibold">viniciuscechella</span> {rec.visivel.replace(/[.,;:\s]+$/, '')}<span className="whitespace-nowrap">… <button onClick={() => setAberta(true)} className="text-[var(--pv-mudo)]">mais</button></span></p>
         )
@@ -97,16 +101,16 @@ export default function PreviewInstagram(props: {
   )
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/90 backdrop-blur-sm" onClick={onClose}>
+      <div className="min-h-full flex">
       <style>{`
         .pv{--pv-fundo:#000;--pv-texto:#f5f5f5;--pv-mudo:#a8a8a8;--pv-linha:#262626;color:var(--pv-texto)}
         .pv.claro{--pv-fundo:#fff;--pv-texto:#262626;--pv-mudo:#737373;--pv-linha:#dbdbdb}
         .pv-card{background:var(--pv-fundo);border:1px solid var(--pv-linha)}
         .pv-img{aspect-ratio:4/5;width:100%}
-        .pv-cel{width:min(390px,95vw,max(300px,calc((100dvh - 330px)*0.8)));max-height:100dvh;overflow-y:auto;padding:8px 0;scrollbar-width:none}
-        .pv-cel::-webkit-scrollbar{display:none}
+        .pv-cel{width:min(390px,95vw,max(280px,calc((100dvh - 360px)*0.8)))}
+        .pv-capbox{max-height:max(72px,calc(100dvh - 760px));overflow-y:auto;padding-right:6px;scrollbar-width:thin;scrollbar-color:var(--pv-mudo) transparent}
         .pv-cel .pv-card{border-radius:1rem}
-        .pv-botoes{position:sticky;bottom:0;padding-top:8px;background:linear-gradient(to bottom,transparent,rgba(0,0,0,.92) 35%)}
         .pv-pc{width:auto;max-width:96vw}
         .pv-pc .pv-card{display:grid;grid-template-columns:calc(min(100dvh - 190px,780px)*0.8) minmax(320px,400px);grid-template-rows:auto 1fr auto;height:min(calc(100dvh - 190px),780px);border-radius:1rem;overflow:hidden}
         .pv-pc .pv-img{grid-column:1;grid-row:1 / span 3;height:100%;aspect-ratio:auto}
@@ -115,14 +119,14 @@ export default function PreviewInstagram(props: {
         .pv-pc .pv-act{grid-column:2;grid-row:3;border-top:1px solid var(--pv-linha)}
         .pv-pc .pv-dots{display:none}
       `}</style>
-      <div className={`pv ${claro ? 'claro' : ''} ${modo === 'celular' ? 'pv-cel' : 'pv-pc'} relative flex flex-col gap-2`} onClick={e => e.stopPropagation()}>
+      <div className={`pv ${claro ? 'claro' : ''} ${modo === 'celular' ? 'pv-cel' : 'pv-pc'} relative flex flex-col gap-2 m-auto py-3`} onClick={e => e.stopPropagation()}>
         {/* Controles da prévia (não fazem parte do Instagram) */}
         <div className="flex items-center gap-2 text-[12px] text-white flex-shrink-0">
           <div className="flex rounded-lg overflow-hidden border border-white/20">
-            <button onClick={() => setModo('celular')} className={`px-3 py-1.5 ${modo === 'celular' ? 'bg-white text-black font-semibold' : 'bg-white/5'}`}>📱 Celular (feed)</button>
-            <button onClick={() => setModo('pc')} className={`px-3 py-1.5 ${modo === 'pc' ? 'bg-white text-black font-semibold' : 'bg-white/5'}`}>🖥 Computador</button>
+            <button onClick={() => setModo('celular')} className={`px-3 py-1.5 whitespace-nowrap ${modo === 'celular' ? 'bg-white text-black font-semibold' : 'bg-white/5'}`}>📱 Celular (feed)</button>
+            <button onClick={() => setModo('pc')} className={`px-3 py-1.5 whitespace-nowrap ${modo === 'pc' ? 'bg-white text-black font-semibold' : 'bg-white/5'}`}>🖥 Computador</button>
           </div>
-          <button onClick={() => setClaro(c => !c)} className="px-3 py-1.5 rounded-lg border border-white/20 bg-white/5">{claro ? '☾ Escuro' : '☀ Claro'}</button>
+          <button onClick={() => setClaro(c => !c)} className="px-3 py-1.5 rounded-lg border border-white/20 bg-white/5 whitespace-nowrap">{claro ? '☾ Escuro' : '☀ Claro'}</button>
           <div className="flex-1" />
           <button onClick={onClose} className="px-2 py-1.5 text-white/70 hover:text-white" aria-label="Fechar">✕</button>
         </div>
@@ -140,10 +144,11 @@ export default function PreviewInstagram(props: {
           <p>{resumo.slides} imagens · legenda de {resumo.caracteres} caracteres{resumo.hashtags ? ` · ${resumo.hashtags} hashtags` : ''}</p>
         </div>
 
-        <div className="pv-botoes flex gap-2">
+        <div className="flex gap-2">
           <button onClick={onRecusar} className="flex-1 py-3 rounded-xl text-sm font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all">✕ Recusar</button>
           <button onClick={onAutorizar} className="flex-1 py-3 rounded-xl text-sm font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all">{rotuloAutorizar}</button>
         </div>
+      </div>
       </div>
     </div>
   )
