@@ -1406,6 +1406,20 @@ export default function VervePage() {
       )}
 
       {/* ── MODAL PREVIEW INSTAGRAM ── */}
+      {/* Celular/janela estreita: coluna única (largura acompanha a altura da janela). Computador (>= 768 px): duas colunas, foto 4:5 grande à esquerda e legenda/ações à direita, como o Instagram na web. */}
+      <style>{`
+        .vp-wrap{width:min(420px,95vw,max(260px,calc((100dvh - 340px)*0.8)))}
+        .vp-shell{max-height:calc(100dvh - 84px)}
+        .vp-img{aspect-ratio:4/5;width:100%}
+        @media (min-width:768px){
+          .vp-wrap{width:auto;max-width:96vw}
+          .vp-shell{display:grid;grid-template-columns:calc(min(100dvh - 84px,820px)*0.8) minmax(320px,400px);grid-template-rows:auto 1fr auto;height:min(calc(100dvh - 84px),820px);max-height:none}
+          .vp-img{grid-column:1;grid-row:1 / span 3;width:100%;height:100%;aspect-ratio:auto}
+          .vp-head{grid-column:2;grid-row:1}
+          .vp-cap{grid-column:2;grid-row:2;max-height:none !important;min-height:0 !important}
+          .vp-act{grid-column:2;grid-row:3;border-top:1px solid #1a1a1a;border-bottom:0}
+        }
+      `}</style>
       {/* Instagram preview modal — portrait 4:5 full-screen */}
       {previewPost && (
         <div
@@ -1413,16 +1427,14 @@ export default function VervePage() {
           onClick={() => setPreviewPost(null)}
         >
           <div
-            className="relative flex flex-col"
-            // A largura acompanha a ALTURA da janela (foto 4:5 + cabeçalho + ações + legenda + botões): em tela de Windows baixa ou com zoom a legenda não some mais.
-            style={{ width: 'min(420px, 95vw, max(260px, calc((100dvh - 340px) * 0.8)))' }}
+            className="vp-wrap relative flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* Instagram phone shell */}
-            <div className="bg-[#0a0a0a] rounded-[2rem] border border-[#2a2a2a] shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: 'calc(100dvh - 84px)' }}>
+            <div className="vp-shell bg-[#0a0a0a] rounded-[2rem] border border-[#2a2a2a] shadow-2xl flex flex-col overflow-hidden">
 
               {/* IG header */}
-              <div className="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-[#1a1a1a] flex-shrink-0">
+              <div className="vp-head px-4 pt-4 pb-3 flex items-center gap-3 border-b border-[#1a1a1a] flex-shrink-0">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 p-0.5 flex-shrink-0">
                   <div className="w-full h-full rounded-full bg-[#0a0a0a] flex items-center justify-center">
                     <span className="text-[9px] font-bold text-white">VC</span>
@@ -1438,7 +1450,7 @@ export default function VervePage() {
               </div>
 
               {/* Slide image — aspect 4:5 portrait (Instagram native) */}
-              <div className="relative bg-black flex-shrink-0" style={{ aspectRatio: '4/5', width: '100%' }}>
+              <div className="vp-img relative bg-black flex-shrink-0">
                 {previewPost.image_urls && previewPost.image_urls[previewSlide] ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img
@@ -1486,7 +1498,7 @@ export default function VervePage() {
               </div>
 
               {/* IG action row */}
-              <div className="px-4 py-3 flex items-center gap-4 border-b border-[#1a1a1a] flex-shrink-0">
+              <div className="vp-act px-4 py-3 flex items-center gap-4 border-b border-[#1a1a1a] flex-shrink-0">
                 <svg viewBox="0 0 24 24" className="w-6 h-6 text-white fill-none stroke-current stroke-2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
                 <svg viewBox="0 0 24 24" className="w-6 h-6 text-white fill-none stroke-current stroke-2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 <svg viewBox="0 0 24 24" className="w-6 h-6 text-white fill-none stroke-current stroke-2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
@@ -1495,7 +1507,7 @@ export default function VervePage() {
               </div>
 
               {/* Caption — full text, scrollable */}
-              <div className="px-4 py-3 overflow-y-auto flex-1" style={{ minHeight: '110px', maxHeight: '200px' }}>
+              <div className="vp-cap px-4 py-3 overflow-y-auto flex-1" style={{ minHeight: '110px', maxHeight: '200px' }}>
                 <p className="text-[13px] text-white leading-relaxed whitespace-pre-wrap">
                   <span className="font-semibold">viniciuscechella</span>{' '}
                   {captions[previewPost.id] || previewPost.legenda || previewPost.titulo}
