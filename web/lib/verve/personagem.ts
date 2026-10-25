@@ -15,7 +15,7 @@ export function descricaoPersonagem(persona: string, faixa: Faixa): string {
   return `a beautiful Brazilian woman aged ${idade}, radiant healthy glowing skin with only subtle natural expression lines, dark brown shoulder-length wavy hair with a few silver highlights, warm confident kind expression, tasteful minimal makeup, elegant simple clothes, graceful and aspirational, looks great for her age`
 }
 
-export const ESTILO = 'composition: the person framed in the upper two thirds with generous headroom, calm uncluttered lower third left free for a text panel, premium editorial portrait photography, soft flattering natural light, warm tones, shallow depth of field, hopeful and empowered mood, photorealistic, ultra detailed, 4:5 portrait, no text, no watermark'
+export const ESTILO = 'composition: the whole head fully in frame with generous headroom above the hair, chin above the middle of the picture, shoulders visible, calm empty lower third left free for text, premium editorial portrait photography, soft flattering natural light, warm tones, shallow depth of field, hopeful and empowered mood, photorealistic, ultra detailed, 4:5 portrait, no text, no watermark'
 
 // Roteiro visual: cenas dignidade-primeiro, em sequência (abertura -> miolo -> consulta). Cada tema do briefing escolhe uma cena favorável, nunca de exaustão ou sofrimento.
 export function cenaDoSlide(indice: number, total: number, tema: string, persona: string): string {
