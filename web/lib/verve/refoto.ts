@@ -26,7 +26,8 @@ export function validarPedido(body: unknown): Pedido {
     if (PROIBIDO.test(t)) return { ok: false, erro: 'instrucao_recusada' }
     if (t) opcoes.instrucao = t
   }
-  if (!opcoes.faixa && !opcoes.persona && !opcoes.instrucao) return { ok: false, erro: 'nada_a_mudar' }
+  // "refazer": o CEO só disse que as fotos não ficaram boas; vale o padrão visual do VERVE (personagem bonita e consistente), sem parâmetro novo.
+  if (!opcoes.faixa && !opcoes.persona && !opcoes.instrucao && b.refazer !== true) return { ok: false, erro: 'nada_a_mudar' }
   return { ok: true, id: typeof b.id === 'string' ? b.id.trim() : undefined, opcoes }
 }
 
