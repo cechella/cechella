@@ -3,7 +3,7 @@
 // Dois modos: CELULAR (o feed do app, onde a maioria vê: foto 4:5, legenda cortada em "… mais") e COMPUTADOR (a página do post na web: foto à esquerda, legenda inteira à direita).
 import { useState } from 'react'
 import { emBrasilia } from '@/lib/verve/horario'
-import { legendaRecolhida, resumoPreview, LIMITE_FEED } from '@/lib/verve/preview-legenda'
+import { legendaRecolhida, resumoPreview } from '@/lib/verve/preview-legenda'
 
 export interface PostPreview {
   id: string
@@ -87,12 +87,12 @@ export default function PreviewInstagram(props: {
         completa || aberta || !rec.cortou ? (
           <p className="whitespace-pre-wrap"><span className="font-semibold">viniciuscechella</span> {legenda}</p>
         ) : (
-          <p className="whitespace-pre-wrap"><span className="font-semibold">viniciuscechella</span> {rec.visivel}… <button onClick={() => setAberta(true)} className="text-[var(--pv-mudo)]">mais</button></p>
+          <p className="whitespace-pre-wrap"><span className="font-semibold">viniciuscechella</span> {rec.visivel.replace(/[.,;:\s]+$/, '')}<span className="whitespace-nowrap">… <button onClick={() => setAberta(true)} className="text-[var(--pv-mudo)]">mais</button></span></p>
         )
       ) : (
         <p className="text-red-400 font-semibold">Sem legenda: será publicado sem texto.</p>
       )}
-      <p className="mt-1.5 text-[11px] uppercase tracking-wide text-[var(--pv-mudo)]">{quando.data ? `Agendado para ${quando.data.split('-').reverse().join('/')} às ${quando.hora}` : 'Sem horário definido'}</p>
+      <p className="mt-1.5 text-[11px] uppercase tracking-wide text-[var(--pv-mudo)]">{quando.data ? `Agendado para ${quando.data.split('-').reverse().join('/')} às ${quando.hora}` : 'Você escolhe o horário ao autorizar'}</p>
     </div>
   )
 
@@ -103,7 +103,8 @@ export default function PreviewInstagram(props: {
         .pv.claro{--pv-fundo:#fff;--pv-texto:#262626;--pv-mudo:#737373;--pv-linha:#dbdbdb}
         .pv-card{background:var(--pv-fundo);border:1px solid var(--pv-linha)}
         .pv-img{aspect-ratio:4/5;width:100%}
-        .pv-cel{width:min(390px,95vw);max-height:100dvh;overflow-y:auto;padding:8px 0}
+        .pv-cel{width:min(390px,95vw,max(300px,calc((100dvh - 330px)*0.8)));max-height:100dvh;overflow-y:auto;padding:8px 0;scrollbar-width:none}
+        .pv-cel::-webkit-scrollbar{display:none}
         .pv-cel .pv-card{border-radius:1rem}
         .pv-botoes{position:sticky;bottom:0;padding-top:8px;background:linear-gradient(to bottom,transparent,rgba(0,0,0,.92) 35%)}
         .pv-pc{width:auto;max-width:96vw}
@@ -133,11 +134,10 @@ export default function PreviewInstagram(props: {
           {Legenda(modo === 'pc')}
         </div>
 
-        {/* O que vai ser publicado, em fatos */}
-        <div className="text-[11px] text-white/70 leading-snug flex-shrink-0">
-          {resumo.avisos.map(a => <p key={a} className="text-red-300 font-semibold">⚠ {a}</p>)}
-          <p>{resumo.slides} imagens (1080×1350, proporção 4:5) · legenda de {resumo.caracteres} caracteres · {resumo.hashtags} hashtags{modo === 'celular' && rec.cortou ? ` · no feed o público vê só os primeiros ~${LIMITE_FEED} caracteres antes de “mais”` : ''}.</p>
-          <p>Publicação pela API oficial do Instagram, como post normal (sem “Patrocinado”).</p>
+        {/* Só o essencial; avisos só quando algo faria o post sair diferente do esperado */}
+        <div className="text-[11px] text-white/60 leading-snug flex-shrink-0">
+          {resumo.avisos.map(x => <p key={x} className="text-red-300 font-semibold">⚠ {x}</p>)}
+          <p>{resumo.slides} imagens · legenda de {resumo.caracteres} caracteres{resumo.hashtags ? ` · ${resumo.hashtags} hashtags` : ''}</p>
         </div>
 
         <div className="pv-botoes flex gap-2">
