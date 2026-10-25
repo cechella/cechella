@@ -33,6 +33,7 @@ export async function POST(req: NextRequest) {
     .select('id,titulo,image_urls,error_msg,created_at')
     .eq('status', 'rascunho')
     .eq('tipo', 'carrossel')
+    .not('titulo', 'like', '%· versão B')   // a versão B tem texto próprio (revisão editorial): o render automático não a refaz com o texto do briefing
     .order('created_at', { ascending: true })
     .limit(20)
   const semImagem = (fila ?? []).filter(p => !(Array.isArray(p.image_urls) && p.image_urls.length))

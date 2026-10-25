@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { renderCarrossel } from './render-slide'
 import { detectPersona, detectFaixa, type Faixa } from './persona'
 import { resumoQa, type Leitor, type QaEntrada } from './foto-qa'
+import type { SlideKit } from './slides-kit'
 
 export type ResultadoRender =
   | { ok: true; imagens: number; persona: string; faixa: Faixa; slides_do_gustavo: boolean; image_urls: string[]; qa: ReturnType<typeof resumoQa> }
@@ -15,6 +16,7 @@ export interface OpcoesRender {
   persona?: 'mulher_35_50' | 'homem_40_60'    // sobrepõe a persona detectada
   faixa?: Faixa                               // sobrepõe a faixa do briefing
   instrucao?: string                          // direção de arte já validada
+  slidesDetalhe?: SlideKit[]                  // slides com papel editorial (revisão editorial): substituem os do briefing
   leitor?: Leitor                             // injetável nos testes
   nova_pasta?: boolean                        // refazer: caminhos novos no Blob (não sobrescreve nem quebra a URL antiga)
 }
@@ -38,7 +40,7 @@ export async function renderPost(supabase: SupabaseClient, postId: string, opcoe
   }
   const persona = opcoes.persona ?? detectPersona(publico, post.titulo, objetivo)
   const faixa = opcoes.faixa ?? detectFaixa(publico, objetivo)
-  const total = slides.length || post.slides || 8
+  const total = opcoes.slidesDetalhe?.length || slides.length || post.slides || 8
   const esperadas = Math.max(2, Math.min(total, 10))
 
   const qaLog: QaEntrada[] = []
@@ -51,6 +53,7 @@ export async function renderPost(supabase: SupabaseClient, postId: string, opcoe
     persona,
     faixa,
     instrucao: opcoes.instrucao,
+    slidesDetalhe: opcoes.slidesDetalhe,
     qaLog,
     leitor: opcoes.leitor,
     postId: opcoes.nova_pasta ? `${post.id}/r${Date.now()}` : post.id,

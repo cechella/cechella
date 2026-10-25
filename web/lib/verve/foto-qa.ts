@@ -23,6 +23,7 @@ export interface QaEntrada { slide: number; tentativa: number; ok: boolean; falh
 
 export const TOLERANCIA_ANOS = 2
 export const LIMIAR_ATRATIVO = 4   // nota mínima (1 a 5) de beleza/acolhimento para ir ao CEO
+export const LEITURAS_POR_FOTO = 3   // repetições só da leitura quando o leitor falha (não regenera a foto)
 export const MAX_TENTATIVAS = 3   // a original + 2 correções (cada uma gasta uma foto paga e uma leitura)
 
 // Aceita o que o modelo devolve com tolerância de FORMA (número como texto, "true"/"false", gênero em outras palavras) e recusa só o que não dá para interpretar.
@@ -173,10 +174,15 @@ export async function fotoConferida(params: {
     if (t > 1 && params.limite && Date.now() > params.limite) { params.log.push({ slide: params.slide, tentativa: t, ok: false, falhas: [], acao: 'prazo_esgotado' }); break }
     let url = ''
     try { url = await params.gerar(instrucao) } catch { params.log.push({ slide: params.slide, tentativa: t, ok: false, falhas: [], acao: 'geracao_falhou' }); continue }
-    let laudo: Laudo
-    try { laudo = await params.ler(url, params.referencia) } catch (e) {
-      params.log.push({ slide: params.slide, tentativa: t, ok: false, falhas: [], acao: 'leitura_falhou:' + String((e as Error).message).slice(0, 60) })
-      continue   // sem laudo não aprova: tenta de novo e, esgotado, o slide falha (nunca passa sem conferir)
+    // Falha do LEITOR não é defeito da foto: repete só a leitura (de graça perto de uma foto nova) e, se persistir, o slide falha SEM gerar outra foto paga.
+    let laudo: Laudo | null = null
+    let erroLeitura = ''
+    for (let l = 1; l <= LEITURAS_POR_FOTO && !laudo; l++) {
+      try { laudo = await params.ler(url, params.referencia) } catch (e) { erroLeitura = String((e as Error).message).slice(0, 60) }
+    }
+    if (!laudo) {
+      params.log.push({ slide: params.slide, tentativa: t, ok: false, falhas: [], acao: 'leitura_falhou:' + erroLeitura })
+      break   // sem laudo não aprova e não gasta outra foto: o carrossel falha fechado e a próxima rodada tenta de novo
     }
     const r = avaliar(laudo, params.persona, params.faixa, !!params.referencia)
     if (r.ok) { params.log.push({ slide: params.slide, tentativa: t, ok: true, falhas: [] }); return url }

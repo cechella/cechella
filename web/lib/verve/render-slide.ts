@@ -5,6 +5,8 @@ import sharp from 'sharp'
 import { FAIXA_PADRAO, type Faixa } from './persona'
 import { fotoConferida, leitorClaude, type Leitor, type QaEntrada } from './foto-qa'
 import { sementeDoPost } from './personagem'
+import { KIT } from './brand-kit'
+import type { SlideKit } from './slides-kit'
 
 const PRAZO_MS = 45_000   // a rota tem 60 s no plano atual: depois disso não começa nova tentativa
 
@@ -43,6 +45,7 @@ export async function renderCarrossel(params: {
   persona?: string
   faixa?: Faixa
   instrucao?: string
+  slidesDetalhe?: SlideKit[]   // slides com papel editorial (comparação, checklist...): têm prioridade sobre temas/descricoes (revisão editorial)
   qaLog?: QaEntrada[]   // recebe cada conferência (slide, tentativa, motivo, ação)
   leitor?: Leitor       // injetável nos testes; padrão: modelo de visão
   postId?: string
@@ -66,7 +69,7 @@ export async function renderCarrossel(params: {
   const seed = sementeDoPost(postId)
   const uma = (i: number, referencia?: string) => {
     const isCta = i + 1 === total
-    const tema = temas[i] ?? titulo
+    const tema = params.slidesDetalhe?.[i]?.titulo ?? temas[i] ?? titulo
     return fotoConferida({
       slide: i + 1, persona, faixa, instrucao: params.instrucao, referencia, limite,
       gerar: instrucao => generatePhotoForPost({ tema, pilar, persona, isCta, faixa, indice: i, total, instrucao, referencia, seed }).then(r => r.url),
@@ -83,31 +86,36 @@ export async function renderCarrossel(params: {
       if (!url) return ''
       const isCta = i + 1 === total
       const slideNum = i + 1
-      const slideTema = temas[i] ?? titulo
-      const slideDesc = descricoes[i] ?? undefined
+      const det = params.slidesDetalhe?.[i]
+      // O texto planejado no briefing vale também no ÚLTIMO slide; a chamada fixa só entra quando o plano não trouxe texto para ele.
+      const slideTema = det?.titulo ?? temas[i] ?? (isCta ? 'Percebeu alguma mudança?' : titulo)
+      const slideDesc = det ? det.texto : (descricoes[i] ?? (isCta && !temas[i] ? 'Converse com um médico para uma avaliação individual.' : undefined))
 
       try {
         // Download da foto do Flux
         const res = await fetch(url)
         const photoBuffer = Buffer.from(await res.arrayBuffer())
+        // A foto aprovada fica guardada: corrigir texto ou layout depois não exige gerar (e pagar) outra foto.
+        try { await put(`verve/fotos/${postId}/foto-${String(slideNum).padStart(2, '0')}.jpg`, photoBuffer, { access: 'public', contentType: 'image/jpeg', allowOverwrite: true }) } catch { /* guardar a foto bruta é um extra: não derruba o slide */ }
 
         // Composta texto sobre a foto
         const composed = await composeSlide({
-          titulo: isCta ? 'Percebeu alguma mudança?' : slideTema,
-          descricao: isCta ? 'Converse com um médico para uma avaliação individual.' : slideDesc,
+          titulo: slideTema,
+          descricao: slideDesc,
           badge: slideNum === 1 ? badge : undefined,  // badge só no slide 1
           slideNum,
           totalSlides: total,
           imageBuffer: photoBuffer,
           isCta,
+          papel: det?.papel, itens: det?.itens, colunas: det?.colunas,
         })
 
         // A API de publicação do Instagram documenta JPEG como único formato de imagem: converte antes de subir.
         const jpeg = await sharp(composed).jpeg({ quality: 92, mozjpeg: true }).toBuffer()
         const blob = await put(
-          `verve/slides/${postId}/slide-${String(slideNum).padStart(2, '0')}.jpg`,
+          `verve/slides/${postId}/${KIT.nome}/slide-${String(slideNum).padStart(2, '0')}.jpg`,
           jpeg,
-          { access: 'public', contentType: 'image/jpeg' }
+          { access: 'public', contentType: 'image/jpeg', allowOverwrite: true }
         )
         return blob.url
       } catch {

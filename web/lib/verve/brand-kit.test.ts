@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import sharp from 'sharp'
-import { papelDoSlide, tamanhosDeTexto, KIT, CHIPS_FECHO } from './brand-kit.ts'
+import { papelDoSlide, tamanhosDeTexto, KIT, CHIPS_FECHO, versaoDoLayout } from './brand-kit.ts'
 import { composeSlide } from './compose-slide.ts'
 
 test('papéis do slide: capa, miolo e fecho (o último ou o marcado como CTA)', () => {
@@ -34,4 +34,18 @@ test('renderiza capa, miolo e fecho no kit de marca (1080x1350) e o layout clás
   assert.notDeepEqual(await raw(capa), await raw(miolo))      // a capa (selo e seta) difere do miolo
   assert.notDeepEqual(await raw(miolo), await raw(fecho))     // o fecho (chips) difere do miolo
   assert.notDeepEqual(await raw(capa), await raw(classico))   // o kit difere do layout antigo
+})
+
+test('papéis de comparação e checklist renderizam no kit e a versão do layout vem do endereço da imagem', async () => {
+  const foto = await sharp({ create: { width: 1080, height: 1350, channels: 3, background: { r: 120, g: 100, b: 90 } } }).jpeg().toBuffer()
+  const base = { imageBuffer: foto, totalSlides: 4 }
+  const comp = await composeSlide({ ...base, titulo: 'Qual é a diferença?', slideNum: 2, papel: 'comparacao', colunas: [{ titulo: 'Transição', texto: 'Ciclo irregular, ainda com menstruação.' }, { titulo: 'Menopausa', texto: '12 meses seguidos sem menstruar.' }] })
+  const check = await composeSlide({ ...base, titulo: 'O que observar', slideNum: 3, papel: 'checklist', itens: ['Mudanças no ciclo', 'Alterações do sono', 'Ondas de calor', 'Mudanças de humor'] })
+  const meio = await composeSlide({ ...base, titulo: 'O que observar', slideNum: 3 })
+  for (const png of [comp, check]) { const m = await sharp(png).metadata(); assert.deepEqual([m.format, m.width, m.height], ['png', 1080, 1350]) }
+  const raw = async (b: Buffer) => sharp(b).resize(54, 68).raw().toBuffer()
+  assert.notDeepEqual(await raw(comp), await raw(meio)); assert.notDeepEqual(await raw(check), await raw(meio))
+  assert.equal(papelDoSlide(2, 4, false, 'checklist'), 'checklist')
+  assert.equal(versaoDoLayout('https://x/verve/slides/abc/kit-v2/slide-01.jpg'), 'kit-v2')
+  assert.equal(versaoDoLayout('https://x/verve/slides/abc/slide-01.jpg'), 'clássico')
 })

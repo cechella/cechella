@@ -75,14 +75,27 @@ test('esgotou as tentativas: devolve vazio (falha fechada) e conta como reprovad
   const r = resumoQa(log); assert.equal(r.reprovadas.length, 1); assert.equal(r.reprovadas[0].slide, 1)
 })
 
-test('sem laudo (leitura falhou) a foto NUNCA passa sem conferir', async () => {
+test('sem laudo (leitura falhou) a foto NUNCA passa sem conferir e NÃO gera outra foto paga', async () => {
   const log: QaEntrada[] = []
+  let geradas = 0, leituras = 0
   const url = await fotoConferida({
     slide: 3, persona: 'mulher_35_50', faixa: FAIXA, log,
-    gerar: async () => 'https://img/y',
-    ler: async () => { throw new Error('qa_indisponivel_sem_chave') },
+    gerar: async () => { geradas++; return 'https://img/y' },
+    ler: async () => { leituras++; throw new Error('qa_indisponivel_sem_chave') },
   })
-  assert.equal(url, ''); assert.ok(log.every(e => !e.ok && /leitura_falhou/.test(e.acao ?? '')))
+  assert.equal(url, ''); assert.equal(geradas, 1); assert.equal(leituras, 3)   // 1 foto, 3 leituras, nenhuma foto nova
+  assert.ok(log.every(e => !e.ok && /leitura_falhou/.test(e.acao ?? '')))
+})
+
+test('a leitura que falha uma vez e volta a funcionar aprova a MESMA foto, sem regenerar', async () => {
+  const log: QaEntrada[] = []
+  let geradas = 0, leituras = 0
+  const url = await fotoConferida({
+    slide: 2, persona: 'mulher_35_50', faixa: FAIXA, log,
+    gerar: async () => { geradas++; return 'https://img/k' },
+    ler: async () => { leituras++; if (leituras === 1) throw new Error('qa_laudo_invalido:pessoas'); return laudo() },
+  })
+  assert.equal(url, 'https://img/k'); assert.equal(geradas, 1); assert.equal(leituras, 2)
 })
 
 test('o laudo aceita variações de FORMA do modelo (texto numérico, "true", gênero em outras palavras) e diz QUAL campo falhou', () => {

@@ -4,6 +4,7 @@
 import { useState } from 'react'
 import { emBrasilia } from '@/lib/verve/horario'
 import { legendaRecolhida, resumoPreview } from '@/lib/verve/preview-legenda'
+import { versaoDoLayout } from '@/lib/verve/brand-kit'
 
 export interface PostPreview {
   id: string
@@ -141,7 +142,7 @@ export default function PreviewInstagram(props: {
         {/* Só o essencial; avisos só quando algo faria o post sair diferente do esperado */}
         <div className="text-[11px] text-white/60 leading-snug flex-shrink-0">
           {resumo.avisos.map(x => <p key={x} className="text-red-300 font-semibold">⚠ {x}</p>)}
-          <p>{resumo.slides} imagens · legenda de {resumo.caracteres} caracteres{resumo.hashtags ? ` · ${resumo.hashtags} hashtags` : ''}</p>
+          <p>{resumo.slides} imagens · legenda de {resumo.caracteres} caracteres{resumo.hashtags ? ` · ${resumo.hashtags} hashtags` : ''}{imgs[0] ? ` · layout ${versaoDoLayout(imgs[0])}` : ''}</p>
         </div>
 
         <div className="flex gap-2">
