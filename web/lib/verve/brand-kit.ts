@@ -1,7 +1,7 @@
 // KIT DE MARCA do Dr. Vinícius / Hormone Ecosystem: o que torna todo carrossel reconhecível de longe (aprendizado com referências: identidade fixa em todos os slides,
 // capa com convite a deslizar, texto grande sobre bloco liso e fecho que pede salvar e enviar). A arte e as fotos são nossas; da referência só se aproveita o PRINCÍPIO.
 export const KIT = {
-  nome: 'kit-v1',
+  nome: 'kit-v2',          // v1 = bloco sobre a foto; v2 = foto em cima e faixa de texto embaixo (registrada no caminho de cada imagem)
   cores: {
     faixa: '#1A1512',                // faixa de texto: marrom quase preto, quente
     destaque: '#C9A96E',              // champanhe: linha, selo e seta
@@ -16,9 +16,10 @@ export const KIT = {
   fonteTexto: 'Instrument Sans',
 } as const
 
-export type PapelSlide = 'capa' | 'conteudo' | 'fecho'
+export type PapelSlide = 'capa' | 'conteudo' | 'fecho' | 'comparacao' | 'checklist'
 
-export function papelDoSlide(slideNum: number, totalSlides: number, isCta?: boolean): PapelSlide {
+export function papelDoSlide(slideNum: number, totalSlides: number, isCta?: boolean, explicito?: PapelSlide): PapelSlide {
+  if (explicito) return explicito
   if (isCta || (totalSlides > 1 && slideNum === totalSlides)) return 'fecho'
   return slideNum === 1 ? 'capa' : 'conteudo'
 }
@@ -35,3 +36,11 @@ export const CHIPS_FECHO = ['SALVE PARA RELER', 'ENVIE A QUEM PRECISA']
 
 const svgUri = (svg: string) => `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 export const SETA_DESLIZE = svgUri(`<svg xmlns="http://www.w3.org/2000/svg" width="120" height="36" viewBox="0 0 120 36"><line x1="4" y1="18" x2="112" y2="18" stroke="#C9A96E" stroke-width="4" stroke-linecap="round"/><polyline points="96,4 112,18 96,32" fill="none" stroke="#C9A96E" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>`)
+
+export const CHECK = svgUri(`<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34" viewBox="0 0 34 34"><circle cx="17" cy="17" r="15" fill="none" stroke="#C9A96E" stroke-width="2.5"/><polyline points="9,18 15,24 25,11" fill="none" stroke="#C9A96E" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`)
+
+// Versão do layout registrada no endereço da imagem (ex.: .../kit-v2/slide-01.jpg); posts antigos não têm o trecho e aparecem como "clássico".
+export function versaoDoLayout(url: string): string {
+  const m = String(url).match(/\/(kit-v\d+)\//)
+  return m ? m[1] : 'clássico'
+}

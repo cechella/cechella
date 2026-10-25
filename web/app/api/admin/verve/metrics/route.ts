@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/verve/admin-auth'
+import { valorMetrica } from '@/lib/verve/insights'
+import { montarMetricas } from '@/lib/verve/metricas-painel'
 
 const IG_USER_ID = process.env.INSTAGRAM_USER_ID ?? '17841411826853302'
 const IG_TOKEN   = process.env.INSTAGRAM_ACCESS_TOKEN ?? ''
@@ -14,75 +16,23 @@ async function igGet(path: string, params: Record<string, string> = {}) {
 }
 
 // GET /api/admin/verve/metrics
-// Retorna: seguidores, alcance semanal, sends/reach, saves
+// Números da aba Métricas. Dado desconhecido é null + motivo (nunca zero): a Meta recusa métricas por permissão, por período ou por mídia, e isso não é "desempenho zero".
 export async function GET(req: NextRequest) {
   const auth = await requireAdmin(req)
   if (!auth.ok) return auth.response
   if (!IG_TOKEN) {
     return NextResponse.json({ error: 'INSTAGRAM_ACCESS_TOKEN não configurado' }, { status: 500 })
   }
-
-  const [accountData, insightsData, mediaData] = await Promise.all([
-    // Contagem de seguidores
-    igGet(`/${IG_USER_ID}`, { fields: 'followers_count,media_count' }),
-    // Insights da conta — últimos 7 dias
-    igGet(`/${IG_USER_ID}/insights`, {
-      metric: 'reach,impressions',
-      period: 'week',
-    }),
-    // Últimas 10 mídias para calcular saves e sends
-    igGet(`/${IG_USER_ID}/media`, {
-      fields: 'id,timestamp,media_type,insights.metric(reach,saved,shares)',
-      limit: '10',
-    }),
-  ])
-
-  // Seguidores ganhos na semana via insights
-  let followersGained = 0
-  const followersInsight = await igGet(`/${IG_USER_ID}/insights`, {
-    metric: 'follower_count',
-    period: 'day',
-    since: String(Math.floor((Date.now() - 7 * 24 * 60 * 60 * 1000) / 1000)),
-    until: String(Math.floor(Date.now() / 1000)),
-  }).catch(() => null)
-
-  if (followersInsight?.data?.[0]?.values) {
-    const values: { value: number }[] = followersInsight.data[0].values
-    followersGained = values.reduce((acc: number, v) => acc + (v.value ?? 0), 0)
-  }
-
-  // Alcance semanal
-  let reach = 0
-  if (insightsData?.data) {
-    const reachMetric = insightsData.data.find((d: { name: string }) => d.name === 'reach')
-    if (reachMetric?.values?.[0]?.value) reach = reachMetric.values[0].value
-  }
-
-  // Saves e shares das últimas mídias
-  let totalSaves = 0
-  let totalShares = 0
-  let totalReach = 0
-  if (mediaData?.data) {
-    for (const media of mediaData.data) {
-      const insightList: { name: string; values: { value: number }[] }[] = media.insights?.data ?? []
-      for (const ins of insightList) {
-        const v = ins.values?.[0]?.value ?? 0
-        if (ins.name === 'saved') totalSaves += v
-        if (ins.name === 'shares') totalShares += v
-        if (ins.name === 'reach') totalReach += v
-      }
-    }
-  }
-
-  const sendsReachPct = totalReach > 0 ? ((totalShares / totalReach) * 100).toFixed(1) : '0.0'
-
-  return NextResponse.json({
-    followers_count: accountData.followers_count ?? 0,
-    media_count: accountData.media_count ?? 0,
-    followers_gained_week: followersGained,
-    reach_week: reach,
-    sends_reach_pct: sendsReachPct,
-    saves_recent: totalSaves,
-    updated_at: new Date().toISOString(),
-  })
+  const agora = Math.floor(Date.now() / 1000)
+  const perfil = (await igGet(`/${IG_USER_ID}`, { fields: 'followers_count' })) as Record<string, unknown>
+  const seguidores = !perfil.error && typeof perfil.followers_count === 'number' ? perfil.followers_count : null
+  const conta = (metric: string) => igGet(`/${IG_USER_ID}/insights`, { metric, period: 'day', metric_type: 'total_value', since: String(agora - 7 * 86400), until: String(agora) }).then(valorMetrica)
+  const [alcance7d, ganhos7d] = await Promise.all([conta('reach'), conta('follower_count')])
+  const lista = (await igGet(`/${IG_USER_ID}/media`, { fields: 'id', limit: '10' })) as { data?: Array<{ id?: string }> }
+  const ids = (Array.isArray(lista.data) ? lista.data : []).map(m => m.id).filter((x): x is string => !!x)
+  const midias = await Promise.all(ids.map(async id => {
+    const [saved, shares, reach] = await Promise.all(['saved', 'shares', 'reach'].map(k => igGet(`/${id}/insights`, { metric: k }).then(valorMetrica)))
+    return { saved, shares, reach }
+  }))
+  return NextResponse.json(montarMetricas({ seguidores, ganhos7d, alcance7d, midias }))
 }

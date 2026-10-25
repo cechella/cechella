@@ -1,6 +1,7 @@
 'use client'
 
 import PreviewInstagram from '@/components/verve/PreviewInstagram'
+import { mostrar } from '@/lib/verve/metricas-painel'
 import { emBrasilia } from '@/lib/verve/horario'
 import { useState, useEffect, useRef } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -57,11 +58,14 @@ interface Briefing {
 }
 
 interface Metrics {
-  followers_count: number
-  followers_gained_week: number
-  reach_week: number
-  sends_reach_pct: string
-  saves_recent: number
+  followers_count: number | null
+  followers_gained_week: number | null
+  reach_week: number | null
+  sends_reach_pct: number | null
+  saves_recent: number | null
+  midias_lidas: number
+  midias_total: number
+  motivos: Record<string, string>
   updated_at: string
 }
 
@@ -1100,27 +1104,27 @@ export default function VervePage() {
                 {[
                   {
                     label: 'Seguidores ganhos',
-                    value: metrics ? (metrics.followers_gained_week > 0 ? `+${metrics.followers_gained_week.toLocaleString('pt-BR')}` : metrics.followers_count.toLocaleString('pt-BR')) : '—',
-                    sub: metrics ? (metrics.followers_gained_week > 0 ? 'esta semana' : 'total de seguidores') : 'esta semana',
+                    value: metrics ? (metrics.followers_gained_week !== null ? (metrics.followers_gained_week > 0 ? `+${metrics.followers_gained_week.toLocaleString('pt-BR')}` : '0') : mostrar(null)) : '—',
+                    sub: metrics ? (metrics.followers_gained_week !== null ? 'esta semana' : (metrics.motivos.followers_gained_week ?? 'sem dado')) : 'esta semana',
                     color: '#a855f7', icon: <Users className="w-4 h-4" />,
                   },
                   {
                     label: 'Alcance semanal',
-                    value: metrics ? metrics.reach_week.toLocaleString('pt-BR') : '—',
-                    sub: 'impressões únicas',
+                    value: metrics ? mostrar(metrics.reach_week) : '—',
+                    sub: metrics && metrics.reach_week === null ? (metrics.motivos.reach_week ?? 'sem dado') : 'contas alcançadas em 7 dias',
                     color: '#3b82f6', icon: <TrendingUp className="w-4 h-4" />,
                   },
                   {
                     label: 'Sends / Reach',
-                    value: metrics ? `${metrics.sends_reach_pct}%` : '—',
-                    sub: 'meta: > 5%',
-                    color: parseFloat(metrics?.sends_reach_pct ?? '0') >= 5 ? '#22c55e' : '#eab308',
+                    value: metrics ? mostrar(metrics.sends_reach_pct, '%') : '—',
+                    sub: metrics && metrics.sends_reach_pct === null ? (metrics.motivos.sends_reach_pct ?? 'sem dado') : 'meta: > 5%',
+                    color: (metrics?.sends_reach_pct ?? 0) >= 5 ? '#22c55e' : '#eab308',
                     icon: <BarChart3 className="w-4 h-4" />,
                   },
                   {
                     label: 'Saves (recentes)',
-                    value: metrics ? metrics.saves_recent.toLocaleString('pt-BR') : '—',
-                    sub: 'últimas 10 mídias',
+                    value: metrics ? mostrar(metrics.saves_recent) : '—',
+                    sub: metrics ? (metrics.saves_recent === null ? (metrics.motivos.saves_recent ?? 'sem dado') : `lido em ${metrics.midias_lidas} de ${metrics.midias_total} mídias`) : 'últimas 10 mídias',
                     color: '#f97316', icon: <Sparkles className="w-4 h-4" />,
                   },
                 ].map(m => (
@@ -1135,7 +1139,7 @@ export default function VervePage() {
                 ))}
               </div>
 
-              {metrics && (
+              {metrics && metrics.followers_count !== null && (
                 <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5">
                   <h3 className="text-[10px] font-bold tracking-[0.1em] text-[#3F3F46] uppercase mb-4 flex items-center gap-2">
                     Progresso da meta

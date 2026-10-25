@@ -5,7 +5,8 @@ import { Resvg } from '@resvg/resvg-js'
 import sharp from 'sharp'
 import { FRAUNCES_700_B64 } from './font-fraunces700'
 import { INSTRUMENT_400_B64 } from './font-instrument400'
-import { KIT, papelDoSlide, tamanhosDeTexto, CHIPS_FECHO, SETA_DESLIZE } from './brand-kit'
+import { KIT, papelDoSlide, tamanhosDeTexto, CHIPS_FECHO, SETA_DESLIZE, CHECK } from './brand-kit'
+import type { PapelEditorial } from './slides-kit'
 
 export interface SlideContent {
   titulo: string
@@ -15,6 +16,9 @@ export interface SlideContent {
   totalSlides: number
   imageBuffer: Buffer     // foto gerada pelo Flux (jpeg)
   isCta?: boolean
+  papel?: PapelEditorial          // papel editorial explícito (comparação, checklist...); sem ele, deduz capa/conteúdo/fecho pela posição
+  itens?: string[]                // checklist
+  colunas?: [{ titulo: string; texto: string }, { titulo: string; texto: string }]   // comparação
   layout?: 'kit' | 'classico'   // padrão: kit de marca; 'classico' é o layout anterior (foto cheia com gradiente)
 }
 
@@ -36,7 +40,7 @@ const LARGURA_UTIL = W - 2 * KIT.margem                // 976: o satori não lim
 
 function elementoKit(content: SlideContent, fotoCortada: Buffer) {
   const { titulo, descricao, badge, slideNum, totalSlides, isCta = false } = content
-  const papel = papelDoSlide(slideNum, totalSlides, isCta)
+  const papel = papelDoSlide(slideNum, totalSlides, isCta, content.papel)
   const tam = tamanhosDeTexto(titulo, descricao)
   const c = KIT.cores
   const chip = (texto: string, cheio = true) => ({
@@ -48,7 +52,15 @@ function elementoKit(content: SlideContent, fotoCortada: Buffer) {
   })
   const texto = [
     { type: 'div', props: { style: { fontFamily: KIT.fonteTitulo, fontSize: tam.titulo, fontWeight: 700, lineHeight: 1.02, color: c.texto, letterSpacing: -1 }, children: titulo } },
-    descricao ? { type: 'div', props: { style: { fontSize: tam.descricao, lineHeight: 1.36, color: c.textoSuave }, children: descricao } } : null,
+    descricao && papel !== 'checklist' && papel !== 'comparacao' ? { type: 'div', props: { style: { fontSize: tam.descricao, lineHeight: 1.36, color: c.textoSuave }, children: descricao } } : null,
+    papel === 'checklist' && content.itens ? { type: 'div', props: { style: { display: 'flex', flexDirection: 'column', gap: 12 }, children: content.itens.map(t => ({ type: 'div', props: { style: { display: 'flex', alignItems: 'center', gap: 16 }, children: [
+      { type: 'img', props: { src: CHECK, width: 34, height: 34 } },
+      { type: 'span', props: { style: { fontSize: 32, color: c.texto, lineHeight: 1.2 }, children: t } },
+    ] } })) } } : null,
+    papel === 'comparacao' && content.colunas ? { type: 'div', props: { style: { display: 'flex', gap: 22, width: LARGURA_UTIL }, children: content.colunas.map(col => ({ type: 'div', props: { style: { display: 'flex', flexDirection: 'column', gap: 8, flex: 1, padding: '16px 20px', border: `2px solid ${c.destaque}`, borderRadius: 24 }, children: [
+      { type: 'span', props: { style: { fontSize: 22, fontWeight: 600, letterSpacing: 2, color: c.destaque }, children: col.titulo.toUpperCase() } },
+      { type: 'span', props: { style: { fontSize: 29, lineHeight: 1.3, color: c.texto }, children: col.texto } },
+    ] } })) } } : null,
     papel === 'capa' ? {
       type: 'div', props: { style: { display: 'flex', alignItems: 'center', gap: 18 }, children: [
         { type: 'span', props: { style: { fontSize: 22, fontWeight: 600, letterSpacing: 3, color: c.destaque }, children: 'DESLIZE' } },
