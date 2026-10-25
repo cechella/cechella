@@ -12,7 +12,7 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-// GET /api/admin/verve/post-detalhe?id=...  ou  ?q=menopausa (o carrossel mais recente cujo título contém q)
+// GET /api/admin/verve/post-detalhe?id=...  ou  ?q=menopausa (o carrossel mais recente cujo título contém q)  ou sem parâmetro (o mais recente)
 // Leitura do que o VERVE precisa para REVISAR um post: texto de cada slide (do briefing), legenda, público, objetivo, versão do layout. Não devolve segredos nem altera nada.
 // Acesso: token do agendador (VERVE_PUBLISH_TOKEN) ou administrador logado.
 export async function GET(req: NextRequest) {
@@ -23,9 +23,9 @@ export async function GET(req: NextRequest) {
   const u = new URL(req.url)
   const id = u.searchParams.get('id')?.trim()
   const q = u.searchParams.get('q')?.trim().replace(/[%,()]/g, ' ').slice(0, 60)
-  if (!id && !q) return NextResponse.json({ error: 'id_ou_q_obrigatorio' }, { status: 400 })
   let query = supabase.from('verve_posts').select('*').eq('tipo', 'carrossel')
-  query = id ? query.eq('id', id) : query.ilike('titulo', `%${q}%`).not('titulo', 'ilike', '%· versão B').order('created_at', { ascending: false }).limit(1)
+  // sem id nem q: o carrossel mais recente (que não seja uma versão B)
+  query = id ? query.eq('id', id) : (q ? query.ilike('titulo', `%${q}%`) : query).not('titulo', 'ilike', '%· versão B').order('created_at', { ascending: false }).limit(1)
   const { data } = await query
   const post = Array.isArray(data) ? data[0] : data
   if (!post) return NextResponse.json({ error: 'post_nao_encontrado' }, { status: 404 })

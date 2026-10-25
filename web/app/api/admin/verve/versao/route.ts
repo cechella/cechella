@@ -50,5 +50,5 @@ export async function POST(req: NextRequest) {
     await supabase.from('verve_posts').delete().eq('id', nova.id).eq('status', 'rascunho')   // falha fechada: nada de versão pela metade
     return NextResponse.json({ ok: false, erro: r.erro, qa: r.qa }, { status: r.status })
   }
-  return NextResponse.json({ ok: true, id: nova.id, id_original: orig.id, titulo: nova.titulo, imagens: r.imagens, qa: r.qa, status: 'aguardando' })
+  return NextResponse.json({ ok: true, id: nova.id, id_original: orig.id, titulo: nova.titulo, imagens: r.imagens, qa: r.qa, geracoes: r.geracoes, status: 'aguardando' })
 }

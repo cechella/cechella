@@ -8,7 +8,7 @@ import { resumoQa, type Leitor, type QaEntrada } from './foto-qa'
 import type { SlideKit } from './slides-kit'
 
 export type ResultadoRender =
-  | { ok: true; imagens: number; persona: string; faixa: Faixa; slides_do_gustavo: boolean; image_urls: string[]; qa: ReturnType<typeof resumoQa> }
+  | { ok: true; imagens: number; persona: string; faixa: Faixa; slides_do_gustavo: boolean; image_urls: string[]; qa: ReturnType<typeof resumoQa>; geracoes: number }
   | { ok: false; erro: string; status: number; geradas?: number; esperadas?: number; qa?: ReturnType<typeof resumoQa> }
 
 export interface OpcoesRender {
@@ -66,7 +66,7 @@ export async function renderPost(supabase: SupabaseClient, postId: string, opcoe
   // Qualquer status permitido volta para "aguardando": trocar a imagem invalida uma autorização anterior, o CEO vê e autoriza de novo.
   const { error } = await supabase.from('verve_posts').update({ image_urls: urls, status: 'aguardando' }).eq('id', post.id).eq('status', post.status)
   if (error) return { ok: false, erro: error.message, status: 500 }
-  return { ok: true, imagens: urls.length, persona, faixa, slides_do_gustavo: slides.length > 0, image_urls: urls, qa }
+  return { ok: true, imagens: urls.length, persona, faixa, slides_do_gustavo: slides.length > 0, image_urls: urls, qa, geracoes: qaLog.length }
 }
 
 export async function renderPostRascunho(supabase: SupabaseClient, postId: string): Promise<ResultadoRender> {
