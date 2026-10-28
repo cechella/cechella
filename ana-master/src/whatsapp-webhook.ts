@@ -541,7 +541,7 @@ async function processReferidosFills(phone: string, message: string): Promise<vo
       .update({ profissao, hobby })
       .eq('indicado_por_telefone', p13)
       .ilike('nome', nome)
-      .catch(() => {})
+      .then(() => {}).catch(() => {})
   }
 }
 
