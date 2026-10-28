@@ -1,4 +1,5 @@
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY!
+export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? process.env.OPENAI_API_KEY!
 
 // Legacy Realtime stack (gpt-realtime-2.1 + marin) — kept as rollback
 export const REALTIME_DEFAULTS = {

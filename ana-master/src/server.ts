@@ -9,6 +9,7 @@ import { injectPaymentConfirmed, injectReferralLinkSent, injectPixDataSent, inje
 import { injectLivePaymentConfirmed, injectLiveReferralLinkSent, injectLivePixDataSent, injectLiveReferidosUpdate } from './live-registry.js'
 import { iniciarColetaReferidos } from './tools/whatsapp.js'
 import { startSipServer } from './sip-server.js'
+import { getWebhookVerifyToken, processWebhookPayload } from './whatsapp-webhook.js'
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN!
@@ -351,6 +352,25 @@ app.get('/transcript-stream/:callSid', (req, reply) => {
     clearInterval(heartbeat)
     unregister()
   })
+})
+
+// WhatsApp Business webhook — GET for Meta verification, POST for incoming messages
+app.get('/webhook/whatsapp', async (req, reply) => {
+  const query = req.query as Record<string, string>
+  const mode = query['hub.mode']
+  const token = query['hub.verify_token']
+  const challenge = query['hub.challenge']
+  if (mode === 'subscribe' && token === getWebhookVerifyToken()) {
+    return reply.send(challenge)
+  }
+  return reply.status(403).send('Forbidden')
+})
+
+app.post('/webhook/whatsapp', async (req, reply) => {
+  reply.status(200).send('OK') // respond immediately to Meta
+  processWebhookPayload(req.body).catch((e: unknown) =>
+    app.log.error({ e }, 'WhatsApp webhook processing error')
+  )
 })
 
 await app.listen({ port: PORT, host: '0.0.0.0' })
