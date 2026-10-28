@@ -8,6 +8,7 @@ import { supabase, saveMemory, getVoiceConfig } from './supabase.js'
 import { injectPaymentConfirmed, injectReferralLinkSent, injectPixDataSent, injectReferidosUpdate } from './session-registry.js'
 import { injectLivePaymentConfirmed, injectLiveReferralLinkSent, injectLivePixDataSent, injectLiveReferidosUpdate } from './live-registry.js'
 import { iniciarColetaReferidos } from './tools/whatsapp.js'
+import { startSipServer } from './sip-server.js'
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN!
@@ -353,3 +354,6 @@ app.get('/transcript-stream/:callSid', (req, reply) => {
 })
 
 await app.listen({ port: PORT, host: '0.0.0.0' })
+
+// Start SIP/TLS server for WhatsApp Business Calling (Gustavo's number)
+startSipServer('')
