@@ -1,4 +1,4 @@
-import { ZAPI_BASE, ZAPI_CLIENT_TOKEN, APP_URL } from '../config.js'
+import { ZAPI_BASE, ZAPI_CLIENT_TOKEN, APP_URL, META_ANDRE_PHONE_ID, META_ANDRE_TOKEN } from '../config.js'
 import { supabase } from '../supabase.js'
 
 async function zapiPost(endpoint: string, body: unknown) {
@@ -10,14 +10,31 @@ async function zapiPost(endpoint: string, body: unknown) {
   return resp.ok
 }
 
+async function metaPost(telefone: string, mensagem: string) {
+  const to = normalizePhone(telefone)
+  const resp = await fetch(`https://graph.facebook.com/v20.0/${META_ANDRE_PHONE_ID}/messages`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${META_ANDRE_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      messaging_product: 'whatsapp',
+      to,
+      type: 'text',
+      text: { body: mensagem },
+    }),
+  })
+  return resp.ok
+}
+
 function normalizePhone(telefone: string) {
   const digits = String(telefone).replace(/\D/g, '')
   return digits.startsWith('55') ? digits : `55${digits}`
 }
 
 export async function sendWhatsApp(telefone: string, mensagem: string) {
-  const phone = normalizePhone(telefone)
-  await zapiPost('send-text', { phone, message: mensagem })
+  await metaPost(telefone, mensagem)
 }
 
 // Fornecedores — lidos do Supabase (configuracoes.fornecedores), fallback hardcoded
@@ -42,7 +59,7 @@ export async function pedidoMikit(paciente: string, qtdKits: number, tamanhoLuva
     `• Trocaters: ${tamTrocater}mm\n\n` +
     `*Endereço de entrega:*\n${enderecoEntrega}\n\n` +
     `Por favor, confirme disponibilidade e prazo. Frete PAC por conta do destinatário. 🙏`
-  return zapiPost('send-text', { phone, message })
+  return metaPost(phone, message)
 }
 
 export async function pedidoBios(paciente: string, prescricao: string[], enderecoEntrega: string) {
@@ -54,7 +71,7 @@ export async function pedidoBios(paciente: string, prescricao: string[], enderec
     `${itens}\n\n` +
     `*Endereço de entrega:*\n${enderecoEntrega}\n\n` +
     `Desconto padrão 20%. Por favor, confirme orçamento e prazo. 🙏`
-  return zapiPost('send-text', { phone, message })
+  return metaPost(phone, message)
 }
 
 export async function reservarSalaMK(data: string, horarioInicio: string, horarioFim: string, qtdPacientes: number) {
@@ -66,7 +83,7 @@ export async function reservarSalaMK(data: string, horarioInicio: string, horari
     `🕐 *Horário:* ${horarioInicio} às ${horarioFim}\n` +
     `👥 *Pacientes:* ${qtdPacientes}\n\n` +
     `Por favor, confirme disponibilidade e envie a chave PIX para pagamento. 🙏`
-  return zapiPost('send-text', { phone, message })
+  return metaPost(phone, message)
 }
 
 export async function sendWelcome(telefone: string) {
@@ -75,7 +92,7 @@ export async function sendWelcome(telefone: string) {
     `🎉 Bem-vinda à família Hormone Ecosystem!\n\n` +
     `Você completou todas as etapas com sucesso. Seu procedimento está confirmado.\n\n` +
     `Em breve nossa equipe entrará em contato para os próximos passos. 💜`
-  await zapiPost('send-text', { phone, message: mensagem })
+  await metaPost(phone, mensagem)
 }
 
 export async function iniciarColetaReferidos(telefone: string): Promise<{ link: string; token: string } | null> {
@@ -111,7 +128,6 @@ export async function iniciarColetaReferidos(telefone: string): Promise<{ link: 
     })
 
   const phone = normalizePhone(telefone)
-  const TUTORIAL_VIDEO_URL = 'https://pub-7091151189544b0980e12e81533a5213.r2.dev/tutorialwpp.mp4'
   const caption =
     `✅ Código recebido!\n\n` +
     `1️⃣ Toque no + à esquerda\n` +
@@ -121,19 +137,7 @@ export async function iniciarColetaReferidos(telefone: string): Promise<{ link: 
     `Você pode selecionar várias de uma vez! 💜\n\n` +
     `👉 ${link}`
 
-  let enviou = false
-  try {
-    const r = await fetch(`${ZAPI_BASE}/send-video`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_CLIENT_TOKEN },
-      body: JSON.stringify({ phone, video: TUTORIAL_VIDEO_URL, caption }),
-    })
-    enviou = r.ok
-  } catch { /* fallback abaixo */ }
-
-  if (!enviou) {
-    await zapiPost('send-text', { phone, message: caption })
-  }
+  await metaPost(phone, caption)
 
   return { link, token }
 }
