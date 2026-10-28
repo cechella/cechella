@@ -42,6 +42,6 @@ export async function GET(req: NextRequest) {
   const imgs: string[] = Array.isArray(post.image_urls) ? post.image_urls : []
   return NextResponse.json({
     id: post.id, titulo: post.titulo, tipo: post.tipo, pilar: post.pilar, status: post.status, scheduled_at: post.scheduled_at ?? null,
-    legenda: post.legenda ?? '', publico_alvo: publico, objetivo, slides, imagens: imgs.length, layout: imgs[0] ? versaoDoLayout(imgs[0]) : null,
+    legenda: post.legenda ?? '', publico_alvo: publico, objetivo, slides, imagens: imgs.length, imagens_urls: imgs, layout: imgs[0] ? versaoDoLayout(imgs[0]) : null,
   })
 }
