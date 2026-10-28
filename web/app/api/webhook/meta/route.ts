@@ -3,8 +3,8 @@ import { NextRequest, NextResponse } from 'next/server';
 const N8N_WEBHOOK_URL = 'http://35.255.229.131:5678/webhook/meta-whatsapp';
 const VERIFY_TOKEN = 'cechella2026';
 const ANA_MASTER_URL = process.env.ANA_MASTER_URL || 'https://ana-master.hormoneecosystem.com';
-// Phone Number ID do número Ageless (+55 47 8473-1049) — ligações do André
-const ANDRE_PHONE_NUMBER_ID = '1320620911136699';
+// Phone Number ID do André (+55 47 8850-7977 — Suporte Dr. Vinícius Cechella)
+const ANDRE_PHONE_NUMBER_ID = process.env.ANDRE_PHONE_NUMBER_ID || '535564639640424';
 
 // GET — verificação do Meta (handshake inicial)
 export async function GET(request: NextRequest) {

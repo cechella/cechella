@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-
-const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text'
-const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
+import { metaSendText } from '@/lib/meta-whatsapp'
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,17 +15,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'Campos obrigatórios ausentes' }, { status: 400 })
     }
 
-    // Envia via Z-API
-    const zapiResp = await fetch(ZAPI_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_TOKEN },
-      body: JSON.stringify({ phone, message }),
-    })
-    if (!zapiResp.ok) {
-      return NextResponse.json({ ok: false, error: 'Falha ao enviar Z-API' }, { status: 502 })
+    const ok = await metaSendText(phone, message)
+    if (!ok) {
+      return NextResponse.json({ ok: false, error: 'Falha ao enviar via Meta API' }, { status: 502 })
     }
 
-    // Busca historico atual e adiciona mensagem do humano
     const { data: lead } = await supabase
       .from('leads')
       .select('historico')
@@ -41,10 +33,7 @@ export async function POST(req: NextRequest) {
       ts: new Date().toISOString(),
     })
 
-    await supabase
-      .from('leads')
-      .update({ historico })
-      .eq('id', leadId)
+    await supabase.from('leads').update({ historico }).eq('id', leadId)
 
     return NextResponse.json({ ok: true })
   } catch (e) {
