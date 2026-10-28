@@ -536,12 +536,13 @@ async function processReferidosFills(phone: string, message: string): Promise<vo
     const profissao = match[2].trim()
     const hobby = match[3].trim()
     if (!nome || (!profissao && !hobby)) continue
-    await supabase
-      .from('contatos_referidos')
-      .update({ profissao, hobby })
-      .eq('indicado_por_telefone', p13)
-      .ilike('nome', nome)
-      .then(() => {}).catch(() => {})
+    try {
+      await supabase
+        .from('contatos_referidos')
+        .update({ profissao, hobby })
+        .eq('indicado_por_telefone', p13)
+        .ilike('nome', nome)
+    } catch { }
   }
 }
 
