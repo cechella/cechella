@@ -79,7 +79,7 @@ export async function scheduleCallback(callSid: string): Promise<void> {
         const memories2: Record<string, any> = call.memories ?? {}
         const nomeLead = String(memories2.nome_lead ?? '').trim()
         const nomeParam = nomeLead ? `&nome=${encodeURIComponent(nomeLead)}` : ''
-        const twimlUrl = `${PUBLIC_HOST.replace(/^https?:\/\//, 'https://')}/twiml?contexto=retomada&from=${call.telefone}${nomeParam}`
+        const twimlUrl = `${PUBLIC_HOST.replace(/^https?:\/\//, 'https://')}/twiml?contexto=retomada&numero=${call.telefone}${nomeParam}`
         const body = new URLSearchParams({
           To: call.telefone.startsWith('+') ? call.telefone : `+${call.telefone}`,
           From: TWILIO_PHONE_NUMBER!,

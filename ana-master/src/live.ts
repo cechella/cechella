@@ -467,14 +467,16 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
     }
   }
 
-  liveWs.on('open', () => {
-    console.log('[ANA LIVE] OpenAI WS open — sending session.start')
+  liveWs.on('open', async () => {
+    // Espera o histórico (máx. 3s) para a memória de retomada entrar já no início da sessão.
+    const contextBlock = await contextReadyPromise
+    console.log(`[ANA LIVE] OpenAI WS open — sending session.start${contextBlock ? ' (com retomada)' : ''}`)
     sendToLive({
       type: 'session.start',
       event_id: 'ana_live_start',
       session: {
         model,
-        instructions: instructions + (opts.contexto ? `\n\nCONTEXTO: ${opts.contexto}` : ''),
+        instructions: instructions + (opts.contexto ? `\n\nCONTEXTO: ${opts.contexto}` : '') + (contextBlock ? `\n\n${contextBlock}` : ''),
         input: [],
         audio: {
           format: { type: 'audio/pcmu', rate: 8000 },
@@ -496,19 +498,8 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
 
       case 'session.started':
         console.log('[ANA LIVE] session.started id=', event.session?.id)
-        // Wait for buildSessionContext before greeting — ensures context is injected first
-        contextReadyPromise.then(contextBlock => {
-          if (contextBlock) {
-            // session.instructions.append não existe na Live API — usamos session.update
-            sendToLive({
-              type: 'session.update',
-              event_id: `ctx_${Date.now()}`,
-              session: {
-                instructions: instructions + `\n\n${contextBlock}`,
-              },
-            })
-            console.log('[ANA LIVE] 📚 contexto injetado via session.update')
-          }
+        // O contexto de retomada já foi enviado no session.start (a Live API recusa session.update de instructions)
+        contextReadyPromise.then(() => {
           sendToLive({
             type: 'session.commentary.append',
             event_id: 'ana_greet',
