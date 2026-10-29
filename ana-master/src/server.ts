@@ -8,6 +8,8 @@ import { supabase, saveMemory, getVoiceConfig } from './supabase.js'
 import { injectPaymentConfirmed, injectReferralLinkSent, injectPixDataSent, injectReferidosUpdate } from './session-registry.js'
 import { injectLivePaymentConfirmed, injectLiveReferralLinkSent, injectLivePixDataSent, injectLiveReferidosUpdate } from './live-registry.js'
 import { iniciarColetaReferidos } from './tools/whatsapp.js'
+import { startSipServer } from './sip-server.js'
+import { getWebhookVerifyToken, processWebhookPayload } from './whatsapp-webhook.js'
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN!
@@ -159,6 +161,7 @@ app.post('/twiml', async (req, reply) => {
   const referidor = query?.referidor ?? ''
   const nome = query?.nome ?? ''
   const origem = query?.origem ?? ''
+  const profile = query?.profile ?? ''
   const host = PUBLIC_HOST.replace(/^https?:\/\//, '')
 
   const twiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -171,6 +174,7 @@ app.post('/twiml', async (req, reply) => {
       <Parameter name="referidor" value="${referidor}" />
       <Parameter name="nome" value="${nome}" />
       <Parameter name="origem" value="${origem}" />
+      <Parameter name="profile" value="${profile}" />
     </Stream>
   </Connect>
 </Response>`
@@ -200,8 +204,10 @@ app.get('/media-stream', { websocket: true }, async (socket, req) => {
 
   rawWs.off('message', earlyListener)
 
+  // profile is passed via Twilio Stream <Parameter> (arrives in 'start' event customParameters)
+  // We pass it through opts so createAnaLiveSession can load the right prompt
   if (voiceStack === 'live') {
-    createAnaLiveSession(rawWs, { contexto, earlyQueue })
+    createAnaLiveSession(rawWs, { contexto, earlyQueue, profile: query?.profile ?? '' })
       .then(() => { app.log.info('ANA LIVE session started') })
       .catch((err: unknown) => {
         app.log.error({ err }, 'Failed to start Live session — closing stream')
@@ -228,6 +234,7 @@ app.post('/outbound', async (req, reply) => {
   const contexto = body?.contexto ?? ''
   const nome = body?.nome ?? ''
   const origem = body?.origem ?? ''
+  const profile = body?.profile ?? ''
 
   if (!numero) return reply.status(400).send({ error: 'numero obrigatório' })
 
@@ -239,6 +246,7 @@ app.post('/outbound', async (req, reply) => {
   if (contexto) twimlUrl.searchParams.set('contexto', contexto)
   if (nome) twimlUrl.searchParams.set('nome', nome)
   if (origem) twimlUrl.searchParams.set('origem', origem)
+  if (profile) twimlUrl.searchParams.set('profile', profile)
 
   const recordingCallback = `${PUBLIC_HOST}/recording-status`
 
@@ -346,4 +354,26 @@ app.get('/transcript-stream/:callSid', (req, reply) => {
   })
 })
 
+// WhatsApp Business webhook — GET for Meta verification, POST for incoming messages
+app.get('/webhook/whatsapp', async (req, reply) => {
+  const query = req.query as Record<string, string>
+  const mode = query['hub.mode']
+  const token = query['hub.verify_token']
+  const challenge = query['hub.challenge']
+  if (mode === 'subscribe' && token === getWebhookVerifyToken()) {
+    return reply.send(challenge)
+  }
+  return reply.status(403).send('Forbidden')
+})
+
+app.post('/webhook/whatsapp', async (req, reply) => {
+  reply.status(200).send('OK') // respond immediately to Meta
+  processWebhookPayload(req.body).catch((e: unknown) =>
+    app.log.error({ e }, 'WhatsApp webhook processing error')
+  )
+})
+
 await app.listen({ port: PORT, host: '0.0.0.0' })
+
+// Start SIP/TLS server for WhatsApp Business Calling (Gustavo's number)
+startSipServer('')

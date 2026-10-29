@@ -304,12 +304,13 @@ INÍCIO DA LIGAÇÃO
 
 Você recebe a ligação e fala PRIMEIRO.`
 
-async function loadGoldenPrompt(): Promise<string> {
+async function loadPrompt(profile?: string): Promise<string> {
+  const profileKey = profile === 'andre' ? 'andre' : 'gold'
   try {
     const { data } = await supabase
       .from('ana_realtime_profiles')
       .select('instructions')
-      .eq('profile', 'gold')
+      .eq('profile', profileKey)
       .single()
     if (data?.instructions) return data.instructions as string
   } catch (e) {
@@ -318,8 +319,9 @@ async function loadGoldenPrompt(): Promise<string> {
   return ANA_LIVE_PROMPT_FALLBACK
 }
 
-export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string; referidor?: string; nome?: string; origem?: string; earlyQueue?: (Buffer | string)[] } = {}) {
-  const [dbConfig, instructions] = await Promise.all([getVoiceConfig(), loadGoldenPrompt()])
+export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: string; referidor?: string; nome?: string; origem?: string; profile?: string; earlyQueue?: (Buffer | string)[] } = {}) {
+  const [dbConfig, baseInstructions] = await Promise.all([getVoiceConfig(), loadPrompt(opts.profile)])
+  let instructions = baseInstructions
   const voice  = dbConfig?.voice  ?? 'bossa'
   const model  = dbConfig?.model  ?? 'gpt-live-1'
 
@@ -831,11 +833,17 @@ export async function createAnaLiveSession(twilioWs: any, opts: { contexto?: str
         const paramReferidor = String(msg.start?.customParameters?.referidor ?? '').trim()
         const paramNome = String(msg.start?.customParameters?.nome ?? '').trim()
         const paramOrigem = String(msg.start?.customParameters?.origem ?? '').trim()
+        const paramProfile = String(msg.start?.customParameters?.profile ?? '').trim()
         opts = {
           ...opts,
           ...(paramReferidor ? { referidor: paramReferidor } : {}),
           ...(paramNome ? { nome: paramNome } : {}),
           ...(paramOrigem ? { origem: paramOrigem } : {}),
+          ...(paramProfile ? { profile: paramProfile } : {}),
+        }
+        // Se profile mudou (ex: 'andre' vindo do TwiML), recarrega o prompt correto
+        if (paramProfile && paramProfile !== (opts.profile ?? '')) {
+          loadPrompt(paramProfile).then(p => { instructions = p }).catch(() => {})
         }
 
         console.log(`[ANA LIVE] start callSid=${callSid} telefone=${telefone} referidor=${opts.referidor ?? ''} streamSid=${streamSid} raw_keys=${Object.keys(msg.start ?? {}).join(',')}`)
