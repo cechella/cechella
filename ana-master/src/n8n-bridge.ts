@@ -58,10 +58,40 @@ async function enviarTemplateRetomada(phone: string): Promise<MetaResult | null>
   return r
 }
 
+// Botões da Meta a partir das mensagens que o N8N já envia (o N8N não muda).
+// Os títulos dos botões de resposta são exatamente os textos que o nó "Detectar Opt-Out" já reconhece.
+const LINK_PAGAMENTO = /https?:\/\/\S+\/pagar\/[\w-]+/
+export function formatarInterativo(message: string): Record<string, unknown> | null {
+  const corpo = (texto: string) => texto.replace(/\n{3,}/g, '\n\n').trim().slice(0, 1024)
+  const botoes = (titulos: string[]) => ({
+    buttons: titulos.map(t => ({ type: 'reply', reply: { id: t.toLowerCase(), title: t } })),
+  })
+
+  const link = message.match(LINK_PAGAMENTO)?.[0]
+  if (link) {
+    const texto = corpo(message.replace(link, '').replace(/👇\s*$/m, '👇'))
+    return { type: 'interactive', interactive: { type: 'cta_url', body: { text: texto || 'Finalize seu pagamento com segurança 👇' }, action: { name: 'cta_url', parameters: { display_text: 'Pagar agora', url: link } } } }
+  }
+
+  if (/responde com \*?1\*? ou \*?2\*?/i.test(message)) {
+    const texto = corpo(message.replace(/\*?1️⃣\*?\s*—[^\n]*\n?/, '').replace(/\*?2️⃣\*?\s*—[^\n]*\n?/, '').replace(/responde com[^\n]*/i, 'Escolha uma opção 👇'))
+    return { type: 'interactive', interactive: { type: 'button', body: { text: texto }, action: botoes(['Remover da lista', 'Falar depois']) } }
+  }
+
+  if (/manda(r)? \*?voltar\*?/i.test(message)) {
+    return { type: 'interactive', interactive: { type: 'button', body: { text: corpo(message) }, action: botoes(['Voltar']) } }
+  }
+
+  return null
+}
+
 // Envia como a Z-API faria. Nunca lança: devolve a resposta no formato que o N8N espera.
 export async function enviarTexto(phoneRaw: string, message: string): Promise<{ zaapId: string; messageId: string; id: string; pendente?: boolean }> {
   const phone = digits(phoneRaw)
-  const r = await metaPost({ to: phone, type: 'text', text: { body: message, preview_url: true } })
+  const interativo = formatarInterativo(message)
+  let r: MetaResult = interativo ? await metaPost({ to: phone, ...interativo }) : { ok: false, code: -1, message: '' }
+  if (interativo && !r.ok && !JANELA_FECHADA.has(r.code)) console.error('[BRIDGE] botão recusado, enviando como texto', phone, r.code, r.message)
+  if (!r.ok) r = await metaPost({ to: phone, type: 'text', text: { body: message, preview_url: true } })
   if (r.ok) return { zaapId: r.id, messageId: r.id, id: r.id }
 
   if (JANELA_FECHADA.has(r.code)) {
@@ -84,7 +114,9 @@ export async function entregarPendentes(phoneRaw: string): Promise<number> {
   if (error || !data?.length) return 0
   let entregues = 0
   for (const p of data) {
-    const r = await metaPost({ to: phone, type: 'text', text: { body: p.mensagem, preview_url: true } })
+    const interativo = formatarInterativo(p.mensagem)
+    let r: MetaResult = interativo ? await metaPost({ to: phone, ...interativo }) : { ok: false, code: -1, message: '' }
+    if (!r.ok) r = await metaPost({ to: phone, type: 'text', text: { body: p.mensagem, preview_url: true } })
     if (!r.ok) { console.error('[BRIDGE] pendente não entregue', phone, r.code, r.message); break }
     await supabase.from('whatsapp_pendentes').update({ entregue_em: new Date().toISOString() }).eq('id', p.id)
     entregues++
