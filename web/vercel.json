@@ -1,8 +1,9 @@
 {
   "framework": "nextjs",
-  "git": {
-    "deploymentEnabled": {
-      "claude/*": false
+  "crons": [
+    {
+      "path": "/api/admin/ana-aprendizado/cron",
+      "schedule": "0 11 * * 1"
     }
-  }
+  ]
 }
