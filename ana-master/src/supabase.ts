@@ -97,6 +97,22 @@ export async function executeGateTransition(
 
 // setCallStatusGanho is now handled inside gate_transition RPC for GATE_VALIDACAO.
 // This function remains only to update the leads table after GATE_VALIDACAO passes.
+const etapaAgente: Record<string, number> = {
+  apresentacao: 1, conexao: 2, di: 3, speech: 4,
+  fechamento: 5, referidos: 6, validacao: 7, ganho: 8,
+}
+
+export async function updateLeadEtapa(telefone: string, etapa: string) {
+  const t = String(telefone).replace(/\D/g, '')
+  const bare = t.replace(/^55/, '')
+  const num = etapaAgente[etapa] ?? 1
+  await supabase
+    .from('leads')
+    .update({ etapa, etapa_agente: num, updated_at: new Date().toISOString() })
+    .or(`telefone.eq.${t},telefone.eq.55${bare},telefone.eq.${bare}`)
+    .lt('etapa_agente', num)
+}
+
 export async function updateLeadsGanho(callSid: string) {
   const { data } = await supabase.from('ana_calls').select('telefone').eq('call_sid', callSid).single()
   if (data?.telefone) {
@@ -181,7 +197,7 @@ export async function checkReferidos(token: string): Promise<{ total: number; co
     .eq('token_indicacao', token)
     .maybeSingle()
 
-  if (!lead?.telefone) return { total: 0, completo: false, semDados: 20, semMensagem: 0, missaoCompleta: false }
+  if (!lead?.telefone) return { total: 0, completo: false, semDados: 0, semMensagem: 0, missaoCompleta: false }
 
   const phone = String(lead.telefone).replace(/\D/g, '')
   // Build all plausible formats: exact, with 55 prefix, without 55 prefix, and without double 55
@@ -219,14 +235,22 @@ export interface VoiceConfig {
   voice_stack: string
 }
 
-export async function getVoiceConfig(): Promise<VoiceConfig | null> {
+export async function getVoiceConfig(profile = 'gold'): Promise<VoiceConfig | null> {
   try {
+    // Try profile-specific config first, fall back to gold
     const { data } = await supabase
+      .from('ana_realtime_profiles')
+      .select('voice,model,vad_threshold,vad_prefix_padding_ms,vad_silence_duration_ms,transcription_model,noise_reduction,max_output_tokens,reasoning_effort')
+      .eq('profile', profile)
+      .single()
+    if (data) return data as unknown as VoiceConfig
+    // Fallback: legacy ana_voice_config table
+    const { data: legacy } = await supabase
       .from('ana_voice_config')
       .select('*')
       .eq('profile', 'gold')
       .single()
-    return data as VoiceConfig | null
+    return legacy as VoiceConfig | null
   } catch {
     return null
   }
@@ -241,6 +265,7 @@ export interface SessionContext {
   nomeLead?: string
   tokenIndicacao?: string
   pagamentoConfirmado?: boolean
+  referidosInfo?: { total: number; semDados: number; semMensagem: number; missaoCompleta: boolean }
 }
 
 export async function buildSessionContext(telefone: string, callSid: string): Promise<SessionContext> {
@@ -249,32 +274,72 @@ export async function buildSessionContext(telefone: string, callSid: string): Pr
     const bare = norm.replace(/^55/, '')
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
 
-    const { data: prevCall } = await supabase
+    // Read authoritative lead name from leads table (pre-stored for referidos leads; prevents capturing Ana's own speech as name)
+    const { data: leadRow } = await supabase
+      .from('leads')
+      .select('nome')
+      .or(`telefone.eq.${norm},telefone.eq.${bare}`)
+      .maybeSingle()
+    const nomeFromLeads = leadRow?.nome || null
+
+    // Fetch all recent calls for this number — payment/token may be on an older call
+    const { data: prevCalls } = await supabase
       .from('ana_calls')
-      .select('call_sid, status, memories, created_at')
+      .select('call_sid, status, stage, memories, created_at')
       .or(`telefone.eq.${norm},telefone.eq.${bare}`)
       .neq('call_sid', callSid)
       .gte('created_at', since)
       .order('created_at', { ascending: false })
+      .limit(20)
+
+    if (!prevCalls || prevCalls.length === 0) return { prevState: 'fresh', contextBlock: '' }
+
+    const prevCall = prevCalls[0] // most recent for status/memories baseline
+    const allCallSids = prevCalls.map((c: any) => c.call_sid)
+
+    const memories: Record<string, any> = prevCall.memories ?? {}
+    const isGanho = prevCalls.some((c: any) => c.status === 'ganho')
+
+    // Look for most recent payment (approved or pending) — pending still tells us which method was chosen
+    const { data: pagamento } = await supabase
+      .from('pagamentos')
+      .select('status, metodo, call_sid')
+      .in('call_sid', allCallSids)
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 
-    if (!prevCall) return { prevState: 'fresh', contextBlock: '' }
+    // Fallback: search by lead_telefone in case the payment call_sid doesn't match any prev call
+    // (happens on resumed/callback calls where the original call chain is broken)
+    let pagamentoPorTelefone: { status: string; metodo: string } | null = null
+    if (pagamento?.status !== 'approved') {
+      const { data: pt } = await supabase
+        .from('pagamentos')
+        .select('status, metodo')
+        .or(`lead_telefone.eq.${norm},lead_telefone.eq.${bare}`)
+        .eq('status', 'approved')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      pagamentoPorTelefone = pt ?? null
+    }
 
-    const memories: Record<string, any> = prevCall.memories ?? {}
-    const isGanho = prevCall.status === 'ganho'
+    const pagamentoConfirmado = pagamento?.status === 'approved' || !!pagamentoPorTelefone
+    const metodoFromPagamento = pagamento?.metodo ?? pagamentoPorTelefone?.metodo
 
-    const { data: pagamento } = await supabase
-      .from('pagamentos')
-      .select('status, metodo')
-      .eq('call_sid', prevCall.call_sid)
-      .eq('status', 'approved')
-      .maybeSingle()
+    // Merge memories across all calls — most recent wins, but pick up token/nome from any call
+    const mergedMemories: Record<string, any> = {}
+    for (const c of [...prevCalls].reverse()) {
+      const mem = c.memories ?? {}
+      for (const [k, v] of Object.entries(mem)) {
+        // Never overwrite a non-null value with null — preserves e.g. forma_pagamento_escolhida across retomadas
+        if (v !== null && v !== undefined) mergedMemories[k] = v
+      }
+    }
 
-    const pagamentoConfirmado = !!pagamento
-    const metodoEscolhido = (memories.forma_pagamento_escolhida ?? pagamento?.metodo) as 'pix' | 'cartao' | undefined
-    const nomeLead = memories.nome_lead as string | undefined
-    const tokenIndicacao = memories.token_indicacao as string | undefined
+    const metodoEscolhido = (mergedMemories.forma_pagamento_escolhida ?? metodoFromPagamento) as 'pix' | 'cartao' | undefined
+    const nomeLead = (nomeFromLeads || mergedMemories.nome_lead) as string | undefined
+    const tokenIndicacao = mergedMemories.token_indicacao as string | undefined
 
     if (isGanho) {
       const contextBlock = `
@@ -288,22 +353,227 @@ ${metodoEscolhido ? `Forma de pagamento anterior: ${metodoEscolhido}` : ''}
       return { prevState: 'completed', contextBlock, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }
     }
 
+    // Check referidos state if token exists — gives Ana exact knowledge of where the lead stopped
+    let referidosInfo: { total: number; semDados: number; semMensagem: number; missaoCompleta: boolean } | null = null
+    if (tokenIndicacao) {
+      try {
+        referidosInfo = await checkReferidos(tokenIndicacao)
+      } catch { /* ignore */ }
+    }
+
+    // Merge transcripts from ALL calls (concatenate, not overwrite — Object.assign loses older turns)
+    const allTranscripts: Array<{ role: string; text: string; ts?: any }> = []
+    for (const c of [...prevCalls].reverse()) {
+      const tr = (c.memories as any)?.transcript
+      if (Array.isArray(tr)) allTranscripts.push(...tr)
+    }
+    const transcript: Array<{ role: string; text: string }> = allTranscripts.length ? allTranscripts : (mergedMemories.transcript ?? [])
+    const leadLines = transcript
+      .filter((t: any) => t.role === 'user' || t.role === 'lead')
+      .map((t: any) => t.text || '')
+    const anaLines = transcript
+      .filter((t: any) => t.role === 'assistant' || t.role === 'ana')
+      .map((t: any) => t.text || '')
+    const leadText = leadLines.join(' ')
+    const transcriptText = transcript.map((t: any) =>
+      `${(t.role === 'assistant' || t.role === 'ana') ? 'ANA' : 'LEAD'}: ${t.text}`
+    ).join('\n')
+
+    // Extract nome from lead speech (fallback to memories.nome_lead)
+    const nomeFromTranscript = (() => {
+      for (const line of leadLines) {
+        const m = line.match(/(?:meu nome [eéEÉ]\s+|me chamo\s+|sou a\s+)([A-ZÀ-Úa-zà-ú]{2,}(?:\s+[A-ZÀ-Úa-zà-ú]{2,})?)/i)
+        if (m) return m[1].trim()
+      }
+      // Also check if Ana repeated the name back ("Ah, Maria!" or "Maria, que bom")
+      const skip = new Set(['Oi', 'Olá', 'Tudo', 'Que', 'Sim', 'Não', 'Ok', 'Certo', 'Claro', 'Nossa', 'Ah', 'Pois', 'Ótimo', 'Perfeito'])
+      for (const line of anaLines) {
+        const m = line.match(/^(?:Ah[,!]?\s+|Oi[,!]?\s+|Olá[,!]?\s+)?([A-ZÀ-Ú][a-zà-ú]{2,})(?:[,!]|\s+que\s+(?:bom|legal|prazer))/i)
+        if (m && !skip.has(m[1])) return m[1].trim()
+      }
+      return null
+    })()
+    const nomeResolvido = (mergedMemories.nome_lead as string | undefined) || nomeFromTranscript || null
+
+    // Extract profissão — search lead lines for profession keywords directly
+    const profissaoExtraida = (() => {
+      const profKeywords = /\b(contadora?|enfermeira|médica|professora|advogada|administradora|nutricionista|fisioterapeuta|psicóloga|dentista|arquiteta|engenheira|vendedora|gerente|diretora|empresária|autônoma|aposentada|contabilidade|contábil|pedagoga|farmacêutica|veterinária|esteticista|cabeleireira|recepcionista|secretária|assistente)\b/i
+      // First: look for "sou [profissão]" or "trabalho como [profissão]"
+      for (const line of leadLines) {
+        const m = line.match(/(?:sou\s+|trabalho como\s+|trabalho de\s+)([a-záéíóúàâêôûãõç\s]{2,40})/i)
+        if (m && profKeywords.test(m[1])) return m[1].replace(/,.*/, '').trim()
+        // Or line itself starts with / contains the keyword
+        const k = line.match(profKeywords)
+        if (k) return k[1].trim()
+      }
+      return null
+    })()
+    // Extract symptoms/dores from lead speech
+    const sintomasExtraidos = (() => {
+      const sintomasKeywords = /\b(falta de energia|baixa de libido|libido baixa|irritabilidade|insônia|cansaço|fadiga|ganho de peso|perda de peso|queda de cabelo|fogacho|calor|ansiedade|depressão|falta de foco|falta de concentração|dor|humor|bem.estar|disposição|memória)\b/gi
+      const found = new Set<string>()
+      for (const line of leadLines) {
+        const matches = line.match(sintomasKeywords)
+        if (matches) matches.forEach((m: string) => found.add(m.toLowerCase()))
+      }
+      return found.size > 0 ? Array.from(found).join(', ') : null
+    })()
+
+    // Search quem indicou in lead lines only (no LEAD:/ANA: prefix confusion)
+    const quemIndicouExtraido = (() => {
+      for (const line of leadLines) {
+        // "foi a Adriana", "foi o João", "Adriana. Uma mensagem" after previous line ended with "foi a"
+        const m = line.match(/(?:foi\s+(?:a|o)\s+|me indicou\s+|indicação de\s+)([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][a-záéíóúâêîôûàãõç]{2,})/i)
+        if (m) return m[1].trim()
+        // Line starts directly with a name (e.g. "Adriana. Uma mensagem...")
+        const mStart = line.match(/^([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][a-záéíóúâêîôûàãõç]{2,})\.\s+(?:Uma|um|Ela|ele|Foi|Fez)/i)
+        if (mStart) return mStart[1].trim()
+      }
+      // Also check "Não, foi Adriana" pattern
+      for (const line of leadLines) {
+        const m = line.match(/foi\s+([A-ZÁÉÍÓÚÂÊÎÔÛÀÃÕÇ][a-záéíóúâêîôûàãõç]{2,})/i)
+        if (m && !['a','o','um','uma'].includes(m[1].toLowerCase())) return m[1].trim()
+      }
+      return null
+    })()
+
+    // Linear stage scores — di_qualificacao (post-combinado DI questions) sits above combinado
+    const stageScore: Record<string, number> = { apresentacao: 1, conexao: 2, di: 3, combinado: 3.5, di_qualificacao: 3.7, speech: 4, fechamento: 5, referidos: 6, validacao: 7, ganho: 8 }
+    const stageMap: Record<string, number> = { apresentacao: 1, conexao: 2, di: 3, combinado: 3, di_qualificacao: 3, speech: 4, fechamento: 5, referidos: 6, validacao: 7, ganho: 8 }
+
+    // Find the most advanced call (highest stage score; ties broken by transcript length)
+    const mostAdvancedCall = prevCalls.reduce((best: any, c: any) => {
+      const cScore = stageScore[c.stage ?? ''] ?? 1
+      const bestScore = stageScore[best.stage ?? ''] ?? 1
+      if (cScore > bestScore) return c
+      if (cScore === bestScore) {
+        const cLen = (c.memories?.transcript ?? []).length
+        const bestLen = (best.memories?.transcript ?? []).length
+        return cLen > bestLen ? c : best
+      }
+      return best
+    }, prevCalls[0])
+
+    const stageMostAdv = (mostAdvancedCall as any).stage as string | undefined
+    const etapaNum = stageMap[stageMostAdv ?? ''] ?? 1
+    const combinadoJaAceito = (stageScore[stageMostAdv ?? ''] ?? 1) >= 3.5  // combinado(3.5), di_qualificacao(3.7), speech(4)+
+
     const etapas: string[] = []
+    if (stageMostAdv && stageMostAdv !== 'apresentacao') etapas.push(`- Etapa mais avançada: ${stageMostAdv} (${etapaNum})`)
     if (pagamentoConfirmado) etapas.push(`- Pagamento já confirmado via ${metodoEscolhido ?? 'método anterior'}`)
     else if (metodoEscolhido) etapas.push(`- Lead escolheu ${metodoEscolhido} mas pagamento não foi confirmado`)
-    if (tokenIndicacao) etapas.push('- Link de indicações já foi enviado')
-    if (nomeLead) etapas.push(`- Nome da lead: ${nomeLead}`)
+    if (tokenIndicacao) etapas.push('- Link de indicações já foi enviado no WhatsApp')
+    if (nomeResolvido) etapas.push(`- Nome da lead: ${nomeResolvido}`)
+    if (profissaoExtraida) etapas.push(`- Profissão mencionada: ${profissaoExtraida}`)
+    if (quemIndicouExtraido) etapas.push(`- Quem indicou: ${quemIndicouExtraido}`)
+    if (sintomasExtraidos) etapas.push(`- Sintomas relatados: ${sintomasExtraidos}`)
+    if (referidosInfo && referidosInfo.total > 0) {
+      etapas.push(`- Referidos já enviados: ${referidosInfo.total}`)
+      if (referidosInfo.semDados > 0) etapas.push(`- Faltam dados (profissão/hobby) em ${referidosInfo.semDados} contato(s)`)
+      if (referidosInfo.semMensagem > 0) etapas.push(`- ${referidosInfo.semMensagem} contato(s) ainda não receberam mensagem`)
+      if (referidosInfo.missaoCompleta) etapas.push('- Missão completa: 20 referidos com dados e mensagens enviadas')
+    }
+
+    // Detect transcript states for payment context (unpaid calls only)
+    const transcriptTexto = allTranscripts.map(t => t.text?.toLowerCase() ?? '').join(' ')
+    // Link was already sent if Ana said she'd send the link/PIX to WhatsApp
+    const linkJaEnviado = !pagamentoConfirmado && /vou te mandar o link|vou te enviar os dados|chegou o link|chegou o pix|dados do pix chegaram|link no whatsapp/i.test(transcriptTexto)
+    // Objection only relevant if link was NOT yet sent
+    const temObjecaoPreco = !pagamentoConfirmado && !linkJaEnviado && /não tenho dinheiro|nao tenho dinheiro|tá caro|ta caro|muito caro|parcel|não tenho|nao tenho|caro|sem dinheiro/.test(transcriptTexto)
+
+    let proximoPasso: string
+    if (!pagamentoConfirmado && metodoEscolhido && linkJaEnviado) {
+      const metodoLabel = metodoEscolhido === 'cartao' ? 'link de cartão' : 'dados do PIX'
+      proximoPasso = `O ${metodoLabel} já foi enviado no WhatsApp da lead. Pergunte se chegou e se conseguiu finalizar o pagamento. NÃO reenvie sem perguntar antes.`
+    } else if (!pagamentoConfirmado && metodoEscolhido && temObjecaoPreco) {
+      proximoPasso = 'A lead mencionou que estava caro ou perguntou sobre parcelamento. NÃO reenvie o PIX diretamente. Primeiro reconheça a objeção, apresente a opção de cartão parcelado em até 6x, e só então pergunte como ela prefere pagar.'
+    } else if (!pagamentoConfirmado && metodoEscolhido) {
+      proximoPasso = 'Retome o pagamento — pergunte se chegou o PIX/link no WhatsApp.'
+    } else if (pagamentoConfirmado && !tokenIndicacao) {
+      proximoPasso = 'Pagamento confirmado. Peça o favor das indicações (WAIT_FOR_YES) e aguarde o sistema enviar o link.'
+    } else if (pagamentoConfirmado && tokenIndicacao && referidosInfo && referidosInfo.total > 0) {
+      if (referidosInfo.missaoCompleta) {
+        proximoPasso = 'Missão completa! Parabenize a lead e encerre com a mensagem de boas-vindas.'
+      } else if (referidosInfo.semDados > 0 && referidosInfo.semMensagem > 0) {
+        proximoPasso = `Lead já enviou ${referidosInfo.total} contatos. Diga que você viu e que faltam profissão/hobby em ${referidosInfo.semDados} e mensagens em ${referidosInfo.semMensagem}. Peça para completar no link.`
+      } else if (referidosInfo.semDados > 0) {
+        proximoPasso = `Lead já enviou ${referidosInfo.total} contatos. Diga que viu e que faltam profissão/hobby em ${referidosInfo.semDados}. Peça para completar no link.`
+      } else if (referidosInfo.semMensagem > 0) {
+        proximoPasso = `Lead já enviou ${referidosInfo.total} contatos com dados completos. Faltam mensagens para ${referidosInfo.semMensagem}. Peça para abrir o link e tocar em "Enviar mensagem".`
+      } else if (referidosInfo.total < 20) {
+        proximoPasso = `Lead já enviou ${referidosInfo.total} contatos. Faltam ${20 - referidosInfo.total} para completar a meta de 20.`
+      } else {
+        proximoPasso = 'Pagamento confirmado e link enviado. Verifique o progresso com verificar_referidos.'
+      }
+    } else if (pagamentoConfirmado && tokenIndicacao) {
+      proximoPasso = 'Pagamento confirmado e link enviado. Pergunte se a lead chegou a abrir o link e enviar contatos. Se sim, oriente o passo a passo.'
+    } else if (etapaNum === 2) {
+      const fatos: string[] = []
+      if (nomeResolvido) fatos.push(`nome=${nomeResolvido}`)
+      if (profissaoExtraida) fatos.push(`profissão=${profissaoExtraida}`)
+      if (quemIndicouExtraido) fatos.push(`indicada por=${quemIndicouExtraido}`)
+      if (sintomasExtraidos) fatos.push(`sintomas=${sintomasExtraidos}`)
+      proximoPasso = `${fatos.length ? fatos.join(', ') + '. ' : ''}Etapa 2 (conexão). Não repita o que já sabe. Use nome/profissão/sintomas e avance ao DI.`
+    } else if (etapaNum === 3) {
+      const fatos: string[] = []
+      if (nomeResolvido) fatos.push(`nome=${nomeResolvido}`)
+      if (profissaoExtraida) fatos.push(`profissão=${profissaoExtraida}`)
+      if (quemIndicouExtraido) fatos.push(`indicada por=${quemIndicouExtraido}`)
+      if (sintomasExtraidos) fatos.push(`sintomas=${sintomasExtraidos}`)
+      if (combinadoJaAceito) {
+        proximoPasso = `${fatos.length ? fatos.join(', ') + '. ' : ''}COMBINADO JÁ ACEITO — não repita. Veja as falas abaixo. Continue apenas da PRÓXIMA PERGUNTA indicada, sem repetir perguntas que já têm resposta. Não pule para o speech antes de terminar o DI.`
+      } else {
+        proximoPasso = `${fatos.length ? fatos.join(', ') + '. ' : ''}Etapa 3 (DI/combinado). NÃO recomece do zero. Continue de onde parou.`
+      }
+    } else if (etapaNum === 4) {
+      proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Etapa 4 (speech). Retome o speech de onde parou, sem repetir.`
+    } else if (etapaNum === 5) {
+      proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Etapa 5 (fechamento). Retome o pagamento de onde parou.`
+    } else if (etapaNum === 6) {
+      proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Etapa 6 (referidos). Continue o processo de onde parou.`
+    } else if (etapaNum === 7) {
+      proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Etapa 7 (validação). Retome de onde parou.`
+    } else {
+      proximoPasso = `${nomeResolvido ? `nome=${nomeResolvido}. ` : ''}Retome sem repetir etapas já concluídas.`
+    }
+
+    // Last 5 turns of the most advanced call — fully autonomous for all stages (500-token limit on thinking.append)
+    const advTranscriptForBlock: Array<{role: string; text: string}> = (mostAdvancedCall as any).memories?.transcript ?? []
+
+    // Autonomous for ALL stages: find the last ANA turn with no LEAD response after it
+    const lastUnansweredAna = (() => {
+      for (let i = advTranscriptForBlock.length - 1; i >= 0; i--) {
+        const t = advTranscriptForBlock[i]
+        if (t.role === 'assistant' || t.role === 'ana') {
+          const hasLeadAfter = advTranscriptForBlock.slice(i + 1).some(
+            (x: any) => x.role === 'user' || x.role === 'lead'
+          )
+          if (!hasLeadAfter) return (t.text || '').trim()
+          break
+        }
+      }
+      return null
+    })()
+
+    const lastTurnsBlock = (() => {
+      const lastTurns = advTranscriptForBlock.slice(-5)
+      if (!lastTurns.length) return ''
+      const lines = lastTurns.map((t: any) => {
+        const role = (t.role === 'assistant' || t.role === 'ana') ? 'ANA' : 'LEAD'
+        return `${role}: ${(t.text || '').trim()}`
+      }).join('\n')
+      const unansweredLine = lastUnansweredAna
+        ? `\nPRÓXIMA PERGUNTA (sem resposta ainda): "${lastUnansweredAna}" — faça só essa, sem repetir as que já têm resposta acima.`
+        : ''
+      return `\n\n--- FALAS DA ETAPA MAIS AVANÇADA ---\n${lines}\n--- CONTINUE A PARTIR DAQUI ---${unansweredLine}`
+    })()
 
     const contextBlock = `
-
---- RETOMADA DE LIGAÇÃO ANTERIOR ---
-Esta lead já foi contactada anteriormente mas a ligação caiu antes de concluir.
-Retome de forma natural, sem repetir etapas já concluídas.
+[RETOMADA] Ligação caiu. Retome sem repetir o já dito.
 ${etapas.join('\n')}
-Contexto: ${pagamentoConfirmado ? 'Pague confirmado — avance para referidos' : metodoEscolhido ? 'Retome o pagamento' : 'Retome desde a apresentação do produto'}
---- FIM RETOMADA ---`
+Próximo: ${proximoPasso}${lastTurnsBlock}`
 
-    return { prevState: 'resume', contextBlock, metodoEscolhido, nomeLead, tokenIndicacao, pagamentoConfirmado }
+    return { prevState: 'resume', contextBlock, metodoEscolhido, nomeLead: nomeResolvido ?? nomeLead, tokenIndicacao, pagamentoConfirmado, referidosInfo: referidosInfo ?? undefined }
   } catch (e: any) {
     console.error('[CTX] buildSessionContext erro:', e.message)
     return { prevState: 'fresh', contextBlock: '' }

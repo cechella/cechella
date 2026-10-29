@@ -8,6 +8,8 @@ import { supabase, saveMemory, getVoiceConfig } from './supabase.js'
 import { injectPaymentConfirmed, injectReferralLinkSent, injectPixDataSent, injectReferidosUpdate } from './session-registry.js'
 import { injectLivePaymentConfirmed, injectLiveReferralLinkSent, injectLivePixDataSent, injectLiveReferidosUpdate } from './live-registry.js'
 import { iniciarColetaReferidos } from './tools/whatsapp.js'
+import { getWebhookVerifyToken, processWebhookPayload } from './whatsapp-webhook.js'
+import { enviarTexto } from './n8n-bridge.js'
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN!
@@ -473,6 +475,35 @@ app.post('/deploy-webhook', async (req: any, reply: any) => {
     else console.log('[DEPLOY] ✅ sucesso:', stdout.slice(-200))
   })
   return { ok: true, message: 'deploy iniciado' }
+})
+
+// WhatsApp (Meta Cloud API) — GET para verificação da Meta, POST para mensagens recebidas
+app.get('/webhook/whatsapp', async (req, reply) => {
+  const query = req.query as Record<string, string>
+  if (query['hub.mode'] === 'subscribe' && query['hub.verify_token'] === getWebhookVerifyToken()) {
+    return reply.send(query['hub.challenge'])
+  }
+  return reply.status(403).send('Forbidden')
+})
+
+app.post('/webhook/whatsapp', async (req, reply) => {
+  reply.status(200).send('OK')
+  processWebhookPayload(req.body).catch((e: unknown) =>
+    app.log.error({ e }, 'WhatsApp webhook processing error')
+  )
+})
+
+// Imitação da Z-API: quem chamava api.z-api.io (N8N, site) chama este servidor, que envia pela Meta.
+app.post('/zapi/instances/:inst/token/:tok/:acao', async (req, reply) => {
+  const { tok, acao } = req.params as { inst: string; tok: string; acao: string }
+  if (!process.env.ZAPI_TOKEN || tok !== process.env.ZAPI_TOKEN) return reply.status(401).send({ error: 'unauthorized' })
+  const body = (req.body ?? {}) as { phone?: string; message?: string }
+  if (acao !== 'send-text') {
+    app.log.warn({ acao }, '[BRIDGE] ação Z-API não suportada')
+    return reply.status(400).send({ error: `ação não suportada: ${acao}` })
+  }
+  if (!body.phone || !body.message) return reply.status(400).send({ error: 'phone e message são obrigatórios' })
+  return reply.send(await enviarTexto(body.phone, body.message))
 })
 
 await app.listen({ port: PORT, host: '0.0.0.0' })
