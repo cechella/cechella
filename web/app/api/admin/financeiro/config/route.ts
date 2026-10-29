@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 
 const MP_TOKEN = process.env.MP_ACCESS_TOKEN || 'APP_USR-1603783113978504-062408-d67a1021538897e0341f70bb7645fdcf-2669863266'
 const ZAPI_INSTANCE = '3F4D4A5044DBE1E458808A5553EDB71F'
-const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
+const ZAPI_TOKEN = '039297EE5982433C7EFA38C5'
 const ZAPI_CLIENT_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
 
 function makeClient() {
@@ -36,7 +36,7 @@ async function checkZAPI(): Promise<{ ok: boolean; latencia: number }> {
   const t0 = Date.now()
   try {
     const resp = await fetch(
-      `https://api.z-api.io/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}/status`,
+      `https://ana-master.hormoneecosystem.com/zapi/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}/status`,
       { headers: { 'Client-Token': ZAPI_CLIENT_TOKEN }, signal: AbortSignal.timeout(5000) }
     )
     return { ok: resp.ok, latencia: Date.now() - t0 }

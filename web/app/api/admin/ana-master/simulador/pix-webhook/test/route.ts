@@ -9,7 +9,7 @@ const supabase = createClient(
   { auth: { autoRefreshToken: false, persistSession: false } }
 )
 
-const ZAPI_BASE = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5'
+const ZAPI_BASE = 'https://ana-master.hormoneecosystem.com/zapi/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5'
 const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
 const TUTORIAL_VIDEO_URL = 'https://pub-7091151189544b0980e12e81533a5213.r2.dev/tutorialwpp.mp4'
 const APP_URL = 'https://www.hormoneecosystem.com'

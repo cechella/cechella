@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 const ZAPI_INSTANCE = '3F4D4A5044DBE1E458808A5553EDB71F'
 const ZAPI_TOKEN = '039297EE5982433C7EFA38C5'
 const ZAPI_CLIENT_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
-const ZAPI_BASE = `https://api.z-api.io/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}`
+const ZAPI_BASE = `https://ana-master.hormoneecosystem.com/zapi/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}`
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY ?? ''
 const FROM_EMAIL = 'Hormone Ecosystem <alertas@hormoneecosystem.com>'
