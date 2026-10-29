@@ -1045,7 +1045,15 @@ async function loadGoldenPrompt(profile = 'gold'): Promise<string> {
         console.log('[ANA LIVE] ✅ prompt migrado no Supabase')
         return ANA_LIVE_PROMPT_FALLBACK
       }
-      return data.instructions as string
+      if (profile !== 'gold') return data.instructions as string
+      // Complemento opcional (técnicas extras) — sem a linha no banco, o prompt Gold fica idêntico.
+      const { data: extra } = await supabase
+        .from('ana_realtime_profiles')
+        .select('instructions')
+        .eq('profile', 'gold_complemento')
+        .maybeSingle()
+      const complemento = (extra?.instructions as string | undefined)?.trim()
+      return complemento ? `${data.instructions}\n\n${complemento}` : data.instructions as string
     }
   } catch (e) {
     console.error(`[ANA LIVE] Failed to load prompt profile=${profile}:`, e)
