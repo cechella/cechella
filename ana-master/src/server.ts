@@ -10,6 +10,7 @@ import { injectLivePaymentConfirmed, injectLiveReferralLinkSent, injectLivePixDa
 import { iniciarColetaReferidos } from './tools/whatsapp.js'
 import { startSipServer } from './sip-server.js'
 import { getWebhookVerifyToken, processWebhookPayload } from './whatsapp-webhook.js'
+import { enviarTexto } from './n8n-bridge.js'
 
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID!
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN!
@@ -371,6 +372,19 @@ app.post('/webhook/whatsapp', async (req, reply) => {
   processWebhookPayload(req.body).catch((e: unknown) =>
     app.log.error({ e }, 'WhatsApp webhook processing error')
   )
+})
+
+// Imitação da Z-API para o N8N: os nós que chamavam api.z-api.io passam a chamar este servidor, que envia pela Meta.
+app.post('/zapi/instances/:inst/token/:tok/:acao', async (req, reply) => {
+  const { tok, acao } = req.params as { inst: string; tok: string; acao: string }
+  if (!process.env.ZAPI_TOKEN || tok !== process.env.ZAPI_TOKEN) return reply.status(401).send({ error: 'unauthorized' })
+  const body = (req.body ?? {}) as { phone?: string; message?: string }
+  if (acao !== 'send-text') {
+    app.log.warn({ acao }, '[BRIDGE] ação Z-API não suportada')
+    return reply.status(400).send({ error: `ação não suportada: ${acao}` })
+  }
+  if (!body.phone || !body.message) return reply.status(400).send({ error: 'phone e message são obrigatórios' })
+  return reply.send(await enviarTexto(body.phone, body.message))
 })
 
 await app.listen({ port: PORT, host: '0.0.0.0' })

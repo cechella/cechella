@@ -91,6 +91,16 @@ No Explorador da Graph API (app Ana Instituto DV):
 
 Note que o user-agent da Meta é `facebookplatform` na verificação (GET) e `facebookexternalua` / `Webhooks/1.0` nos eventos (POST).
 
+## Cérebro: N8N (fluxo original de 8 etapas) — `WHATSAPP_ENGINE=n8n`
+
+Desde 29/10/2026 o WhatsApp usa o fluxo original do N8N ("Hormone Agent — Dr. Vinícius 7 Passos", 42 nós). Só o transporte mudou de Z-API para Meta:
+
+- **Entrada:** Meta → `ana-master /webhook/whatsapp` → `src/n8n-bridge.ts` converte para o formato `ReceivedCallback` da Z-API → `http://localhost:5678/webhook/whatsapp-webhook` (N8N).
+- **Saída:** os nós do N8N chamam `https://ana-master.hormoneecosystem.com/zapi/instances/<inst>/token/<ZAPI_TOKEN>/send-text` (antes `https://api.z-api.io/...`; trocado em `workflow_entity` e `workflow_history`). O ana-master envia pela Meta. Só `send-text` é suportado; o token do caminho precisa bater com `ZAPI_TOKEN` do `.env`.
+- **Janela de 24h:** se a Meta recusar (fora da janela), a mensagem vai para `whatsapp_pendentes`, o lead recebe o template `ana_retomar_conversa` (botão "Pode enviar") e as pendentes são entregues assim que ele responder. Templates criados: `ana_retomar_conversa`, `ana_indicacao`, `ana_lembrete`.
+- **Voltar ao código TypeScript** (`whatsapp-webhook.ts`): remover `WHATSAPP_ENGINE` do `.env` e reiniciar. Para voltar o N8N à Z-API, restaurar o backup em `~/backups/n8n-20261029-1958/database.sqlite` com o container parado.
+- A plataforma de aprendizado (abaixo) hoje alimenta só o modo TypeScript; no modo N8N ainda não é usada.
+
 ## Plataforma de aprendizado (`/admin/ana-aprendizado`)
 
 O roteiro das 8 etapas não muda. A plataforma só acrescenta uma seção **MATERIAL DE CONSULTA** ao prompt; quando não há nada ativo (ou o banco falha), o prompt é idêntico ao original.
