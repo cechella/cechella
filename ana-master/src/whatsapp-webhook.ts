@@ -8,6 +8,7 @@ import { supabase } from './supabase.js'
 import { META_ANDRE_PHONE_ID, META_ANDRE_TOKEN, APP_URL, ANTHROPIC_API_KEY } from './config.js'
 import { iniciarColetaReferidos } from './tools/whatsapp.js'
 import { materialDeConsulta } from './aprendizado.js'
+import { engineN8n, encaminharParaN8n } from './n8n-bridge.js'
 
 const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'hormone-wh-2025'
 const ANA_MODEL = 'claude-haiku-4-5-20251001'
@@ -642,6 +643,11 @@ export async function processWebhookPayload(body: any): Promise<void> {
     const messages = value?.messages
 
     if (!messages || messages.length === 0) return
+
+    if (engineN8n()) {
+      await encaminharParaN8n(value)
+      return
+    }
 
     for (const msg of messages) {
       const phone = msg.from as string
