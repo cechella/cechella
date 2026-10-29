@@ -7,6 +7,7 @@
 import { supabase } from './supabase.js'
 import { META_ANDRE_PHONE_ID, META_ANDRE_TOKEN, APP_URL, ANTHROPIC_API_KEY } from './config.js'
 import { iniciarColetaReferidos } from './tools/whatsapp.js'
+import { materialDeConsulta } from './aprendizado.js'
 
 const WHATSAPP_VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN ?? 'hormone-wh-2025'
 const ANA_MODEL = 'claude-haiku-4-5-20251001'
@@ -57,7 +58,7 @@ interface Lead {
   dor_principal: string | null
   etapa_agente: number
   total_referidos: number
-  historico: Array<{ role: string; content: string; ts?: string }>
+  historico: Array<{ role: string; content: string; ts?: string; etapa?: number; grupo?: 'A' | 'B' }>
   origem: string | null
   atendimento_humano: boolean
   metodo_pagamento: string | null
@@ -167,7 +168,7 @@ async function processVCards(phone: string, contacts: any[]): Promise<void> {
 
 // ── Prompt builder (mirrors N8N montar-prompt.js) ─────────────────────────────
 
-function buildPrompt(lead: Lead, message: string, referidos: { total: number; lista: string; grupos: string[] }): { systemPrompt: string; messages: any[] } {
+function buildPrompt(lead: Lead, message: string, referidos: { total: number; lista: string; grupos: string[] }, material = ''): { systemPrompt: string; messages: any[] } {
   const nome = lead.nome ?? 'você'
   const dor = lead.dor_principal ?? 'sintomas hormonais'
   const etapa = lead.etapa_agente ?? 1
@@ -448,7 +449,7 @@ ${scriptEtapa}
 
 ${PERFIL}
 
-${KNOWLEDGE}
+${KNOWLEDGE}${material ? `\n\n${material}` : ''}
 
 RESPONDA SEMPRE EM JSON COM ESTE FORMATO EXATO:
 {
@@ -587,19 +588,22 @@ export async function handleWhatsAppMessage(phone: string, message: string, cont
   const referidos = await getReferidosInfo(phone)
 
   // Build prompt and call Claude
-  const { systemPrompt, messages } = buildPrompt(lead, message, referidos)
+  const material = await materialDeConsulta(lead.etapa_agente ?? 1, p13, message)
+  const { systemPrompt, messages } = buildPrompt(lead, message, referidos, material.texto)
   const result = await callClaude(systemPrompt, messages, lead.etapa_agente)
 
-  // Build updated historico
+  // Build updated historico (etapa/grupo alimentam os exemplos e o relatório semanal)
   const historico = [...(lead.historico ?? [])]
-  if (message) historico.push({ role: 'user', content: message, ts: new Date().toISOString() })
-  historico.push({ role: 'assistant', content: result.resposta, ts: new Date().toISOString() })
+  const meta = { etapa: lead.etapa_agente ?? 1, grupo: material.grupo }
+  if (message) historico.push({ role: 'user', content: message, ts: new Date().toISOString(), ...meta })
+  historico.push({ role: 'assistant', content: result.resposta, ts: new Date().toISOString(), ...meta })
 
   // Persist updates
   const patch: Partial<Lead> = {
     historico,
     etapa_agente: result.proxima_etapa,
-  }
+    updated_at: new Date().toISOString(),
+  } as Partial<Lead>
   if (result.nome_lead) patch.nome = result.nome_lead
   if (result.dor_principal) patch.dor_principal = result.dor_principal
   if (result.metodo_pagamento) patch.metodo_pagamento = result.metodo_pagamento

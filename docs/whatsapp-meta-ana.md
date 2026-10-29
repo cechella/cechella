@@ -91,6 +91,16 @@ No Explorador da Graph API (app Ana Instituto DV):
 
 Note que o user-agent da Meta é `facebookplatform` na verificação (GET) e `facebookexternalua` / `Webhooks/1.0` nos eventos (POST).
 
+## Plataforma de aprendizado (`/admin/ana-aprendizado`)
+
+O roteiro das 8 etapas não muda. A plataforma só acrescenta uma seção **MATERIAL DE CONSULTA** ao prompt; quando não há nada ativo (ou o banco falha), o prompt é idêntico ao original.
+
+- **Conhecimento (Parte 1):** cole uma transcrição/aula → o Claude separa em técnicas (`ana_conhecimento`, status `rascunho`). Status: `rascunho`/`inativo` = não usado; `teste` = só grupo B; `ativo` = todos. Técnicas por etapa ou para todas, limite de ~6.000 caracteres por mensagem.
+- **Exemplos (Parte 2):** quando um lead que pagou tem histórico marcado com etapa, os trechos de cada etapa vão para `ana_exemplos` (na análise semanal ou no botão "Buscar vendas agora"). A Ana recebe até 2 trechos da etapa atual, priorizando ⭐ destaque e palavras em comum com a mensagem.
+- **Relatório semanal (Parte 3):** toda segunda 08:00 (Vercel Cron `/api/admin/ana-aprendizado/cron`, exige `CRON_SECRET`) ou pelo botão "Rodar análise agora". Calcula conversão, onde os leads param e o A/B; o Claude propõe técnicas (`ana_sugestoes`). Aprovar = vira técnica `teste`; você decide ativar para todos depois de comparar os grupos.
+- **Grupo A/B:** sorteio fixo pelo telefone (`grupoTeste`, mesma função em `ana-master/src/aprendizado.ts` e `web/lib/ana-aprendizado/core.ts` — manter idênticas). Cada mensagem nova no `historico` grava `etapa` e `grupo`.
+- **Instalação:** rodar `ana-master/supabase/ana_aprendizado.sql` no Supabase; o site usa `ANTHROPIC_API_KEY` (e opcional `ANA_APRENDIZADO_MODEL`) e `CRON_SECRET` na Vercel.
+
 ## Pendências
 
 - [ ] Adicionar crédito e recarga automática no Claude Console (saldo estava em US$ 0,02).
