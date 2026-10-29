@@ -28,19 +28,24 @@ function normalizePhone(raw: string): string {
 
 async function metaSend(to: string, text: string): Promise<void> {
   const phone = normalizePhone(to)
-  await fetch(`https://graph.facebook.com/v20.0/${META_ANDRE_PHONE_ID}/messages`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${META_ANDRE_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      to: phone,
-      type: 'text',
-      text: { body: text },
-    }),
-  }).catch(e => console.error('[WH] metaSend error', e.message))
+  try {
+    const resp = await fetch(`https://graph.facebook.com/v20.0/${META_ANDRE_PHONE_ID}/messages`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${META_ANDRE_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: phone,
+        type: 'text',
+        text: { body: text },
+      }),
+    })
+    if (!resp.ok) console.error('[WH] metaSend failed', resp.status, await resp.text())
+  } catch (e: any) {
+    console.error('[WH] metaSend error', e.message)
+  }
 }
 
 // ── Lead loader ───────────────────────────────────────────────────────────────
