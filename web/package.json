@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "test:ebook": "node --experimental-strip-types --import ./lib/verve/test-support/register.mjs --test lib/ebook/*.test.ts",
     "test:verve": "node --experimental-strip-types --import ./lib/verve/test-support/register.mjs --test lib/verve/*.test.ts"
   },
   "dependencies": {

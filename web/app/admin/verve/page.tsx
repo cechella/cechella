@@ -1,5 +1,7 @@
 'use client'
 
+import PreviewInstagram from '@/components/verve/PreviewInstagram'
+import { mostrar } from '@/lib/verve/metricas-painel'
 import { emBrasilia } from '@/lib/verve/horario'
 import { useState, useEffect, useRef } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
@@ -56,11 +58,14 @@ interface Briefing {
 }
 
 interface Metrics {
-  followers_count: number
-  followers_gained_week: number
-  reach_week: number
-  sends_reach_pct: string
-  saves_recent: number
+  followers_count: number | null
+  followers_gained_week: number | null
+  reach_week: number | null
+  sends_reach_pct: number | null
+  saves_recent: number | null
+  midias_lidas: number
+  midias_total: number
+  motivos: Record<string, string>
   updated_at: string
 }
 
@@ -428,12 +433,12 @@ export default function VervePage() {
       await aprovar(postId, scheduledAt)
     }
   }
-  async function recusar(id: string) {
+  async function recusar(id: string, motivo?: { aspectos: string[]; texto?: string }) {
     setPosts(prev => prev.map(p => p.id === id ? { ...p, status: 'recusado' } : p))
     await fetch('/api/admin/verve/posts', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, status: 'recusado' }),
+      body: JSON.stringify({ id, status: 'recusado', ...(motivo ? { motivo } : {}) }),
     })
   }
 
@@ -1099,27 +1104,27 @@ export default function VervePage() {
                 {[
                   {
                     label: 'Seguidores ganhos',
-                    value: metrics ? (metrics.followers_gained_week > 0 ? `+${metrics.followers_gained_week.toLocaleString('pt-BR')}` : metrics.followers_count.toLocaleString('pt-BR')) : '—',
-                    sub: metrics ? (metrics.followers_gained_week > 0 ? 'esta semana' : 'total de seguidores') : 'esta semana',
+                    value: metrics ? (metrics.followers_gained_week !== null ? (metrics.followers_gained_week > 0 ? `+${metrics.followers_gained_week.toLocaleString('pt-BR')}` : '0') : mostrar(null)) : '—',
+                    sub: metrics ? (metrics.followers_gained_week !== null ? 'esta semana' : (metrics.motivos.followers_gained_week ?? 'sem dado')) : 'esta semana',
                     color: '#a855f7', icon: <Users className="w-4 h-4" />,
                   },
                   {
                     label: 'Alcance semanal',
-                    value: metrics ? metrics.reach_week.toLocaleString('pt-BR') : '—',
-                    sub: 'impressões únicas',
+                    value: metrics ? mostrar(metrics.reach_week) : '—',
+                    sub: metrics && metrics.reach_week === null ? (metrics.motivos.reach_week ?? 'sem dado') : 'contas alcançadas em 7 dias',
                     color: '#3b82f6', icon: <TrendingUp className="w-4 h-4" />,
                   },
                   {
                     label: 'Sends / Reach',
-                    value: metrics ? `${metrics.sends_reach_pct}%` : '—',
-                    sub: 'meta: > 5%',
-                    color: parseFloat(metrics?.sends_reach_pct ?? '0') >= 5 ? '#22c55e' : '#eab308',
+                    value: metrics ? mostrar(metrics.sends_reach_pct, '%') : '—',
+                    sub: metrics && metrics.sends_reach_pct === null ? (metrics.motivos.sends_reach_pct ?? 'sem dado') : 'meta: > 5%',
+                    color: (metrics?.sends_reach_pct ?? 0) >= 5 ? '#22c55e' : '#eab308',
                     icon: <BarChart3 className="w-4 h-4" />,
                   },
                   {
                     label: 'Saves (recentes)',
-                    value: metrics ? metrics.saves_recent.toLocaleString('pt-BR') : '—',
-                    sub: 'últimas 10 mídias',
+                    value: metrics ? mostrar(metrics.saves_recent) : '—',
+                    sub: metrics ? (metrics.saves_recent === null ? (metrics.motivos.saves_recent ?? 'sem dado') : `lido em ${metrics.midias_lidas} de ${metrics.midias_total} mídias`) : 'últimas 10 mídias',
                     color: '#f97316', icon: <Sparkles className="w-4 h-4" />,
                   },
                 ].map(m => (
@@ -1134,7 +1139,7 @@ export default function VervePage() {
                 ))}
               </div>
 
-              {metrics && (
+              {metrics && metrics.followers_count !== null && (
                 <div className="bg-[#111113] border border-[#1C1C1E] rounded-2xl p-5">
                   <h3 className="text-[10px] font-bold tracking-[0.1em] text-[#3F3F46] uppercase mb-4 flex items-center gap-2">
                     Progresso da meta
@@ -1405,120 +1410,17 @@ export default function VervePage() {
         </div>
       )}
 
-      {/* ── MODAL PREVIEW INSTAGRAM ── */}
-      {/* Instagram preview modal — portrait 4:5 full-screen */}
+      {/* ── PRÉVIA FIEL AO INSTAGRAM (celular/computador): só o que será publicado ── */}
       {previewPost && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
-          onClick={() => setPreviewPost(null)}
-        >
-          <div
-            className="relative flex flex-col"
-            style={{ width: 'min(420px, 95vw)', maxHeight: '96vh' }}
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Instagram phone shell */}
-            <div className="bg-[#0a0a0a] rounded-[2rem] border border-[#2a2a2a] shadow-2xl flex flex-col overflow-hidden" style={{ maxHeight: '92vh' }}>
-
-              {/* IG header */}
-              <div className="px-4 pt-4 pb-3 flex items-center gap-3 border-b border-[#1a1a1a] flex-shrink-0">
-                <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-yellow-400 via-pink-500 to-purple-600 p-0.5 flex-shrink-0">
-                  <div className="w-full h-full rounded-full bg-[#0a0a0a] flex items-center justify-center">
-                    <span className="text-[9px] font-bold text-white">VC</span>
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-semibold text-white leading-tight">viniciuscechella</p>
-                  <p className="text-[11px] text-[#71717A]">Hormone Ecosystem · Patrocinado</p>
-                </div>
-                <button onClick={() => setPreviewPost(null)} className="text-[#71717A] hover:text-white p-1">
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* Slide image — aspect 4:5 portrait (Instagram native) */}
-              <div className="relative bg-black flex-shrink-0" style={{ aspectRatio: '4/5', width: '100%' }}>
-                {previewPost.image_urls && previewPost.image_urls[previewSlide] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={previewPost.image_urls[previewSlide]}
-                    alt={`Slide ${previewSlide + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-[#111]">
-                    <p className="text-[#444] text-sm">Gerando fotos…</p>
-                  </div>
-                )}
-                {/* Slide counter dots */}
-                {previewPost.image_urls && previewPost.image_urls.length > 1 && (
-                  <div className="absolute top-3 left-0 right-0 flex justify-center gap-1">
-                    {previewPost.image_urls.map((_, i) => (
-                      <div
-                        key={i}
-                        className={`h-1 rounded-full transition-all ${i === previewSlide ? 'w-5 bg-white' : 'w-1.5 bg-white/40'}`}
-                      />
-                    ))}
-                  </div>
-                )}
-                {/* Tap zones prev/next — full half-screen touch area */}
-                {previewPost.image_urls && previewSlide > 0 && (
-                  <button
-                    onClick={() => setPreviewSlide(s => s - 1)}
-                    className="absolute left-0 top-0 w-1/3 h-full flex items-center justify-start pl-3 opacity-0 hover:opacity-100 transition-opacity"
-                  >
-                    <div className="w-9 h-9 rounded-full bg-black/60 flex items-center justify-center text-white text-xl">‹</div>
-                  </button>
-                )}
-                {previewPost.image_urls && previewSlide < previewPost.image_urls.length - 1 && (
-                  <button
-                    onClick={() => setPreviewSlide(s => s + 1)}
-                    className="absolute right-0 top-0 w-1/3 h-full flex items-center justify-end pr-3 opacity-0 hover:opacity-100 transition-opacity"
-                  >
-                    <div className="w-9 h-9 rounded-full bg-black/60 flex items-center justify-center text-white text-xl">›</div>
-                  </button>
-                )}
-                {/* Slide number badge */}
-                <div className="absolute bottom-3 right-3 bg-black/60 rounded-full px-2.5 py-1 text-[11px] text-white font-medium">
-                  {previewSlide + 1} / {previewPost.image_urls?.length ?? previewPost.slides ?? 1}
-                </div>
-              </div>
-
-              {/* IG action row */}
-              <div className="px-4 py-3 flex items-center gap-4 border-b border-[#1a1a1a] flex-shrink-0">
-                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white fill-none stroke-current stroke-2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white fill-none stroke-current stroke-2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white fill-none stroke-current stroke-2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-                <div className="flex-1" />
-                <svg viewBox="0 0 24 24" className="w-6 h-6 text-white fill-none stroke-current stroke-2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-              </div>
-
-              {/* Caption — full text, scrollable */}
-              <div className="px-4 py-3 overflow-y-auto flex-1" style={{ minHeight: '80px', maxHeight: '200px' }}>
-                <p className="text-[13px] text-white leading-relaxed whitespace-pre-wrap">
-                  <span className="font-semibold">viniciuscechella</span>{' '}
-                  {captions[previewPost.id] || previewPost.legenda || previewPost.titulo}
-                </p>
-              </div>
-            </div>
-
-            {/* Action buttons */}
-            <div className="flex gap-2 mt-3">
-              <button
-                onClick={() => { recusar(previewPost.id); setPreviewPost(null) }}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 transition-all"
-              >
-                ✕ Recusar
-              </button>
-              <button
-                onClick={() => openScheduleModal(previewPost.id)}
-                className="flex-1 py-3 rounded-xl text-sm font-semibold bg-[#22c55e] text-black hover:bg-[#16a34a] transition-all"
-              >
-                {(previewPost.status === 'aprovado' || previewPost.status === 'erro') ? '🚀 Publicar' : '✓ Autorizar'}
-              </button>
-            </div>
-          </div>
-        </div>
+        <PreviewInstagram
+          post={previewPost}
+          slide={previewSlide}
+          onSlide={setPreviewSlide}
+          onClose={() => setPreviewPost(null)}
+          onRecusar={motivo => { recusar(previewPost.id, motivo); setPreviewPost(null) }}
+          onAutorizar={() => openScheduleModal(previewPost.id)}
+          rotuloAutorizar={(previewPost.status === 'aprovado' || previewPost.status === 'erro') ? '🚀 Publicar' : '✓ Autorizar'}
+        />
       )}
 
       {/* Schedule modal */}

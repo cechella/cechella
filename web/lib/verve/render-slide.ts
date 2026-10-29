@@ -2,6 +2,13 @@ import { generatePhotoForPost } from './generate-photo'
 import { composeSlide } from './compose-slide'
 import { put } from '@vercel/blob'
 import sharp from 'sharp'
+import { FAIXA_PADRAO, type Faixa } from './persona'
+import { fotoConferida, leitorClaude, type Leitor, type QaEntrada } from './foto-qa'
+import { sementeDoPost } from './personagem'
+import { KIT } from './brand-kit'
+import type { SlideKit } from './slides-kit'
+
+const PRAZO_MS = 45_000   // a rota tem 60 s no plano atual: depois disso não começa nova tentativa
 
 export interface SlideInput {
   titulo: string
@@ -21,12 +28,10 @@ export async function renderSlide(input: SlideInput): Promise<Buffer> {
 }
 
 // Deriva badge a partir do persona detectado
-function buildBadge(persona: string, pilar: string): string {
+export function buildBadge(persona: string, pilar: string, faixa: Faixa = FAIXA_PADRAO): string {
   if (pilar === 'familia') return 'FAMÍLIA'
   if (pilar === 'lifestyle') return 'LIFESTYLE'
-  return persona === 'homem_40_60'
-    ? 'PARA HOMENS DE 40 A 60 ANOS'
-    : 'PARA MULHERES DE 35 A 50 ANOS'
+  return `PARA ${persona === 'homem_40_60' ? 'HOMENS' : 'MULHERES'} DE ${faixa.min} A ${faixa.max} ANOS`
 }
 
 // Gera N slides compostos (foto Flux + texto SVG) e persiste no Vercel Blob.
@@ -38,6 +43,11 @@ export async function renderCarrossel(params: {
   slides?: number
   badge?: string
   persona?: string
+  faixa?: Faixa
+  instrucao?: string
+  slidesDetalhe?: SlideKit[]   // slides com papel editorial (comparação, checklist...): têm prioridade sobre temas/descricoes (revisão editorial)
+  qaLog?: QaEntrada[]   // recebe cada conferência (slide, tentativa, motivo, ação)
+  leitor?: Leitor       // injetável nos testes; padrão: modelo de visão
   postId?: string
 }): Promise<string[]> {
   const {
@@ -46,19 +56,29 @@ export async function renderCarrossel(params: {
     persona = 'mulher_35_50', postId = 'preview',
   } = params
   const total = Math.max(2, Math.min(slides, 10))
-  const badge = params.badge ?? buildBadge(persona, pilar)
+  const faixa = params.faixa ?? FAIXA_PADRAO
+  const badge = params.badge ?? buildBadge(persona, pilar, faixa)
 
   if (!process.env.FAL_KEY) return []
 
-  // Gera fotos em paralelo
-  const photoPromises = Array.from({ length: total }, (_, i) => {
+  // A MESMA personagem em todo o carrossel: gera a foto de abertura (conferida), e os demais slides partem dela (edição por referência), cada um conferido
+  // também quanto a "é a mesma pessoa". O prazo protege o limite de 60 s da rota: esgotado, para de refazer e o post fica como estava.
+  const limite = Date.now() + PRAZO_MS
+  const ler = params.leitor ?? leitorClaude()
+  const log = params.qaLog ?? []
+  const seed = sementeDoPost(postId)
+  const uma = (i: number, referencia?: string) => {
     const isCta = i + 1 === total
-    const tema = temas[i] ?? titulo
-    return generatePhotoForPost({ tema, pilar, persona, isCta })
-      .then(r => r.url)
-      .catch(() => '')
-  })
-  const photoUrls = await Promise.all(photoPromises)
+    const tema = params.slidesDetalhe?.[i]?.titulo ?? temas[i] ?? titulo
+    return fotoConferida({
+      slide: i + 1, persona, faixa, instrucao: params.instrucao, referencia, limite,
+      gerar: instrucao => generatePhotoForPost({ tema, pilar, persona, isCta, faixa, indice: i, total, instrucao, referencia, seed }).then(r => r.url),
+      ler, log,
+    })
+  }
+  const abertura = await uma(0)
+  const demais = abertura ? await Promise.all(Array.from({ length: total - 1 }, (_, k) => uma(k + 1, abertura))) : Array.from({ length: total - 1 }, () => '')
+  const photoUrls = [abertura, ...demais]
 
   // Para cada foto: baixa, composta com texto e faz upload no Blob
   const blobUrls = await Promise.all(
@@ -66,31 +86,36 @@ export async function renderCarrossel(params: {
       if (!url) return ''
       const isCta = i + 1 === total
       const slideNum = i + 1
-      const slideTema = temas[i] ?? titulo
-      const slideDesc = descricoes[i] ?? undefined
+      const det = params.slidesDetalhe?.[i]
+      // O texto planejado no briefing vale também no ÚLTIMO slide; a chamada fixa só entra quando o plano não trouxe texto para ele.
+      const slideTema = det?.titulo ?? temas[i] ?? (isCta ? 'Percebeu alguma mudança?' : titulo)
+      const slideDesc = det ? det.texto : (descricoes[i] ?? (isCta && !temas[i] ? 'Converse com um médico para uma avaliação individual.' : undefined))
 
       try {
         // Download da foto do Flux
         const res = await fetch(url)
         const photoBuffer = Buffer.from(await res.arrayBuffer())
+        // A foto aprovada fica guardada: corrigir texto ou layout depois não exige gerar (e pagar) outra foto.
+        try { await put(`verve/fotos/${postId}/foto-${String(slideNum).padStart(2, '0')}.jpg`, photoBuffer, { access: 'public', contentType: 'image/jpeg', allowOverwrite: true }) } catch { /* guardar a foto bruta é um extra: não derruba o slide */ }
 
         // Composta texto sobre a foto
         const composed = await composeSlide({
-          titulo: isCta ? 'Percebeu alguma mudança?' : slideTema,
-          descricao: isCta ? 'Converse com um médico para uma avaliação individual.' : slideDesc,
+          titulo: slideTema,
+          descricao: slideDesc,
           badge: slideNum === 1 ? badge : undefined,  // badge só no slide 1
           slideNum,
           totalSlides: total,
           imageBuffer: photoBuffer,
           isCta,
+          papel: det?.papel, itens: det?.itens, colunas: det?.colunas,
         })
 
         // A API de publicação do Instagram documenta JPEG como único formato de imagem: converte antes de subir.
         const jpeg = await sharp(composed).jpeg({ quality: 92, mozjpeg: true }).toBuffer()
         const blob = await put(
-          `verve/slides/${postId}/slide-${String(slideNum).padStart(2, '0')}.jpg`,
+          `verve/slides/${postId}/${KIT.nome}/slide-${String(slideNum).padStart(2, '0')}.jpg`,
           jpeg,
-          { access: 'public', contentType: 'image/jpeg' }
+          { access: 'public', contentType: 'image/jpeg', allowOverwrite: true }
         )
         return blob.url
       } catch {

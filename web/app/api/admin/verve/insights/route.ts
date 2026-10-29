@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { requireAdmin } from '@/lib/verve/admin-auth'
 import { atlasAuthorized } from '@/lib/verve/admin-core'
 import { publishAuthorized } from '@/lib/verve/publish-core'
+import { lerMotivo } from '@/lib/verve/motivo-recusa'
 import { METRICAS_CONTA, METRICAS_MIDIA, diagnostico, resumirMidia, valorMetrica, type Metrica, type MidiaBruta } from '@/lib/verve/insights'
 
 export const dynamic = 'force-dynamic'
@@ -79,7 +80,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Decisões do CEO (aprendizado): posts recentes aprovados/recusados/publicados.
-  const { data: decisoes } = await supabase.from('verve_posts').select('id,titulo,tipo,pilar,status,scheduled_at').in('status', ['recusado', 'aprovado', 'publicado']).order('scheduled_at', { ascending: false }).limit(40)
+  const { data: decisoes } = await supabase.from('verve_posts').select('id,titulo,tipo,pilar,status,scheduled_at,error_msg').in('status', ['recusado', 'aprovado', 'publicado']).order('scheduled_at', { ascending: false }).limit(40)
 
   return NextResponse.json({
     coletado_em: new Date().toISOString(),
@@ -87,7 +88,7 @@ export async function GET(req: NextRequest) {
     conta: perfilOk ? { username: perfil.username ?? null, seguidores: perfil.followers_count, seguindo: perfil.follows_count ?? null, midias: perfil.media_count ?? null } : { erro: (perfil.error as Record<string, unknown> | undefined)?.message ?? 'perfil_indisponivel' },
     conta_insights: conta,
     midias: resumo,
-    decisoes: decisoes ?? [],
+    decisoes: (decisoes ?? []).map(({ error_msg, ...d }) => ({ ...d, motivo_recusa: d.status === 'recusado' ? lerMotivo(error_msg) : null })),
     diagnostico: diagnostico(perfilOk, todas),
   })
 }
