@@ -99,6 +99,7 @@ Desde 29/10/2026 o WhatsApp usa o fluxo original do N8N ("Hormone Agent — Dr. 
 - **Saída:** os nós do N8N chamam `https://ana-master.hormoneecosystem.com/zapi/instances/<inst>/token/<ZAPI_TOKEN>/send-text` (antes `https://api.z-api.io/...`; trocado em `workflow_entity` e `workflow_history`). O ana-master envia pela Meta. Só `send-text` é suportado; o token do caminho precisa bater com `ZAPI_TOKEN` do `.env`.
 - **Janela de 24h:** se a Meta recusar (fora da janela), a mensagem vai para `whatsapp_pendentes`, o lead recebe o template `ana_retomar_conversa` (botão "Pode enviar") e as pendentes são entregues assim que ele responder. Templates criados: `ana_retomar_conversa`, `ana_indicacao`, `ana_lembrete`.
 - **Voltar ao código TypeScript** (`whatsapp-webhook.ts`): remover `WHATSAPP_ENGINE` do `.env` e reiniciar. Para voltar o N8N à Z-API, restaurar o backup em `~/backups/n8n-20261029-1958/database.sqlite` com o container parado.
+- **Botões (sem alterar o N8N):** `formatarInterativo` no `n8n-bridge.ts` reconhece mensagens que o N8N já envia: link `/pagar/<token>` → botão **Pagar agora**; menu "Responde com 1 ou 2" → botões **Remover da lista** / **Falar depois** (o toque chega ao N8N como "remover da lista"/"falar depois", que o nó Detectar Opt-Out já trata); mensagens com "manda VOLTAR" → botão **Voltar**. Se a Meta recusar o botão, a mesma mensagem sai como texto.
 - A plataforma de aprendizado (abaixo) hoje alimenta só o modo TypeScript; no modo N8N ainda não é usada.
 
 ## Plataforma de aprendizado (`/admin/ana-aprendizado`)
