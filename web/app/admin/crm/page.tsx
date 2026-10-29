@@ -151,7 +151,7 @@ export default function CRMPage() {
   const [acionandoAna, setAcionandoAna] = useState<string | null>(null)
   const [filtroStatusRef, setFiltroStatusRef] = useState<string>('todos')
 
-  const ZAPI_URL = 'https://api.z-api.io/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text'
+  const ZAPI_URL = 'https://ana-master.hormoneecosystem.com/zapi/instances/3F4D4A5044DBE1E458808A5553EDB71F/token/039297EE5982433C7EFA38C5/send-text'
   const ZAPI_TOKEN = 'F16a4d3e95c034a14b42b138d8165a90cS'
 
   const acionarAna = async (lead: Lead) => {

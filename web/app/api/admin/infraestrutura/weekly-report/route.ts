@@ -122,7 +122,7 @@ export async function GET() {
       `💰 Pagamentos: *${stats.paidCount}*\n\n` +
       `Detalhes: https://www.hormoneecosystem.com/admin`
 
-    await fetch(`https://api.z-api.io/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}/send-text`, {
+    await fetch(`https://ana-master.hormoneecosystem.com/zapi/instances/${ZAPI_INSTANCE}/token/${ZAPI_TOKEN}/send-text`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Client-Token': ZAPI_CLIENT_TOKEN },
       body: JSON.stringify({ phone: adminPhone, message: waSummary }),

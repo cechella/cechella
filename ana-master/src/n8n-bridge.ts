@@ -106,6 +106,41 @@ export async function enviarTexto(phoneRaw: string, message: string): Promise<{ 
   return { zaapId: 'erro', messageId: 'erro', id: 'erro' }
 }
 
+// Mídia e contato (send-video / send-contact da Z-API). Fora da janela de 24h, cai para texto pendente.
+export async function enviarMidiaOuContato(acao: string, body: any): Promise<{ zaapId: string; messageId: string; id: string } | null> {
+  const phone = digits(body?.phone)
+  let payload: Record<string, unknown> | null = null
+  let textoFallback = ''
+  if (acao === 'send-video' && body?.video) {
+    payload = { type: 'video', video: { link: body.video, ...(body.caption ? { caption: String(body.caption).slice(0, 1024) } : {}) } }
+    textoFallback = [body.caption, body.video].filter(Boolean).join('\n\n')
+  } else if (acao === 'send-image' && body?.image) {
+    payload = { type: 'image', image: { link: body.image, ...(body.caption ? { caption: String(body.caption).slice(0, 1024) } : {}) } }
+    textoFallback = [body.caption, body.image].filter(Boolean).join('\n\n')
+  } else if (acao === 'send-contact' && body?.contactPhone) {
+    const nome = String(body.contactName ?? '').trim() || String(body.contactPhone)
+    payload = { type: 'contacts', contacts: [{ name: { formatted_name: nome, first_name: nome }, phones: [{ phone: `+${digits(body.contactPhone)}`, wa_id: digits(body.contactPhone), type: 'CELL' }] }] }
+    textoFallback = `${nome}: +${digits(body.contactPhone)}`
+  }
+  if (!phone || !payload) return null
+  const r = await metaPost({ to: phone, ...payload })
+  if (r.ok) return { zaapId: r.id, messageId: r.id, id: r.id }
+  console.error('[BRIDGE]', acao, 'falhou, enviando como texto', phone, r.code, r.message)
+  return enviarTexto(phone, textoFallback)
+}
+
+// Estado do número na Meta, no formato do /status da Z-API.
+export async function statusConexao(): Promise<{ connected: boolean; smartphoneConnected: boolean; session: string; status?: string }> {
+  try {
+    const res = await fetch(`${GRAPH}/${META_ANDRE_PHONE_ID}?fields=status,display_phone_number`, { headers: { Authorization: `Bearer ${META_ANDRE_TOKEN}` } })
+    const json: any = await res.json().catch(() => ({}))
+    const connected = res.ok && json?.status === 'CONNECTED'
+    return { connected, smartphoneConnected: connected, session: connected ? 'CONNECTED' : 'DISCONNECTED', status: json?.status ?? json?.error?.message }
+  } catch (e: any) {
+    return { connected: false, smartphoneConnected: false, session: 'DISCONNECTED', status: e?.message }
+  }
+}
+
 // Entrega o que ficou pendente quando o lead volta a escrever (janela reaberta).
 export async function entregarPendentes(phoneRaw: string): Promise<number> {
   const phone = digits(phoneRaw)
