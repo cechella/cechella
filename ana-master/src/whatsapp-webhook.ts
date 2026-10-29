@@ -502,6 +502,7 @@ async function callClaude(systemPrompt: string, messages: any[], etapa: number):
   })
 
   const data = await res.json() as any
+  if (!res.ok) console.error('[WH] Claude API failed', res.status, JSON.stringify(data?.error ?? data))
   let content = data.content?.[0]?.text ?? ''
   content = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
 
