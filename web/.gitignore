@@ -1,0 +1,5 @@
+
+# variáveis de ambiente locais (servidor)
+.env
+.env.*
+!.env.example
